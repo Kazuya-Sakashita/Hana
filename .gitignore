@@ -1,0 +1,68 @@
+# === Claude Code ===
+.claude/settings.local.json
+.claude/cache/
+.claude/.tmp/
+
+# === Node / pnpm ===
+node_modules/
+.pnpm-store/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# === Env / Secrets ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p8
+*.p12
+*.crt
+
+# === Next.js / Build / Cache ===
+.next/
+out/
+dist/
+build/
+.turbo/
+.cache/
+.vercel/
+.wrangler/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# === Generated artifacts that are NOT type definitions ===
+docs/openapi/openapi.bundled.yaml
+docs/openapi/openapi.bundled.json
+
+# NOTE: src/lib/api/generated/ は Git 管理する（CI で差分検知するため）
+
+# === Test ===
+playwright-report/
+test-results/
+.nyc_output/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === IDE ===
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# === Local data ===
+*.sqlite
+*.sqlite3
+*.db
+/tmp/
+/uploads-local/
+
+# === Misc ===
+*.bak
+*.orig

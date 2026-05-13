@@ -1,0 +1,27 @@
+# Build output
+.next/
+out/
+dist/
+build/
+coverage/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Generated artifacts
+src/lib/api/generated/
+docs/openapi/openapi.bundled.yaml
+docs/openapi/openapi.bundled.json
+next-env.d.ts
+
+# Lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Logs
+*.log
+
+# User-authored long-form docs (do not auto-format)
+Hana_PRD_v1.md

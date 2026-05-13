@@ -117,9 +117,7 @@ tests/
   "detail": "入力内容に誤りがあります",
   "reason": "validation_error",
   "instance": "req_01HXYZ...",
-  "errors": [
-    { "path": "body.name", "reason": "required", "message": "必須項目です" }
-  ]
+  "errors": [{ "path": "body.name", "reason": "required", "message": "必須項目です" }]
 }
 ```
 
@@ -184,16 +182,16 @@ tests/
 
 ## 9. テスト方針
 
-| レイヤ | ツール | 目的 |
-|---|---|---|
-| OpenAPI Lint | `redocly` + `spectral` | 仕様が壊れていない |
-| 型生成差分 | `openapi-typescript` + CI | 生成漏れを検知 |
-| 契約テスト | `schemathesis` | 実装が OpenAPI に準拠 |
-| 単体 | `vitest` | 純粋関数 / ViewModel 変換 |
-| 結合 | `vitest` + supertest | 主要シナリオ + 認可 |
-| E2E | `playwright` | golden path（写真→AI→保存） |
-| AI 出力 | カスタム | 性質テスト（氏名漏洩・NG ワード） |
-| セキュリティ | カスタム | ログ PII / Presigned 期限 |
+| レイヤ       | ツール                    | 目的                              |
+| ------------ | ------------------------- | --------------------------------- |
+| OpenAPI Lint | `redocly` + `spectral`    | 仕様が壊れていない                |
+| 型生成差分   | `openapi-typescript` + CI | 生成漏れを検知                    |
+| 契約テスト   | `schemathesis`            | 実装が OpenAPI に準拠             |
+| 単体         | `vitest`                  | 純粋関数 / ViewModel 変換         |
+| 結合         | `vitest` + supertest      | 主要シナリオ + 認可               |
+| E2E          | `playwright`              | golden path（写真→AI→保存）       |
+| AI 出力      | カスタム                  | 性質テスト（氏名漏洩・NG ワード） |
+| セキュリティ | カスタム                  | ログ PII / Presigned 期限         |
 
 ---
 
