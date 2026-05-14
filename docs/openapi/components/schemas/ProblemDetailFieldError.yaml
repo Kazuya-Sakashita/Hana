@@ -1,0 +1,20 @@
+type: object
+description: フィールド単位のエラー詳細（ProblemDetails.errors の要素）
+required: [path, reason, message]
+properties:
+  path:
+    type: string
+    description: |
+      対象フィールドのドット区切りパス。リクエストボディは `body.<field>`、
+      クエリは `query.<field>`、パスは `path.<field>`、ヘッダは `header.<field>` を用いる。
+    example: 'body.name'
+  reason:
+    type: string
+    description: |
+      フィールド単位の安定ID（snake_case）。
+      クライアントはこの値だけを分岐ロジックに使う。
+    example: 'required'
+  message:
+    type: string
+    description: 人間向けの説明文。ユーザー表示可だが翻訳前提（i18n）。
+    example: '必須項目です'

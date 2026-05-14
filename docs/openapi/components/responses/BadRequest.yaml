@@ -1,0 +1,17 @@
+description: |
+  リクエストが構文・型として不正。JSON パース失敗、必須ヘッダ欠如など。
+  ビジネス検証エラー（フィールドバリデーション）は 422 UnprocessableEntity を用いる。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      bad_request:
+        summary: Malformed JSON
+        value:
+          type: 'https://hana.app/problems/bad-request'
+          title: 'Bad Request'
+          status: 400
+          detail: 'JSON のパースに失敗しました'
+          reason: 'bad_request'
+          instance: 'req_01HXYZABCDEFG'

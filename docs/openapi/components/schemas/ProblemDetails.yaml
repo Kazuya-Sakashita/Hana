@@ -1,0 +1,51 @@
+type: object
+description: |
+  RFC 9457 (Problem Details for HTTP APIs) に準拠したエラーレスポンス。
+  すべてのエラー応答はこの形を返し、`Content-Type: application/problem+json` を用いる。
+required: [type, title, status, reason]
+properties:
+  type:
+    type: string
+    format: uri
+    description: |
+      エラー種別の安定 URI。クライアント分岐用のIDではないが、
+      ドキュメントへのリンクとして機能する。Hana では
+      `https://hana.app/problems/<reason>` 形式を用いる。
+    example: 'https://hana.app/problems/validation-error'
+  title:
+    type: string
+    description: |
+      人間向けの短い説明（英語）。同じ `type` に対して安定で、
+      この値を変えない（クライアントが UI で参照することがある）。
+    example: 'Validation Error'
+  status:
+    type: integer
+    minimum: 400
+    maximum: 599
+    description: HTTP ステータスコード。レスポンスの実ステータスと一致させる。
+    example: 422
+  detail:
+    type: string
+    description: |
+      このインスタンス固有のメッセージ。ユーザー表示してよいが、
+      個人情報・スタックトレース・SQL・テーブル名等は含めない。
+    example: '入力内容に誤りがあります'
+  instance:
+    type: string
+    description: |
+      リクエスト ID（UUID / ULID）。サポート問い合わせ時に
+      ログから該当リクエストを引くのに使う。user_id 等を含めない。
+    example: 'req_01HXYZABCDEFG'
+  reason:
+    type: string
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: |
+      クライアントが分岐に使う安定 ID（snake_case）。
+      機能プレフィクスを付ける（例: `child_not_found`, `image_too_large`）。
+      詳細は docs/api-driven-development/error-format.md を参照。
+    example: 'validation_error'
+  errors:
+    type: array
+    description: フィールド単位のエラー（バリデーション時のみ）
+    items:
+      $ref: './ProblemDetailFieldError.yaml'

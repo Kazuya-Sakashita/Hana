@@ -1,0 +1,92 @@
+openapi: 3.1.0
+info:
+  title: Hana API
+  version: 0.1.0
+  summary: AI 育児記録アプリ Hana のバックエンド API
+  description: |
+    写真 1 枚から AI が子どもとの記憶を物語にする育児記録アプリ Hana の API。
+
+    - 認証: Bearer JWT
+    - エラー形式: RFC 9457 Problem Details (`application/problem+json`)
+    - ページネーション: カーソル方式（`limit` + `cursor`）
+    - 画像アクセス: Presigned URL（公開 URL を使わない）
+
+    詳細は以下を参照:
+    - `docs/api-driven-development/README.md`
+    - `docs/api-driven-development/openapi-style-guide.md`
+    - `docs/api-driven-development/error-format.md`
+  contact:
+    name: Hana Maintainers
+    url: https://github.com/Kazuya-Sakashita/Hana
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:3000/v1
+    description: Local development
+  - url: https://staging.hana.app/v1
+    description: Staging（予定）
+  - url: https://api.hana.app/v1
+    description: Production（予定）
+security:
+  - bearerAuth: []
+tags:
+  - name: meta
+    description: ヘルスチェック等の運用エンドポイント
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: ヘルスチェック
+      description: API が稼働しているか確認する公開エンドポイント。認証不要。
+      tags: [meta]
+      security: []
+      responses:
+        '200':
+          description: 稼働中
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    description: 'ok を返す'
+                    enum: [ok]
+              example:
+                status: ok
+        '500':
+          $ref: './components/responses/InternalServerError.yaml'
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: './components/securitySchemes.yaml#/bearerAuth'
+  schemas:
+    ProblemDetails:
+      $ref: './components/schemas/ProblemDetails.yaml'
+    ProblemDetailFieldError:
+      $ref: './components/schemas/ProblemDetailFieldError.yaml'
+  parameters:
+    Limit:
+      $ref: './components/parameters/Limit.yaml'
+    Cursor:
+      $ref: './components/parameters/Cursor.yaml'
+    RequestId:
+      $ref: './components/parameters/RequestId.yaml'
+  responses:
+    BadRequest:
+      $ref: './components/responses/BadRequest.yaml'
+    Unauthorized:
+      $ref: './components/responses/Unauthorized.yaml'
+    Forbidden:
+      $ref: './components/responses/Forbidden.yaml'
+    NotFound:
+      $ref: './components/responses/NotFound.yaml'
+    Conflict:
+      $ref: './components/responses/Conflict.yaml'
+    UnprocessableEntity:
+      $ref: './components/responses/UnprocessableEntity.yaml'
+    TooManyRequests:
+      $ref: './components/responses/TooManyRequests.yaml'
+    InternalServerError:
+      $ref: './components/responses/InternalServerError.yaml'

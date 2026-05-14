@@ -1,0 +1,17 @@
+description: |
+  リソースが見つからない。自分のリソースの 404 にのみ用い、他人のリソースは 403 を返す
+  ことで存在の有無を漏らさない。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      not_found:
+        summary: Resource not found
+        value:
+          type: 'https://hana.app/problems/not-found'
+          title: 'Not Found'
+          status: 404
+          detail: '対象が見つかりません'
+          reason: 'not_found'
+          instance: 'req_01HXYZABCDEFG'

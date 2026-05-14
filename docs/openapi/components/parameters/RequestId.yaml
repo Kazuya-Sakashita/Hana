@@ -1,0 +1,11 @@
+name: X-Request-Id
+in: header
+description: |
+  リクエスト ID（クライアント発行の任意ヘッダ）。サーバはこれを ProblemDetails.instance や
+  ログに記録し、サポート問い合わせ時のトレースに用いる。
+  クライアントが指定しない場合、サーバが UUID を生成して付与する。
+required: false
+schema:
+  type: string
+  pattern: '^[A-Za-z0-9_\-]{8,64}$'
+example: 'req_01HXYZABCDEFG'

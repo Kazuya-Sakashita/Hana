@@ -1,0 +1,10 @@
+name: limit
+in: query
+description: 1 ページあたりの取得件数（カーソルページネーション）
+required: false
+schema:
+  type: integer
+  minimum: 1
+  maximum: 100
+  default: 20
+example: 20

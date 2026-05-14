@@ -1,0 +1,16 @@
+description: |
+  リソース状態の競合。重複登録、楽観ロック失敗、状態遷移違反など。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      email_already_registered:
+        summary: Email already registered
+        value:
+          type: 'https://hana.app/problems/email-already-registered'
+          title: 'Conflict'
+          status: 409
+          detail: 'このメールアドレスは既に登録済みです'
+          reason: 'email_already_registered'
+          instance: 'req_01HXYZABCDEFG'

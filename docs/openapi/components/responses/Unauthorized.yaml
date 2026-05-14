@@ -1,0 +1,25 @@
+description: |
+  認証情報が無いか、無効・期限切れ。クライアントはリフレッシュフローを試みる。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      unauthorized:
+        summary: Missing or invalid token
+        value:
+          type: 'https://hana.app/problems/unauthorized'
+          title: 'Unauthorized'
+          status: 401
+          detail: '認証情報が無効です'
+          reason: 'unauthorized'
+          instance: 'req_01HXYZABCDEFG'
+      token_expired:
+        summary: Access token expired
+        value:
+          type: 'https://hana.app/problems/token-expired'
+          title: 'Unauthorized'
+          status: 401
+          detail: 'アクセストークンの有効期限が切れています'
+          reason: 'token_expired'
+          instance: 'req_01HXYZABCDEFG'

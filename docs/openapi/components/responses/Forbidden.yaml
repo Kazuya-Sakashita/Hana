@@ -1,0 +1,17 @@
+description: |
+  認証は通っているがリソースに対する権限が無い。他ユーザーの子ども・記録・画像への
+  アクセスは常に 403 を返し、存在の有無を漏らさない。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      forbidden:
+        summary: Not allowed
+        value:
+          type: 'https://hana.app/problems/forbidden'
+          title: 'Forbidden'
+          status: 403
+          detail: 'このリソースへのアクセス権がありません'
+          reason: 'forbidden'
+          instance: 'req_01HXYZABCDEFG'
