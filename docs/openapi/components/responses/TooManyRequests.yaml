@@ -1,0 +1,33 @@
+description: |
+  レート制限を超過した。`Retry-After` ヘッダで再試行可能時刻を返す。
+  AI 生成 API（`/v1/ai/*`）と認証系 API で特に重要。
+headers:
+  Retry-After:
+    description: 再試行可能になるまでの秒数
+    schema:
+      type: integer
+      minimum: 1
+    example: 60
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      rate_limited:
+        summary: Generic rate limit
+        value:
+          type: 'https://hana.app/problems/rate-limited'
+          title: 'Too Many Requests'
+          status: 429
+          detail: 'リクエストが多すぎます。しばらくしてから再度お試しください'
+          reason: 'rate_limited'
+          instance: 'req_01HXYZABCDEFG'
+      ai_quota_exceeded:
+        summary: AI generation quota exceeded
+        value:
+          type: 'https://hana.app/problems/ai-quota-exceeded'
+          title: 'Too Many Requests'
+          status: 429
+          detail: '本日の AI 生成回数の上限に達しました'
+          reason: 'ai_quota_exceeded'
+          instance: 'req_01HXYZABCDEFG'

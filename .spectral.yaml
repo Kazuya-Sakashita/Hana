@@ -1,0 +1,58 @@
+extends:
+  - 'spectral:oas'
+
+rules:
+  # === Bootstrap 期に許容するルール ===
+  # 共通コンポーネント（ProblemDetails / 共通エラー応答 / 共通パラメータ）は
+  # 実 API 追加（ISSUE-005 以降）までは未参照のため、unused 警告をオフにする。
+  # 実 API 投入後に再有効化する。
+  oas3-unused-component: off
+
+  # === 必須ドキュメント ===
+  operation-description: error
+  operation-tags: warn
+  info-contact: warn
+  info-description: error
+
+  # === 命名規約 ===
+  hana-operationid-lower-camel:
+    description: operationId は lowerCamel（動詞 + リソース）であること
+    message: '{{property}} ({{value}}) は lowerCamel である必要があります'
+    severity: error
+    given: '$.paths[*][get,put,post,delete,patch].operationId'
+    then:
+      function: pattern
+      functionOptions:
+        match: '^[a-z][a-zA-Z0-9]*$'
+
+  hana-path-lowercase:
+    description: paths は小文字（ハイフン無し）であること
+    message: 'パス {{property}} は小文字（A-Z 不使用）である必要があります'
+    severity: error
+    given: '$.paths'
+    then:
+      field: '@key'
+      function: pattern
+      functionOptions:
+        notMatch: '[A-Z]'
+
+  hana-schema-upper-camel:
+    description: components.schemas のキーは UpperCamel
+    message: 'schema {{property}} は UpperCamel である必要があります'
+    severity: error
+    given: '$.components.schemas'
+    then:
+      field: '@key'
+      function: pattern
+      functionOptions:
+        match: '^[A-Z][A-Za-z0-9]*$'
+
+  # === エラー形式 ===
+  hana-error-content-type:
+    description: 4xx / 5xx レスポンスは application/problem+json を返す
+    message: 'エラーレスポンスは application/problem+json を含む必要があります'
+    severity: error
+    given: '$.paths[*][*].responses[?(@property.match(/^[45]/))].content'
+    then:
+      field: 'application/problem+json'
+      function: truthy

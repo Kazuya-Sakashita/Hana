@@ -1,0 +1,39 @@
+name: openapi-validate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/openapi/**'
+      - '.spectral.yaml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/openapi-validate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/openapi/**'
+      - '.spectral.yaml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: OpenAPI lint (redocly + spectral)
+        run: pnpm openapi:lint
+
+      - name: OpenAPI bundle (smoke test)
+        run: pnpm openapi:bundle

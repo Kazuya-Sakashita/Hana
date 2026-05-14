@@ -1,0 +1,9 @@
+bearerAuth:
+  type: http
+  scheme: bearer
+  bearerFormat: JWT
+  description: |
+    JWT Bearer トークンによる認証。
+    - access token TTL: 15 分（既定）
+    - refresh token TTL: 30 日（既定）
+    - クライアントは `Authorization: Bearer <token>` ヘッダで送る

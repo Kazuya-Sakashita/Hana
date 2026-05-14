@@ -17,7 +17,10 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "openapi:lint": "redocly lint docs/openapi/openapi.yaml && spectral lint --ruleset .spectral.yaml docs/openapi/openapi.yaml",
+    "openapi:bundle": "redocly bundle docs/openapi/openapi.yaml -o docs/openapi/openapi.bundled.yaml",
+    "openapi:all": "pnpm openapi:lint && pnpm openapi:bundle"
   },
   "dependencies": {
     "next": "^16.2.6",
@@ -25,6 +28,8 @@
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
+    "@redocly/cli": "^2.30.5",
+    "@stoplight/spectral-cli": "^6.16.0",
     "@types/node": "^25.7.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

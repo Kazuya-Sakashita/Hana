@@ -1,0 +1,9 @@
+name: cursor
+in: query
+description: |
+  次ページの取得カーソル。前回レスポンスの `page.next_cursor` をそのまま渡す。
+  null / 未指定の場合は先頭ページを返す。
+required: false
+schema:
+  type: string
+example: 'eyJpZCI6IjAxSFhZWiJ9'

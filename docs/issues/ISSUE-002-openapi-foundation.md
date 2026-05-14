@@ -2,7 +2,7 @@
 id: ISSUE-002
 title: OpenAPI 基盤 & ProblemDetails 定義
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-05-14
 ---
@@ -70,7 +70,13 @@ API 駆動開発は「最初に書く OpenAPI の質」で寿命が決まる。
   - `reason` 値の名前空間ルール（snake_case、機能プレフィクス）
   - HTTP status と `reason` のマッピング表
   - 既存 reason 一覧（成長させていく）
-- [ ] `docs/adr/0002-rfc9457-problem-details.md`
+- [ ] `docs/adr/0003-rfc9457-problem-details.md`（0001=OpenAPI as SoT / 0002=Frontend Stack で採番済みのため 0003）
+
+---
+
+## ステータス
+
+- 2026-05-14: in_progress に変更
 
 ---
 
@@ -109,7 +115,7 @@ API 駆動開発は「最初に書く OpenAPI の質」で寿命が決まる。
   - すべての schema property に description がある（warn 以上）
 - [ ] `docs/api-driven-development/error-format.md` に `reason` の付け方ルールが書かれている
 - [ ] `docs/api-driven-development/openapi-style-guide.md` に命名規約が書かれている
-- [ ] `docs/adr/0002-rfc9457-problem-details.md` が accepted
+- [ ] `docs/adr/0003-rfc9457-problem-details.md`（0001=OpenAPI as SoT / 0002=Frontend Stack で採番済みのため 0003） が accepted
 
 ---
 
@@ -176,3 +182,64 @@ ProblemDetails:
 - `CLAUDE.md` §5, §6
 - `docs/api-driven-development/README.md`
 - `Hana_PRD_v1.md` §11 API 設計
+
+---
+
+## 実施結果 (2026-05-14)
+
+### 作成・変更ファイル
+
+#### OpenAPI ファイル
+
+- `docs/openapi/openapi.yaml`（エントリ。`/health` だけ初期投入、本物のAPIはISSUE-005以降）
+- `docs/openapi/components/securitySchemes.yaml`（bearerAuth）
+- `docs/openapi/components/schemas/ProblemDetails.yaml`
+- `docs/openapi/components/schemas/ProblemDetailFieldError.yaml`
+- `docs/openapi/components/parameters/{Limit,Cursor,RequestId}.yaml`
+- `docs/openapi/components/responses/{BadRequest,Unauthorized,Forbidden,NotFound,Conflict,UnprocessableEntity,TooManyRequests,InternalServerError}.yaml`
+- `docs/openapi/examples/problem-details.json`
+
+#### ツール導入分
+
+- `@redocly/cli@2.30.5` / `@stoplight/spectral-cli@6.16.0` 追加
+- `package.json` scripts: `openapi:lint` / `openapi:bundle` / `openapi:all`
+- `.spectral.yaml`（カスタムルール: lowerCamel / lowercase paths / UpperCamel / `application/problem+json` 必須）
+
+#### ドキュメント分
+
+- `docs/api-driven-development/openapi-style-guide.md`（命名・型・page・例示・禁止事項）
+- `docs/api-driven-development/error-format.md`（`reason` 名前空間 / status マッピング / 403 vs 404 ポリシー）
+- `docs/adr/0003-rfc9457-problem-details.md`
+
+#### CI
+
+- `.github/workflows/openapi-validate.yml`（PR 時に `openapi:lint` + `openapi:bundle` を必須化）
+
+### 検証結果
+
+- [x] `pnpm openapi:lint` exit 0（warnings 3 件は受容: license-strict / localhost server / health 4xx）
+- [x] `pnpm openapi:bundle` 成功（`openapi.bundled.yaml` は `.gitignore` 対象）
+- [x] `pnpm typecheck` グリーン
+- [x] `pnpm lint` グリーン
+- [x] `pnpm format:check` グリーン
+
+### 既知の Bootstrap 期の運用
+
+- Spectral の `oas3-unused-component` を **off** に設定。実 API（ISSUE-005 以降）が `$ref` で参照し始めたら再有効化する。
+- `/health` の 4xx response 未定義は Redocly の warning として残るが、Bootstrap 段階では許容。
+
+### ADR 番号の調整
+
+- 当初 spec では `docs/adr/0002-rfc9457-problem-details.md` を想定していたが、ADR-0002 は ISSUE-001 で「フロントスタック決定」に使用済みのため **ADR-0003** で起票。
+
+### PR ドラフト
+
+タイトル: `[ISSUE-002] OpenAPI 基盤 & ProblemDetails (RFC 9457)`
+
+本文の主要点:
+
+- OpenAPI 3.1 エントリ + 共通 components（schemas / responses / parameters / security）
+- `redocly` + `spectral` + カスタムルールで CI 検証
+- `error-format.md` で `reason` の名前空間と status マッピングを規約化
+- ADR-0003 で RFC 9457 採用の背景・受容コストを記録
+- 動作確認: `pnpm openapi:lint && pnpm openapi:bundle` がローカルで成功

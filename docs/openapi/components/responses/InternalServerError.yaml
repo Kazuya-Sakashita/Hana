@@ -1,0 +1,17 @@
+description: |
+  サーバ内部エラー。固定文言で返し、スタックトレース・SQL・テーブル名・例外メッセージ等
+  の内部情報を漏らさない。詳細は instance（request_id）でサーバログを引いて調査する。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      internal_server_error:
+        summary: Generic 5xx
+        value:
+          type: 'https://hana.app/problems/internal-server-error'
+          title: 'Internal Server Error'
+          status: 500
+          detail: 'サーバ内部で問題が発生しました'
+          reason: 'internal_server_error'
+          instance: 'req_01HXYZABCDEFG'

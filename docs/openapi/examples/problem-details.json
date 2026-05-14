@@ -1,0 +1,20 @@
+{
+  "type": "https://hana.app/problems/validation-error",
+  "title": "Validation Error",
+  "status": 422,
+  "detail": "入力内容に誤りがあります",
+  "reason": "validation_error",
+  "instance": "req_01HXYZABCDEFG",
+  "errors": [
+    {
+      "path": "body.name",
+      "reason": "required",
+      "message": "必須項目です"
+    },
+    {
+      "path": "body.birthdate",
+      "reason": "invalid_format",
+      "message": "YYYY-MM-DD 形式で入力してください"
+    }
+  ]
+}
