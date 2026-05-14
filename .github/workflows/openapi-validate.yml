@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'docs/openapi/**'
+      - 'src/lib/api/generated/**'
       - '.spectral.yaml'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - 'docs/openapi/**'
+      - 'src/lib/api/generated/**'
       - '.spectral.yaml'
 
 jobs:
@@ -21,6 +23,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -37,3 +41,22 @@ jobs:
 
       - name: OpenAPI bundle (smoke test)
         run: pnpm openapi:bundle
+
+      - name: Regenerate types
+        run: pnpm openapi:gen
+
+      - name: Detect generation drift
+        run: |
+          if ! git diff --exit-code src/lib/api/generated/; then
+            echo "::error::Generated types are out of sync with OpenAPI."
+            echo "::error::Run 'pnpm openapi:gen' locally and commit the diff."
+            exit 1
+          fi
+
+      - name: Detect breaking changes (warn-only)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: oasdiff/oasdiff-action/breaking@v0.0.21
+        with:
+          base: 'origin/${{ github.base_ref }}:docs/openapi/openapi.yaml'
+          revision: 'docs/openapi/openapi.yaml'

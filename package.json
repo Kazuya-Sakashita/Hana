@@ -20,7 +20,9 @@
     "test:watch": "vitest",
     "openapi:lint": "redocly lint docs/openapi/openapi.yaml && spectral lint --ruleset .spectral.yaml docs/openapi/openapi.yaml",
     "openapi:bundle": "redocly bundle docs/openapi/openapi.yaml -o docs/openapi/openapi.bundled.yaml",
-    "openapi:all": "pnpm openapi:lint && pnpm openapi:bundle"
+    "openapi:gen": "openapi-typescript docs/openapi/openapi.yaml -o src/lib/api/generated/schema.d.ts",
+    "openapi:check-breaking": "oasdiff breaking origin/main:docs/openapi/openapi.yaml docs/openapi/openapi.yaml || true",
+    "openapi:all": "pnpm openapi:lint && pnpm openapi:bundle && pnpm openapi:gen"
   },
   "dependencies": {
     "next": "^16.2.6",
@@ -37,6 +39,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.6",
     "eslint-config-prettier": "^10.1.8",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"

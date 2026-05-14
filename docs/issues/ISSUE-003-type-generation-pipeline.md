@@ -2,7 +2,7 @@
 id: ISSUE-003
 title: 型生成パイプライン構築
 priority: P0
-status: todo
+status: review
 size: S
 created_at: 2026-05-14
 ---
@@ -141,3 +141,45 @@ npm run openapi:all
 - `CLAUDE.md` §5
 - `docs/api-driven-development/README.md` §7
 - ISSUE-002（OpenAPI 基盤・前提条件）
+
+---
+
+## 実施結果 (2026-05-14)
+
+### 作成・変更ファイル
+
+- `package.json`: `openapi-typescript@7.13.0` 追加、scripts に `openapi:gen` / `openapi:check-breaking` / `openapi:all` 追加
+- `src/lib/api/generated/schema.d.ts`: 自動生成（先頭に `openapi-typescript` 由来の `Do not make direct changes` ヘッダ付き）
+- `src/lib/api/generated/README.md`: 直接編集禁止と再生成手順を明示
+- `.github/workflows/openapi-validate.yml`:
+  - `paths` トリガに `src/lib/api/generated/**` を追加
+  - `actions/checkout` に `fetch-depth: 0`
+  - `Regenerate types` + `Detect generation drift` (生成漏れを CI で fail)
+  - `Detect breaking changes (warn-only)` を `oasdiff/oasdiff-action/breaking@v0.0.21` で実装
+
+### スコープ調整
+
+- 当初 spec の「ダミー `/v1/ping` を一時追加」は不要と判断（ISSUE-002 で投入済みの `/health` で生成パイプラインの動作確認が成立するため）
+- `oasdiff` は curl ダウンロードではなく **公式 GitHub Action** を使用（バージョン固定・サンドボックスを濁さない）
+
+### 検証結果
+
+- [x] `pnpm openapi:gen` で `schema.d.ts` が生成される
+- [x] 生成ファイル先頭に `openapi-typescript` 由来の自動生成ヘッダ
+- [x] `src/lib/api/generated/` が Git 管理対象
+- [x] `pnpm openapi:all` (lint → bundle → gen) 通過
+- [x] `pnpm typecheck` / `pnpm lint` / `pnpm format:check` 通過
+- [x] `eslint.config.mjs` の ignore に `src/lib/api/generated/**` 含む
+- [x] `.prettierignore` に `src/lib/api/generated/` 含む
+
+### CI 動作の予告
+
+PR #5（このIssueのPR）で確認できること:
+
+- `validate` job が新たに `Regenerate types` / `Detect generation drift` を実行
+- `Detect breaking changes` は warn-only（破壊変更があってもジョブは fail しない）
+- 初回のため drift は出ない見込み
+
+### PR ドラフト
+
+タイトル: `[ISSUE-003] 型生成パイプライン (openapi-typescript + drift 検知 + oasdiff)`
