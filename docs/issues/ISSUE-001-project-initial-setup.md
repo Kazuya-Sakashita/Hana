@@ -2,7 +2,7 @@
 id: ISSUE-001
 title: プロジェクト初期設定
 priority: P0
-status: todo
+status: review
 size: S
 created_at: 2026-05-14
 ---
@@ -55,14 +55,14 @@ Hana を **API 駆動開発** で進めるための土台を整える。
 
 ## 影響範囲
 
-| 領域 | 影響 |
-|---|---|
-| OpenAPI | なし |
-| 生成型 | なし |
-| 画面 | 雛形のみ |
-| データ | なし |
-| CI | typecheck / lint を新規追加 |
-| ドキュメント | README / ADR 0001 追加 |
+| 領域         | 影響                        |
+| ------------ | --------------------------- |
+| OpenAPI      | なし                        |
+| 生成型       | なし                        |
+| 画面         | 雛形のみ                    |
+| データ       | なし                        |
+| CI           | typecheck / lint を新規追加 |
+| ドキュメント | README / ADR 0001 追加      |
 
 ---
 
@@ -116,3 +116,90 @@ Hana を **API 駆動開発** で進めるための土台を整える。
 - `CLAUDE.md`
 - `docs/api-driven-development/README.md`
 - `Hana_PRD_v1.md` §6 MVP 仕様, §17 ロードマップ
+
+---
+
+## 実施結果 (2026-05-14)
+
+### 採用した判断
+
+- フロントスタック: **Next.js 16.2.6 (App Router) + Route Handlers 同居** → `docs/adr/0002-frontend-stack.md`
+- パッケージマネージャ: **pnpm 10.32.1**
+- 単一リポ
+- React 19.2.6 / TypeScript 6.0.3 (strict + `noUncheckedIndexedAccess`)
+- ESLint 9.39.4（10 系は `scopeManager.addGlobals` のプラグイン互換問題で 9 に固定）
+
+### 作成・変更ファイル
+
+- `package.json`, `pnpm-lock.yaml`
+- `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`
+- `.gitignore`, `.env.example`
+- `src/app/layout.tsx`, `src/app/page.tsx`
+- `README.md`（プロジェクト概要 + セットアップ + ディレクトリ）
+- `docs/adr/0001-openapi-as-sot.md`, `docs/adr/0002-frontend-stack.md`
+- `.github/ISSUE_TEMPLATE/feature.md` / `api-change.md` / `bug.md`
+- `.github/pull_request_template.md`
+- `.github/workflows/typecheck.yml`（typecheck + lint + format:check）
+
+### 検証結果
+
+- [x] `pnpm install` 成功
+- [x] `pnpm typecheck` グリーン
+- [x] `pnpm lint` グリーン
+- [x] `pnpm format:check` グリーン
+- [x] `pnpm build` 成功（`/` を static prerender）
+- [x] CI workflow が typecheck / lint / format:check を必須化
+
+### PR ドラフト
+
+タイトル: `[ISSUE-001] プロジェクト初期設定 (Next.js 16 + pnpm + strict TS)`
+
+本文:
+
+````markdown
+## 関連 Issue
+
+Closes #1
+
+## 変更概要
+
+Hana を API 駆動開発で進めるための土台を整備:
+
+- Next.js 16.2.6 (App Router) + React 19 + TypeScript 6 (strict)
+- pnpm 10 / 単一リポ / `@/*` パスエイリアス
+- ESLint 9 (flat config, `eslint-config-next`) + Prettier
+- `.gitignore` / `.env.example` / CI workflow (typecheck + lint + format:check)
+- Issue / PR テンプレート 3 種
+- ADR-0001 (OpenAPI as SoT), ADR-0002 (フロントスタック決定)
+- README にセットアップ・コマンド・ディレクトリ構成
+
+OpenAPI / API クライアント / 認証 などの実装は後続 Issue (ISSUE-002 以降)。
+
+## 実装後チェックリスト
+
+- [x] `pnpm typecheck` 通過
+- [x] `pnpm lint` 通過
+- [x] `pnpm format:check` 通過
+- [x] `pnpm build` 通過
+- [x] `.gitignore` に `.claude/settings.local.json`, env, build artifacts, `docs/openapi/openapi.bundled.yaml` を含む
+- [x] PR テンプレに PII チェック項目あり
+- [x] README に「実データをコミットしない」明記
+
+## 動作確認手順
+
+```bash
+pnpm install
+pnpm dev
+# → http://localhost:3000 で Hana のトップが表示される
+```
+
+## デプロイ・マイグレーション影響
+
+- なし（DB 接続未導入、デプロイ設定は別 Issue）
+
+## メモ
+
+- ESLint は v9 で固定（v10.3.0 は `eslint-plugin-react-hooks` 等との互換問題で起動失敗）
+- TypeScript 6 で `baseUrl` が deprecated のため、`paths` のみで `@/*` エイリアスを実現
+- Next.js が build 時に `tsconfig.json` の `jsx: react-jsx` を自動付与（mandatory change）
+````

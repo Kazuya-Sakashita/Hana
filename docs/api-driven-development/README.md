@@ -71,17 +71,17 @@ Hana/
 
 ## 3. ツールチェイン（推奨）
 
-| 領域 | 推奨ライブラリ | 役割 |
-|---|---|---|
-| OpenAPI | OpenAPI 3.1 | API 契約フォーマット |
-| Lint | `@redocly/cli`, `@stoplight/spectral-cli` | OpenAPI の妥当性検証 |
-| Bundle | `@redocly/cli` | 分割ファイルを 1 つに集約 |
-| 型生成 | `openapi-typescript` | `paths` 型の生成 |
-| API クライアント | `openapi-fetch` | 型安全な fetch ラッパー |
-| データフェッチ | `@tanstack/react-query` v5 | キャッシュ・楽観更新 |
-| モック | `msw` v2 | 開発時 / Storybook / E2E |
-| 契約テスト | `schemathesis` | OpenAPI と実装の整合性 |
-| 破壊変更検知 | `oasdiff` | CI でブレイキングチェンジを失敗させる |
+| 領域             | 推奨ライブラリ                            | 役割                                  |
+| ---------------- | ----------------------------------------- | ------------------------------------- |
+| OpenAPI          | OpenAPI 3.1                               | API 契約フォーマット                  |
+| Lint             | `@redocly/cli`, `@stoplight/spectral-cli` | OpenAPI の妥当性検証                  |
+| Bundle           | `@redocly/cli`                            | 分割ファイルを 1 つに集約             |
+| 型生成           | `openapi-typescript`                      | `paths` 型の生成                      |
+| API クライアント | `openapi-fetch`                           | 型安全な fetch ラッパー               |
+| データフェッチ   | `@tanstack/react-query` v5                | キャッシュ・楽観更新                  |
+| モック           | `msw` v2                                  | 開発時 / Storybook / E2E              |
+| 契約テスト       | `schemathesis`                            | OpenAPI と実装の整合性                |
+| 破壊変更検知     | `oasdiff`                                 | CI でブレイキングチェンジを失敗させる |
 
 これらは推奨デフォルトであり、置き換えはコメントで議論可能。ただし「OpenAPI を真実の源にする」原則は固定。
 
@@ -137,9 +137,7 @@ Hana/
   "detail": "入力内容に誤りがあります",
   "reason": "validation_error",
   "instance": "req_01HXYZ...",
-  "errors": [
-    { "path": "body.name", "reason": "required", "message": "必須項目です" }
-  ]
+  "errors": [{ "path": "body.name", "reason": "required", "message": "必須項目です" }]
 }
 ```
 
@@ -207,11 +205,17 @@ created_at: YYYY-MM-DD
 ---
 
 ## 目的 (Why)
+
 ## スコープ (What)
+
 ## やらないこと (Out of Scope)
+
 ## 影響範囲
+
 ## 受け入れ条件 (Acceptance Criteria)
+
 ## セキュリティ・プライバシー考慮
+
 ## 参考
 ```
 
@@ -233,16 +237,16 @@ todo → in_progress → review → done
 
 ## 9. テスト戦略（要約）
 
-| レイヤ | ツール | 確認内容 |
-|---|---|---|
-| OpenAPI Lint | redocly / spectral | 仕様の妥当性 |
-| 生成差分 | openapi-typescript + CI | 生成漏れ検知 |
-| 契約 | schemathesis | 実装と OpenAPI の整合 |
-| Unit | vitest | 純粋関数 / ViewModel |
-| Integration | vitest + supertest | request spec / 認可 |
-| E2E | playwright | golden path |
-| AI 出力 | カスタム | 性質テスト |
-| セキュリティ | カスタム | ログ PII / Presigned 期限 |
+| レイヤ       | ツール                  | 確認内容                  |
+| ------------ | ----------------------- | ------------------------- |
+| OpenAPI Lint | redocly / spectral      | 仕様の妥当性              |
+| 生成差分     | openapi-typescript + CI | 生成漏れ検知              |
+| 契約         | schemathesis            | 実装と OpenAPI の整合     |
+| Unit         | vitest                  | 純粋関数 / ViewModel      |
+| Integration  | vitest + supertest      | request spec / 認可       |
+| E2E          | playwright              | golden path               |
+| AI 出力      | カスタム                | 性質テスト                |
+| セキュリティ | カスタム                | ログ PII / Presigned 期限 |
 
 ---
 
@@ -285,7 +289,9 @@ todo → in_progress → review → done
 - Date: YYYY-MM-DD
 
 ## Context
+
 ## Decision
+
 ## Consequences
 ```
 
