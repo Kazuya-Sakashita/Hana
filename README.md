@@ -39,31 +39,50 @@ pnpm install
 
 # 2. 環境変数を準備（.env.local は Git 管理外）
 cp .env.example .env.local
-# 必要な値を埋める（ローカル開発では空のままでも起動できる項目あり）
+# Supabase の接続情報を取得して埋める（手順は下記）
 
-# 3. 開発サーバを起動
+# 3. DB を初期化
+pnpm db:generate
+pnpm db:migrate
+
+# 4. 開発サーバを起動
 pnpm dev
 # → http://localhost:3000
 ```
+
+### Supabase / Prisma の詳しいセットアップ
+
+[`docs/api-driven-development/db-setup.md`](./docs/api-driven-development/db-setup.md) を参照（5 分で完了）。
 
 ---
 
 ## よく使うコマンド
 
 ```bash
-pnpm dev              # 開発サーバ
-pnpm build            # 本番ビルド
-pnpm start            # ビルド済みを起動
-pnpm typecheck        # TypeScript 型チェック
-pnpm lint             # ESLint
-pnpm lint:fix         # ESLint --fix
-pnpm format           # Prettier 整形
-pnpm format:check     # Prettier 差分チェック
-pnpm test             # Vitest 1 回実行
-pnpm test:watch       # Vitest watch モード
-```
+pnpm dev                  # 開発サーバ
+pnpm build                # 本番ビルド
+pnpm start                # ビルド済みを起動
+pnpm typecheck            # TypeScript 型チェック
+pnpm lint                 # ESLint
+pnpm lint:fix             # ESLint --fix
+pnpm format               # Prettier 整形
+pnpm format:check         # Prettier 差分チェック
+pnpm test                 # Vitest 1 回実行
+pnpm test:watch           # Vitest watch モード
 
-OpenAPI 関連スクリプト（`openapi:lint` / `openapi:gen` / `openapi:check-breaking`）は ISSUE-002 / ISSUE-003 で追加します。
+# OpenAPI
+pnpm openapi:lint         # redocly + spectral で OpenAPI を検証
+pnpm openapi:bundle       # 分割ファイルを 1 つに集約
+pnpm openapi:gen          # OpenAPI → TypeScript 型を再生成
+pnpm openapi:check-breaking  # main ブランチに対する破壊変更を検出 (warn)
+pnpm openapi:all          # lint → bundle → gen
+
+# Database (Supabase + Prisma)
+pnpm db:generate          # Prisma Client の型を生成
+pnpm db:migrate           # ローカル: 開発用 migration を作成・適用
+pnpm db:migrate:deploy    # 本番/CI: 既存 migration を適用
+pnpm db:studio            # Prisma Studio (DB GUI) を起動
+```
 
 ---
 
