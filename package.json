@@ -22,11 +22,19 @@
     "openapi:bundle": "redocly bundle docs/openapi/openapi.yaml -o docs/openapi/openapi.bundled.yaml",
     "openapi:gen": "openapi-typescript docs/openapi/openapi.yaml -o src/lib/api/generated/schema.d.ts",
     "openapi:check-breaking": "oasdiff breaking origin/main:docs/openapi/openapi.yaml docs/openapi/openapi.yaml || true",
-    "openapi:all": "pnpm openapi:lint && pnpm openapi:bundle && pnpm openapi:gen"
+    "openapi:all": "pnpm openapi:lint && pnpm openapi:bundle && pnpm openapi:gen",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "next": "^16.2.6",
     "openapi-fetch": "^0.17.0",
+    "pg": "^8.20.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
@@ -34,15 +42,25 @@
     "@redocly/cli": "^2.30.5",
     "@stoplight/spectral-cli": "^6.16.0",
     "@types/node": "^25.7.0",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "dotenv": "^17.4.2",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.6",
     "eslint-config-prettier": "^10.1.8",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3",
+    "prisma": "^7.8.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
   }
 }

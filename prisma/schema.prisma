@@ -1,0 +1,24 @@
+// Hana Prisma schema
+//
+// このファイルは ISSUE-005 で datasource + generator のみで開始する。
+// 実テーブル (profiles / children / memories 等) は使うタイミングの Issue で追加する。
+//   - profiles: ISSUE-006 (Supabase Auth 統合)
+//   - children: ISSUE-007 (子どもプロフィール API)
+//   - memories: ISSUE-009 (記録 API)
+//
+// マイグレーション運用:
+//   ローカル: pnpm db:migrate (= prisma migrate dev)
+//   本番:    pnpm db:migrate:deploy
+//
+// 注意:
+//   - DATABASE_URL は pgbouncer 経由 (pooled)
+//   - DIRECT_URL は port 5432 (direct) — Prisma Migrate に必須
+//   - password を含む URL を log や git に出さないこと
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
