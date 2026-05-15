@@ -56,7 +56,32 @@ paths:
               example:
                 status: ok
         '500':
-          $ref: './components/responses/InternalServerError.yaml'
+          $ref: '#/components/responses/InternalServerError'
+  /me:
+    get:
+      operationId: getCurrentUser
+      summary: 現在のユーザーを取得
+      description: |
+        Supabase Auth セッションから現在のユーザー (AppUser) を返す。
+        profile レコードが無い場合はサーバ側で lazy に作成する。
+      tags: [meta]
+      responses:
+        '200':
+          description: 現在のユーザー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+              example:
+                id: '8f7e6d5c-4b3a-4291-8765-0123456789ab'
+                email: 'parent@example.com'
+                display_name: null
+                ai_consent_at: null
+                created_at: '2026-05-14T09:30:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     bearerAuth:
@@ -66,6 +91,8 @@ components:
       $ref: './components/schemas/ProblemDetails.yaml'
     ProblemDetailFieldError:
       $ref: './components/schemas/ProblemDetailFieldError.yaml'
+    AppUser:
+      $ref: './components/schemas/AppUser.yaml'
   parameters:
     Limit:
       $ref: './components/parameters/Limit.yaml'

@@ -2,12 +2,6 @@ extends:
   - 'spectral:oas'
 
 rules:
-  # === Bootstrap 期に許容するルール ===
-  # 共通コンポーネント（ProblemDetails / 共通エラー応答 / 共通パラメータ）は
-  # 実 API 追加（ISSUE-005 以降）までは未参照のため、unused 警告をオフにする。
-  # 実 API 投入後に再有効化する。
-  oas3-unused-component: off
-
   # === 必須ドキュメント ===
   operation-description: error
   operation-tags: warn
