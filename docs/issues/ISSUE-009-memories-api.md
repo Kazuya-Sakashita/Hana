@@ -2,9 +2,11 @@
 id: ISSUE-009
 title: 記録 (Memory) API + /record + /album 画面
 priority: P0
-status: review
+status: done
 size: M+
 created_at: 2026-05-23
+merged_at: 2026-05-23
+pr: 22
 ---
 
 ## 目的 (Why)
