@@ -1,0 +1,44 @@
+type: object
+description: |
+  記録の作成リクエスト。`image_ids` は事前に `POST /uploads/confirm` で作成済みの
+  画像 ID を指定する。各画像は **現在のユーザーが所有** かつ **未紐付け**である必要がある。
+required: [child_id, title, recorded_at, image_ids, ai_generated]
+properties:
+  child_id:
+    type: string
+    format: uuid
+    description: 紐付ける子ども ID
+    example: '4a2c89b6-1234-4d8e-9abc-fedcba987654'
+  title:
+    type: string
+    minLength: 1
+    maxLength: 100
+    example: 'はじめての すなあそび'
+  body:
+    type: [string, 'null']
+    maxLength: 1000
+    description: 本文 (任意)。null も許容
+    example: 'すなを ぎゅっと にぎって、はじめての かんしょく。'
+  recorded_at:
+    type: string
+    format: date
+    description: 記録対象日 (YYYY-MM-DD)
+    example: '2026-05-23'
+  weather:
+    type: [string, 'null']
+    maxLength: 20
+    example: 'はれ'
+  image_ids:
+    type: array
+    minItems: 1
+    maxItems: 5
+    items:
+      type: string
+      format: uuid
+    description: 紐付ける画像 ID (1〜5 件・表示順)
+    example:
+      - 'a1b2c3d4-1234-4d8e-9abc-fedcba987654'
+  ai_generated:
+    type: boolean
+    description: 本文が AI 生成かどうか。ISSUE-009 では常に false で送る
+    example: false

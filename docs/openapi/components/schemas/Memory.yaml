@@ -1,0 +1,77 @@
+type: object
+description: |
+  記録 (子どもの 1 日 1 ページ)。子ども (Child) に紐付き、複数の画像 (Image) を持つ。
+  `ai_generated` が true のとき、本文は AI 生成 (ISSUE-010 で実装)。
+  論理削除フラグ `deleted_at` は API レスポンスに含めない。
+required:
+  [
+    id,
+    child_id,
+    title,
+    body,
+    recorded_at,
+    weather,
+    is_favorite,
+    ai_generated,
+    image_ids,
+    created_at,
+    updated_at,
+  ]
+properties:
+  id:
+    type: string
+    format: uuid
+    description: 記録 ID
+    example: '7d6e5f4c-3b2a-4291-8765-0123456789ab'
+  child_id:
+    type: string
+    format: uuid
+    description: 紐付く子ども ID (現在のユーザーが所有)
+    example: '4a2c89b6-1234-4d8e-9abc-fedcba987654'
+  title:
+    type: string
+    minLength: 1
+    maxLength: 100
+    description: 記録のタイトル
+    example: 'はじめての すなあそび'
+  body:
+    type: [string, 'null']
+    maxLength: 1000
+    description: 記録の本文 (情景・感情)。null も許容
+    example: 'すなを ぎゅっと にぎって、はじめての かんしょく。'
+  recorded_at:
+    type: string
+    format: date
+    description: 記録の対象日 (撮影日)
+    example: '2026-05-23'
+  weather:
+    type: [string, 'null']
+    maxLength: 20
+    description: 天気 (はれ / くもり / あめ / ゆき / かぜ / よる など)
+    example: 'はれ'
+  is_favorite:
+    type: boolean
+    description: お気に入りフラグ
+    example: false
+  ai_generated:
+    type: boolean
+    description: 本文が AI 生成かどうか
+    example: false
+  image_ids:
+    type: array
+    description: 紐付く画像 ID の配列 (表示順)
+    items:
+      type: string
+      format: uuid
+    example:
+      - 'a1b2c3d4-1234-4d8e-9abc-fedcba987654'
+  created_at:
+    type: string
+    format: date-time
+    description: レコード作成日時
+    example: '2026-05-23T11:00:00Z'
+  updated_at:
+    type: string
+    format: date-time
+    description: レコード更新日時
+    example: '2026-05-23T11:00:00Z'

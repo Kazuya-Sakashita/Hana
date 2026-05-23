@@ -5,7 +5,7 @@
 //   - profiles: ISSUE-006 (Supabase Auth 統合)
 //   - children: ISSUE-007 (子どもプロフィール API)
 //   - images:   ISSUE-008 (写真アップロード + Supabase Storage)
-//   - memories: ISSUE-009 (記録 API)
+//   - memories: ISSUE-009 (記録 API) ← このIssue
 //
 // マイグレーション運用:
 //   ローカル: pnpm db:migrate (= prisma migrate dev)
@@ -38,6 +38,7 @@ model Profile {
 
   children Child[]
   images   Image[]
+  memories Memory[]
 
   @@map("profiles")
 }
@@ -57,7 +58,8 @@ model Child {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memories Memory[]
 
   @@index([userId])
   @@map("children")
@@ -81,9 +83,37 @@ model Image {
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
 
-  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memory Memory?  @relation(fields: [memoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([memoryId])
   @@map("images")
+}
+
+// 記録 (1 日 1 ページの育児ログ)。
+// child_id は children.id への FK、user_id は profiles.id への FK (Cascade)。
+// 画像との関係は images.memory_id (nullable) で表現する 1:N。
+// 論理削除フラグ deleted_at で「やり直し」をサポート。
+model Memory {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  childId      String    @map("child_id") @db.Uuid
+  title        String    @db.VarChar(100)
+  body         String?   @db.Text
+  recordedAt   DateTime  @map("recorded_at") @db.Date
+  weather      String?   @db.VarChar(20)
+  isFavorite   Boolean   @default(false) @map("is_favorite")
+  aiGenerated  Boolean   @default(false) @map("ai_generated")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child  Child   @relation(fields: [childId], references: [id], onDelete: Cascade)
+  images Image[]
+
+  @@index([userId, recordedAt(sort: Desc), id(sort: Desc)], map: "memories_user_recorded_desc_idx")
+  @@index([childId])
+  @@map("memories")
 }
