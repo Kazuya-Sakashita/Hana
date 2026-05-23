@@ -2,9 +2,11 @@
 id: ISSUE-007
 title: 子どもプロフィール API (children) + /onboarding 画面
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-23
+merged_at: 2026-05-23
+pr: 18
 ---
 
 ## 目的 (Why)
