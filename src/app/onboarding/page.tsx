@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,12 @@ import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 
 type FieldErrors = Partial<Record<'name' | 'birthdate' | 'avatar_url', string>>
+type Phase = 'loading' | 'form' | 'already' | 'success' | 'error'
+
+interface RegisteredChild {
+  name: string
+  birthdate: string
+}
 
 function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   const fields: FieldErrors = {}
@@ -24,34 +30,65 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
 
 export default function OnboardingPage() {
   const router = useRouter()
+
+  const [phase, setPhase] = useState<Phase>('loading')
+  const [existingChild, setExistingChild] = useState<RegisteredChild | null>(null)
   const [name, setName] = useState('')
   const [birthdate, setBirthdate] = useState('')
   const [pending, setPending] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-  const [topMessage, setTopMessage] = useState<{
-    kind: 'limit_reached' | 'auth' | 'generic'
-    text: string
-  } | null>(null)
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null)
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const canSubmit = name.trim().length > 0 && birthdate.length > 0 && !pending
+
+  // 初期マウント時に既存の子どもプロフィールを取得し、状態を切替
+  useEffect(() => {
+    let cancelled = false
+    const client = getBrowserApiClient()
+
+    client
+      .GET('/children')
+      .then(({ data }) => {
+        if (cancelled) return
+        const first = data?.data?.[0]
+        if (first) {
+          setExistingChild({ name: first.name, birthdate: first.birthdate })
+          setPhase('already')
+        } else {
+          setPhase('form')
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        if (isApiProblemError(e) && e.reason === 'unauthorized') {
+          router.push('/sign-in')
+          return
+        }
+        setPhase('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [router])
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
     setFieldErrors({})
-    setTopMessage(null)
+    setSubmitMessage(null)
 
+    const trimmedName = name.trim()
     const client = getBrowserApiClient()
     try {
       await client.POST('/children', {
-        body: {
-          name: name.trim(),
-          birthdate,
-          avatar_url: null,
-        },
+        body: { name: trimmedName, birthdate, avatar_url: null },
       })
-      router.push('/')
+      // 短い成功画面 → ホームへ
+      setExistingChild({ name: trimmedName, birthdate })
+      setPhase('success')
+      setTimeout(() => router.push('/'), 1500)
     } catch (e) {
       if (isApiProblemError(e)) {
         switch (e.reason) {
@@ -59,51 +96,114 @@ export default function OnboardingPage() {
             setFieldErrors(extractFieldErrors(e.problem))
             break
           case 'child_limit_reached':
-            setTopMessage({
-              kind: 'limit_reached',
-              text: 'すでに お子さんの ページが あります。',
-            })
-            break
+            // 別タブで登録した等の race。最新状態で再描画
+            setExistingChild({ name: trimmedName, birthdate })
+            setPhase('already')
+            return
           case 'unauthorized':
             router.push('/sign-in')
             return
           default:
-            setTopMessage({
-              kind: 'generic',
-              text: 'うまく ほぞんできませんでした。もういちど ためしてみてください。',
-            })
+            setSubmitMessage(
+              `うまく ほぞんできませんでした。もういちど ためしてみてください。 (${e.reason})`,
+            )
         }
       } else {
-        setTopMessage({
-          kind: 'generic',
-          text: 'うまく つうしんできませんでした。もういちど ためしてみてください。',
-        })
+        setSubmitMessage('うまく つうしんできませんでした。もういちど ためしてみてください。')
       }
       setPending(false)
     }
   }
 
+  // === 表示分岐 ===
+
+  if (phase === 'loading') {
+    return (
+      <Shell>
+        <Card className="w-full max-w-md">
+          <CardContent className="flex items-center justify-center py-16">
+            <span className="text-ink-tertiary text-sm">よみこんでいます…</span>
+          </CardContent>
+        </Card>
+      </Shell>
+    )
+  }
+
+  if (phase === 'error') {
+    return (
+      <Shell>
+        <Card className="w-full max-w-md">
+          <CardHeader className="items-center text-center">
+            <CardTitle className="font-serif text-xl">うまく ひらけませんでした</CardTitle>
+            <CardDescription className="mt-2">
+              ネットワークの ちょうしを たしかめて、もういちど ためしてみてください。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => location.reload()} className="w-full">
+              もういちど ひらく
+            </Button>
+          </CardContent>
+        </Card>
+      </Shell>
+    )
+  }
+
+  if (phase === 'already' && existingChild) {
+    return (
+      <Shell>
+        <Card className="w-full max-w-md">
+          <CardHeader className="items-center text-center">
+            <CardTitle className="font-serif text-2xl">
+              {existingChild.name} ちゃんの ページは すでに あります
+            </CardTitle>
+            <CardDescription className="mt-2">
+              うまれたひ: {existingChild.birthdate}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Button asChild size="lg" className="w-full">
+              <Link href="/">ホームへ</Link>
+            </Button>
+            <p className="text-ink-tertiary text-center text-xs">
+              プロフィールは あとから せってい で かえられます。
+            </p>
+          </CardContent>
+        </Card>
+      </Shell>
+    )
+  }
+
+  if (phase === 'success' && existingChild) {
+    return (
+      <Shell>
+        <Card className="w-full max-w-md">
+          <CardHeader className="items-center text-center">
+            <CardTitle className="font-serif text-2xl">
+              {existingChild.name} ちゃん、はじめまして
+            </CardTitle>
+            <CardDescription className="mt-2">これが、ふたりの 1ページ目です。</CardDescription>
+          </CardHeader>
+        </Card>
+      </Shell>
+    )
+  }
+
+  // phase === 'form'
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-6 py-12">
+    <Shell>
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
           <CardTitle className="font-serif text-2xl">お子さんのこと、おしえてください</CardTitle>
           <CardDescription className="mt-2">あとから いつでも かえられます。</CardDescription>
         </CardHeader>
         <CardContent>
-          {topMessage ? (
+          {submitMessage ? (
             <div
               role="alert"
               className="text-ink-secondary mb-6 rounded-xl bg-warm px-4 py-3 text-sm leading-narrative"
             >
-              {topMessage.text}
-              {topMessage.kind === 'limit_reached' ? (
-                <span className="ml-2">
-                  <Link href="/" className="text-sakura-deep underline-offset-4 hover:underline">
-                    ホームへ
-                  </Link>
-                </span>
-              ) : null}
+              {submitMessage}
             </div>
           ) : null}
 
@@ -150,11 +250,19 @@ export default function OnboardingPage() {
             </div>
 
             <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
-              {pending ? '...' : 'つづける'}
+              {pending ? 'ほぞん しています…' : 'つづける'}
             </Button>
           </form>
         </CardContent>
       </Card>
+    </Shell>
+  )
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-canvas px-6 py-12">
+      {children}
     </main>
   )
 }
