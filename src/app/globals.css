@@ -1,0 +1,183 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================================
+   Hana Design Tokens — Warm Washi Paper Inspired
+   docs/design/v0-prompt.md §1 (Visual System) を CSS で実体化したもの
+   ============================================================================ */
+
+:root {
+  /* --- Hana raw tokens --- */
+  --bg-canvas: #fbf7f2; /* ivory washi base */
+  --bg-elevated: #ffffff; /* card surface */
+  --bg-warm: #f5ede3; /* subtle warm wash */
+
+  --ink-primary: #2a2522; /* near-black, warm-shifted */
+  --ink-secondary: #6b5f57; /* muted brown-grey */
+  --ink-tertiary: #a89c92; /* timestamps, helpers */
+
+  --accent-sakura: #e8b4b8; /* the ONE accent */
+  --accent-deep: #8c5a5e; /* hover/pressed */
+  --hairline: #ede4d8; /* dividers */
+  --success-leaf: #7a8b6f; /* soft sage */
+  --warning-amber: #c89766; /* warm amber, never red */
+
+  --shadow-soft: 0 1px 2px rgba(58, 38, 30, 0.04), 0 4px 16px rgba(58, 38, 30, 0.04);
+  --shadow-lift: 0 2px 4px rgba(58, 38, 30, 0.05), 0 12px 32px rgba(58, 38, 30, 0.06);
+
+  --ease-organic: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* --- shadcn-compatible token mapping --- */
+  --background: var(--bg-canvas);
+  --foreground: var(--ink-primary);
+  --card: var(--bg-elevated);
+  --card-foreground: var(--ink-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--ink-primary);
+  --primary: var(--accent-sakura);
+  --primary-foreground: var(--ink-primary);
+  --secondary: var(--bg-warm);
+  --secondary-foreground: var(--ink-primary);
+  --muted: var(--bg-warm);
+  --muted-foreground: var(--ink-secondary);
+  --accent: var(--bg-warm);
+  --accent-foreground: var(--ink-primary);
+  --destructive: var(--warning-amber);
+  --destructive-foreground: var(--ink-primary);
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--accent-sakura);
+
+  --radius: 1.25rem; /* 20px — Hana の card デフォルト */
+}
+
+/* Dark mode — "warm midnight"。今は token 定義のみ、Provider は未導入 */
+.dark {
+  --bg-canvas: #1c1816;
+  --bg-elevated: #252220;
+  --bg-warm: #1f1b18;
+
+  --ink-primary: #f3ebe0;
+  --ink-secondary: #a89c92;
+  --ink-tertiary: #6b5f57;
+
+  --hairline: #3a322c;
+}
+
+@theme inline {
+  /* Fonts (next/font が --font-sans / --font-serif を提供) */
+  --font-sans: var(--font-sans), 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-serif), 'Noto Serif JP', ui-serif, Georgia, serif;
+
+  /* Hana semantic colors → Tailwind utility (bg-canvas, text-ink 等) */
+  --color-canvas: var(--bg-canvas);
+  --color-elevated: var(--bg-elevated);
+  --color-warm: var(--bg-warm);
+  --color-ink: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-tertiary: var(--ink-tertiary);
+  --color-sakura: var(--accent-sakura);
+  --color-sakura-deep: var(--accent-deep);
+  --color-hairline: var(--hairline);
+  --color-leaf: var(--success-leaf);
+  --color-amber: var(--warning-amber);
+
+  /* shadcn tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-canvas text-ink;
+    font-family: var(--font-sans);
+    font-feature-settings: 'palt' 1; /* 日本語のプロポーショナル詰め */
+  }
+
+  /* 物語本文・heading は serif (Noto Serif JP) を使う */
+  .font-serif {
+    font-family: var(--font-serif);
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-lift {
+    box-shadow: var(--shadow-lift);
+  }
+  .ease-organic {
+    transition-timing-function: var(--ease-organic);
+  }
+  /* 物語本文用の行送り (V0 prompt §1) */
+  .leading-narrative {
+    line-height: 1.85;
+  }
+  .leading-bookish {
+    line-height: 1.95;
+  }
+  /* 統計値 (Inter light + tabular-nums) */
+  .tabular-nums-light {
+    font-variant-numeric: tabular-nums;
+    font-weight: 300;
+  }
+  /* meta label utility (V0 prompt §1: 12px / uppercase / tracking +0.08em / ink-tertiary) */
+  .meta-label {
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-tertiary);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Focus ring (sakura 2px + 4px offset) */
+:focus-visible {
+  outline: 2px solid var(--accent-sakura);
+  outline-offset: 4px;
+}
+
+/* prefers-reduced-motion を尊重 (V0 prompt §4 Accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
