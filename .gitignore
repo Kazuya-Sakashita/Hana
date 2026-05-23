@@ -40,6 +40,11 @@ docs/openapi/openapi.bundled.json
 
 # NOTE: src/lib/api/generated/ は Git 管理する（CI で差分検知するため）
 
+# === Design reference assets (local-only) ===
+# V0 AI の出力は実装の参考用にローカルへ置くが、リポジトリには載せない。
+# 参照不要になったら手元で rm -rf する。詳細: docs/design/README.md
+docs/design/v0-output/
+
 # === Test ===
 playwright-report/
 test-results/

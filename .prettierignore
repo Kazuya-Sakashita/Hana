@@ -25,3 +25,6 @@ yarn.lock
 
 # User-authored long-form docs (do not auto-format)
 Hana_PRD_v1.md
+
+# Design reference assets (V0 AI output — do not edit / do not format)
+docs/design/v0-output/
