@@ -1,0 +1,27 @@
+type: object
+description: |
+  signed URL 発行レスポンス。クライアントは `presigned_url` に
+  `Content-Type` ヘッダ付きで直接 PUT する。
+  本 API は **DB には何も書き込まない**。確定処理は `POST /uploads/confirm` で行う。
+required: [presigned_url, storage_key, expires_at]
+properties:
+  presigned_url:
+    type: string
+    format: uri
+    description: |
+      Supabase Storage が発行する一回限りの PUT URL。
+      認証情報を含むため、ログ・クライアント永続化・URL 共有を禁止。
+    example: 'https://example.supabase.co/storage/v1/object/upload/sign/images/uploads/abc'
+  storage_key:
+    type: string
+    description: |
+      bucket 内のオブジェクトキー。confirm 時にクライアントから返す。
+      形式: `uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`
+    example: 'uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg'
+  expires_at:
+    type: string
+    format: date-time
+    description: |
+      presigned_url の有効期限 (情報提供)。
+      Supabase Storage の signed upload URL は現状約 2 時間有効。
+    example: '2026-05-23T12:00:00Z'

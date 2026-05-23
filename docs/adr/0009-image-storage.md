@@ -1,0 +1,165 @@
+# ADR-0009: 写真ストレージ設計 (Supabase Storage + presigned URL)
+
+- 状態: Accepted
+- 決定日: 2026-05-23
+- 対象 Issue: ISSUE-008
+
+## 背景
+
+Hana では子どもの写真を扱う。CLAUDE.md §7 で以下が宣言されている:
+
+- パブリック URL で公開しない
+- Presigned URL（デフォルト 30 分）経由でのみアクセス
+- `Cache-Control: private, no-store`
+- `storage_key: uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`
+- アップロード時にサーバ側で EXIF を削除
+
+これらを「どう実装に落とすか」を ADR で明文化し、後続 ISSUE が同じ判断を踏襲できるようにする。
+
+## 決定
+
+### 1. Storage は Supabase Storage を採用
+
+代替案: S3 / Cloudflare R2 / Bunny CDN。
+
+採用理由:
+
+- ADR-0004 で Supabase をマネージド基盤として採用済み
+- Auth と Storage の認可情報を 1 プロジェクトで共有できる
+- presigned URL API が SDK レベルで揃っている (`createSignedUploadUrl` / `createSignedUrl`)
+- private bucket / cache policy が UI から設定可能
+
+受容コスト: Supabase の Storage 料金体系 (容量 + 帯域)。MVP の規模では Free tier で十分。
+
+### 2. アップロードは Presigned URL 方式 (サーバ経由しない)
+
+代替案: クライアント → Next.js Route Handler → Storage (サーバ経由 PUT)
+
+採用理由:
+
+- Vercel Functions の body size 制約 (4.5 MB) を回避
+- サーバの帯域コストを払わない
+- 大量同時アップロードでスケールしやすい
+- PRD §11 API 設計の通り
+
+### 3. Presigned URL のフロー: 「発行 → 直接 PUT → 確認」の 3 ステップ
+
+```
+client                            server                              storage
+  │  POST /uploads/presigned-url    │
+  ├────────────────────────────────►│  generateStorageKey()
+  │                                 │  createSignedUploadUrl()
+  │  ◄─── { presigned_url, key } ───┤
+  │  PUT (画像本体)                                                        │
+  ├───────────────────────────────────────────────────────────────────────►│
+  │  POST /uploads/confirm                                                 │
+  ├────────────────────────────────►│  validate key prefix
+  │                                 │  prisma.image.create()
+  │  ◄─── 201 { id, ... } ──────────┤
+```
+
+- presigned-url 発行時には DB に **何も書かない** (確定処理は confirm で)
+- confirm が呼ばれなかった場合、Storage 側にゴミファイルが残る
+  - クリーンアップは将来 ISSUE で cron job 実装
+
+### 4. EXIF 削除はクライアント側で行う (MVP)
+
+CLAUDE.md §7 「アップロード時にサーバ側で EXIF を削除」と方針が異なるが、MVP では:
+
+- ブラウザの Canvas API で再エンコードすると **副作用で EXIF が消える** (位置情報・撮影機種等)
+- サーバ側で削除するには Storage からダウンロード → 加工 → 再アップロードが必要で、Function の実行時間と帯域コストが膨らむ
+- 信頼境界としては「クライアントが正しく削除した前提」だが、Hana のユーザーは自身のため、悪意ある混入の動機が低い
+
+将来 (v1 以降) で必要なら:
+
+- サーバ側で Storage hook を使い、アップロード後に自動的に EXIF 削除する仕組みに切替
+- このときは本 ADR を Superseded にし、新 ADR を起こす
+
+### 5. Signed URL TTL
+
+| 用途             | TTL                       | 由来                                                                                                               |
+| ---------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **アップロード** | Supabase 既定 (約 2 時間) | `createSignedUploadUrl` は TTL 指定をサポートしない                                                                |
+| **ダウンロード** | 30 分                     | `PRESIGNED_URL_TTL_SECONDS` (`.env.example` のコメント) と CLAUDE.md §7 が一致。`createSignedUrl(path, 1800)` 想定 |
+
+ダウンロード API は本 Issue ではまだ作らない (ISSUE-009 Memory 画面で必要)。
+本 ADR でルールだけ宣言。
+
+### 6. storage_key 形式: `uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`
+
+- `userIdHash`: SHA-256(user_id) の先頭 16 文字 — user_id 自体を URL に露出しない
+- `yyyymm`: アップロード時の UTC 年月 — 月単位の cleanup ジョブで論理的に処理しやすい
+- `uuid`: ランダム UUID v4 — 推測不可能
+- `ext`: content_type から導出 (`jpg` / `png` / `webp` / `heic` のみ)
+
+検証:
+
+- 発行: `generateStorageKey(userId, mime)` で組み立て
+- 確認: `isValidStorageKey(key)` で正規表現マッチ、`storageKeyBelongsToUser(key, userId)` で prefix 照合
+
+### 7. PII を API レスポンスから除外
+
+`Image` schema は `storage_key` を **含めない**:
+
+- CLAUDE.md §7 のログ禁止リストに `storage_key` がある
+- API レスポンス → ログ → モニタリングで漏れるリスクを構造的に排除
+- ダウンロード用 signed URL は別途 `GET /uploads/{imageId}/url` で発行する (ISSUE-009 で実装予定)
+
+### 8. content_type ホワイトリスト
+
+許可: `image/jpeg` / `image/png` / `image/webp` / `image/heic`
+
+- HEIC は iPhone の標準形式。MVP のターゲット (0–3歳児の母親) は iPhone 利用率が高い前提
+- 動画系 (mp4 / mov) は OUT (MVP では動画非対応・PRD §6)
+- それ以外は 422 `unsupported_media_type`
+
+### 9. file_size 上限 10 MiB
+
+- iPhone の HEIC で 1 枚 ~2–4 MB、JPEG で 1–3 MB
+- 10 MiB 上限で多くの実用範囲をカバー
+- 上限超過は **クライアント側で先に弾く** ことを推奨。サーバ側は最終防衛線
+- Supabase Storage の bucket 設定 (file size limit) も同じ値に揃える
+
+### 10. 退会時の物理削除
+
+- `images` テーブルは `profiles.id` への FK Cascade
+- ただし **Storage 上のオブジェクトは Cascade されない**
+- 退会フロー (ISSUE-016) で:
+  1. `images` 行から `storage_key` 一覧を取得
+  2. Supabase Storage で一括削除 (`remove([])`)
+  3. その後 `profiles` 削除 (Cascade で `images` 行も消える)
+
+## 採用した代替案
+
+### ❌ サーバ経由 PUT (multipart/form-data)
+
+理由: Vercel Functions の body size 制約、帯域コスト、スケーラビリティ。
+
+### ❌ Cloudinary / imgix 等の外部画像 SaaS
+
+理由: 別契約・料金体系を増やす価値が MVP では薄い。Supabase Storage で十分。
+
+### ❌ Storage の object policy で RLS
+
+理由: Phase 1 では Storage Policy は public-bucket=false のみ。RLS は Phase 2 (ADR-0007 と同じ判断軸)。
+アプリ層で storage_key prefix を検証することで認可を担保。
+
+## 受容コスト
+
+- **Storage 側の orphan files**: confirm 未到達のアップロードファイルが Storage に残る。
+  対策: 定期 cleanup ジョブ (将来 ISSUE)
+- **EXIF 削除のクライアント信頼**: 悪意あるユーザーが直 PUT で EXIF 付きの画像を上げる可能性。
+  対策: Phase 2 で Storage hook + sharp で自動削除
+- **storage_key の偽造防止**: `isValidStorageKey` + `storageKeyBelongsToUser` で防ぐが、
+  prefix 自体は user_id を SHA-256 で出しただけなので、user_id を知られると prefix も計算できる。
+  ただし user_id は Bearer JWT の中にあり、外部に流出しない設計。
+
+## 関連
+
+- ISSUE-008: 写真アップロード + Supabase Storage
+- ISSUE-009 (未着手): Memory API + 画像ダウンロード signed URL
+- ISSUE-016 (未着手): 退会フロー + Storage 物理削除
+- ADR-0004: Supabase をマネージド基盤に採用
+- ADR-0007: 認可は Route Handler 層 / RLS は Phase 2
+- `Hana_PRD_v1.md` §10 / §11 / §12
+- `CLAUDE.md` §7 セキュリティ・プライバシー

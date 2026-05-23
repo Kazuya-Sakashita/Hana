@@ -1,0 +1,20 @@
+type: object
+description: |
+  写真アップロード用の signed URL 発行リクエスト。
+  クライアントは事前に Canvas API 等で **EXIF を削除** した上で
+  受け取った `presigned_url` に PUT する想定 (CLAUDE.md §7)。
+required: [file_name, content_type]
+properties:
+  file_name:
+    type: string
+    minLength: 1
+    maxLength: 255
+    description: |
+      クライアント側の元ファイル名。サーバ側では拡張子の判定にのみ使用し、
+      DB には保管しない (PII)。
+    example: 'IMG_1234.jpg'
+  content_type:
+    type: string
+    enum: [image/jpeg, image/png, image/webp, image/heic]
+    description: MIME type。許可は 4 種のみ
+    example: 'image/jpeg'

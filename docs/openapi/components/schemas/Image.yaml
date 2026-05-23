@@ -1,0 +1,45 @@
+type: object
+description: |
+  アップロード済みの画像メタデータ。
+  実体は Supabase Storage の private bucket `images` に保管され、
+  ダウンロード時は別途 `GET /uploads/{imageId}/url` で signed URL を発行する想定 (本Issueでは未実装)。
+  `storage_key` は PII 扱いで API レスポンスには含めない (ログにも出さない)。
+required: [id, memory_id, content_type, width, height, file_size, created_at]
+properties:
+  id:
+    type: string
+    format: uuid
+    description: 画像 ID
+    example: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654'
+  memory_id:
+    type: [string, 'null']
+    format: uuid
+    description: |
+      紐付く記録の ID。アップロード直後は null。
+      ISSUE-009 で記録作成時に `POST /memories` 内で紐付ける。
+    example: null
+  content_type:
+    type: string
+    description: MIME type
+    enum: [image/jpeg, image/png, image/webp, image/heic]
+    example: 'image/jpeg'
+  width:
+    type: integer
+    minimum: 1
+    description: 画像の幅 (px)
+    example: 1920
+  height:
+    type: integer
+    minimum: 1
+    description: 画像の高さ (px)
+    example: 1080
+  file_size:
+    type: integer
+    minimum: 1
+    description: ファイルサイズ (byte)
+    example: 524288
+  created_at:
+    type: string
+    format: date-time
+    description: レコード作成 (= confirm された) 日時
+    example: '2026-05-23T10:00:00Z'

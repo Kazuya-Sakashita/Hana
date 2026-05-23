@@ -100,6 +100,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/presigned-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 写真アップロード用 signed URL を発行
+         * @description Supabase Storage に画像を直接 PUT するための **一回限りの signed URL** を発行する。
+         *     このエンドポイントは DB に書き込みを行わない。アップロード完了後に
+         *     `POST /uploads/confirm` を呼ぶことで Image レコードが作成される。
+         *
+         *     クライアントは PUT 前に **Canvas API 等で EXIF を削除** することが期待される (ADR-0009)。
+         */
+        post: operations["createPresignedUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/uploads/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * アップロード完了を通知して Image レコードを作成
+         * @description クライアントが presigned URL に PUT したあとに呼ぶ。
+         *     サーバは `storage_key` のプレフィクスが現在のユーザーのものであることを検証し、
+         *     Supabase Storage 上でオブジェクトの存在を確認した上で `images` テーブルに行を作成する。
+         */
+        post: operations["confirmUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -295,6 +341,128 @@ export interface components {
              * @example null
              */
             avatar_url?: string | null;
+        };
+        /**
+         * @description アップロード済みの画像メタデータ。
+         *     実体は Supabase Storage の private bucket `images` に保管され、
+         *     ダウンロード時は別途 `GET /uploads/{imageId}/url` で signed URL を発行する想定 (本Issueでは未実装)。
+         *     `storage_key` は PII 扱いで API レスポンスには含めない (ログにも出さない)。
+         */
+        Image: {
+            /**
+             * Format: uuid
+             * @description 画像 ID
+             * @example a1b2c3d4-1234-4d8e-9abc-fedcba987654
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description 紐付く記録の ID。アップロード直後は null。
+             *     ISSUE-009 で記録作成時に `POST /memories` 内で紐付ける。
+             * @example null
+             */
+            memory_id: string | null;
+            /**
+             * @description MIME type
+             * @example image/jpeg
+             * @enum {string}
+             */
+            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic";
+            /**
+             * @description 画像の幅 (px)
+             * @example 1920
+             */
+            width: number;
+            /**
+             * @description 画像の高さ (px)
+             * @example 1080
+             */
+            height: number;
+            /**
+             * @description ファイルサイズ (byte)
+             * @example 524288
+             */
+            file_size: number;
+            /**
+             * Format: date-time
+             * @description レコード作成 (= confirm された) 日時
+             * @example 2026-05-23T10:00:00Z
+             */
+            created_at: string;
+        };
+        /**
+         * @description 写真アップロード用の signed URL 発行リクエスト。
+         *     クライアントは事前に Canvas API 等で **EXIF を削除** した上で
+         *     受け取った `presigned_url` に PUT する想定 (CLAUDE.md §7)。
+         */
+        PresignedUploadRequest: {
+            /**
+             * @description クライアント側の元ファイル名。サーバ側では拡張子の判定にのみ使用し、
+             *     DB には保管しない (PII)。
+             * @example IMG_1234.jpg
+             */
+            file_name: string;
+            /**
+             * @description MIME type。許可は 4 種のみ
+             * @example image/jpeg
+             * @enum {string}
+             */
+            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic";
+        };
+        /**
+         * @description signed URL 発行レスポンス。クライアントは `presigned_url` に
+         *     `Content-Type` ヘッダ付きで直接 PUT する。
+         *     本 API は **DB には何も書き込まない**。確定処理は `POST /uploads/confirm` で行う。
+         */
+        PresignedUploadResponse: {
+            /**
+             * Format: uri
+             * @description Supabase Storage が発行する一回限りの PUT URL。
+             *     認証情報を含むため、ログ・クライアント永続化・URL 共有を禁止。
+             * @example https://example.supabase.co/storage/v1/object/upload/sign/images/uploads/abc
+             */
+            presigned_url: string;
+            /**
+             * @description bucket 内のオブジェクトキー。confirm 時にクライアントから返す。
+             *     形式: `uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`
+             * @example uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg
+             */
+            storage_key: string;
+            /**
+             * Format: date-time
+             * @description presigned_url の有効期限 (情報提供)。
+             *     Supabase Storage の signed upload URL は現状約 2 時間有効。
+             * @example 2026-05-23T12:00:00Z
+             */
+            expires_at: string;
+        };
+        /**
+         * @description アップロード完了通知。サーバはここで初めて `images` テーブルに行を作る。
+         *     Storage 上のオブジェクトの存在を確認した上で Image レコードを作成する。
+         */
+        UploadConfirmRequest: {
+            /**
+             * @description `POST /uploads/presigned-url` で受け取った storage_key を返す。
+             *     サーバ側で `uploads/{currentUserHash}/...` で始まることを検証し、
+             *     他ユーザーの prefix を指定した場合は 403 を返す。
+             * @example uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg
+             */
+            storage_key: string;
+            /**
+             * @description 画像の幅 (px)
+             * @example 1920
+             */
+            width: number;
+            /**
+             * @description 画像の高さ (px)
+             * @example 1080
+             */
+            height: number;
+            /**
+             * @description ファイルサイズ (byte)。10 MiB を上限とする
+             * @example 524288
+             */
+            file_size: number;
         };
     };
     responses: {
@@ -609,6 +777,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Child"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    createPresignedUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "file_name": "IMG_1234.jpg",
+                 *       "content_type": "image/jpeg"
+                 *     }
+                 */
+                "application/json": components["schemas"]["PresignedUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description signed URL と storage_key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresignedUploadResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    confirmUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "storage_key": "uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg",
+                 *       "width": 1920,
+                 *       "height": 1080,
+                 *       "file_size": 524288
+                 *     }
+                 */
+                "application/json": components["schemas"]["UploadConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description 作成された Image */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Image"];
                 };
             };
             401: components["responses"]["Unauthorized"];
