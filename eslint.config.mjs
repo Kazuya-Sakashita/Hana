@@ -12,6 +12,7 @@ const config = [
       'coverage/**',
       'src/lib/api/generated/**',
       'docs/openapi/openapi.bundled.*',
+      'docs/design/v0-output/**',
       'next-env.d.ts',
     ],
   },
