@@ -14,3 +14,12 @@ content:
           detail: 'このメールアドレスは既に登録済みです'
           reason: 'email_already_registered'
           instance: 'req_01HXYZABCDEFG'
+      child_limit_reached:
+        summary: Child limit reached (MVP は 1 ユーザー 1 子ども)
+        value:
+          type: 'https://hana.app/problems/child-limit-reached'
+          title: 'Conflict'
+          status: 409
+          detail: '現在のプランでは子どもプロフィールは 1 件までです'
+          reason: 'child_limit_reached'
+          instance: 'req_01HXYZABCDEFG'

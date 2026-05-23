@@ -45,6 +45,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 子どもプロフィール一覧
+         * @description 認証ユーザーが登録した子どもプロフィールを返す。
+         *     MVP では最大 1 件 (1 ユーザー 1 子ども制限)。
+         */
+        get: operations["listChildren"];
+        put?: never;
+        /**
+         * 子どもプロフィール作成
+         * @description 新しい子どもプロフィールを作成する。
+         *     MVP では 1 ユーザー 1 件までで、2 件目は 409 `child_limit_reached` を返す。
+         */
+        post: operations["createChild"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/children/{childId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 子ども ID (UUID) */
+                childId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * 子どもプロフィール取得
+         * @description 指定した子どもプロフィールを返す。
+         *     他ユーザーの子どもには 403 を返す (404 で隠す案もあるが、Hana では明示的に 403)。
+         */
+        get: operations["getChild"];
+        /**
+         * 子どもプロフィール更新
+         * @description 指定した子どもプロフィールを更新する。
+         *     全フィールド省略可。送られたフィールドのみ更新 (PATCH 的な PUT)。
+         */
+        put: operations["updateChild"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -147,6 +202,99 @@ export interface components {
              * @example 2026-05-14T09:30:00Z
              */
             created_at: string;
+        };
+        /**
+         * @description 子どもプロフィール。1 ユーザーにつき MVP では 1 件まで (v1 で複数対応予定)。
+         *     age_days のような派生フィールドは含めず、`birthdate` から client 側で計算する。
+         */
+        Child: {
+            /**
+             * Format: uuid
+             * @description 子ども ID
+             * @example 4a2c89b6-1234-4d8e-9abc-fedcba987654
+             */
+            id: string;
+            /**
+             * @description 表示名。本名でも愛称でも OK。AI プロンプトには送られない
+             * @example はると
+             */
+            name: string;
+            /**
+             * Format: date
+             * @description 生年月日 (RFC 3339 date-only, YYYY-MM-DD)。月齢計算の基準
+             * @example 2026-01-13
+             */
+            birthdate: string;
+            /**
+             * Format: uri
+             * @description アバター画像の URL。ISSUE-008 (Storage) で実装するまで null 固定。
+             *     クライアントは null も表示できるよう設計する。
+             * @example null
+             */
+            avatar_url: string | null;
+            /**
+             * Format: date-time
+             * @description レコード作成日時
+             * @example 2026-05-23T01:30:00Z
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description レコード更新日時
+             * @example 2026-05-23T01:30:00Z
+             */
+            updated_at: string;
+        };
+        /**
+         * @description 子どもプロフィール一覧。MVP は最大 1 件なので page (cursor) は付けない。
+         *     v1 で複数対応するときに `page` を後付け追加できる。
+         */
+        ChildListResponse: {
+            /** @description 認証ユーザーの子どもプロフィール (MVP では 0 or 1 件) */
+            data: components["schemas"]["Child"][];
+        };
+        /** @description 子どもプロフィール作成リクエスト */
+        ChildCreateRequest: {
+            /**
+             * @description 表示名
+             * @example はると
+             */
+            name: string;
+            /**
+             * Format: date
+             * @description 生年月日 (YYYY-MM-DD)
+             * @example 2026-01-13
+             */
+            birthdate: string;
+            /**
+             * Format: uri
+             * @description アバター URL。ISSUE-008 までは null を送る (受け取っても保存のみで使用しない)
+             * @example null
+             */
+            avatar_url?: string | null;
+        };
+        /**
+         * @description 子どもプロフィール更新リクエスト。
+         *     全フィールド省略可。送られたフィールドのみ更新する (PATCH 的な PUT)。
+         */
+        ChildUpdateRequest: {
+            /**
+             * @description 表示名
+             * @example はると
+             */
+            name?: string;
+            /**
+             * Format: date
+             * @description 生年月日 (YYYY-MM-DD)
+             * @example 2026-01-13
+             */
+            birthdate?: string;
+            /**
+             * Format: uri
+             * @description アバター URL。ISSUE-008 まで null 固定で扱う
+             * @example null
+             */
+            avatar_url?: string | null;
         };
     };
     responses: {
@@ -332,6 +480,141 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    listChildren: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 子どもプロフィール一覧 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "4a2c89b6-1234-4d8e-9abc-fedcba987654",
+                     *           "name": "はると",
+                     *           "birthdate": "2026-01-13",
+                     *           "avatar_url": null,
+                     *           "created_at": "2026-05-23T01:30:00Z",
+                     *           "updated_at": "2026-05-23T01:30:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ChildListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    createChild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "はると",
+                 *       "birthdate": "2026-01-13",
+                 *       "avatar_url": null
+                 *     }
+                 */
+                "application/json": components["schemas"]["ChildCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description 作成された子どもプロフィール */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Child"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getChild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 子ども ID (UUID) */
+                childId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 子どもプロフィール */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Child"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    updateChild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 子ども ID (UUID) */
+                childId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "はると"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ChildUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description 更新後の子どもプロフィール */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Child"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
         };
     };

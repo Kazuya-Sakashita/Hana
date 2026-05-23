@@ -20,7 +20,10 @@ rules:
         match: '^[a-z][a-zA-Z0-9]*$'
 
   hana-path-lowercase:
-    description: paths は小文字（ハイフン無し）であること
+    description: |
+      paths のセグメントは小文字であること。
+      ただし `{childId}` のような OpenAPI パスパラメータ部 (中括弧内) は除外する
+      (openapi-style-guide.md §3 で camelCase 推奨)。
     message: 'パス {{property}} は小文字（A-Z 不使用）である必要があります'
     severity: error
     given: '$.paths'
@@ -28,7 +31,7 @@ rules:
       field: '@key'
       function: pattern
       functionOptions:
-        notMatch: '[A-Z]'
+        notMatch: '(?:^|/)[^/{]*[A-Z]'
 
   hana-schema-upper-camel:
     description: components.schemas のキーは UpperCamel

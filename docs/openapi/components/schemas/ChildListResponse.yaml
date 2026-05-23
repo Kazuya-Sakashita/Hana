@@ -1,0 +1,11 @@
+type: object
+description: |
+  子どもプロフィール一覧。MVP は最大 1 件なので page (cursor) は付けない。
+  v1 で複数対応するときに `page` を後付け追加できる。
+required: [data]
+properties:
+  data:
+    type: array
+    items:
+      $ref: './Child.yaml'
+    description: 認証ユーザーの子どもプロフィール (MVP では 0 or 1 件)

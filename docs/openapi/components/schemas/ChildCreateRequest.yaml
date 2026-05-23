@@ -1,0 +1,20 @@
+type: object
+description: 子どもプロフィール作成リクエスト
+required: [name, birthdate]
+properties:
+  name:
+    type: string
+    minLength: 1
+    maxLength: 50
+    description: 表示名
+    example: 'はると'
+  birthdate:
+    type: string
+    format: date
+    description: 生年月日 (YYYY-MM-DD)
+    example: '2026-01-13'
+  avatar_url:
+    type: [string, 'null']
+    format: uri
+    description: アバター URL。ISSUE-008 までは null を送る (受け取っても保存のみで使用しない)
+    example: null
