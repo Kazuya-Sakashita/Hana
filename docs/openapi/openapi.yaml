@@ -32,6 +32,8 @@ security:
 tags:
   - name: meta
     description: ヘルスチェック等の運用エンドポイント
+  - name: children
+    description: 子どもプロフィール
 paths:
   /health:
     get:
@@ -82,6 +84,128 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /children:
+    get:
+      operationId: listChildren
+      summary: 子どもプロフィール一覧
+      description: |
+        認証ユーザーが登録した子どもプロフィールを返す。
+        MVP では最大 1 件 (1 ユーザー 1 子ども制限)。
+      tags: [children]
+      responses:
+        '200':
+          description: 子どもプロフィール一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildListResponse'
+              example:
+                data:
+                  - id: '4a2c89b6-1234-4d8e-9abc-fedcba987654'
+                    name: 'はると'
+                    birthdate: '2026-01-13'
+                    avatar_url: null
+                    created_at: '2026-05-23T01:30:00Z'
+                    updated_at: '2026-05-23T01:30:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      operationId: createChild
+      summary: 子どもプロフィール作成
+      description: |
+        新しい子どもプロフィールを作成する。
+        MVP では 1 ユーザー 1 件までで、2 件目は 409 `child_limit_reached` を返す。
+      tags: [children]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChildCreateRequest'
+            example:
+              name: 'はると'
+              birthdate: '2026-01-13'
+              avatar_url: null
+      responses:
+        '201':
+          description: 作成された子どもプロフィール
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Child'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /children/{childId}:
+    parameters:
+      - name: childId
+        in: path
+        required: true
+        description: 子ども ID (UUID)
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getChild
+      summary: 子どもプロフィール取得
+      description: |
+        指定した子どもプロフィールを返す。
+        他ユーザーの子どもには 403 を返す (404 で隠す案もあるが、Hana では明示的に 403)。
+      tags: [children]
+      responses:
+        '200':
+          description: 子どもプロフィール
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Child'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      operationId: updateChild
+      summary: 子どもプロフィール更新
+      description: |
+        指定した子どもプロフィールを更新する。
+        全フィールド省略可。送られたフィールドのみ更新 (PATCH 的な PUT)。
+      tags: [children]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChildUpdateRequest'
+            example:
+              name: 'はると'
+      responses:
+        '200':
+          description: 更新後の子どもプロフィール
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Child'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     bearerAuth:
@@ -93,6 +217,14 @@ components:
       $ref: './components/schemas/ProblemDetailFieldError.yaml'
     AppUser:
       $ref: './components/schemas/AppUser.yaml'
+    Child:
+      $ref: './components/schemas/Child.yaml'
+    ChildListResponse:
+      $ref: './components/schemas/ChildListResponse.yaml'
+    ChildCreateRequest:
+      $ref: './components/schemas/ChildCreateRequest.yaml'
+    ChildUpdateRequest:
+      $ref: './components/schemas/ChildUpdateRequest.yaml'
   parameters:
     Limit:
       $ref: './components/parameters/Limit.yaml'

@@ -1,0 +1,39 @@
+type: object
+description: |
+  子どもプロフィール。1 ユーザーにつき MVP では 1 件まで (v1 で複数対応予定)。
+  age_days のような派生フィールドは含めず、`birthdate` から client 側で計算する。
+required: [id, name, birthdate, avatar_url, created_at, updated_at]
+properties:
+  id:
+    type: string
+    format: uuid
+    description: 子ども ID
+    example: '4a2c89b6-1234-4d8e-9abc-fedcba987654'
+  name:
+    type: string
+    minLength: 1
+    maxLength: 50
+    description: 表示名。本名でも愛称でも OK。AI プロンプトには送られない
+    example: 'はると'
+  birthdate:
+    type: string
+    format: date
+    description: 生年月日 (RFC 3339 date-only, YYYY-MM-DD)。月齢計算の基準
+    example: '2026-01-13'
+  avatar_url:
+    type: [string, 'null']
+    format: uri
+    description: |
+      アバター画像の URL。ISSUE-008 (Storage) で実装するまで null 固定。
+      クライアントは null も表示できるよう設計する。
+    example: null
+  created_at:
+    type: string
+    format: date-time
+    description: レコード作成日時
+    example: '2026-05-23T01:30:00Z'
+  updated_at:
+    type: string
+    format: date-time
+    description: レコード更新日時
+    example: '2026-05-23T01:30:00Z'

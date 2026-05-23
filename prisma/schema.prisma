@@ -35,5 +35,28 @@ model Profile {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
+  children Child[]
+
   @@map("profiles")
+}
+
+// 子どもプロフィール。
+// MVP は 1 ユーザー 1 子どもに制限する。論理削除を許す前提で、
+// `(user_id) WHERE deleted_at IS NULL` の partial unique index を migration SQL に手書きで追加する
+// (Prisma では partial index を schema 上で表現できないため)。
+// v1 で複数子ども対応するときに index を外す。詳細は ADR-0008。
+model Child {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  name      String    @db.VarChar(50)
+  birthdate DateTime  @db.Date
+  avatarUrl String?   @map("avatar_url")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("children")
 }
