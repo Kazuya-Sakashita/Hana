@@ -2,9 +2,11 @@
 id: ISSUE-006c
 title: デザインシステム導入 (Tailwind v4 + 和紙色トークン + shadcn 最小セット + Noto Serif JP)
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-05-23
+merged_at: 2026-05-23
+pr: 16
 ---
 
 ## 目的 (Why)
