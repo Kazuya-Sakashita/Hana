@@ -1,0 +1,30 @@
+type: object
+description: Hana のドメイン用ユーザー。Supabase Auth の auth.users と profiles を結合した形。
+required: [id, email, display_name, ai_consent_at, created_at]
+properties:
+  id:
+    type: string
+    format: uuid
+    description: ユーザー ID (Supabase auth.users.id と同一)
+    example: '8f7e6d5c-4b3a-4291-8765-0123456789ab'
+  email:
+    type: [string, 'null']
+    format: email
+    description: |
+      認証プロバイダ (Google) から取得した email。
+      クライアント表示には用いず、サポート用途のみ。
+    example: 'parent@example.com'
+  display_name:
+    type: [string, 'null']
+    description: 画面表示用のニックネーム (本名を入れる UI 誘導はしない)
+    example: 'はるとパパ'
+  ai_consent_at:
+    type: [string, 'null']
+    format: date-time
+    description: AI への画像送信に同意した日時。未同意なら null。
+    example: '2026-05-15T10:00:00Z'
+  created_at:
+    type: string
+    format: date-time
+    description: profile レコード作成日時
+    example: '2026-05-14T09:30:00Z'

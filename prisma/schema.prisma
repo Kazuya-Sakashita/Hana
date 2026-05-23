@@ -22,3 +22,18 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// Hana 固有のユーザープロフィール。
+// id は Supabase の auth.users.id に 1:1 で対応する (UUID)。
+// auth.users への FK は cross-schema のため Prisma では表現せず、migration SQL に手書きで追加する。
+//   ALTER TABLE profiles ADD CONSTRAINT profiles_id_fkey
+//     FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+model Profile {
+  id          String    @id @db.Uuid
+  displayName String?   @map("display_name")
+  aiConsentAt DateTime? @map("ai_consent_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("profiles")
+}

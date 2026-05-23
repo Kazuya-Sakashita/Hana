@@ -24,6 +24,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 現在のユーザーを取得
+         * @description Supabase Auth セッションから現在のユーザー (AppUser) を返す。
+         *     profile レコードが無い場合はサーバ側で lazy に作成する。
+         */
+        get: operations["getCurrentUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -93,6 +114,39 @@ export interface components {
              * @example 必須項目です
              */
             message: string;
+        };
+        /** @description Hana のドメイン用ユーザー。Supabase Auth の auth.users と profiles を結合した形。 */
+        AppUser: {
+            /**
+             * Format: uuid
+             * @description ユーザー ID (Supabase auth.users.id と同一)
+             * @example 8f7e6d5c-4b3a-4291-8765-0123456789ab
+             */
+            id: string;
+            /**
+             * Format: email
+             * @description 認証プロバイダ (Google) から取得した email。
+             *     クライアント表示には用いず、サポート用途のみ。
+             * @example parent@example.com
+             */
+            email: string | null;
+            /**
+             * @description 画面表示用のニックネーム (本名を入れる UI 誘導はしない)
+             * @example はるとパパ
+             */
+            display_name: string | null;
+            /**
+             * Format: date-time
+             * @description AI への画像送信に同意した日時。未同意なら null。
+             * @example 2026-05-15T10:00:00Z
+             */
+            ai_consent_at: string | null;
+            /**
+             * Format: date-time
+             * @description profile レコード作成日時
+             * @example 2026-05-14T09:30:00Z
+             */
+            created_at: string;
         };
     };
     responses: {
@@ -247,6 +301,37 @@ export interface operations {
                     };
                 };
             };
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 現在のユーザー */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "8f7e6d5c-4b3a-4291-8765-0123456789ab",
+                     *       "email": "parent@example.com",
+                     *       "display_name": null,
+                     *       "ai_consent_at": null,
+                     *       "created_at": "2026-05-14T09:30:00Z"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AppUser"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
         };
     };
