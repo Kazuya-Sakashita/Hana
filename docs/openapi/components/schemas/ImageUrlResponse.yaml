@@ -1,0 +1,19 @@
+type: object
+description: |
+  画像ダウンロード用の signed URL。
+  TTL は 1800 秒 (30 分) — CLAUDE.md §7 / ADR-0009 §5。
+  クライアントは TTL 切れる前に再取得する想定。
+required: [url, expires_at]
+properties:
+  url:
+    type: string
+    format: uri
+    description: |
+      Supabase Storage の signed download URL。`Cache-Control: private` 推奨。
+      ログに残さない (一時的とはいえ認証情報を含む)。
+    example: 'https://example.supabase.co/storage/v1/object/sign/images/uploads/abc?token=...'
+  expires_at:
+    type: string
+    format: date-time
+    description: signed URL の有効期限
+    example: '2026-05-23T11:30:00Z'

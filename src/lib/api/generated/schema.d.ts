@@ -146,6 +146,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/{imageId}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 画像 ID (UUID) */
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * 画像ダウンロード用の signed URL を発行
+         * @description 指定した画像の Supabase Storage signed URL を返す (TTL 30 分)。
+         *     画像は現在のユーザーが所有していること。
+         *     URL はログに残さない (一時的とはいえ認証情報を含む)。
+         */
+        get: operations["getImageDownloadUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 記録一覧
+         * @description 現在のユーザーが所有する記録をカーソル方式で返す。
+         *     並び順: `recorded_at` 降順 → `id` 降順 (タイブレーカー)。
+         *     画像 URL は含めない (`GET /uploads/{imageId}/url` で取得)。
+         */
+        get: operations["listMemories"];
+        put?: never;
+        /**
+         * 記録作成
+         * @description 新しい記録を作成し、指定の画像群を紐付ける。
+         *     - `child_id` は現在のユーザーが所有していること
+         *     - `image_ids` は **各画像が現在のユーザーが所有** かつ **未紐付け** であること
+         *     - 失敗時はトランザクションでロールバック
+         */
+        post: operations["createMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/memories/{memoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 記録 ID (UUID) */
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * 記録取得
+         * @description 指定した記録を返す。他人の記録は 403、存在しない場合は 404。
+         */
+        get: operations["getMemory"];
+        /**
+         * 記録更新
+         * @description title / body / weather / is_favorite を部分更新する。送らないフィールドは変更されない。
+         */
+        put: operations["updateMemory"];
+        post?: never;
+        /**
+         * 記録削除 (論理削除)
+         * @description 記録を論理削除する (`deleted_at` セット)。
+         *     紐付く画像は **そのまま残る** (画像の Storage 削除は退会フロー / cleanup ジョブで)。
+         *     30 日以内なら復活可能 (将来 ISSUE で復元 API)。
+         */
+        delete: operations["deleteMemory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -463,6 +550,164 @@ export interface components {
              * @example 524288
              */
             file_size: number;
+        };
+        /**
+         * @description 画像ダウンロード用の signed URL。
+         *     TTL は 1800 秒 (30 分) — CLAUDE.md §7 / ADR-0009 §5。
+         *     クライアントは TTL 切れる前に再取得する想定。
+         */
+        ImageUrlResponse: {
+            /**
+             * Format: uri
+             * @description Supabase Storage の signed download URL。`Cache-Control: private` 推奨。
+             *     ログに残さない (一時的とはいえ認証情報を含む)。
+             * @example https://example.supabase.co/storage/v1/object/sign/images/uploads/abc?token=...
+             */
+            url: string;
+            /**
+             * Format: date-time
+             * @description signed URL の有効期限
+             * @example 2026-05-23T11:30:00Z
+             */
+            expires_at: string;
+        };
+        /**
+         * @description 記録 (子どもの 1 日 1 ページ)。子ども (Child) に紐付き、複数の画像 (Image) を持つ。
+         *     `ai_generated` が true のとき、本文は AI 生成 (ISSUE-010 で実装)。
+         *     論理削除フラグ `deleted_at` は API レスポンスに含めない。
+         */
+        Memory: {
+            /**
+             * Format: uuid
+             * @description 記録 ID
+             * @example 7d6e5f4c-3b2a-4291-8765-0123456789ab
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description 紐付く子ども ID (現在のユーザーが所有)
+             * @example 4a2c89b6-1234-4d8e-9abc-fedcba987654
+             */
+            child_id: string;
+            /**
+             * @description 記録のタイトル
+             * @example はじめての すなあそび
+             */
+            title: string;
+            /**
+             * @description 記録の本文 (情景・感情)。null も許容
+             * @example すなを ぎゅっと にぎって、はじめての かんしょく。
+             */
+            body: string | null;
+            /**
+             * Format: date
+             * @description 記録の対象日 (撮影日)
+             * @example 2026-05-23
+             */
+            recorded_at: string;
+            /**
+             * @description 天気 (はれ / くもり / あめ / ゆき / かぜ / よる など)
+             * @example はれ
+             */
+            weather: string | null;
+            /**
+             * @description お気に入りフラグ
+             * @example false
+             */
+            is_favorite: boolean;
+            /**
+             * @description 本文が AI 生成かどうか
+             * @example false
+             */
+            ai_generated: boolean;
+            /**
+             * @description 紐付く画像 ID の配列 (表示順)
+             * @example [
+             *       "a1b2c3d4-1234-4d8e-9abc-fedcba987654"
+             *     ]
+             */
+            image_ids: string[];
+            /**
+             * Format: date-time
+             * @description レコード作成日時
+             * @example 2026-05-23T11:00:00Z
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description レコード更新日時
+             * @example 2026-05-23T11:00:00Z
+             */
+            updated_at: string;
+        };
+        /**
+         * @description 記録一覧。カーソル方式ページネーション。
+         *     各要素には `image_ids` だけが含まれる (画像 URL は detail / `GET /uploads/{imageId}/url` で取得)。
+         */
+        MemoryListResponse: {
+            /** @description 記録の配列 (recorded_at + id の降順) */
+            data: components["schemas"]["Memory"][];
+            page: {
+                /**
+                 * @description 次ページの取得カーソル。最終ページなら null
+                 * @example eyJpZCI6IjdkNmU1ZjRjLTNiMmEtNDI5MS04NzY1LTAxMjM0NTY3ODlhYiJ9
+                 */
+                next_cursor: string | null;
+            };
+        };
+        /**
+         * @description 記録の作成リクエスト。`image_ids` は事前に `POST /uploads/confirm` で作成済みの
+         *     画像 ID を指定する。各画像は **現在のユーザーが所有** かつ **未紐付け**である必要がある。
+         */
+        MemoryCreateRequest: {
+            /**
+             * Format: uuid
+             * @description 紐付ける子ども ID
+             * @example 4a2c89b6-1234-4d8e-9abc-fedcba987654
+             */
+            child_id: string;
+            /** @example はじめての すなあそび */
+            title: string;
+            /**
+             * @description 本文 (任意)。null も許容
+             * @example すなを ぎゅっと にぎって、はじめての かんしょく。
+             */
+            body?: string | null;
+            /**
+             * Format: date
+             * @description 記録対象日 (YYYY-MM-DD)
+             * @example 2026-05-23
+             */
+            recorded_at: string;
+            /** @example はれ */
+            weather?: string | null;
+            /**
+             * @description 紐付ける画像 ID (1〜5 件・表示順)
+             * @example [
+             *       "a1b2c3d4-1234-4d8e-9abc-fedcba987654"
+             *     ]
+             */
+            image_ids: string[];
+            /**
+             * @description 本文が AI 生成かどうか。ISSUE-009 では常に false で送る
+             * @example false
+             */
+            ai_generated: boolean;
+        };
+        /**
+         * @description 記録の更新リクエスト (PATCH 的な PUT)。指定したフィールドだけ更新。
+         *     `recorded_at` と `image_ids` と `child_id` は MVP では変更不可。
+         *     (やり直したい場合は DELETE + 新規作成)
+         */
+        MemoryUpdateRequest: {
+            /** @example はじめての すなあそび */
+            title?: string;
+            /** @example すなを ぎゅっと にぎって、はじめての かんしょく。 */
+            body?: string | null;
+            /** @example はれ */
+            weather?: string | null;
+            /** @example true */
+            is_favorite?: boolean;
         };
     };
     responses: {
@@ -853,6 +1098,174 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getImageDownloadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 画像 ID (UUID) */
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description signed URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageUrlResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    listMemories: {
+        parameters: {
+            query?: {
+                /** @description 1 ページあたりの件数 (default 20, max 100) */
+                limit?: number;
+                /** @description 前回レスポンスの `page.next_cursor` */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 記録一覧 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    createMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description 作成された記録 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 記録 ID (UUID) */
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 記録 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    updateMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 記録 ID (UUID) */
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description 更新後の記録 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    deleteMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 記録 ID (UUID) */
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 削除成功 (no content) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
     };

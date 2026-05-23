@@ -36,6 +36,8 @@ tags:
     description: 子どもプロフィール
   - name: uploads
     description: 写真アップロード (presigned URL 方式)
+  - name: memories
+    description: 記録 (1 日 1 ページの育児ログ)
 paths:
   /health:
     get:
@@ -278,6 +280,184 @@ paths:
           $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /uploads/{imageId}/url:
+    parameters:
+      - name: imageId
+        in: path
+        required: true
+        description: 画像 ID (UUID)
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getImageDownloadUrl
+      summary: 画像ダウンロード用の signed URL を発行
+      description: |
+        指定した画像の Supabase Storage signed URL を返す (TTL 30 分)。
+        画像は現在のユーザーが所有していること。
+        URL はログに残さない (一時的とはいえ認証情報を含む)。
+      tags: [uploads]
+      responses:
+        '200':
+          description: signed URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageUrlResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /memories:
+    get:
+      operationId: listMemories
+      summary: 記録一覧
+      description: |
+        現在のユーザーが所有する記録をカーソル方式で返す。
+        並び順: `recorded_at` 降順 → `id` 降順 (タイブレーカー)。
+        画像 URL は含めない (`GET /uploads/{imageId}/url` で取得)。
+      tags: [memories]
+      parameters:
+        - name: limit
+          in: query
+          description: 1 ページあたりの件数 (default 20, max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          description: 前回レスポンスの `page.next_cursor`
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 記録一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      operationId: createMemory
+      summary: 記録作成
+      description: |
+        新しい記録を作成し、指定の画像群を紐付ける。
+        - `child_id` は現在のユーザーが所有していること
+        - `image_ids` は **各画像が現在のユーザーが所有** かつ **未紐付け** であること
+        - 失敗時はトランザクションでロールバック
+      tags: [memories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryCreateRequest'
+      responses:
+        '201':
+          description: 作成された記録
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /memories/{memoryId}:
+    parameters:
+      - name: memoryId
+        in: path
+        required: true
+        description: 記録 ID (UUID)
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getMemory
+      summary: 記録取得
+      description: 指定した記録を返す。他人の記録は 403、存在しない場合は 404。
+      tags: [memories]
+      responses:
+        '200':
+          description: 記録
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      operationId: updateMemory
+      summary: 記録更新
+      description: title / body / weather / is_favorite を部分更新する。送らないフィールドは変更されない。
+      tags: [memories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryUpdateRequest'
+      responses:
+        '200':
+          description: 更新後の記録
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      operationId: deleteMemory
+      summary: 記録削除 (論理削除)
+      description: |
+        記録を論理削除する (`deleted_at` セット)。
+        紐付く画像は **そのまま残る** (画像の Storage 削除は退会フロー / cleanup ジョブで)。
+        30 日以内なら復活可能 (将来 ISSUE で復元 API)。
+      tags: [memories]
+      responses:
+        '204':
+          description: 削除成功 (no content)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     bearerAuth:
@@ -305,6 +485,16 @@ components:
       $ref: './components/schemas/PresignedUploadResponse.yaml'
     UploadConfirmRequest:
       $ref: './components/schemas/UploadConfirmRequest.yaml'
+    ImageUrlResponse:
+      $ref: './components/schemas/ImageUrlResponse.yaml'
+    Memory:
+      $ref: './components/schemas/Memory.yaml'
+    MemoryListResponse:
+      $ref: './components/schemas/MemoryListResponse.yaml'
+    MemoryCreateRequest:
+      $ref: './components/schemas/MemoryCreateRequest.yaml'
+    MemoryUpdateRequest:
+      $ref: './components/schemas/MemoryUpdateRequest.yaml'
   parameters:
     Limit:
       $ref: './components/parameters/Limit.yaml'

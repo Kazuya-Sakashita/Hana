@@ -1,0 +1,19 @@
+type: object
+description: |
+  記録一覧。カーソル方式ページネーション。
+  各要素には `image_ids` だけが含まれる (画像 URL は detail / `GET /uploads/{imageId}/url` で取得)。
+required: [data, page]
+properties:
+  data:
+    type: array
+    items:
+      $ref: './Memory.yaml'
+    description: 記録の配列 (recorded_at + id の降順)
+  page:
+    type: object
+    required: [next_cursor]
+    properties:
+      next_cursor:
+        type: [string, 'null']
+        description: 次ページの取得カーソル。最終ページなら null
+        example: 'eyJpZCI6IjdkNmU1ZjRjLTNiMmEtNDI5MS04NzY1LTAxMjM0NTY3ODlhYiJ9'

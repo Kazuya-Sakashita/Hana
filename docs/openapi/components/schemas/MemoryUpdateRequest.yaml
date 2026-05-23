@@ -1,0 +1,22 @@
+type: object
+description: |
+  記録の更新リクエスト (PATCH 的な PUT)。指定したフィールドだけ更新。
+  `recorded_at` と `image_ids` と `child_id` は MVP では変更不可。
+  (やり直したい場合は DELETE + 新規作成)
+properties:
+  title:
+    type: string
+    minLength: 1
+    maxLength: 100
+    example: 'はじめての すなあそび'
+  body:
+    type: [string, 'null']
+    maxLength: 1000
+    example: 'すなを ぎゅっと にぎって、はじめての かんしょく。'
+  weather:
+    type: [string, 'null']
+    maxLength: 20
+    example: 'はれ'
+  is_favorite:
+    type: boolean
+    example: true
