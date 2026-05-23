@@ -2,9 +2,11 @@
 id: ISSUE-006
 title: Supabase Auth 統合 (Google 先行、SNS-only)
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-14
+merged_at: 2026-05-23
+pr: 12
 ---
 
 ## 目的 (Why)

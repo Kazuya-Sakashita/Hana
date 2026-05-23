@@ -2,9 +2,11 @@
 id: ISSUE-006b
 title: V0 デザインアセットの参照方針整備（gitignore + プロンプト保管）
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-05-23
+merged_at: 2026-05-23
+pr: 14
 ---
 
 ## 目的 (Why)
