@@ -3,7 +3,7 @@ import { requireUser } from '@/server/auth/current-user'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
 import { prisma } from '@/server/db/prisma'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isUuid } from '@/features/memories/server/parse'
 
 export const dynamic = 'force-dynamic'
@@ -32,7 +32,9 @@ export async function GET(_request: Request, { params }: Params) {
       throw problems.forbidden()
     }
 
-    const supabase = await createSupabaseServerClient()
+    // 認可は requireUser + image.userId 比較で済んでいるため、Storage は service_role で
+    // (Storage Policy は Phase 2 で導入予定・ADR-0009 §3)
+    const supabase = createSupabaseAdminClient()
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .createSignedUrl(image.storageKey, DOWNLOAD_TTL_SECONDS)

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/server/auth/current-user'
 import { toProblemResponse } from '@/server/api/problem-response'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { generateStorageKey } from '@/features/uploads/server/storage-key'
 import { parsePresignedUploadRequest, readJsonBody } from '@/features/uploads/server/parse'
 
@@ -18,7 +18,9 @@ export async function POST(request: Request) {
     const input = parsePresignedUploadRequest(raw)
 
     const storageKey = generateStorageKey(user.id, input.contentType)
-    const supabase = await createSupabaseServerClient()
+    // 認可は requireUser() で済んでいるため、Storage への発行は service_role で行う
+    // (Storage Policy は Phase 2 で導入予定・ADR-0009 §3)
+    const supabase = createSupabaseAdminClient()
     const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storageKey)
 
     if (error || !data) {

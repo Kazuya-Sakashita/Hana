@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
     auth: { getUser: mocks.getUser },
+  }),
+}))
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createSupabaseAdminClient: () => ({
     storage: {
       from: () => ({
         createSignedUploadUrl: mocks.createSignedUploadUrl,
