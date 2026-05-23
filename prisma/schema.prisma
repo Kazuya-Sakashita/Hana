@@ -4,6 +4,7 @@
 // 実テーブル (profiles / children / memories 等) は使うタイミングの Issue で追加する。
 //   - profiles: ISSUE-006 (Supabase Auth 統合)
 //   - children: ISSUE-007 (子どもプロフィール API)
+//   - images:   ISSUE-008 (写真アップロード + Supabase Storage)
 //   - memories: ISSUE-009 (記録 API)
 //
 // マイグレーション運用:
@@ -36,6 +37,7 @@ model Profile {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   children Child[]
+  images   Image[]
 
   @@map("profiles")
 }
@@ -59,4 +61,29 @@ model Child {
 
   @@index([userId])
   @@map("children")
+}
+
+// 写真メタデータ。実体は Supabase Storage の private bucket `images` に保管する。
+// アップロード完了 (POST /v1/uploads/confirm) 時点で 1 行作成。
+// memory_id は ISSUE-008 段階では null。ISSUE-009 で memories テーブルとの FK を張る。
+//   - storage_key は推測不可能な uploads/{userIdHash}/{yyyymm}/{uuid}.{ext} 形式
+//   - 物理ファイルの削除は退会フロー (ISSUE-016) で扱う
+model Image {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  memoryId     String?   @map("memory_id") @db.Uuid
+  storageKey   String    @unique @map("storage_key")
+  contentType  String    @map("content_type")
+  width        Int
+  height       Int
+  fileSize     Int       @map("file_size")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([memoryId])
+  @@map("images")
 }

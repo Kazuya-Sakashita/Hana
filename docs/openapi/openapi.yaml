@@ -34,6 +34,8 @@ tags:
     description: ヘルスチェック等の運用エンドポイント
   - name: children
     description: 子どもプロフィール
+  - name: uploads
+    description: 写真アップロード (presigned URL 方式)
 paths:
   /health:
     get:
@@ -206,6 +208,76 @@ paths:
           $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /uploads/presigned-url:
+    post:
+      operationId: createPresignedUpload
+      summary: 写真アップロード用 signed URL を発行
+      description: |
+        Supabase Storage に画像を直接 PUT するための **一回限りの signed URL** を発行する。
+        このエンドポイントは DB に書き込みを行わない。アップロード完了後に
+        `POST /uploads/confirm` を呼ぶことで Image レコードが作成される。
+
+        クライアントは PUT 前に **Canvas API 等で EXIF を削除** することが期待される (ADR-0009)。
+      tags: [uploads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignedUploadRequest'
+            example:
+              file_name: 'IMG_1234.jpg'
+              content_type: 'image/jpeg'
+      responses:
+        '200':
+          description: signed URL と storage_key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedUploadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /uploads/confirm:
+    post:
+      operationId: confirmUpload
+      summary: アップロード完了を通知して Image レコードを作成
+      description: |
+        クライアントが presigned URL に PUT したあとに呼ぶ。
+        サーバは `storage_key` のプレフィクスが現在のユーザーのものであることを検証し、
+        Supabase Storage 上でオブジェクトの存在を確認した上で `images` テーブルに行を作成する。
+      tags: [uploads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadConfirmRequest'
+            example:
+              storage_key: 'uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg'
+              width: 1920
+              height: 1080
+              file_size: 524288
+      responses:
+        '201':
+          description: 作成された Image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     bearerAuth:
@@ -225,6 +297,14 @@ components:
       $ref: './components/schemas/ChildCreateRequest.yaml'
     ChildUpdateRequest:
       $ref: './components/schemas/ChildUpdateRequest.yaml'
+    Image:
+      $ref: './components/schemas/Image.yaml'
+    PresignedUploadRequest:
+      $ref: './components/schemas/PresignedUploadRequest.yaml'
+    PresignedUploadResponse:
+      $ref: './components/schemas/PresignedUploadResponse.yaml'
+    UploadConfirmRequest:
+      $ref: './components/schemas/UploadConfirmRequest.yaml'
   parameters:
     Limit:
       $ref: './components/parameters/Limit.yaml'
