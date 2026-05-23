@@ -2,9 +2,11 @@
 id: ISSUE-008
 title: 写真アップロード + Supabase Storage (presigned URL 方式)
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-23
+merged_at: 2026-05-23
+pr: 20
 ---
 
 ## 目的 (Why)
