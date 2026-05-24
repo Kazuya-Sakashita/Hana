@@ -38,6 +38,17 @@ export const problems = {
       409,
       '現在のプランでは子どもプロフィールは 1 件までです',
     ),
+  aiConsentRequired: () =>
+    build('ai_consent_required', 'Forbidden', 403, 'AI への画像送信に同意が必要です'),
+  aiQuotaExceeded: () =>
+    build('ai_quota_exceeded', 'Too Many Requests', 429, '今月の AI 生成回数の上限に達しました'),
+  aiGenerationFailed: () =>
+    build(
+      'ai_generation_failed',
+      'Internal Server Error',
+      500,
+      '生成に失敗しました。もういちど ためしてみてください',
+    ),
 } as const
 
 export type { FieldError }

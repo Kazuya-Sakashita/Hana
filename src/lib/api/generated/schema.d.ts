@@ -45,6 +45,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/ai-consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * AI への画像送信に同意する
+         * @description 現在のユーザーの `profile.ai_consent_at` を **現在時刻にセット** する (idempotent)。
+         *     既に同意済みでも 200 を返す (時刻は更新しない)。
+         *
+         *     AI 同意なしで `POST /ai/generate` を叩くと 403 `ai_consent_required` が返るので、
+         *     クライアントは同意ダイアログ → 本エンドポイント → 生成 の順で呼ぶ。
+         */
+        post: operations["setAiConsent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/children": {
         parameters: {
             query?: never;
@@ -228,6 +252,33 @@ export interface paths {
          *     30 日以内なら復活可能 (将来 ISSUE で復元 API)。
          */
         delete: operations["deleteMemory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ai/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * AI による育児記録の文章生成
+         * @description 指定の画像群と子どもの月齢・天気・親のひとことから、タイトル + 本文 + タグを生成する。
+         *     画像とプロンプトは Anthropic Claude API に送信される。
+         *
+         *     **AI 同意が必要**: 初回呼び出しの前にクライアントが
+         *     `profile.ai_consent_at` をセット (本Issueでは UI ダイアログで同意取得)。
+         *     未同意で叩くと 403 `ai_consent_required` を返す。
+         *
+         *     **月間 20 回まで** (Free tier)。超過時は 429 `ai_quota_exceeded`。
+         */
+        post: operations["generateAiText"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -709,6 +760,74 @@ export interface components {
             /** @example true */
             is_favorite?: boolean;
         };
+        /**
+         * @description AI 文章生成リクエスト。指定の画像群 + 子どもの月齢 + 天気 + 親のひとこと から、
+         *     タイトル + 本文 + タグを生成する。
+         *     画像とプロンプトは Anthropic Claude API に送信される。
+         *     AI 同意 (`profile.ai_consent_at`) が必要。
+         */
+        AiGenerateRequest: {
+            /**
+             * Format: uuid
+             * @description 紐付ける子ども ID (所有権チェック)
+             * @example 4a2c89b6-1234-4d8e-9abc-fedcba987654
+             */
+            child_id: string;
+            /**
+             * @description 生成のヒントとなる画像 ID (1〜5 件・現在のユーザーが所有)
+             * @example [
+             *       "a1b2c3d4-1234-4d8e-9abc-fedcba987654"
+             *     ]
+             */
+            image_ids: string[];
+            /**
+             * Format: date
+             * @description 撮影日 (YYYY-MM-DD)。未指定なら今日として扱う
+             * @example 2026-05-23
+             */
+            recorded_at?: string | null;
+            /**
+             * @description 天気 (はれ / くもり / あめ など)
+             * @example はれ
+             */
+            weather?: string | null;
+            /**
+             * @description 親のひとこと (AI への補足ヒント)
+             * @example はじめての すなあそび
+             */
+            parent_note?: string | null;
+        };
+        /**
+         * @description AI 生成結果。`generation_id` は後で `POST /memories` の AiGeneration ログと紐付けるための ID
+         *     (本Issue では Memory との紐付け API は未実装、必要なら別 ISSUE で `ai_generation_id` を MemoryCreateRequest に追加)。
+         */
+        AiGenerateResponse: {
+            /**
+             * Format: uuid
+             * @description 生成ログ ID (audit / 分析用)
+             * @example b2c3d4e5-1234-4d8e-9abc-fedcba987654
+             */
+            generation_id: string;
+            /**
+             * @description 生成されたタイトル (10 文字以内目安)
+             * @example はじめての すなあそび
+             */
+            title: string;
+            /**
+             * @description 生成された本文 (80〜150 文字目安)
+             * @example すなを ぎゅっと にぎって、はじめての かんしょく。きょとんと した かおが、なんとも かわいくて。これが すなとの、さいしょの であいでした。
+             */
+            body: string;
+            /**
+             * @description AI が付けたタグ (将来の検索 ISSUE で使用)
+             * @example [
+             *       "はじめて",
+             *       "おそと",
+             *       "なつ"
+             *     ]
+             */
+            tags: string[];
+        };
     };
     responses: {
         /**
@@ -889,6 +1008,28 @@ export interface operations {
                      *       "created_at": "2026-05-14T09:30:00Z"
                      *     }
                      */
+                    "application/json": components["schemas"]["AppUser"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    setAiConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 同意後の AppUser */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["AppUser"];
                 };
             };
@@ -1266,6 +1407,36 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    generateAiText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description 生成結果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenerateResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
         };
     };

@@ -1,0 +1,32 @@
+type: object
+description: |
+  AI 生成結果。`generation_id` は後で `POST /memories` の AiGeneration ログと紐付けるための ID
+  (本Issue では Memory との紐付け API は未実装、必要なら別 ISSUE で `ai_generation_id` を MemoryCreateRequest に追加)。
+required: [generation_id, title, body, tags]
+properties:
+  generation_id:
+    type: string
+    format: uuid
+    description: 生成ログ ID (audit / 分析用)
+    example: 'b2c3d4e5-1234-4d8e-9abc-fedcba987654'
+  title:
+    type: string
+    maxLength: 20
+    description: 生成されたタイトル (10 文字以内目安)
+    example: 'はじめての すなあそび'
+  body:
+    type: string
+    maxLength: 300
+    description: 生成された本文 (80〜150 文字目安)
+    example: 'すなを ぎゅっと にぎって、はじめての かんしょく。きょとんと した かおが、なんとも かわいくて。これが すなとの、さいしょの であいでした。'
+  tags:
+    type: array
+    maxItems: 5
+    items:
+      type: string
+      maxLength: 30
+    description: AI が付けたタグ (将来の検索 ISSUE で使用)
+    example:
+      - 'はじめて'
+      - 'おそと'
+      - 'なつ'

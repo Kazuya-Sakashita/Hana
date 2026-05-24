@@ -1,0 +1,38 @@
+type: object
+description: |
+  AI 文章生成リクエスト。指定の画像群 + 子どもの月齢 + 天気 + 親のひとこと から、
+  タイトル + 本文 + タグを生成する。
+  画像とプロンプトは Anthropic Claude API に送信される。
+  AI 同意 (`profile.ai_consent_at`) が必要。
+required: [child_id, image_ids]
+properties:
+  child_id:
+    type: string
+    format: uuid
+    description: 紐付ける子ども ID (所有権チェック)
+    example: '4a2c89b6-1234-4d8e-9abc-fedcba987654'
+  image_ids:
+    type: array
+    minItems: 1
+    maxItems: 5
+    items:
+      type: string
+      format: uuid
+    description: 生成のヒントとなる画像 ID (1〜5 件・現在のユーザーが所有)
+    example:
+      - 'a1b2c3d4-1234-4d8e-9abc-fedcba987654'
+  recorded_at:
+    type: [string, 'null']
+    format: date
+    description: 撮影日 (YYYY-MM-DD)。未指定なら今日として扱う
+    example: '2026-05-23'
+  weather:
+    type: [string, 'null']
+    maxLength: 20
+    description: 天気 (はれ / くもり / あめ など)
+    example: 'はれ'
+  parent_note:
+    type: [string, 'null']
+    maxLength: 200
+    description: 親のひとこと (AI への補足ヒント)
+    example: 'はじめての すなあそび'
