@@ -31,6 +31,11 @@ vi.mock('@/lib/ai/client', () => ({
   getAiModel: () => 'claude-haiku-4-5',
 }))
 
+// resize は単体テストで検証。integration では bypass (identity transform)
+vi.mock('@/features/ai/server/resize', () => ({
+  resizeForClaude: async (buf: Buffer) => ({ buffer: buf, mediaType: 'image/jpeg' as const }),
+}))
+
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
     profile: { upsert: mocks.profileUpsert },

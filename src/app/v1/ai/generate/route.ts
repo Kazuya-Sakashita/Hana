@@ -13,6 +13,7 @@ import {
   type AiImageInput,
 } from '@/features/ai/server/generate'
 import { checkMonthlyQuota } from '@/features/ai/server/quota'
+import { resizeForClaude } from '@/features/ai/server/resize'
 import { ApiProblemError } from '@/lib/api/error'
 
 export const dynamic = 'force-dynamic'
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
       ])
     }
 
-    // 6. Storage から画像取得 → base64
+    // 6. Storage から画像取得 → resize (Claude 5MB 制約) → base64
     const supabase = createSupabaseAdminClient()
     const imageInputs: AiImageInput[] = []
     for (const img of images) {
@@ -92,10 +93,13 @@ export async function POST(request: Request) {
         console.error('storage.download failed', { reason: error?.message ?? 'no_data' })
         throw new Error('image fetch failed')
       }
-      const buffer = await data.arrayBuffer()
+      const arrayBuffer = await data.arrayBuffer()
+      const originalBuffer = Buffer.from(arrayBuffer)
+      // 元画像は Storage にフル品質で残し、Claude に渡すコピーだけを縮める (ADR-0011 §11)
+      const resized = await resizeForClaude(originalBuffer)
       imageInputs.push({
-        mediaType: img.contentType,
-        base64: Buffer.from(buffer).toString('base64'),
+        mediaType: resized.mediaType,
+        base64: resized.buffer.toString('base64'),
       })
     }
 

@@ -129,6 +129,31 @@ Claude haiku の応答時間: 通常 3〜8 秒、最悪 15〜20 秒。
 
 クライアントは pending 中に「○○ちゃんの ページを、つくっています…」を表示。
 
+### 11. Claude の 5 MB 画像上限への対応: サーバ側 resize (Phase 2 で追加)
+
+**問題発見**: Anthropic Messages API は base64 画像を **5,242,880 bytes (5 MB)** までしか受け付けない。
+iPhone デフォルト解像度 (4032×3024) を Canvas で quality 92% 再エンコードすると典型的に 5〜8 MB になり、上限超過する。
+
+**採用**: `src/features/ai/server/resize.ts` で sharp による server-side resize を Claude 送信前に挟む。
+
+- 長辺 **1568px** に縮める (Anthropic 公式の推奨値)
+- JPEG quality 85 で encode
+- それでも 5 MB を超える場合は 1280px / quality 70 にフォールバック
+- 元写真は Storage に **フル品質で保管** (PRD §1「10 年後の宝物」公約を守る)
+
+**代替案 (却下)**:
+
+- **クライアント Canvas で事前 downsize**: 元写真の品質が永久に失われる → ISSUE-021 (フォトブック印刷) で品質限界に達する。PRD §1 と矛盾
+- **Storage 上限を 5 MiB に下げる**: iPhone 標準解像度 (5〜8 MB) が拒否される → PRD §13「責めないデザイン」と矛盾
+
+**受容コスト**:
+
+- sharp は ~10 MB の native binary を含む依存だが、Next.js が next/image で sharp を内部利用しているため Vercel 上でも実質追加コストはほぼなし
+- サーバ側 CPU 使用が増える: 1 画像あたり ~50〜200ms。30 秒フローには許容範囲
+- HEIC は sharp の libheif サポートが環境依存 → 既存の **422 弾き** (`media_type_not_supported_for_ai`) で防衛
+
+将来の ISSUE-015 (サムネイル生成) で同じ sharp 基盤を再利用予定。
+
 ## 受容コスト
 
 - **prompt 改善のサイクルが手間**: PROMPT_VERSION を bump して新旧比較する仕組みは未整備。違反観測時に判断
