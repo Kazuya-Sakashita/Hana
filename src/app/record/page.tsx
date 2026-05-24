@@ -542,14 +542,15 @@ function AiConsentDialog({
   // 既に同意済みなのに 403 ai_consent_required が返ってきた場合は、サーバとローカルの状態差。
   // ユーザーには通常通り同意ダイアログを見せる (idempotent endpoint なので安全)。
   void aiConsentAt
+  // 同意ダイアログは「外側クリックで閉じる」を意図的に **無効**。
+  // 明示的に「どういして、つくる」または「AI を つかわない」を押させる (consent UX の鉄則)。
   return (
     <div
       role="dialog"
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center"
-      onClick={onDecline}
     >
-      <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+      <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
           <CardTitle className="font-serif text-xl">あなたの しゃしんを、ことばに します</CardTitle>
           <CardDescription className="leading-narrative mt-2">
@@ -559,10 +560,10 @@ function AiConsentDialog({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button size="lg" onClick={onAccept} className="w-full">
+          <Button type="button" size="lg" onClick={onAccept} className="w-full">
             どういして、つくる
           </Button>
-          <Button variant="ghost" size="lg" onClick={onDecline} className="w-full">
+          <Button type="button" variant="ghost" size="lg" onClick={onDecline} className="w-full">
             AI を つかわない
           </Button>
           <p className="text-ink-tertiary text-center text-xs">
