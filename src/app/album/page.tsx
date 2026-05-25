@@ -98,20 +98,26 @@ export default function AlbumPage() {
           <ul className="flex flex-col gap-3">
             {items.map((m) => (
               <li key={m.id}>
-                <Card>
-                  <CardContent className="flex flex-col gap-2 py-5">
-                    <div className="meta-label">
-                      {m.recorded_at}
-                      {m.weather ? ` ・ ${m.weather}` : ''}
-                    </div>
-                    <h2 className="font-serif text-lg leading-tight">{m.title}</h2>
-                    {m.body ? (
-                      <p className="text-ink-secondary leading-narrative text-sm">
-                        {m.body.length > 80 ? `${m.body.slice(0, 80)}…` : m.body}
-                      </p>
-                    ) : null}
-                  </CardContent>
-                </Card>
+                <Link
+                  href={`/memory/${m.id}`}
+                  className="ease-organic block transition-transform active:scale-[0.98]"
+                >
+                  <Card>
+                    <CardContent className="flex flex-col gap-2 py-5">
+                      <div className="meta-label">
+                        {m.recorded_at}
+                        {m.weather ? ` ・ ${m.weather}` : ''}
+                        {m.is_favorite ? ' ・ ❀' : ''}
+                      </div>
+                      <h2 className="font-serif text-lg leading-tight">{m.title}</h2>
+                      {m.body ? (
+                        <p className="text-ink-secondary leading-narrative text-sm">
+                          {m.body.length > 80 ? `${m.body.slice(0, 80)}…` : m.body}
+                        </p>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                </Link>
               </li>
             ))}
           </ul>
