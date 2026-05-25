@@ -12,6 +12,7 @@ import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 
 type Phase = 'loading' | 'no-child' | 'form' | 'success' | 'error'
 type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'confirming' | 'done' | 'failed'
+type AiStatus = 'idle' | 'consent_pending' | 'generating' | 'done' | 'failed'
 
 interface UploadedImage {
   id: string
@@ -37,8 +38,6 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   return fields
 }
 
-// Canvas で再エンコードして EXIF を削除する。
-// HEIC は Safari でしか描画できないが、その場合 onerror で失敗する。
 type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic'
 
 async function reencodeImage(
@@ -58,8 +57,6 @@ async function reencodeImage(
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Canvas が つかえません')
     ctx.drawImage(img, 0, 0)
-
-    // PNG は PNG のまま、その他は JPEG に正規化 (画質 92%)
     const outType: AllowedMime = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
@@ -79,12 +76,17 @@ export default function RecordPage() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [childId, setChildId] = useState<string | null>(null)
   const [childName, setChildName] = useState<string>('')
+  const [aiConsentAt, setAiConsentAt] = useState<string | null>(null)
 
   const [file, setFile] = useState<File | null>(null)
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null)
+
+  const [aiStatus, setAiStatus] = useState<AiStatus>('idle')
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiQuotaExceeded, setAiQuotaExceeded] = useState(false)
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -98,16 +100,16 @@ export default function RecordPage() {
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
+  const canGenerateAi = !!uploadedImage && aiStatus !== 'generating' && !aiQuotaExceeded
 
-  // 初期マウント: 子どもプロフィールを取得
   useEffect(() => {
     let cancelled = false
     const client = getBrowserApiClient()
-    client
-      .GET('/children')
-      .then(({ data }) => {
+    Promise.all([client.GET('/me'), client.GET('/children')])
+      .then(([meRes, childrenRes]) => {
         if (cancelled) return
-        const first = data?.data?.[0]
+        setAiConsentAt(meRes.data?.ai_consent_at ?? null)
+        const first = childrenRes.data?.data?.[0]
         if (!first) {
           setPhase('no-child')
           return
@@ -130,7 +132,6 @@ export default function RecordPage() {
     }
   }, [router, todayIso])
 
-  // file が変わったらプレビュー URL の cleanup
   useEffect(() => {
     if (!filePreviewUrl) return
     return () => URL.revokeObjectURL(filePreviewUrl)
@@ -145,11 +146,11 @@ export default function RecordPage() {
     setUploadStatus('preparing')
     setUploadError(null)
     setUploadedImage(null)
+    setAiStatus('idle')
+    setAiError(null)
 
     try {
       const { blob, contentType, width, height } = await reencodeImage(f)
-
-      setUploadStatus('preparing')
       const client = getBrowserApiClient()
       const presigned = await client.POST('/uploads/presigned-url', {
         body: { file_name: f.name, content_type: contentType },
@@ -182,6 +183,72 @@ export default function RecordPage() {
     }
   }
 
+  async function callAiGenerate() {
+    if (!uploadedImage || !childId) return
+    setAiStatus('generating')
+    setAiError(null)
+    const client = getBrowserApiClient()
+    try {
+      const res = await client.POST('/ai/generate', {
+        body: {
+          child_id: childId,
+          image_ids: [uploadedImage.id],
+          recorded_at: recordedAt || null,
+          weather: weather.trim() === '' ? null : weather,
+          parent_note: body.trim() === '' ? null : body,
+        },
+      })
+      if (!res.data) throw new Error('生成結果が からでした')
+      setTitle(res.data.title)
+      setBody(res.data.body)
+      setAiStatus('done')
+    } catch (e) {
+      if (isApiProblemError(e)) {
+        switch (e.reason) {
+          case 'unauthorized':
+            router.push('/sign-in')
+            return
+          case 'ai_consent_required':
+            setAiStatus('consent_pending')
+            return
+          case 'ai_quota_exceeded':
+            setAiQuotaExceeded(true)
+            setAiStatus('failed')
+            setAiError(
+              '今月の AI せいせい かいすうの じょうげんに たっしました。らいげつ また つかえます。',
+            )
+            return
+          default:
+            setAiStatus('failed')
+            setAiError(`AI せいせいに しっぱい しました (${e.reason})`)
+        }
+      } else {
+        setAiStatus('failed')
+        setAiError('AI せいせいに しっぱい しました')
+      }
+    }
+  }
+
+  async function acceptAiConsent() {
+    const client = getBrowserApiClient()
+    try {
+      const res = await client.POST('/me/ai-consent')
+      if (res.data?.ai_consent_at) {
+        setAiConsentAt(res.data.ai_consent_at)
+      }
+      setAiStatus('idle')
+      // 同意完了 → 自動で生成リトライ
+      void callAiGenerate()
+    } catch {
+      setAiStatus('failed')
+      setAiError('どういの ほぞんに しっぱい しました')
+    }
+  }
+
+  function declineAiConsent() {
+    setAiStatus('idle')
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!uploadedImage || !childId) return
@@ -189,17 +256,19 @@ export default function RecordPage() {
     setFieldErrors({})
     setTopMessage(null)
 
+    const trimmedTitle = title.trim()
+    const wasAiGenerated = aiStatus === 'done'
     const client = getBrowserApiClient()
     try {
       await client.POST('/memories', {
         body: {
           child_id: childId,
-          title: title.trim(),
+          title: trimmedTitle,
           body: body.trim() === '' ? null : body,
           recorded_at: recordedAt,
           weather: weather.trim() === '' ? null : weather,
           image_ids: [uploadedImage.id],
-          ai_generated: false,
+          ai_generated: wasAiGenerated,
         },
       })
       setPhase('success')
@@ -222,8 +291,6 @@ export default function RecordPage() {
       setSubmitting(false)
     }
   }
-
-  // === 表示分岐 ===
 
   if (phase === 'loading') {
     return (
@@ -294,7 +361,6 @@ export default function RecordPage() {
     )
   }
 
-  // phase === 'form'
   return (
     <Shell>
       <Card className="w-full max-w-md">
@@ -354,6 +420,34 @@ export default function RecordPage() {
                 <p className="text-amber text-xs">{fieldErrors.imageIds}</p>
               ) : null}
             </div>
+
+            {uploadedImage ? (
+              <div className="bg-warm rounded-xl p-4">
+                <p className="text-ink-secondary font-serif text-sm">
+                  AI に、ことばを かんがえて もらえます。
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="mt-3 w-full"
+                  onClick={callAiGenerate}
+                  disabled={!canGenerateAi}
+                >
+                  {aiStatus === 'generating'
+                    ? '○○ちゃんの ページを、つくっています…'.replace('○○', childName)
+                    : aiStatus === 'done'
+                      ? 'もういちど AI に たのむ'
+                      : 'AI で つくる'}
+                </Button>
+                {aiStatus === 'done' ? (
+                  <p className="text-leaf mt-2 text-xs">
+                    タイトルと ほんぶんに、ていあんを いれました。じゆうに なおせます。
+                  </p>
+                ) : null}
+                {aiError ? <p className="text-amber mt-2 text-xs">{aiError}</p> : null}
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="memory-title" className="font-serif">
@@ -421,7 +515,63 @@ export default function RecordPage() {
           </form>
         </CardContent>
       </Card>
+
+      {aiStatus === 'consent_pending' ? (
+        <AiConsentDialog
+          childName={childName}
+          aiConsentAt={aiConsentAt}
+          onAccept={acceptAiConsent}
+          onDecline={declineAiConsent}
+        />
+      ) : null}
     </Shell>
+  )
+}
+
+function AiConsentDialog({
+  childName,
+  aiConsentAt,
+  onAccept,
+  onDecline,
+}: {
+  childName: string
+  aiConsentAt: string | null
+  onAccept: () => void
+  onDecline: () => void
+}) {
+  // 既に同意済みなのに 403 ai_consent_required が返ってきた場合は、サーバとローカルの状態差。
+  // ユーザーには通常通り同意ダイアログを見せる (idempotent endpoint なので安全)。
+  void aiConsentAt
+  // 同意ダイアログは「外側クリックで閉じる」を意図的に **無効**。
+  // 明示的に「どういして、つくる」または「AI を つかわない」を押させる (consent UX の鉄則)。
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center"
+    >
+      <Card className="w-full max-w-md">
+        <CardHeader className="items-center text-center">
+          <CardTitle className="font-serif text-xl">あなたの しゃしんを、ことばに します</CardTitle>
+          <CardDescription className="leading-narrative mt-2">
+            Hana は、{childName} ちゃんの しゃしんを そとの AI に いちじてきに おくり、 ぶんしょうの
+            ていあんを もらいます。 なまえと月齢は おくりますが、たんじょうびと じゅうしょは
+            おくりません。 学習にも つかわれません。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Button type="button" size="lg" onClick={onAccept} className="w-full">
+            どういして、つくる
+          </Button>
+          <Button type="button" variant="ghost" size="lg" onClick={onDecline} className="w-full">
+            AI を つかわない
+          </Button>
+          <p className="text-ink-tertiary text-center text-xs">
+            せっていから いつでも かえられます。
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

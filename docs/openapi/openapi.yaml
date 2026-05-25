@@ -38,6 +38,8 @@ tags:
     description: 写真アップロード (presigned URL 方式)
   - name: memories
     description: 記録 (1 日 1 ページの育児ログ)
+  - name: ai
+    description: AI 文章生成 (Claude API)
 paths:
   /health:
     get:
@@ -84,6 +86,28 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /me/ai-consent:
+    post:
+      operationId: setAiConsent
+      summary: AI への画像送信に同意する
+      description: |
+        現在のユーザーの `profile.ai_consent_at` を **現在時刻にセット** する (idempotent)。
+        既に同意済みでも 200 を返す (時刻は更新しない)。
+
+        AI 同意なしで `POST /ai/generate` を叩くと 403 `ai_consent_required` が返るので、
+        クライアントは同意ダイアログ → 本エンドポイント → 生成 の順で呼ぶ。
+      tags: [meta]
+      responses:
+        '200':
+          description: 同意後の AppUser
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -458,6 +482,45 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /ai/generate:
+    post:
+      operationId: generateAiText
+      summary: AI による育児記録の文章生成
+      description: |
+        指定の画像群と子どもの月齢・天気・親のひとことから、タイトル + 本文 + タグを生成する。
+        画像とプロンプトは Anthropic Claude API に送信される。
+
+        **AI 同意が必要**: 初回呼び出しの前にクライアントが
+        `profile.ai_consent_at` をセット (本Issueでは UI ダイアログで同意取得)。
+        未同意で叩くと 403 `ai_consent_required` を返す。
+
+        **月間 20 回まで** (Free tier)。超過時は 429 `ai_quota_exceeded`。
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiGenerateRequest'
+      responses:
+        '200':
+          description: 生成結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiGenerateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     bearerAuth:
@@ -495,6 +558,10 @@ components:
       $ref: './components/schemas/MemoryCreateRequest.yaml'
     MemoryUpdateRequest:
       $ref: './components/schemas/MemoryUpdateRequest.yaml'
+    AiGenerateRequest:
+      $ref: './components/schemas/AiGenerateRequest.yaml'
+    AiGenerateResponse:
+      $ref: './components/schemas/AiGenerateResponse.yaml'
   parameters:
     Limit:
       $ref: './components/parameters/Limit.yaml'

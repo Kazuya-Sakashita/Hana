@@ -2,10 +2,11 @@
 //
 // このファイルは ISSUE-005 で datasource + generator のみで開始する。
 // 実テーブル (profiles / children / memories 等) は使うタイミングの Issue で追加する。
-//   - profiles: ISSUE-006 (Supabase Auth 統合)
-//   - children: ISSUE-007 (子どもプロフィール API)
-//   - images:   ISSUE-008 (写真アップロード + Supabase Storage)
-//   - memories: ISSUE-009 (記録 API) ← このIssue
+//   - profiles:      ISSUE-006 (Supabase Auth 統合)
+//   - children:      ISSUE-007 (子どもプロフィール API)
+//   - images:        ISSUE-008 (写真アップロード + Supabase Storage)
+//   - memories:      ISSUE-009 (記録 API)
+//   - ai_generations: ISSUE-010 (AI 文章生成) ← このIssue
 //
 // マイグレーション運用:
 //   ローカル: pnpm db:migrate (= prisma migrate dev)
@@ -36,9 +37,10 @@ model Profile {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  children Child[]
-  images   Image[]
-  memories Memory[]
+  children      Child[]
+  images        Image[]
+  memories      Memory[]
+  aiGenerations AiGeneration[]
 
   @@map("profiles")
 }
@@ -116,4 +118,31 @@ model Memory {
   @@index([userId, recordedAt(sort: Desc), id(sort: Desc)], map: "memories_user_recorded_desc_idx")
   @@index([childId])
   @@map("memories")
+}
+
+// AI 文章生成のログ。プロンプト改善・分析・quota チェックに使う。
+// PII を含まないこと:
+//   - 生成された title / body 自体は保管せず、本数 (input/output tokens)・モデル名・
+//     成否のみ記録する。生成結果はクライアントに返したらサーバ側では捨てる。
+//   - 子どもの名前を渡したフラグは boolean のみで、name 自体は保管しない。
+// 月次 quota チェックに `(user_id, created_at)` の index を張る。
+model AiGeneration {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  childId       String?  @map("child_id") @db.Uuid
+  model         String   @db.VarChar(100)
+  promptVersion String   @map("prompt_version") @db.VarChar(20)
+  // 成否・コスト等の集計情報のみ。生成本文は保管しない (PII)。
+  succeeded     Boolean  @default(true)
+  inputTokens   Int?     @map("input_tokens")
+  outputTokens  Int?     @map("output_tokens")
+  durationMs    Int?     @map("duration_ms")
+  // 失敗理由 (NG ワード検出 / API エラー / quota 超過 等の集計用 enum-ish)
+  errorReason   String?  @map("error_reason") @db.VarChar(50)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("ai_generations")
 }
