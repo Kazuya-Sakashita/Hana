@@ -2,11 +2,11 @@
 id: ISSUE-015
 title: /album にサムネイル表示
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-05-25
-merged_at: null
-pr: null
+merged_at: 2026-05-25
+pr: 28
 ---
 
 ## 目的 (Why)
