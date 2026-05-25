@@ -96,11 +96,21 @@ export default function RecordPage() {
   const [submitting, setSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [topMessage, setTopMessage] = useState<string | null>(null)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
   const canGenerateAi = !!uploadedImage && aiStatus !== 'generating' && !aiQuotaExceeded
+  const hasUnsavedChanges = !!uploadedImage || title.trim().length > 0 || body.trim().length > 0
+
+  function onCancelClick() {
+    if (hasUnsavedChanges) {
+      setCancelDialogOpen(true)
+    } else {
+      router.push('/')
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -363,6 +373,15 @@ export default function RecordPage() {
 
   return (
     <Shell>
+      <button
+        type="button"
+        onClick={onCancelClick}
+        aria-label="やめて とじる"
+        className="bg-elevated text-ink-secondary ring-elevated ease-organic absolute left-4 top-4 flex items-center gap-1 rounded-full px-3 py-2 font-serif text-sm ring-1 transition-transform active:scale-[0.97]"
+      >
+        <span aria-hidden="true">‹</span>
+        やめる
+      </button>
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
           <CardTitle className="font-serif text-2xl">
@@ -524,6 +543,13 @@ export default function RecordPage() {
           onDecline={declineAiConsent}
         />
       ) : null}
+
+      {cancelDialogOpen ? (
+        <CancelConfirmDialog
+          onKeep={() => setCancelDialogOpen(false)}
+          onClose={() => router.push('/')}
+        />
+      ) : null}
     </Shell>
   )
 }
@@ -577,8 +603,44 @@ function AiConsentDialog({
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="bg-canvas flex min-h-dvh items-center justify-center px-6 py-12">
+    <main className="bg-canvas relative flex min-h-dvh items-center justify-center px-6 py-12">
       {children}
     </main>
+  )
+}
+
+function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cancel-confirm-title"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center"
+    >
+      <Card className="w-full max-w-md">
+        <CardHeader className="items-center text-center">
+          <CardTitle id="cancel-confirm-title" className="font-serif text-xl">
+            ほぞんせずに とじますか？
+          </CardTitle>
+          <CardDescription className="leading-narrative mt-2">
+            なおした ぶんは うしなわれます。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Button type="button" size="lg" onClick={onKeep} className="w-full">
+            もうすこし なおす
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            onClick={onClose}
+            className="text-ink-tertiary w-full"
+          >
+            とじる
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
