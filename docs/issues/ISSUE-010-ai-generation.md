@@ -2,9 +2,11 @@
 id: ISSUE-010
 title: AI 文章生成統合 (Claude API)
 priority: P0
-status: review
+status: done
 size: M+
 created_at: 2026-05-23
+merged_at: 2026-05-25
+pr: 24
 ---
 
 ## 目的 (Why)
