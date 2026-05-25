@@ -90,7 +90,7 @@ export default function AlbumPage() {
   }, [items])
 
   return (
-    <main className="bg-canvas min-h-dvh px-6 py-12">
+    <main className="bg-canvas min-h-dvh px-6 pb-28 pt-12">
       <div className="mx-auto w-full max-w-md">
         <header className="mb-8 flex items-center justify-between">
           <h1 className="font-serif text-2xl">アルバム</h1>
