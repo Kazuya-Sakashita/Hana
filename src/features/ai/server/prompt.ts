@@ -62,31 +62,6 @@ export function buildUserPrompt(params: PromptParams): string {
   return lines.join('\n')
 }
 
-/**
- * 撮影日と誕生日から月齢・日数を算出。
- *   ageMonths: 完全月数 (UTC、当該日に達していなければ -1)
- *   ageDays:   当該月以降の経過日数
- */
-export function computeAge(birthdate: Date, recordedAt: Date): { months: number; days: number } {
-  const b = new Date(
-    Date.UTC(birthdate.getUTCFullYear(), birthdate.getUTCMonth(), birthdate.getUTCDate()),
-  )
-  const r = new Date(
-    Date.UTC(recordedAt.getUTCFullYear(), recordedAt.getUTCMonth(), recordedAt.getUTCDate()),
-  )
-
-  // recordedAt が birthdate より前なら 0/0 にクランプ (誕生前の写真の理論上のケース)
-  if (r.getTime() <= b.getTime()) {
-    return { months: 0, days: 0 }
-  }
-
-  let months = (r.getUTCFullYear() - b.getUTCFullYear()) * 12 + (r.getUTCMonth() - b.getUTCMonth())
-  let dayCursor = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + months, b.getUTCDate()))
-  if (dayCursor.getTime() > r.getTime()) {
-    months -= 1
-    dayCursor = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + months, b.getUTCDate()))
-  }
-  const dayMs = 24 * 60 * 60 * 1000
-  const days = Math.max(0, Math.floor((r.getTime() - dayCursor.getTime()) / dayMs))
-  return { months: Math.max(0, months), days }
-}
+// 月齢計算は Server / Client 共用 (ISSUE-013 で memory detail 画面が同じロジックを使う)。
+// 実装は src/lib/age.ts に集約。既存 import (computeAge) はここで re-export して維持。
+export { computeAge } from '@/lib/age'
