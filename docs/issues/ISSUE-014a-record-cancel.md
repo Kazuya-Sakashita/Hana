@@ -2,9 +2,11 @@
 id: ISSUE-014a
 title: /record にキャンセル動線 (やめる + 確認ダイアログ) を追加
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-05-26
+merged_at: 2026-05-26
+pr: 34
 parent: ISSUE-014
 ---
 
