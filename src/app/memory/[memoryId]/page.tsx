@@ -202,7 +202,7 @@ export default function MemoryDetailPage() {
   if (memory.weather) metaParts.push(memory.weather)
 
   return (
-    <main className="bg-canvas min-h-dvh pb-16">
+    <main className="bg-canvas min-h-dvh pb-28">
       <div className="relative mx-auto w-full max-w-md">
         <Link
           href="/album"
