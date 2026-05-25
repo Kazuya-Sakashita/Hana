@@ -2,9 +2,11 @@
 id: ISSUE-012
 title: ホーム画面 (`/`) を V0 §5.2 ベースに刷新
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-25
+merged_at: 2026-05-25
+pr: 32
 ---
 
 ## 目的 (Why)
