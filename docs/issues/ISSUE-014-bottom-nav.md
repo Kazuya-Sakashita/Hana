@@ -2,9 +2,11 @@
 id: ISSUE-014
 title: BottomNav (ホーム / アルバム / せってい + 中央 + ボタン) + /settings 最小 stub
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-05-25
+merged_at: 2026-05-25
+pr: 30
 ---
 
 ## 目的 (Why)
