@@ -2,9 +2,11 @@
 id: ISSUE-013
 title: 記録詳細画面 (/memory/[memoryId]) — "the cry-worthy moment"
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-25
+merged_at: 2026-05-25
+pr: 26
 ---
 
 ## 目的 (Why)
