@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError } from '@/lib/api/error'
 import { computeAge, formatAgeLabel } from '@/lib/age'
+import { imageUrlCache } from '@/lib/cache/image-url-cache'
 
 type Memory = {
   id: string
@@ -67,13 +68,19 @@ export default function MemoryDetailPage() {
         )
         if (c) setChild(c)
 
-        // signed URL を画像ごとに並列取得
+        // signed URL を画像ごとに並列取得 (ISSUE-019: preview size + client cache)
         const urls = await Promise.all(
           mem.image_ids.map(async (imgId) => {
+            const cached = imageUrlCache.get(imgId, 'preview')
+            if (cached) return [imgId, cached] as const
             const r = await client.GET('/uploads/{imageId}/url', {
-              params: { path: { imageId: imgId } },
+              params: { path: { imageId: imgId }, query: { size: 'preview' } },
             })
-            return [imgId, r.data?.url ?? null] as const
+            const url = r.data?.url ?? null
+            if (url && r.data?.expires_at) {
+              imageUrlCache.set(imgId, 'preview', url, r.data.expires_at)
+            }
+            return [imgId, url] as const
           }),
         )
         if (cancelled) return
