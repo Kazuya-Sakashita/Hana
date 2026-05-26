@@ -12,6 +12,7 @@ parent: PERF
 
 実 latency が同じでも、 **画面遷移時の skeleton 表示と prefetch** で体感速度は大幅に変わる。
 現状:
+
 - `loading.tsx` / `error.tsx` / `<Suspense>` 未使用 → 真っ白 → ドンの遷移
 - `<Link>` の prefetch を明示しておらず、動的ルートはほぼ未 prefetch
 
@@ -66,6 +67,7 @@ V0 §1「Whisper not shout」に合わせて主張しすぎない。
 ### prefetch の副作用
 
 `prefetch={true}` は viewport に入ると HTML を事前取得。
+
 - 帯域コスト: メタタグ + 軽量 HTML なので影響小
 - セキュリティ: 既存の auth は維持されるので問題なし
 
@@ -73,16 +75,16 @@ V0 §1「Whisper not shout」に合わせて主張しすぎない。
 
 ## 影響範囲
 
-| 領域         | 影響                                  |
-| ------------ | ------------------------------------- |
-| OpenAPI      | なし                                  |
-| 生成型       | なし                                  |
-| データ       | なし                                  |
+| 領域         | 影響                                         |
+| ------------ | -------------------------------------------- |
+| OpenAPI      | なし                                         |
+| 生成型       | なし                                         |
+| データ       | なし                                         |
 | 画面         | `/`, `/album`, `/memory/[id]` に loading.tsx |
-| Link         | 主要動線で prefetch={true}            |
-| CI           | typecheck / lint / format / build / test |
-| ドキュメント | このIssueファイル                    |
-| 環境変数     | なし                                  |
+| Link         | 主要動線で prefetch={true}                   |
+| CI           | typecheck / lint / format / build / test     |
+| ドキュメント | このIssueファイル                            |
+| 環境変数     | なし                                         |
 
 ---
 

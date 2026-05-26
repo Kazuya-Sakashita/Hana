@@ -246,6 +246,7 @@ tests/
 - `docs/api-driven-development/security-and-privacy.md` — セキュリティ詳細
 - `docs/adr/` — アーキテクチャ判断記録
 - `docs/issues/` — Issue の永続コピー
+- `docs/perf/` — パフォーマンスベースラインと計測手引き
 
 ---
 

@@ -11,6 +11,7 @@ parent: PERF
 ## 目的 (Why)
 
 ISSUE-018 で list レベルの N+1 は解消するが、 **詳細画面 (`/memory/[id]`) では本画像 URL を個別取得** したままになる。
+
 - presigned URL の **Cache-Control が未設定**。 CLAUDE.md の `private, no-store` 記述だと TTL 30 分の活用ができない
 - クライアント側 URL キャッシュなし → タブ切替やページ再訪で同じ URL を再発行
 
@@ -74,17 +75,17 @@ ISSUE-018 で list レベルの N+1 は解消するが、 **詳細画面 (`/memo
 
 ## 影響範囲
 
-| 領域         | 影響                                            |
-| ------------ | ----------------------------------------------- |
+| 領域         | 影響                                             |
+| ------------ | ------------------------------------------------ |
 | OpenAPI      | `/v1/uploads/{imageId}/url` に `size` クエリ追加 |
-| 生成型       | `npm run openapi:gen` で更新                  |
-| データ       | なし                                            |
-| 画面         | `/memory/[id]` (preview size 指定)              |
-| API          | uploads URL endpoint                            |
-| テスト       | Cache-Control header / cache hit のユニット     |
-| CI           | typecheck / lint / format / build / test        |
-| ドキュメント | ADR-0010 / CLAUDE.md §7 修正                    |
-| 環境変数     | なし                                            |
+| 生成型       | `npm run openapi:gen` で更新                     |
+| データ       | なし                                             |
+| 画面         | `/memory/[id]` (preview size 指定)               |
+| API          | uploads URL endpoint                             |
+| テスト       | Cache-Control header / cache hit のユニット      |
+| CI           | typecheck / lint / format / build / test         |
+| ドキュメント | ADR-0010 / CLAUDE.md §7 修正                     |
+| 環境変数     | なし                                             |
 
 ---
 

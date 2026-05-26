@@ -55,6 +55,7 @@ ISSUE-016 で取った **ベースラインは synthetic (Lighthouse)** で、 R
 ### PII を絶対に送らない
 
 CLAUDE.md §4 ルールに従い、 payload は **数値メトリクスと識別子ハッシュのみ**。
+
 - `userIdHash`: SHA256(user_id).slice(0, 16) (storage_key と同じ手法)
 - `route`: pathname (`/`, `/album` など)、 `[memoryId]` のような params は含めない (匿名化)
 
@@ -66,17 +67,17 @@ CLAUDE.md §4 ルールに従い、 payload は **数値メトリクスと識別
 
 ## 影響範囲
 
-| 領域         | 影響                                              |
-| ------------ | ------------------------------------------------- |
-| OpenAPI      | `/v1/metrics/vitals` 追加                         |
-| 生成型       | `npm run openapi:gen` で更新                     |
-| データ       | なし (DB 保存しない、ログのみ)                    |
-| 画面         | layout.tsx に reporter 1 つ追加                   |
-| API          | 新規 endpoint 1 つ                                |
-| テスト       | reporter / route の unit test                     |
-| CI           | typecheck / lint / format / build / test          |
-| ドキュメント | このIssueファイル                                |
-| 環境変数     | なし                                              |
+| 領域         | 影響                                     |
+| ------------ | ---------------------------------------- |
+| OpenAPI      | `/v1/metrics/vitals` 追加                |
+| 生成型       | `npm run openapi:gen` で更新             |
+| データ       | なし (DB 保存しない、ログのみ)           |
+| 画面         | layout.tsx に reporter 1 つ追加          |
+| API          | 新規 endpoint 1 つ                       |
+| テスト       | reporter / route の unit test            |
+| CI           | typecheck / lint / format / build / test |
+| ドキュメント | このIssueファイル                        |
+| 環境変数     | なし                                     |
 
 ---
 
