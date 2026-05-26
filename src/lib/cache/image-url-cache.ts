@@ -12,7 +12,9 @@ type CacheEntry = {
   expiresAt: number // epoch ms
 }
 
-const STORAGE_KEY_PREFIX = 'hana:imageUrlCache:'
+// v2: ISSUE-019 検証中に transformation params を変えた (resize=contain 明示) ので
+//     v1 で取得した URL は古い変換結果を指している。 prefix を bump して invalidate。
+const STORAGE_KEY_PREFIX = 'hana:imageUrlCache:v2:'
 const SAFETY_BUFFER_MS = 30_000 // 30 秒前に失効扱い (URL TTL ギリギリで叩かない)
 
 const memory = new Map<string, CacheEntry>()

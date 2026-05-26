@@ -72,7 +72,7 @@ describe('imageUrlCache', () => {
   it('persists to sessionStorage', async () => {
     const cache = await load()
     cache.set(IMG, 'thumbnail', 'https://example.com/a', isoFromNow(60_000))
-    const raw = window.sessionStorage.getItem(`hana:imageUrlCache:${IMG}:thumbnail`)
+    const raw = window.sessionStorage.getItem(`hana:imageUrlCache:v2:${IMG}:thumbnail`)
     expect(raw).not.toBeNull()
     const parsed = JSON.parse(raw!) as { url: string; expiresAt: number }
     expect(parsed.url).toBe('https://example.com/a')

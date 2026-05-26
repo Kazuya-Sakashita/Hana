@@ -15,9 +15,18 @@ const RESPONSE_CACHE_MAX_AGE = 300 // 5 分 (ADR-0012)
 const SIZES = ['thumbnail', 'preview', 'original'] as const
 type ImageSize = (typeof SIZES)[number]
 
-const TRANSFORMS: Record<Exclude<ImageSize, 'original'>, { width: number; quality: number }> = {
-  thumbnail: { width: 320, quality: 70 },
-  preview: { width: 1024, quality: 80 },
+// resize: 'contain' を明示する理由:
+//   Supabase image transformation の既定 resize は 'cover' だが、 width だけ指定すると
+//   非アスペクト保持の center crop を返す挙動 (ISSUE-019 検証で判明)。
+//   'contain' を明示するとアスペクト比を保ったまま width に縮小する。
+//   サーバ側ではクロップしないので、 各画面のコンテナ (4:5 / 80×80) に応じた crop は
+//   ブラウザ側の object-cover に委ねる (= ISSUE-019 前と視覚的に一致)。
+const TRANSFORMS: Record<
+  Exclude<ImageSize, 'original'>,
+  { width: number; resize: 'contain'; quality: number }
+> = {
+  thumbnail: { width: 320, resize: 'contain', quality: 70 },
+  preview: { width: 1024, resize: 'contain', quality: 80 },
 }
 
 function parseSize(value: string | null): ImageSize {

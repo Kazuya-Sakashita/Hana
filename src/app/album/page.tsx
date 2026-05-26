@@ -192,7 +192,7 @@ function Thumbnail({ url, hasImage, alt }: { url: CoverState; hasImage: boolean;
   if (typeof url === 'string') {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={alt} className={`${baseClass} object-cover`} />
+      <img src={url} alt={alt} className={`${baseClass} object-contain`} />
     )
   }
   if (url === undefined && hasImage) {

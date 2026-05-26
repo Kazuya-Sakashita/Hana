@@ -119,7 +119,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     expect(body.expires_at).toMatch(/T.*Z$/)
   })
 
-  it('passes transform=320/q70 when size=thumbnail', async () => {
+  it('passes resize=contain transform when size=thumbnail', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -130,11 +130,11 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     const res = await call(IMG_ID, 'thumbnail')
     expect(res.status).toBe(200)
     expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, {
-      transform: { width: 320, quality: 70 },
+      transform: { width: 320, resize: 'contain', quality: 70 },
     })
   })
 
-  it('passes transform=1024/q80 when size=preview', async () => {
+  it('passes resize=contain transform when size=preview', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -145,7 +145,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     const res = await call(IMG_ID, 'preview')
     expect(res.status).toBe(200)
     expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, {
-      transform: { width: 1024, quality: 80 },
+      transform: { width: 1024, resize: 'contain', quality: 80 },
     })
   })
 

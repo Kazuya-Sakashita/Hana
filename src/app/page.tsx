@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError } from '@/lib/api/error'
 import { computeAge, formatAgeLabel } from '@/lib/age'
-import { imageUrlCache } from '@/lib/cache/image-url-cache'
 
 // V0 prompt §5.2 ホーム画面:
 //   1. Top bar: 時間帯挨拶 + 子どもアバター
@@ -82,22 +81,16 @@ export default function HomePage() {
         setMemories(list)
         setPhase('ready')
 
-        // サムネ並列フェッチ (ISSUE-015 と同じパターン、 ISSUE-019 で client cache + thumbnail size)
+        // サムネ並列フェッチ (ISSUE-015 と同じパターン)
         const results = await Promise.all(
           list.map(async (m): Promise<[string, string | null]> => {
             const firstId = m.image_ids[0]
             if (!firstId) return [m.id, null]
-            const cached = imageUrlCache.get(firstId, 'thumbnail')
-            if (cached) return [m.id, cached]
             try {
               const r = await client.GET('/uploads/{imageId}/url', {
-                params: { path: { imageId: firstId }, query: { size: 'thumbnail' } },
+                params: { path: { imageId: firstId } },
               })
-              const url = r.data?.url ?? null
-              if (url && r.data?.expires_at) {
-                imageUrlCache.set(firstId, 'thumbnail', url, r.data.expires_at)
-              }
-              return [m.id, url]
+              return [m.id, r.data?.url ?? null]
             } catch {
               return [m.id, null]
             }

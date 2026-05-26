@@ -25,13 +25,19 @@ Cache-Control: private, max-age=300
 
 ### 2. `size` クエリパラメータの導入
 
-| size        | 用途                              | Supabase transformation |
-| ----------- | --------------------------------- | ----------------------- |
-| `thumbnail` | 一覧 (`/album`, `/`) のサムネ表示 | width=320, quality=70   |
-| `preview`   | 詳細 (`/memory/[id]`) の本画像    | width=1024, quality=80  |
-| `original`  | (default) 変換なし                | (なし)                  |
+| size        | 用途                              | Supabase transformation                    |
+| ----------- | --------------------------------- | ------------------------------------------ |
+| `thumbnail` | 一覧 (`/album`, `/`) のサムネ表示 | width=320, **resize=contain**, quality=70  |
+| `preview`   | 詳細 (`/memory/[id]`) の本画像    | width=1024, **resize=contain**, quality=80 |
+| `original`  | (default) 変換なし                | (なし)                                     |
 
 クライアントは表示サイズに応じて適切な `size` を指定し、 **「80×80 表示なのに 2MB 原寸を取得」 という浪費** を排除する。
+
+#### `resize=contain` を明示する理由 (重要)
+
+Supabase image transformation の既定 `resize` は `cover` だが、 **width だけ指定したケースで非アスペクト保持の center crop を返す** ことが ISSUE-019 検証で判明。 ホーム carousel (4:5 コンテナ) と /album (80×80 コンテナ) の両方で「画像が部分的にクロップされている」 症状が出た。
+
+`resize=contain` を明示すると、 サーバはアスペクト比を保ったまま指定幅に縮小するだけになる (クロップしない)。 各画面のコンテナに応じた crop はブラウザの `object-cover` に委ね、 ISSUE-019 前の視覚と一致させる。
 
 ### 3. クライアント側 in-memory + sessionStorage cache
 
