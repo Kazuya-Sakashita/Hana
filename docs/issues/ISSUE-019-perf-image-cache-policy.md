@@ -2,9 +2,11 @@
 id: ISSUE-019
 title: 画像 URL の Cache-Control 適正化 + クライアント URL キャッシュ
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-26
+merged_at: 2026-05-27
+pr: 38
 parent: PERF
 ---
 
