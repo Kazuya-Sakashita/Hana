@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError } from '@/lib/api/error'
 import { computeAge, formatAgeLabel } from '@/lib/age'
-import { imageUrlCache } from '@/lib/cache/image-url-cache'
 
 // V0 prompt §5.2 ホーム画面:
 //   1. Top bar: 時間帯挨拶 + 子どもアバター
@@ -26,6 +25,7 @@ type Memory = {
   recorded_at: string
   weather: string | null
   image_ids: string[]
+  cover_thumbnail_url?: string | null
 }
 
 type Phase = 'loading' | 'no_child' | 'ready' | 'error'
@@ -51,7 +51,6 @@ export default function HomePage() {
   const [, setMe] = useState<Me | null>(null)
   const [child, setChild] = useState<Child | null>(null)
   const [memories, setMemories] = useState<Memory[]>([])
-  const [covers, setCovers] = useState<Record<string, string | null>>({})
   // SSR hydration mismatch を避けるため client-only に計算する。
   // useSyncExternalStore は server snapshot を別途返せるので setState in effect を避けられる。
   const greetingText = useSyncExternalStore(
@@ -68,7 +67,7 @@ export default function HomePage() {
       client.GET('/children'),
       client.GET('/memories', { params: { query: { limit: 5 } } }),
     ])
-      .then(async ([meRes, childrenRes, memoriesRes]) => {
+      .then(([meRes, childrenRes, memoriesRes]) => {
         if (cancelled) return
         if (meRes.data) setMe(meRes.data as Me)
         const first = (childrenRes.data?.data as Child[] | undefined)?.[0]
@@ -78,35 +77,10 @@ export default function HomePage() {
           return
         }
         setChild(first)
+        // ISSUE-018: list レスポンスに cover_thumbnail_url が含まれるので追加 fetch 不要
         const list = (memoriesRes.data?.data ?? []) as Memory[]
         setMemories(list)
         setPhase('ready')
-
-        // サムネ並列フェッチ (ISSUE-015 と同じパターン、 ISSUE-019 で client cache + thumbnail size)
-        const results = await Promise.all(
-          list.map(async (m): Promise<[string, string | null]> => {
-            const firstId = m.image_ids[0]
-            if (!firstId) return [m.id, null]
-            const cached = imageUrlCache.get(firstId, 'thumbnail')
-            if (cached) return [m.id, cached]
-            try {
-              const r = await client.GET('/uploads/{imageId}/url', {
-                params: { path: { imageId: firstId }, query: { size: 'thumbnail' } },
-              })
-              const url = r.data?.url ?? null
-              if (url && r.data?.expires_at) {
-                imageUrlCache.set(firstId, 'thumbnail', url, r.data.expires_at)
-              }
-              return [m.id, url]
-            } catch {
-              return [m.id, null]
-            }
-          }),
-        )
-        if (cancelled) return
-        const map: Record<string, string | null> = {}
-        for (const [memId, url] of results) map[memId] = url
-        setCovers(map)
       })
       .catch((e: unknown) => {
         if (cancelled) return
@@ -215,7 +189,7 @@ export default function HomePage() {
               </div>
               <ul className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-2">
                 {memories.map((m) => {
-                  const url = covers[m.id]
+                  const url = m.cover_thumbnail_url ?? null
                   return (
                     <li key={m.id} className="w-[140px] shrink-0">
                       <Link
@@ -229,15 +203,10 @@ export default function HomePage() {
                             alt={m.title}
                             className="border-hairline aspect-[4/5] w-full rounded-2xl border object-cover"
                           />
-                        ) : url === null ? (
+                        ) : (
                           <div className="bg-warm text-sakura-deep border-hairline flex aspect-[4/5] w-full items-center justify-center rounded-2xl border text-3xl">
                             ❀
                           </div>
-                        ) : (
-                          <div
-                            className="bg-warm border-hairline aspect-[4/5] w-full animate-pulse rounded-2xl border"
-                            aria-hidden="true"
-                          />
                         )}
                         <p className="text-ink mt-2 line-clamp-2 font-serif text-sm leading-tight">
                           {m.title}

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError } from '@/lib/api/error'
-import { imageUrlCache } from '@/lib/cache/image-url-cache'
 
 type Memory = {
   id: string
@@ -17,20 +16,18 @@ type Memory = {
   weather: string | null
   is_favorite: boolean
   image_ids: string[]
+  cover_thumbnail_url?: string | null
 }
 
 type Phase = 'loading' | 'empty' | 'list' | 'error'
-
-// 「サムネ取得中 (undefined)」と「失敗 / 画像無し (null)」を区別する
-type CoverState = string | null | undefined
 
 export default function AlbumPage() {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('loading')
   const [items, setItems] = useState<Memory[]>([])
-  const [covers, setCovers] = useState<Record<string, CoverState>>({})
 
-  // Stage 1: memories 一覧
+  // ISSUE-018 で BFF 化: list レスポンスに cover_thumbnail_url が含まれるので
+  // 個別の /uploads/{id}/url fetch は不要 (50 並列 N+1 排除)
   useEffect(() => {
     let cancelled = false
     const client = getBrowserApiClient()
@@ -54,47 +51,6 @@ export default function AlbumPage() {
       cancelled = true
     }
   }, [router])
-
-  // Stage 2: 各 memory の image_ids[0] の signed URL を並列取得
-  useEffect(() => {
-    if (items.length === 0) return
-    let cancelled = false
-    const client = getBrowserApiClient()
-
-    void (async () => {
-      const results = await Promise.all(
-        items.map(async (m): Promise<[string, CoverState]> => {
-          const firstId = m.image_ids[0]
-          if (!firstId) return [m.id, null]
-          const cached = imageUrlCache.get(firstId, 'thumbnail')
-          if (cached) return [m.id, cached]
-          try {
-            const r = await client.GET('/uploads/{imageId}/url', {
-              params: { path: { imageId: firstId }, query: { size: 'thumbnail' } },
-            })
-            const url = r.data?.url ?? null
-            if (url && r.data?.expires_at) {
-              imageUrlCache.set(firstId, 'thumbnail', url, r.data.expires_at)
-            }
-            return [m.id, url]
-          } catch {
-            // silent fail: V0 §4「責めない」原則。placeholder で品よく
-            return [m.id, null]
-          }
-        }),
-      )
-      if (cancelled) return
-      setCovers((prev) => {
-        const next = { ...prev }
-        for (const [memId, url] of results) next[memId] = url
-        return next
-      })
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [items])
 
   return (
     <main className="bg-canvas min-h-dvh px-6 pb-28 pt-12">
@@ -152,11 +108,7 @@ export default function AlbumPage() {
                 >
                   <Card>
                     <CardContent className="flex gap-4 p-4">
-                      <Thumbnail
-                        url={covers[m.id]}
-                        hasImage={m.image_ids.length > 0}
-                        alt={m.title}
-                      />
+                      <Thumbnail url={m.cover_thumbnail_url ?? null} alt={m.title} />
                       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <div className="meta-label">
                           {m.recorded_at}
@@ -182,12 +134,10 @@ export default function AlbumPage() {
   )
 }
 
-function Thumbnail({ url, hasImage, alt }: { url: CoverState; hasImage: boolean; alt: string }) {
+function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
   // home (/) carousel と同じ視覚言語: aspect-[4/5] + object-cover + rounded-2xl。
   // サイズは row レイアウト用に w-20 (= 80×100、 home は w-full=140 wide)。
-  // url === undefined: フェッチ中 (skeleton)
-  // url === null:      画像無し or 失敗 → placeholder
-  // url is string:     表示
+  // ISSUE-018 (BFF) で skeleton 状態は不要 (1 stage fetch、 url は null か string)。
   const baseClass = 'aspect-[4/5] w-20 shrink-0 rounded-2xl border border-hairline'
 
   if (typeof url === 'string') {
@@ -196,11 +146,6 @@ function Thumbnail({ url, hasImage, alt }: { url: CoverState; hasImage: boolean;
       <img src={url} alt={alt} className={`${baseClass} object-cover`} />
     )
   }
-  if (url === undefined && hasImage) {
-    // フェッチ中: warm skeleton
-    return <div className={`${baseClass} bg-warm animate-pulse`} aria-hidden="true" />
-  }
-  // 画像なし or 失敗: ❀ placeholder
   return (
     <div
       className={`${baseClass} bg-warm text-sakura-deep flex items-center justify-center text-3xl`}
