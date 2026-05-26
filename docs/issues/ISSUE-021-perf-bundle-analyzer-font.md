@@ -12,6 +12,7 @@ parent: PERF
 
 初回 JS / フォントのサイズは LCP に直結する。
 現状:
+
 - bundle 可視化ツールが無く、 dependency の影響が見えない
 - Noto Serif JP は `weight: ['400', '500', '700']` の 3 種類を読んでいる → 実使用は 400 と 700 のみの可能性
 
@@ -63,16 +64,16 @@ parent: PERF
 
 ## 影響範囲
 
-| 領域         | 影響                                              |
-| ------------ | ------------------------------------------------- |
-| OpenAPI      | なし                                              |
-| 生成型       | なし                                              |
-| データ       | なし                                              |
-| 画面         | 全画面で font weight 変更 (見た目変化の可能性)    |
-| API          | なし                                              |
-| CI           | typecheck / lint / format / build / test          |
-| ドキュメント | `docs/perf/bundle-baseline.md`                    |
-| 環境変数     | `ANALYZE` (dev only)                              |
+| 領域         | 影響                                           |
+| ------------ | ---------------------------------------------- |
+| OpenAPI      | なし                                           |
+| 生成型       | なし                                           |
+| データ       | なし                                           |
+| 画面         | 全画面で font weight 変更 (見た目変化の可能性) |
+| API          | なし                                           |
+| CI           | typecheck / lint / format / build / test       |
+| ドキュメント | `docs/perf/bundle-baseline.md`                 |
+| 環境変数     | `ANALYZE` (dev only)                           |
 
 ---
 

@@ -11,6 +11,7 @@ parent: PERF
 ## 目的 (Why)
 
 実 latency を下げきった後の **次の体感速度改善**。
+
 - 「のこす」 押下 → 1.5 秒固まる → 成功画面
 - お気に入りトグル → fetch 完了まで指の下がモヤモヤ
 - 削除 → 確認 → 待つ → リストから消える
@@ -77,17 +78,17 @@ toast で謝り、 ユーザーに再操作してもらう (V0 §1 「Forgive th
 
 ## 影響範囲
 
-| 領域         | 影響                                              |
-| ------------ | ------------------------------------------------- |
-| OpenAPI      | なし                                              |
-| 生成型       | なし                                              |
-| データ       | なし                                              |
-| 画面         | `/record`, `/album`, `/memory/[id]`               |
-| API          | なし (mutation はそのまま)                        |
-| テスト       | optimistic + rollback の unit test                |
-| CI           | typecheck / lint / format / build / test          |
-| ドキュメント | このIssueファイル                                |
-| 環境変数     | なし                                              |
+| 領域         | 影響                                     |
+| ------------ | ---------------------------------------- |
+| OpenAPI      | なし                                     |
+| 生成型       | なし                                     |
+| データ       | なし                                     |
+| 画面         | `/record`, `/album`, `/memory/[id]`      |
+| API          | なし (mutation はそのまま)               |
+| テスト       | optimistic + rollback の unit test       |
+| CI           | typecheck / lint / format / build / test |
+| ドキュメント | このIssueファイル                        |
+| 環境変数     | なし                                     |
 
 ---
 

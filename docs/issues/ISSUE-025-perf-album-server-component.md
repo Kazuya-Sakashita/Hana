@@ -53,6 +53,7 @@ ISSUE-018 (cover URL を BFF) と ISSUE-023 (Tanstack Query) が完了してい�
 ### prisma 直叩き vs internal API call
 
 Server Component 内では **prisma 直叩き** を採用:
+
 - HTTP 往復が不要 (server 同士の通信オーバーヘッドゼロ)
 - 認可ロジックは `requireUser()` + `where: { userId }` で担保
 - ただし共通ロジックは `src/features/memories/server/queries.ts` に切り出して Route Handler と共有
@@ -79,17 +80,17 @@ mutation 後のリアルタイム反映が必要な操作 (削除、お気に入
 
 ## 影響範囲
 
-| 領域         | 影響                                              |
-| ------------ | ------------------------------------------------- |
-| OpenAPI      | なし                                              |
-| 生成型       | なし                                              |
-| データ       | なし                                              |
-| 画面         | `/album` 全体                                     |
-| API          | なし (server から内部呼び出しに切替)              |
-| テスト       | 既存 E2E がパス + SC 用 unit test                 |
-| CI           | typecheck / lint / format / build / test          |
-| ドキュメント | このIssueファイル                                |
-| 環境変数     | なし                                              |
+| 領域         | 影響                                     |
+| ------------ | ---------------------------------------- |
+| OpenAPI      | なし                                     |
+| 生成型       | なし                                     |
+| データ       | なし                                     |
+| 画面         | `/album` 全体                            |
+| API          | なし (server から内部呼び出しに切替)     |
+| テスト       | 既存 E2E がパス + SC 用 unit test        |
+| CI           | typecheck / lint / format / build / test |
+| ドキュメント | このIssueファイル                        |
+| 環境変数     | なし                                     |
 
 ---
 

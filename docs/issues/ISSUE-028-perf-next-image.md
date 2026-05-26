@@ -12,6 +12,7 @@ parent: PERF
 
 現状すべての画像が **`<img>` 直接** で、 Next.js の image optimization (AVIF / WebP 配信、 自動 lazy、 srcset) を活用していない。
 ISSUE-018 / 019 で Supabase image transformation を使うので転送量は減ったが、 さらに:
+
 - AVIF 配信で 20〜30% 削減
 - viewport 外の自動 lazy
 - レスポンシブ srcset で device に応じた最適サイズ
@@ -77,16 +78,16 @@ Hana は Vercel デプロイ前提 (`CLAUDE.md` 暗黙、 vercel.ts も今後導
 
 ## 影響範囲
 
-| 領域         | 影響                                              |
-| ------------ | ------------------------------------------------- |
-| OpenAPI      | なし                                              |
-| 生成型       | なし                                              |
-| データ       | なし                                              |
+| 領域         | 影響                                                |
+| ------------ | --------------------------------------------------- |
+| OpenAPI      | なし                                                |
+| 生成型       | なし                                                |
+| データ       | なし                                                |
 | 画面         | `/`, `/album`, `/memory/[id]`, `/record` の画像表示 |
-| 設定         | `next.config.ts`                                  |
-| CI           | typecheck / lint / format / build / test          |
-| ドキュメント | ADR-0011                                          |
-| 環境変数     | なし                                              |
+| 設定         | `next.config.ts`                                    |
+| CI           | typecheck / lint / format / build / test            |
+| ドキュメント | ADR-0011                                            |
+| 環境変数     | なし                                                |
 
 ---
 

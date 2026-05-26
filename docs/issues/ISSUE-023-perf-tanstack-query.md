@@ -14,6 +14,7 @@ parent: PERF
 画面遷移するたびに **同じデータを取り直し**、 ブラウザの HTTP cache 任せ。
 
 `@tanstack/react-query` を導入して、 全画面で:
+
 - 同じ API は in-memory で 1 度だけ fetch
 - `staleTime` で TTL 制御
 - mutation 後の自動 invalidate
@@ -78,17 +79,17 @@ ISSUE-018 で `cover_thumbnail_url` を BFF 化済み、 ISSUE-025〜027 で Ser
 
 ## 影響範囲
 
-| 領域         | 影響                                              |
-| ------------ | ------------------------------------------------- |
-| OpenAPI      | なし                                              |
-| 生成型       | なし                                              |
-| データ       | なし                                              |
+| 領域         | 影響                                                    |
+| ------------ | ------------------------------------------------------- |
+| OpenAPI      | なし                                                    |
+| 生成型       | なし                                                    |
+| データ       | なし                                                    |
 | 画面         | `/`, `/record`, `/onboarding`, `/settings` のフェッチ層 |
-| API          | なし                                              |
-| テスト       | 既存テスト + hook の unit test                    |
-| CI           | typecheck / lint / format / build / test          |
-| ドキュメント | このIssueファイル                                |
-| 環境変数     | なし                                              |
+| API          | なし                                                    |
+| テスト       | 既存テスト + hook の unit test                          |
+| CI           | typecheck / lint / format / build / test                |
+| ドキュメント | このIssueファイル                                       |
+| 環境変数     | なし                                                    |
 
 ---
 

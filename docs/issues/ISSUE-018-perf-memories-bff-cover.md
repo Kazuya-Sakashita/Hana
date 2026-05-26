@@ -74,17 +74,17 @@ Storage 障害でリスト全体が落ちるのを避ける。
 
 ## 影響範囲
 
-| 領域         | 影響                                                              |
-| ------------ | ----------------------------------------------------------------- |
-| OpenAPI      | `Memory` schema に optional field 追加 (additive、互換性あり)    |
-| 生成型       | `npm run openapi:gen` で更新                                     |
-| データ       | なし                                                              |
-| 画面         | `/album` / `/` (cover fetch ロジック削除)                        |
-| API          | `/v1/memories` (cover_thumbnail_url を埋める)                    |
-| テスト       | list レスポンスに `cover_thumbnail_url` が含まれることを assert   |
-| CI           | typecheck / lint / format / build / test                          |
-| ドキュメント | このIssueファイル + openapi yaml                                 |
-| 環境変数     | なし                                                              |
+| 領域         | 影響                                                            |
+| ------------ | --------------------------------------------------------------- |
+| OpenAPI      | `Memory` schema に optional field 追加 (additive、互換性あり)   |
+| 生成型       | `npm run openapi:gen` で更新                                    |
+| データ       | なし                                                            |
+| 画面         | `/album` / `/` (cover fetch ロジック削除)                       |
+| API          | `/v1/memories` (cover_thumbnail_url を埋める)                   |
+| テスト       | list レスポンスに `cover_thumbnail_url` が含まれることを assert |
+| CI           | typecheck / lint / format / build / test                        |
+| ドキュメント | このIssueファイル + openapi yaml                                |
+| 環境変数     | なし                                                            |
 
 ---
 
