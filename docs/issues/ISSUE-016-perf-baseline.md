@@ -2,9 +2,11 @@
 id: ISSUE-016
 title: パフォーマンス計測ベースラインの取得とドキュメント化
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-05-26
+merged_at: 2026-05-26
+pr: 36
 parent: PERF
 ---
 
