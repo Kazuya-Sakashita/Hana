@@ -320,10 +320,33 @@ paths:
         指定した画像の Supabase Storage signed URL を返す (TTL 30 分)。
         画像は現在のユーザーが所有していること。
         URL はログに残さない (一時的とはいえ認証情報を含む)。
+
+        `size` パラメータで Supabase Storage の image transformation を指定可能:
+        - `thumbnail`: width=320 / quality=70 (一覧表示用)
+        - `preview`: width=1024 / quality=80 (詳細表示用)
+        - `original`: 変換なし (default)
+
+        レスポンスには `Cache-Control: private, max-age=300` を設定 (ADR-0012)。
+        クライアントは presigned URL の TTL 内であれば再取得を避けて良い。
       tags: [uploads]
+      parameters:
+        - name: size
+          in: query
+          required: false
+          description: 画像サイズ。 省略時は `original`
+          schema:
+            type: string
+            enum: [thumbnail, preview, original]
+            default: original
       responses:
         '200':
           description: signed URL
+          headers:
+            Cache-Control:
+              description: private, max-age=300
+              schema:
+                type: string
+                example: 'private, max-age=300'
           content:
             application/json:
               schema:

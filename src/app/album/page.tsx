@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError } from '@/lib/api/error'
+import { imageUrlCache } from '@/lib/cache/image-url-cache'
 
 type Memory = {
   id: string
@@ -65,11 +66,17 @@ export default function AlbumPage() {
         items.map(async (m): Promise<[string, CoverState]> => {
           const firstId = m.image_ids[0]
           if (!firstId) return [m.id, null]
+          const cached = imageUrlCache.get(firstId, 'thumbnail')
+          if (cached) return [m.id, cached]
           try {
             const r = await client.GET('/uploads/{imageId}/url', {
-              params: { path: { imageId: firstId } },
+              params: { path: { imageId: firstId }, query: { size: 'thumbnail' } },
             })
-            return [m.id, r.data?.url ?? null]
+            const url = r.data?.url ?? null
+            if (url && r.data?.expires_at) {
+              imageUrlCache.set(firstId, 'thumbnail', url, r.data.expires_at)
+            }
+            return [m.id, url]
           } catch {
             // silent fail: V0 §4「責めない」原則。placeholder で品よく
             return [m.id, null]

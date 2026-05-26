@@ -1,8 +1,8 @@
 ---
 id: ISSUE-019
 title: 画像 URL の Cache-Control 適正化 + クライアント URL キャッシュ
-priority: P1
-status: todo
+priority: P0
+status: review
 size: M
 created_at: 2026-05-26
 parent: PERF
@@ -23,7 +23,7 @@ ISSUE-018 で list レベルの N+1 は解消するが、 **詳細画面 (`/memo
 
 ### 設計判断 ADR
 
-- [ ] `docs/adr/ADR-0010-image-url-caching.md` を作成
+- [ ] `docs/adr/ADR-0012-image-url-caching.md` を作成
   - **サムネ用 URL**: `Cache-Control: private, max-age=1500` (25min、TTL とほぼ一致)
   - **本画像 URL**: `Cache-Control: private, max-age=300` (5min、念のため短め)
   - 「子どもの画像が漏れる」リスクは presigned URL の TTL がある時点で時間制限あり、 cache はブラウザ単位なので追加リスクなし
@@ -49,7 +49,7 @@ ISSUE-018 で list レベルの N+1 は解消するが、 **詳細画面 (`/memo
 
 ### CLAUDE.md 修正
 
-- [ ] §7 の Cache-Control 記述を ADR-0010 への参照に変更
+- [ ] §7 の Cache-Control 記述を ADR-0012 への参照に変更
 
 ### やらないこと
 
@@ -84,15 +84,15 @@ ISSUE-018 で list レベルの N+1 は解消するが、 **詳細画面 (`/memo
 | API          | uploads URL endpoint                             |
 | テスト       | Cache-Control header / cache hit のユニット      |
 | CI           | typecheck / lint / format / build / test         |
-| ドキュメント | ADR-0010 / CLAUDE.md §7 修正                     |
+| ドキュメント | ADR-0012 / CLAUDE.md §7 修正                     |
 | 環境変数     | なし                                             |
 
 ---
 
 ## 受け入れ条件
 
-- [ ] ADR-0010 が存在
-- [ ] CLAUDE.md §7 が ADR-0010 参照に書き換わっている
+- [ ] ADR-0012 が存在
+- [ ] CLAUDE.md §7 が ADR-0012 参照に書き換わっている
 - [ ] `pnpm openapi:lint` / `gen` グリーン
 - [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test`
 - [ ] `/memory/{id}` を 2 回開いて、 2 回目は `/uploads/*/url` を呼ばない (in-memory cache hit)
@@ -119,7 +119,7 @@ pnpm dev
 - [ ] `private` で共有 cache を禁止 (CDN/中間 proxy に乗らない)
 - [ ] sessionStorage はタブ閉じで消える (永続化しすぎない)
 - [ ] サインアウト時に `image-url-cache.clear()` を呼ぶ
-- [ ] ADR-0010 で漏洩シナリオを文書化
+- [ ] ADR-0012 で漏洩シナリオを文書化
 
 ---
 

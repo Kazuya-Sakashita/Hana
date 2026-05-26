@@ -185,6 +185,14 @@ export interface paths {
          * @description 指定した画像の Supabase Storage signed URL を返す (TTL 30 分)。
          *     画像は現在のユーザーが所有していること。
          *     URL はログに残さない (一時的とはいえ認証情報を含む)。
+         *
+         *     `size` パラメータで Supabase Storage の image transformation を指定可能:
+         *     - `thumbnail`: width=320 / quality=70 (一覧表示用)
+         *     - `preview`: width=1024 / quality=80 (詳細表示用)
+         *     - `original`: 変換なし (default)
+         *
+         *     レスポンスには `Cache-Control: private, max-age=300` を設定 (ADR-0012)。
+         *     クライアントは presigned URL の TTL 内であれば再取得を避けて良い。
          */
         get: operations["getImageDownloadUrl"];
         put?: never;
@@ -1244,7 +1252,10 @@ export interface operations {
     };
     getImageDownloadUrl: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 画像サイズ。 省略時は `original` */
+                size?: "thumbnail" | "preview" | "original";
+            };
             header?: never;
             path: {
                 /** @description 画像 ID (UUID) */
@@ -1257,6 +1268,8 @@ export interface operations {
             /** @description signed URL */
             200: {
                 headers: {
+                    /** @description private, max-age=300 */
+                    "Cache-Control"?: string;
                     [name: string]: unknown;
                 };
                 content: {

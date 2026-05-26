@@ -142,7 +142,8 @@ tests/
 
 - パブリック URL で公開しない
 - **Presigned URL（デフォルト 30 分）** 経由でのみアクセス
-- `Cache-Control: private, no-store`
+- `Cache-Control: private, max-age=300` (ADR-0012、 5 分のブラウザ cache を許容)
+- 表示サイズに応じた `size=thumbnail|preview|original` (ADR-0012)
 - storage_key: `uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`
 - アップロード時にサーバ側で **EXIF を削除**
 

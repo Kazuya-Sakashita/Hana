@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError } from '@/lib/api/error'
 import { computeAge, formatAgeLabel } from '@/lib/age'
+import { imageUrlCache } from '@/lib/cache/image-url-cache'
 
 // 最小スコープの設定画面 (ISSUE-014):
 //   - 親のメール表示
@@ -56,6 +57,7 @@ export default function SettingsPage() {
     } catch {
       // ignore: even on failure, push to /sign-in
     }
+    imageUrlCache.clearAll()
     router.push('/sign-in')
   }
 
