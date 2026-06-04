@@ -183,16 +183,17 @@ export default function AlbumPage() {
 }
 
 function Thumbnail({ url, hasImage, alt }: { url: CoverState; hasImage: boolean; alt: string }) {
+  // home (/) carousel と同じ視覚言語: aspect-[4/5] + object-cover + rounded-2xl。
+  // サイズは row レイアウト用に w-20 (= 80×100、 home は w-full=140 wide)。
   // url === undefined: フェッチ中 (skeleton)
   // url === null:      画像無し or 失敗 → placeholder
   // url is string:     表示
-  const baseClass =
-    'aspect-square h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-hairline'
+  const baseClass = 'aspect-[4/5] w-20 shrink-0 rounded-2xl border border-hairline'
 
   if (typeof url === 'string') {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={alt} className={`${baseClass} object-contain`} />
+      <img src={url} alt={alt} className={`${baseClass} object-cover`} />
     )
   }
   if (url === undefined && hasImage) {
@@ -202,7 +203,7 @@ function Thumbnail({ url, hasImage, alt }: { url: CoverState; hasImage: boolean;
   // 画像なし or 失敗: ❀ placeholder
   return (
     <div
-      className={`${baseClass} bg-warm text-sakura-deep flex items-center justify-center text-2xl`}
+      className={`${baseClass} bg-warm text-sakura-deep flex items-center justify-center text-3xl`}
       aria-hidden="true"
     >
       ❀
