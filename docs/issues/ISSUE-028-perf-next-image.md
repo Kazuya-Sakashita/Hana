@@ -1,8 +1,8 @@
 ---
 id: ISSUE-028
 title: 画像表示を next/image に全面移行 (AVIF/WebP + lazy + srcset)
-priority: P2
-status: todo
+priority: P1
+status: review
 size: M
 created_at: 2026-05-26
 parent: PERF
@@ -25,7 +25,7 @@ ISSUE-018 / 019 で Supabase image transformation を使うので転送量は減
 
 ### ADR
 
-- [ ] `docs/adr/ADR-0011-image-optimization-stack.md`
+- [ ] `docs/adr/ADR-0013-image-optimization-stack.md`
   - Supabase Storage transformation と Vercel Image Optimization の **二重最適化を避ける** 判断
   - 結論: Supabase で base resize (320 / 1024)、 Vercel で format conversion (AVIF/WebP) という分担
   - もしくは: Supabase だけで完結し、 `<Image unoptimized>` を使う案との比較
@@ -86,14 +86,14 @@ Hana は Vercel デプロイ前提 (`CLAUDE.md` 暗黙、 vercel.ts も今後導
 | 画面         | `/`, `/album`, `/memory/[id]`, `/record` の画像表示 |
 | 設定         | `next.config.ts`                                    |
 | CI           | typecheck / lint / format / build / test            |
-| ドキュメント | ADR-0011                                            |
+| ドキュメント | ADR-0013                                            |
 | 環境変数     | なし                                                |
 
 ---
 
 ## 受け入れ条件
 
-- [ ] ADR-0011 が存在
+- [ ] ADR-0013 が存在
 - [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
 - [ ] DevTools Network で画像が `image/avif` または `image/webp` で配信されている
 - [ ] viewport 外の画像が初期ロードに含まれない (lazy)

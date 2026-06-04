@@ -18,6 +18,10 @@ export type ImageSize = (typeof SIZES)[number]
 //   Supabase image transformation の既定 resize は 'cover' だが、
 //   width だけ指定すると非アスペクト保持のクロップを返す挙動がある。
 //   'contain' を明示するとアスペクト比保持の縮小のみになる。
+// format 指定なし (ISSUE-028 / ADR-0013):
+//   Supabase は format 未指定だと Accept ヘッダに応じて WebP/AVIF を自動配信する。
+//   明示すると 'origin' (= 元 format 維持) しか選べないため、 modern format を
+//   得るためにはむしろ **指定しない** のが正解。
 const TRANSFORMS: Record<
   Exclude<ImageSize, 'original'>,
   { width: number; resize: 'contain'; quality: number }

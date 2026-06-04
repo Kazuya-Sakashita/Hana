@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -141,9 +142,19 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
   const baseClass = 'aspect-[4/5] w-20 shrink-0 rounded-2xl border border-hairline'
 
   if (typeof url === 'string') {
+    // unoptimized: Supabase signed URL (dynamic token) を Vercel image proxy 経由せず素通し。
+    //   Supabase 側で resize + WebP 配信済 (ADR-0013)。
+    //   next/image の lazy + 寸法指定による CLS 防止のメリットは得る。
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={alt} className={`${baseClass} object-cover`} />
+      <Image
+        src={url}
+        alt={alt}
+        width={80}
+        height={100}
+        className={`${baseClass} object-cover`}
+        sizes="80px"
+        unoptimized
+      />
     )
   }
   return (

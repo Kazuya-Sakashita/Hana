@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useSyncExternalStore } from 'react'
@@ -197,10 +198,15 @@ export default function HomePage() {
                         className="ease-organic block transition-transform active:scale-[0.97]"
                       >
                         {typeof url === 'string' ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          // unoptimized: Supabase signed URL (dynamic) を素通し。
+                          //   resize + WebP は Supabase 側で処理済 (ADR-0013)。
+                          <Image
                             src={url}
                             alt={m.title}
+                            width={140}
+                            height={175}
+                            sizes="140px"
+                            unoptimized
                             className="border-hairline aspect-[4/5] w-full rounded-2xl border object-cover"
                           />
                         ) : (

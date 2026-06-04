@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -219,19 +220,25 @@ export default function MemoryDetailPage() {
           ‹
         </Link>
 
-        {memory.image_ids.map((id) => {
+        {memory.image_ids.map((id, idx) => {
           const url = imageUrls[id]
           if (!url) {
             return (
               <div key={id} className="bg-warm aspect-[4/5] w-full animate-pulse rounded-b-3xl" />
             )
           }
+          // 1 枚目は LCP 候補なので priority、 2 枚目以降は lazy。
+          // unoptimized: Supabase signed URL (dynamic) を素通し、 resize + WebP は Supabase 側 (ADR-0013)。
           return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               key={id}
               src={url}
               alt=""
+              width={1024}
+              height={1280}
+              sizes="(max-width: 480px) 100vw, 480px"
+              unoptimized
+              priority={idx === 0}
               className="aspect-[4/5] w-full rounded-b-3xl object-cover"
             />
           )
