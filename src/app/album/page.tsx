@@ -142,9 +142,9 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
   const baseClass = 'aspect-[4/5] w-20 shrink-0 rounded-2xl border border-hairline'
 
   if (typeof url === 'string') {
-    // unoptimized: Supabase signed URL (dynamic token) を Vercel image proxy 経由せず素通し。
-    //   Supabase 側で resize + WebP 配信済 (ADR-0013)。
-    //   next/image の lazy + 寸法指定による CLS 防止のメリットは得る。
+    // ADR-0013 (改訂): Supabase Free plan は transformation 未対応のため、
+    //   Vercel Image Optimization で WebP/AVIF + resize を担う。
+    //   sizes は actual display size。 Vercel は適切な解像度の variant を配信。
     return (
       <Image
         src={url}
@@ -153,7 +153,6 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
         height={100}
         className={`${baseClass} object-cover`}
         sizes="80px"
-        unoptimized
       />
     )
   }

@@ -1,103 +1,107 @@
-# ADR-0013: 画像最適化スタックの分担 (Supabase + next/image)
+# ADR-0013: 画像最適化スタックの分担 (Supabase + Vercel Image Optimization)
 
-- Status: Accepted
+- Status: Accepted (改訂版、 2026-05-27)
 - Date: 2026-05-27
 - Authors: Hana 開発チーム
 - Related: ADR-0009 (image storage), ADR-0012 (image URL caching)
 
 ## 文脈 (Context)
 
-ISSUE-016 ベースライン + ISSUE-019/018/030 完了後の Lighthouse 再計測 (`docs/perf/baseline-2026-05-27.md`) で、 **Speed Index は -45% 改善したが LCP は variance 内で横ばい** と判明。 残る支配要因:
+ISSUE-016 baseline + ISSUE-019/018/030 完了後の Lighthouse 再計測 (`docs/perf/baseline-2026-05-27.md`) で、 **Speed Index は -45% 改善したが LCP は variance 内で横ばい** と判明。 詳しく Network panel で実測した結果:
 
-1. 画像バイト数 (Supabase の resize=contain 後でもまだ重い、 特に LCP 画像)
-2. `<img>` の late discovery (LCP 画像が parser から遅れて発見される)
-3. lazy loading 未活用 (`/album` の off-screen サムネも全部即時 fetch)
+- `/memory/[id]` の本画像が **2.3〜3.7 MB の JPEG** で配信されていた
+- URL は `/storage/v1/object/sign/...` (transformation **適用なし** の path)
+- ISSUE-019 で実装した `resize=contain` + quality 設定は **完全に無視されていた**
 
-これらを Next.js の `next/image` で解消する。
+**根本原因**: Supabase Storage の Image Transformation は **Pro plan ($25/月) 以上の機能**で、 Free plan では transform option を silent fallback で無視し original を返す。 Hana は Free plan のため、 サーバ側で透過的に optimization する手段が無い。
 
 ## 決定 (Decision)
 
-### 1. Supabase Storage と Vercel Image Optimization の分担
+### 1. 画像最適化スタックの分担 (改訂版)
 
-| 工程                          | 担当                                       | 理由                                                                   |
-| ----------------------------- | ------------------------------------------ | ---------------------------------------------------------------------- |
-| Resize (320 / 1024)           | **Supabase Storage transformation**        | 既に ISSUE-019 で実装済、 storage 直結なので余計な往復なし             |
-| Format conversion (WebP/AVIF) | **Supabase Storage transformation (自動)** | Supabase は format 未指定で Accept ヘッダに応じて modern format を返す |
-| Lazy / priority / CLS 防止    | **next/image (`unoptimized={true}`)**      | Vercel proxy は通さない、 attribute だけ恩恵                           |
+| 工程                                   | 担当                          | 理由                                      |
+| -------------------------------------- | ----------------------------- | ----------------------------------------- |
+| 元画像の保管                           | Supabase Storage              | private bucket + presigned URL (ADR-0009) |
+| Resize / format conversion (WebP/AVIF) | **Vercel Image Optimization** | Free plan の Supabase で唯一実用的な手段  |
+| Lazy / priority / CLS 防止             | next/image attributes         | Vercel optimization の付随機能            |
 
-→ **Vercel Image Optimization は使わない** (`unoptimized={true}`)。 理由:
+### 2. `unoptimized` 方針
 
-- Signed URL の token が毎リクエスト変わる → Vercel cache key が分散して効率悪い
-- Free tier (1000 transformations/月) を超えるリスク
-- Supabase 側で既に resize + WebP 配信されているので二重最適化は無駄
+- **Supabase signed URL を `src` にする <Image>**: `unoptimized` **指定しない** (= `false`、 Vercel optimization 経由)
+  - `/album` thumbnail / `/` home carousel / `/memory/[id]` 本画像
+- **blob URL (`URL.createObjectURL`)**: `unoptimized` **必須**
+  - `/record` のアップロード前 preview (Vercel proxy が blob URL を扱えない)
 
-### 2. `unoptimized={true}` でも得られる next/image の利点
-
-- `loading="lazy"` がデフォルト → off-screen 画像を遅延ロード (`/album` で特に効く)
-- `priority` hint → LCP 候補画像を fetchpriority="high" で前倒し (memory 詳細で使用)
-- `width` / `height` 必須 → CLS 防止 (本ファイル時点で CLS は既に 0 だが回帰防止)
-- `sizes` で適切な intrinsic size hint
-
-### 3. Object URL (`URL.createObjectURL`) の扱い
-
-`/record` のアップロード前プレビューは blob URL なので Vercel proxy が扱えない (リモートでないため)。 → 必ず `unoptimized` を付与。
-
-### 4. `next.config.ts` の最小設定
+### 3. `next.config.ts` 設定
 
 ```ts
 images: {
   remotePatterns: [
     { protocol: 'https', hostname: '*.supabase.co' },
   ],
+  formats: ['image/avif', 'image/webp'],
 }
 ```
 
-`unoptimized={true}` でも remotePatterns を入れておく理由: 将来 unoptimized を外す可能性 (Vercel cache の状況改善 / Pro 課金など) のための足場。
+### 4. Vercel Image Optimization の利用上の注意
+
+- **Cache key は src URL**: Supabase signed URL の token は 30 分有効、 毎回新しい URL が生成されると Vercel cache が分散
+  - 軽減策: ISSUE-019 の `imageUrlCache` (sessionStorage / 25 分 cache) で client 側で URL を再利用 → 同じ URL が Vercel cache hit する
+  - ISSUE-018 (BFF) で server が cover URL を埋めるが、 list の各 request で新 URL が発行される (将来 SSR cache 検討余地)
+- **Vercel Hobby の制限**: 1000 unique source images / 月
+  - Hana MVP 規模では当面足りるが、 ユーザー数 + memory 数 × session 数 が増えたら超過リスク
+  - 監視 + 超過時に Pro upgrade or 事前生成 (ISSUE 別途)
 
 ## 代替案
 
-### A. Vercel Image Optimization 経由 (`unoptimized={false}`)
+### A. Supabase Pro plan ($25/月) に upgrade
 
-- 利点: AVIF/WebP に format 変換 (Supabase 側より高品質な可能性)
-- 欠点: signed URL token がランダムなので cache が分散、 Free tier 制限あり
-- **却下**: Hana MVP 規模では cost > benefit
+- 利点: ISSUE-019 のコードがそのまま動く、 シンプル
+- 欠点: 月額固定費、 MVP 段階では不必要
+- **却下** (現時点): 利用者が確定するまで Vercel 無料枠で十分
 
-### B. next/image を使わず `<img>` のままで lazy="lazy" 手動付与
+### B. アップロード時に sharp で 3 サイズ事前生成 (original / preview / thumbnail)
 
-- 利点: 依存が増えない、 動作が単純
-- 欠点: `priority` hint (fetchpriority="high") を Next.js が自動で `<head>` の preload に変換する仕組みを失う
-- **却下**: LCP 画像の前倒しが next/image の真の価値
+- 利点: 完全に無料、 plan 依存ゼロ、 cache key 安定
+- 欠点: アップロード latency 増加、 storage 容量 3 倍、 失敗時のリカバリー実装が要る
+- **却下** (現時点): 工数 1-2 日、 Vercel 無料枠で当面回るので保留
 
-### C. Supabase の format=webp を明示指定
+### C. 全て `unoptimized={true}` で original 配信のまま
 
-- Supabase の `TransformOptions.format` は型上 `'origin'` のみ
-- 未指定だと自動で modern format を返す (現状の挙動)
-- **採用しない**: 明示しないのが正解
+- 利点: 何もしない
+- 欠点: LCP が改善しない (現状)
+- **却下**: 解決にならない
 
 ## 影響 (Consequences)
 
 ### Positive
 
-- `/album` の off-screen サムネが遅延ロードされ、 初期帯域消費が大幅減
-- `/memory/[id]` の本画像が `priority` で早期発見 → LCP 改善見込み
-- CLS リスクが恒久的にゼロに (width/height 強制)
-- 画像配信は引き続き Supabase 直結、 Vercel コストゼロ
+- 既存の next/image コードからほぼ変更なし (`unoptimized` 削除のみ)
+- Vercel が AVIF/WebP に変換、 srcset で device に応じた解像度配信
+- 課金プラン変更なし、 環境変数追加なし
 
 ### Negative
 
-- next/image 依存が 4 ファイルに伝播 (`/album`, `/`, `/memory/[id]`, `/record`)
-- `unoptimized` を外す日が来たら `remotePatterns` の精密化が必要 (現状は `*.supabase.co` で広い)
+- Vercel Hobby の 1000 src/月制限と隣り合わせ → 監視が必要
+- Vercel optimization の初回 fetch は Supabase からの転送 (egress) が発生 → Supabase Free 帯域上限への影響を要確認
+- Signed URL token の dynamic 性で cache 効率が落ちる (将来 SSR cache で改善検討)
 
 ### Risks
 
-- Supabase の自動 format negotiation が将来挙動を変えたら影響 → 計測で監視
-- `priority` の使いすぎは逆効果 → memory 詳細の 1 枚目のみに限定
+- Vercel Hobby 制限超過時の挙動 (有料に切替 or オリジナル fallback) を要確認
+- Supabase Free egress (2GB/月) 上限 — original 画像が頻繁に Vercel に転送されるとリスク
+
+## 変更履歴
+
+- **2026-05-27 (初版)**: Supabase で resize + WebP、 next/image は `unoptimized={true}` で素通し方針
+- **2026-05-27 (改訂)**: 実測で Supabase Free plan は transformation 未対応と判明。 Vercel Image Optimization 経由に切替 (本決定)
 
 ## 関連
 
 - ISSUE-028 (本 ADR の実装)
 - ADR-0009 (画像 storage 設計)
 - ADR-0012 (signed URL の cache ポリシー)
-- `docs/perf/baseline-2026-05-27.md` (改善前の数値)
+- `docs/perf/baseline-2026-05-27.md`
 - Next.js Image: https://nextjs.org/docs/app/api-reference/components/image
+- Vercel Image Optimization 料金: https://vercel.com/docs/image-optimization
 - Supabase Image Transformations: https://supabase.com/docs/guides/storage/serving/image-transformations

@@ -228,7 +228,8 @@ export default function MemoryDetailPage() {
             )
           }
           // 1 枚目は LCP 候補なので priority、 2 枚目以降は lazy。
-          // unoptimized: Supabase signed URL (dynamic) を素通し、 resize + WebP は Supabase 側 (ADR-0013)。
+          // ADR-0013 (改訂): Vercel Image Optimization で WebP/AVIF + resize を担う
+          //   (Supabase Free plan は transformation 未対応)。
           return (
             <Image
               key={id}
@@ -237,7 +238,6 @@ export default function MemoryDetailPage() {
               width={1024}
               height={1280}
               sizes="(max-width: 480px) 100vw, 480px"
-              unoptimized
               priority={idx === 0}
               className="aspect-[4/5] w-full rounded-b-3xl object-cover"
             />
