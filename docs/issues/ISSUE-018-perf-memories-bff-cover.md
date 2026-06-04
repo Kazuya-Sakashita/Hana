@@ -2,9 +2,11 @@
 id: ISSUE-018
 title: /v1/memories レスポンスに cover_thumbnail_url を含める (BFF 化)
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-26
+merged_at: 2026-05-27
+pr: 40
 parent: PERF
 ---
 
