@@ -2,9 +2,11 @@
 id: ISSUE-030
 title: アルバム一覧サムネをホーム「さいきんの ページ」と同じ表示方針に統一
 priority: P2
-status: todo
+status: done
 size: S
 created_at: 2026-05-27
+merged_at: 2026-05-27
+pr: 42
 ---
 
 ## 目的 (Why)
