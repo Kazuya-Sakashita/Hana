@@ -43,7 +43,20 @@ images: {
 }
 ```
 
-### 4. Vercel Image Optimization の利用上の注意
+### 4. macOS dev での IPv6/NAT64 問題への対応
+
+macOS の dev 環境では Supabase ホスト名が NAT64 prefix (`64:ff9b::...`) で IPv6 化される。 Next.js の SSRF 保護 (image optimization の upstream fetch) がこの IPv6 表記を誤って "private ip" と判定し、 画像取得を拒否する。 ログに `upstream image ... resolved to private ip ["64:ff9b::..."]` と出る。
+
+対応: **`package.json` の dev / start script に `NODE_OPTIONS='--dns-result-order=ipv4first'` を付与** して Node.js の DNS 解決を IPv4 優先にする。 NAT64 経路を避け、 直接 IPv4 で Cloudflare に到達する。
+
+```json
+"dev": "NODE_OPTIONS='--dns-result-order=ipv4first' next dev",
+"start": "NODE_OPTIONS='--dns-result-order=ipv4first' next start",
+```
+
+Vercel 本番では起きない (内部 DNS 経路が異なる)。 dev / self-hosted 環境専用の workaround。
+
+### 5. Vercel Image Optimization の利用上の注意
 
 - **Cache key は src URL**: Supabase signed URL の token は 30 分有効、 毎回新しい URL が生成されると Vercel cache が分散
   - 軽減策: ISSUE-019 の `imageUrlCache` (sessionStorage / 25 分 cache) で client 側で URL を再利用 → 同じ URL が Vercel cache hit する
