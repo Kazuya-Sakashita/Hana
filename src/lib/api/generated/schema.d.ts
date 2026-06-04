@@ -687,6 +687,15 @@ export interface components {
              */
             image_ids: string[];
             /**
+             * Format: uri
+             * @description 最初の画像のサムネ signed URL (320px、 quality=70、 TTL 30 分)。
+             *     list endpoint (`GET /v1/memories`) で BFF 的に同梱して N+1 を排除する (ADR-0012)。
+             *     画像なし or URL 発行失敗時は null。 ログには出さない (認証情報を含むため)。
+             *     詳細/作成/更新エンドポイントでは含まれない (optional)。
+             * @example https://example.supabase.co/storage/v1/render/image/sign/images/uploads/abc?token=...
+             */
+            cover_thumbnail_url?: string | null;
+            /**
              * Format: date-time
              * @description レコード作成日時
              * @example 2026-05-23T11:00:00Z

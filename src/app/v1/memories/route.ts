@@ -10,6 +10,7 @@ import {
   readJsonBody,
 } from '@/features/memories/server/parse'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
+import { generateSignedImageUrl } from '@/features/uploads/server/signed-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
       include: {
         images: {
           where: { deletedAt: null },
-          select: { id: true, createdAt: true },
+          select: { id: true, createdAt: true, storageKey: true },
         },
       },
     })
@@ -37,8 +38,24 @@ export async function GET(request: Request) {
     const last = page[page.length - 1]
     const nextCursor = hasMore && last ? encodeCursor(last.id) : null
 
+    // BFF: 各メモの最初の画像 (created_at 昇順) の thumbnail signed URL を並列発行。
+    // クライアントの N+1 (50 並列の /uploads/{id}/url) を排除する。 ADR-0012。
+    const coversWithUrls = await Promise.all(
+      page.map(async (m) => {
+        const sortedImages = [...m.images].sort(
+          (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+        )
+        const first = sortedImages[0]
+        if (!first) return { memory: m, coverThumbnailUrl: null as string | null }
+        const url = await generateSignedImageUrl(first.storageKey, 'thumbnail')
+        return { memory: m, coverThumbnailUrl: url }
+      }),
+    )
+
     return NextResponse.json({
-      data: page.map((m) => toMemoryResponse(m)),
+      data: coversWithUrls.map(({ memory, coverThumbnailUrl }) =>
+        toMemoryResponse(memory, { coverThumbnailUrl }),
+      ),
       page: { next_cursor: nextCursor },
     })
   } catch (e) {

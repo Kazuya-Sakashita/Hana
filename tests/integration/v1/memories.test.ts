@@ -12,11 +12,22 @@ const mocks = vi.hoisted(() => ({
   txMemoryCreate: vi.fn(),
   txImageUpdateMany: vi.fn(),
   txMemoryFindUniqueOrThrow: vi.fn(),
+  createSignedUrl: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
     auth: { getUser: mocks.getUser },
+  }),
+}))
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createSupabaseAdminClient: () => ({
+    storage: {
+      from: () => ({
+        createSignedUrl: mocks.createSignedUrl,
+      }),
+    },
   }),
 }))
 
@@ -77,7 +88,13 @@ const memoryRow = {
   createdAt: new Date('2026-05-23T11:00:00Z'),
   updatedAt: new Date('2026-05-23T11:00:00Z'),
   deletedAt: null,
-  images: [{ id: IMAGE_ID, createdAt: new Date('2026-05-23T10:00:00Z') }],
+  images: [
+    {
+      id: IMAGE_ID,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      storageKey: 'uploads/abc/202605/img.jpg',
+    },
+  ],
 }
 
 function authed() {
@@ -117,15 +134,62 @@ describe('GET /v1/memories', () => {
   it('returns 200 + one memory + null cursor when no more pages', async () => {
     authed()
     mocks.memoryFindMany.mockResolvedValue([memoryRow])
+    mocks.createSignedUrl.mockResolvedValue({
+      data: { signedUrl: 'https://example.com/thumb-1' },
+      error: null,
+    })
     const res = await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
-      data: Array<{ id: string }>
+      data: Array<{ id: string; cover_thumbnail_url: string | null }>
       page: { next_cursor: string | null }
     }
     expect(body.data).toHaveLength(1)
     expect(body.data[0]?.id).toBe(MEMORY_ID)
+    expect(body.data[0]?.cover_thumbnail_url).toBe('https://example.com/thumb-1')
     expect(body.page.next_cursor).toBeNull()
+  })
+
+  it('includes cover_thumbnail_url via Supabase thumbnail transform (BFF)', async () => {
+    authed()
+    mocks.memoryFindMany.mockResolvedValue([memoryRow])
+    mocks.createSignedUrl.mockResolvedValue({
+      data: { signedUrl: 'https://example.com/thumb-bff' },
+      error: null,
+    })
+
+    await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img.jpg', 1800, {
+      transform: { width: 320, resize: 'contain', quality: 70 },
+    })
+  })
+
+  it('returns cover_thumbnail_url=null when memory has no images', async () => {
+    authed()
+    mocks.memoryFindMany.mockResolvedValue([{ ...memoryRow, images: [] }])
+    const res = await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      data: Array<{ cover_thumbnail_url: string | null }>
+    }
+    expect(body.data[0]?.cover_thumbnail_url).toBeNull()
+    expect(mocks.createSignedUrl).not.toHaveBeenCalled()
+  })
+
+  it('returns cover_thumbnail_url=null when signed URL generation fails', async () => {
+    authed()
+    mocks.memoryFindMany.mockResolvedValue([memoryRow])
+    mocks.createSignedUrl.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      data: Array<{ cover_thumbnail_url: string | null }>
+    }
+    expect(body.data[0]?.cover_thumbnail_url).toBeNull()
+
+    spy.mockRestore()
   })
 
   it('rejects invalid cursor with 422', async () => {

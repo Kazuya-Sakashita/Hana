@@ -25,10 +25,20 @@ function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
-export function toMemoryResponse(row: MemoryWithImages): MemoryResponse {
+/**
+ * Prisma row を API レスポンスに変換する。
+ *
+ * `coverThumbnailUrl` を渡すと `cover_thumbnail_url` フィールドが付加される。
+ * list endpoint (BFF、 ADR-0012) で利用し、 詳細/作成/更新では渡さない
+ * (フィールド自体が optional なので省略される)。
+ */
+export function toMemoryResponse(
+  row: MemoryWithImages,
+  options?: { coverThumbnailUrl: string | null },
+): MemoryResponse {
   // 画像は created_at 昇順 (= アップロード順 = 表示順) で並べる
   const sorted = [...row.images].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-  return {
+  const base: MemoryResponse = {
     id: row.id,
     child_id: row.childId,
     title: row.title,
@@ -41,4 +51,8 @@ export function toMemoryResponse(row: MemoryWithImages): MemoryResponse {
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   }
+  if (options) {
+    return { ...base, cover_thumbnail_url: options.coverThumbnailUrl }
+  }
+  return base
 }
