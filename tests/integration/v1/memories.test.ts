@@ -150,7 +150,7 @@ describe('GET /v1/memories', () => {
     expect(body.page.next_cursor).toBeNull()
   })
 
-  it('includes cover_thumbnail_url via Supabase thumbnail transform (BFF)', async () => {
+  it('includes cover_thumbnail_url via pre-generated _thumb.webp variant (BFF, ISSUE-031)', async () => {
     authed()
     mocks.memoryFindMany.mockResolvedValue([memoryRow])
     mocks.createSignedUrl.mockResolvedValue({
@@ -159,9 +159,7 @@ describe('GET /v1/memories', () => {
     })
 
     await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img.jpg', 1800, {
-      transform: { width: 320, resize: 'contain', quality: 70 },
-    })
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img_thumb.webp', 1800)
   })
 
   it('returns cover_thumbnail_url=null when memory has no images', async () => {

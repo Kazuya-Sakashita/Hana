@@ -103,7 +103,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     expect(res.status).toBe(422)
   })
 
-  it('returns 200 with no transform when size is omitted', async () => {
+  it('returns 200 with original key when size is omitted', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -113,13 +113,13 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID)
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, undefined)
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800)
     const body = (await res.json()) as { url: string; expires_at: string }
     expect(body.url).toBe('https://example.com/signed')
     expect(body.expires_at).toMatch(/T.*Z$/)
   })
 
-  it('passes resize=contain transform when size=thumbnail', async () => {
+  it('uses derived _thumb.webp key when size=thumbnail (ISSUE-031)', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -129,12 +129,10 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID, 'thumbnail')
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, {
-      transform: { width: 320, resize: 'contain', quality: 70 },
-    })
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img_thumb.webp', 1800)
   })
 
-  it('passes resize=contain transform when size=preview', async () => {
+  it('uses derived _preview.webp key when size=preview (ISSUE-031)', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -144,12 +142,10 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID, 'preview')
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, {
-      transform: { width: 1024, resize: 'contain', quality: 80 },
-    })
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img_preview.webp', 1800)
   })
 
-  it('passes no transform when size=original', async () => {
+  it('uses original key when size=original', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -159,7 +155,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID, 'original')
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, undefined)
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800)
   })
 
   it('sets Cache-Control: private, max-age=300', async () => {

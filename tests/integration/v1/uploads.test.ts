@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => ({
   profileUpsert: vi.fn(),
   imageCreate: vi.fn(),
   createSignedUploadUrl: vi.fn(),
+  storageDownload: vi.fn(),
+  storageUpload: vi.fn(),
+  thumbnailVariant: vi.fn(),
+  previewVariant: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -19,9 +23,17 @@ vi.mock('@/lib/supabase/admin', () => ({
     storage: {
       from: () => ({
         createSignedUploadUrl: mocks.createSignedUploadUrl,
+        download: mocks.storageDownload,
+        upload: mocks.storageUpload,
       }),
     },
   }),
+}))
+
+// ISSUE-031: sharp 起動を回避するため variants モジュールを mock
+vi.mock('@/features/uploads/server/variants', () => ({
+  generateThumbnailVariant: mocks.thumbnailVariant,
+  generatePreviewVariant: mocks.previewVariant,
 }))
 
 vi.mock('@/server/db/prisma', () => ({
@@ -176,8 +188,25 @@ describe('POST /v1/uploads/confirm', () => {
     expect(body.reason).toBe('forbidden')
   })
 
+  function setupVariantMocks() {
+    mocks.storageDownload.mockResolvedValue({
+      data: new Blob(['fake-original-bytes']),
+      error: null,
+    })
+    mocks.thumbnailVariant.mockResolvedValue({
+      buffer: Buffer.from('fake-thumb'),
+      contentType: 'image/webp',
+    })
+    mocks.previewVariant.mockResolvedValue({
+      buffer: Buffer.from('fake-preview'),
+      contentType: 'image/webp',
+    })
+    mocks.storageUpload.mockResolvedValue({ data: { path: 'ok' }, error: null })
+  }
+
   it('returns 201 with Image shape (no storage_key leak)', async () => {
     authed()
+    setupVariantMocks()
     const ownKey = generateStorageKey(USER_ID, 'image/png')
     mocks.imageCreate.mockResolvedValue({
       id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
@@ -214,5 +243,81 @@ describe('POST /v1/uploads/confirm', () => {
     // storage_key を絶対に返さない (PII)
     expect(body).not.toHaveProperty('storage_key')
     expect(body).not.toHaveProperty('user_id')
+  })
+
+  it('uploads _thumb.webp and _preview.webp variants (ISSUE-031)', async () => {
+    authed()
+    setupVariantMocks()
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    mocks.imageCreate.mockResolvedValue({
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    })
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+        width: 800,
+        height: 600,
+        file_size: 10000,
+      }),
+    )
+    expect(res.status).toBe(201)
+
+    // 派生 key で 2 variant が upload されたこと
+    expect(mocks.storageDownload).toHaveBeenCalledWith(ownKey)
+    expect(mocks.thumbnailVariant).toHaveBeenCalledTimes(1)
+    expect(mocks.previewVariant).toHaveBeenCalledTimes(1)
+
+    const uploadCalls = mocks.storageUpload.mock.calls.map((c) => c[0] as string)
+    expect(uploadCalls).toHaveLength(2)
+    expect(uploadCalls.some((k) => k.endsWith('_thumb.webp'))).toBe(true)
+    expect(uploadCalls.some((k) => k.endsWith('_preview.webp'))).toBe(true)
+  })
+
+  it('returns 201 even when variant generation fails (graceful degradation)', async () => {
+    authed()
+    // download が落ちても Image row は作成される
+    mocks.storageDownload.mockResolvedValue({
+      data: null,
+      error: { message: 'boom' },
+    })
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    mocks.imageCreate.mockResolvedValue({
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+        width: 800,
+        height: 600,
+        file_size: 10000,
+      }),
+    )
+    expect(res.status).toBe(201)
+    expect(mocks.storageUpload).not.toHaveBeenCalled()
+
+    errSpy.mockRestore()
   })
 })
