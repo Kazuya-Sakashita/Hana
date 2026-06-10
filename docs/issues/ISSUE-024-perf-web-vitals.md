@@ -2,7 +2,7 @@
 id: ISSUE-024
 title: Web Vitals 計測基盤の導入
 priority: P2
-status: todo
+status: review
 size: S
 created_at: 2026-05-26
 parent: PERF

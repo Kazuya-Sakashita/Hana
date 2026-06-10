@@ -1,0 +1,34 @@
+type: object
+description: |
+  Web Vitals 計測 1 件の報告 payload (ISSUE-024)。
+  PII は含めない (allowlist: name / value / id / navigationType / route)。
+  user 識別はサーバ側で session cookie から SHA256(user_id) 先頭 16 文字に変換してログに出す。
+required: [name, value, id, route]
+properties:
+  name:
+    type: string
+    enum: [CLS, FCP, INP, LCP, TTFB]
+    description: Web Vitals メトリクス名
+    example: 'LCP'
+  value:
+    type: number
+    minimum: 0
+    description: 数値 (ms / unitless どちらか、 name に依存)
+    example: 2400
+  id:
+    type: string
+    minLength: 1
+    maxLength: 128
+    description: web-vitals が発行するユニーク ID (同一メトリクスの更新で同じ id)
+    example: 'v1-1717068000000-12345'
+  navigationType:
+    type: [string, 'null']
+    enum: [navigate, reload, back-forward, back-forward-cache, prerender, restore, null]
+    description: Navigation Timing API の type
+    example: 'navigate'
+  route:
+    type: string
+    description: |
+      ページの sanitized pathname (`[memoryId]` 等の dynamic params は除去済)。
+      例: `/`, `/album`, `/memory/[memoryId]`
+    example: '/album'

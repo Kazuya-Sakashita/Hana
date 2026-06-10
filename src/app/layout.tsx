@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 import { Inter, Noto_Serif_JP } from 'next/font/google'
 import { BottomNav } from '@/components/bottom-nav'
+import { WebVitalsReporter } from '@/components/web-vitals-reporter'
 import './globals.css'
 
 const inter = Inter({
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         {children}
         <BottomNav />
+        <WebVitalsReporter />
       </body>
     </html>
   )

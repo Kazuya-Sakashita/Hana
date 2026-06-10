@@ -265,6 +265,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metrics/vitals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Web Vitals 計測の報告 (RUM、 ISSUE-024)
+         * @description ブラウザの `web-vitals` ライブラリから `navigator.sendBeacon` で送られる
+         *     Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受け、 構造化ログに記録する。
+         *     DB 保存はしない (Vercel Logs で十分)。
+         *     サインアウト状態でも送れる (匿名で記録)。
+         *     PII を含めない (allowlist: name / value / id / navigationType / route + userIdHash)。
+         */
+        post: operations["reportWebVitals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ai/generate": {
         parameters: {
             query?: never;
@@ -722,6 +746,41 @@ export interface components {
                  */
                 next_cursor: string | null;
             };
+        };
+        /**
+         * @description Web Vitals 計測 1 件の報告 payload (ISSUE-024)。
+         *     PII は含めない (allowlist: name / value / id / navigationType / route)。
+         *     user 識別はサーバ側で session cookie から SHA256(user_id) 先頭 16 文字に変換してログに出す。
+         */
+        WebVitalsReport: {
+            /**
+             * @description Web Vitals メトリクス名
+             * @example LCP
+             * @enum {string}
+             */
+            name: "CLS" | "FCP" | "INP" | "LCP" | "TTFB";
+            /**
+             * @description 数値 (ms / unitless どちらか、 name に依存)
+             * @example 2400
+             */
+            value: number;
+            /**
+             * @description web-vitals が発行するユニーク ID (同一メトリクスの更新で同じ id)
+             * @example v1-1717068000000-12345
+             */
+            id: string;
+            /**
+             * @description Navigation Timing API の type
+             * @example navigate
+             * @enum {string|null}
+             */
+            navigationType?: "navigate" | "reload" | "back-forward" | "back-forward-cache" | "prerender" | "restore" | null;
+            /**
+             * @description ページの sanitized pathname (`[memoryId]` 等の dynamic params は除去済)。
+             *     例: `/`, `/album`, `/memory/[memoryId]`
+             * @example /album
+             */
+            route: string;
         };
         /**
          * @description 記録の作成リクエスト。`image_ids` は事前に `POST /uploads/confirm` で作成済みの
@@ -1430,6 +1489,29 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    reportWebVitals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebVitalsReport"];
+            };
+        };
+        responses: {
+            /** @description 受信成功 (body なし) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     generateAiText: {
