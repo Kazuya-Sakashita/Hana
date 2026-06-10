@@ -9,8 +9,8 @@ import {
   parseMemoryCreate,
   readJsonBody,
 } from '@/features/memories/server/parse'
+import { fetchMemoriesWithCovers } from '@/features/memories/server/queries'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
-import { generateSignedImageUrl } from '@/features/uploads/server/signed-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,40 +20,18 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const query = parseListMemoriesQuery(url)
 
-    const items = await prisma.memory.findMany({
-      where: { userId: user.id, deletedAt: null },
-      orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
-      take: query.limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor.id }, skip: 1 } : {}),
-      include: {
-        images: {
-          where: { deletedAt: null },
-          select: { id: true, createdAt: true, storageKey: true },
-        },
-      },
+    // ISSUE-026: 共通 server function に抽出 (Server Component と共有)
+    const { items, hasMore } = await fetchMemoriesWithCovers({
+      userId: user.id,
+      limit: query.limit,
+      cursorId: query.cursor?.id ?? null,
     })
 
-    const hasMore = items.length > query.limit
-    const page = hasMore ? items.slice(0, query.limit) : items
-    const last = page[page.length - 1]
+    const last = items[items.length - 1]
     const nextCursor = hasMore && last ? encodeCursor(last.id) : null
 
-    // BFF: 各メモの最初の画像 (created_at 昇順) の thumbnail signed URL を並列発行。
-    // クライアントの N+1 (50 並列の /uploads/{id}/url) を排除する。 ADR-0012。
-    const coversWithUrls = await Promise.all(
-      page.map(async (m) => {
-        const sortedImages = [...m.images].sort(
-          (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-        )
-        const first = sortedImages[0]
-        if (!first) return { memory: m, coverThumbnailUrl: null as string | null }
-        const url = await generateSignedImageUrl(first.storageKey, 'thumbnail')
-        return { memory: m, coverThumbnailUrl: url }
-      }),
-    )
-
     return NextResponse.json({
-      data: coversWithUrls.map(({ memory, coverThumbnailUrl }) =>
+      data: items.map(({ coverThumbnailUrl, ...memory }) =>
         toMemoryResponse(memory, { coverThumbnailUrl }),
       ),
       page: { next_cursor: nextCursor },
