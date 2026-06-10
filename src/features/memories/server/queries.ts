@@ -2,6 +2,7 @@ import 'server-only'
 
 import { prisma } from '@/server/db/prisma'
 import { generateSignedImageUrl } from '@/features/uploads/server/signed-url'
+import { isUuid } from '@/features/memories/server/parse'
 import type { MemoryWithImages } from '@/features/memories/view-models/memory'
 
 // ISSUE-026: memory list の取得 (BFF cover URL 付き) を Route Handler と
@@ -65,4 +66,52 @@ export async function fetchMemoriesWithCovers(
   )
 
   return { items, hasMore }
+}
+
+// === ISSUE-027: memory 詳細 SC化用 ===
+
+export interface MemoryDetailImage {
+  id: string
+  previewUrl: string | null
+}
+
+export interface MemoryDetail extends MemoryWithImages {
+  imagesWithPreviews: MemoryDetailImage[]
+}
+
+/**
+ * 単一の memory を取得し、 各画像の preview signed URL (1024px) を並列発行する。
+ * - memoryId が不正 / 存在しない / 他ユーザー所有 のいずれも `null` を返す
+ *   (情報漏洩防止のため not_found と forbidden を区別しない)
+ * - 認可成立後の場合のみ画像の preview URL 発行に進む
+ */
+export async function fetchMemoryWithPreviews(opts: {
+  memoryId: string
+  userId: string
+}): Promise<MemoryDetail | null> {
+  if (!isUuid(opts.memoryId)) return null
+
+  const memory = await prisma.memory.findFirst({
+    where: { id: opts.memoryId, deletedAt: null },
+    include: {
+      images: {
+        where: { deletedAt: null },
+        select: { id: true, createdAt: true, storageKey: true },
+      },
+    },
+  })
+  if (!memory) return null
+  if (memory.userId !== opts.userId) return null
+
+  const sortedImages = [...memory.images].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  )
+  const imagesWithPreviews = await Promise.all(
+    sortedImages.map(async (img): Promise<MemoryDetailImage> => {
+      const previewUrl = await generateSignedImageUrl(img.storageKey, 'preview')
+      return { id: img.id, previewUrl }
+    }),
+  )
+
+  return { ...memory, imagesWithPreviews }
 }
