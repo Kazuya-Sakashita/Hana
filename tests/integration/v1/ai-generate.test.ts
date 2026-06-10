@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // Anthropic SDK / Supabase / Prisma を全モック
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  profileUpsert: vi.fn(),
+  profileFindUnique: vi.fn(),
+  profileCreate: vi.fn(),
   childFindFirst: vi.fn(),
   imageFindMany: vi.fn(),
   aiGenerationCount: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock('@/features/ai/server/resize', () => ({
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
-    profile: { upsert: mocks.profileUpsert },
+    profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
     child: { findFirst: mocks.childFindFirst },
     image: { findMany: mocks.imageFindMany },
     aiGeneration: {
@@ -79,11 +80,11 @@ const imageRow = {
 
 function authedWithConsent() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-  mocks.profileUpsert.mockResolvedValue(profileConsented)
+  mocks.profileFindUnique.mockResolvedValue(profileConsented)
 }
 function authedNoConsent() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-  mocks.profileUpsert.mockResolvedValue(profileNoConsent)
+  mocks.profileFindUnique.mockResolvedValue(profileNoConsent)
 }
 function unauthed() {
   mocks.getUser.mockResolvedValue({ data: { user: null } })

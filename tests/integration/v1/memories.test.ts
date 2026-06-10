@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  profileUpsert: vi.fn(),
+  profileFindUnique: vi.fn(),
+  profileCreate: vi.fn(),
   childFindFirst: vi.fn(),
   imageFindMany: vi.fn(),
   memoryFindFirst: vi.fn(),
@@ -33,7 +34,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
-    profile: { upsert: mocks.profileUpsert },
+    profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
     child: { findFirst: mocks.childFindFirst },
     image: { findMany: mocks.imageFindMany },
     memory: {
@@ -99,7 +100,7 @@ const memoryRow = {
 
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-  mocks.profileUpsert.mockResolvedValue(profileRow)
+  mocks.profileFindUnique.mockResolvedValue(profileRow)
 }
 
 function unauthed() {
