@@ -3,7 +3,8 @@ import { generateStorageKey, storageKeyPrefixForUser } from '@/features/uploads/
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  profileUpsert: vi.fn(),
+  profileFindUnique: vi.fn(),
+  profileCreate: vi.fn(),
   imageCreate: vi.fn(),
   createSignedUploadUrl: vi.fn(),
   storageDownload: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock('@/features/uploads/server/variants', () => ({
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
-    profile: { upsert: mocks.profileUpsert },
+    profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
     image: { create: mocks.imageCreate },
   },
 }))
@@ -60,7 +61,7 @@ const profileRow = {
 
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-  mocks.profileUpsert.mockResolvedValue(profileRow)
+  mocks.profileFindUnique.mockResolvedValue(profileRow)
 }
 
 function unauthed() {

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  upsert: vi.fn(),
+  findUnique: vi.fn(),
+  create: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -12,7 +13,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/server/db/prisma', () => ({
-  prisma: { profile: { upsert: mocks.upsert } },
+  prisma: { profile: { findUnique: mocks.findUnique, create: mocks.create } },
 }))
 
 import { GET } from '@/app/v1/me/route'
@@ -33,7 +34,7 @@ describe('GET /v1/me', () => {
     mocks.getUser.mockResolvedValue({
       data: { user: { id: '8f7e6d5c-4b3a-4291-8765-0123456789ab', email: 'parent@example.com' } },
     })
-    mocks.upsert.mockResolvedValue({
+    mocks.findUnique.mockResolvedValue({
       id: '8f7e6d5c-4b3a-4291-8765-0123456789ab',
       displayName: null,
       aiConsentAt: null,
