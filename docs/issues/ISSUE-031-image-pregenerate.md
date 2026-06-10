@@ -2,9 +2,11 @@
 id: ISSUE-031
 title: 画像 variant (thumbnail/preview) をアップロード時に sharp で事前生成
 priority: P0
-status: todo
+status: done
 size: M
 created_at: 2026-05-27
+merged_at: 2026-06-10
+pr: 46
 parent: PERF
 ---
 
