@@ -170,13 +170,51 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     expect(res.headers.get('Cache-Control')).toBe('private, max-age=300')
   })
 
-  it('returns 500 when Storage createSignedUrl fails', async () => {
+  it('returns 500 when Storage createSignedUrl fails (size=original)', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({ data: null, error: { message: 'boom' } })
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const res = await call(IMG_ID)
+    const res = await call(IMG_ID, 'original')
+    expect(res.status).toBe(500)
+
+    spy.mockRestore()
+  })
+
+  it('falls back to original when variant key is missing (ISSUE-031 既存データ救済)', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue(imageRow)
+    // 1 回目 (variant key) は失敗、 2 回目 (original key) で成功する mock
+    mocks.createSignedUrl
+      .mockResolvedValueOnce({ data: null, error: { message: 'Object not found' } })
+      .mockResolvedValueOnce({
+        data: { signedUrl: 'https://example.com/original-fallback' },
+        error: null,
+      })
+
+    const res = await call(IMG_ID, 'preview')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { url: string }
+    expect(body.url).toBe('https://example.com/original-fallback')
+
+    // variant key → original key の順で 2 回呼ばれること
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(2)
+    expect(mocks.createSignedUrl).toHaveBeenNthCalledWith(
+      1,
+      'uploads/abc/202605/img_preview.webp',
+      1800,
+    )
+    expect(mocks.createSignedUrl).toHaveBeenNthCalledWith(2, imageRow.storageKey, 1800)
+  })
+
+  it('returns 500 when both variant and original fail', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue(imageRow)
+    mocks.createSignedUrl.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await call(IMG_ID, 'preview')
     expect(res.status).toBe(500)
 
     spy.mockRestore()

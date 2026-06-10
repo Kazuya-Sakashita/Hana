@@ -34,6 +34,7 @@ export function deriveVariantKey(originalKey: string, size: ImageSize): string {
 /**
  * Supabase Storage の signed download URL を発行する。
  * - size に応じた variant key (ISSUE-031 で事前生成) の URL を返す
+ * - **variant key が存在しない場合は original key にフォールバック** (ISSUE-031 既存データ救済)
  * - 失敗時は null を返す (呼び出し側でフォールバック処理)
  * - URL はログに残さない (認証情報を含むため)
  */
@@ -43,14 +44,26 @@ export async function generateSignedImageUrl(
 ): Promise<string | null> {
   const supabase = createSupabaseAdminClient()
   const key = deriveVariantKey(storageKey, size)
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(key, SIGNED_URL_TTL_SECONDS)
+  const primary = await supabase.storage.from(BUCKET).createSignedUrl(key, SIGNED_URL_TTL_SECONDS)
 
-  if (error || !data) {
-    // 詳細はサーバログのみ
-    console.error('createSignedUrl failed', { reason: error?.message ?? 'no_data' })
+  if (primary.data) return primary.data.signedUrl
+
+  // variant が存在しない (ISSUE-031 以前のデータ) → original にフォールバック
+  if (size !== 'original') {
+    const fallback = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(storageKey, SIGNED_URL_TTL_SECONDS)
+    if (fallback.data) return fallback.data.signedUrl
+
+    console.error('createSignedUrl failed (both variant and original)', {
+      reason: fallback.error?.message ?? primary.error?.message ?? 'no_data',
+    })
     return null
   }
-  return data.signedUrl
+
+  // size=original で失敗 → 救済不能
+  console.error('createSignedUrl failed', {
+    reason: primary.error?.message ?? 'no_data',
+  })
+  return null
 }
