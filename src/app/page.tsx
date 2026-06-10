@@ -1,13 +1,12 @@
-'use client'
-
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getBrowserApiClient } from '@/lib/api/browser-client'
-import { isApiProblemError } from '@/lib/api/error'
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { HomeGreeting } from '@/components/home-greeting'
 import { computeAge, formatAgeLabel } from '@/lib/age'
+import { getCurrentUser } from '@/server/auth/current-user'
+import { prisma } from '@/server/db/prisma'
+import { fetchMemoriesWithCovers } from '@/features/memories/server/queries'
 
 // V0 prompt §5.2 ホーム画面:
 //   1. Top bar: 時間帯挨拶 + 子どもアバター
@@ -16,27 +15,11 @@ import { computeAge, formatAgeLabel } from '@/lib/age'
 //   4. 最近のページ (横スクロール)
 //   5. これまでの あゆみ stat (全体カウントベースで代替・月別フィルタは ISSUE-016)
 //   6. 空状態: 「○○ちゃんとの 1まいめを、ひらきましょう」
+//
+// ISSUE-026: Server Component 化。 HTML に hero + carousel cover URL を同梱して
+// LCP の JS waterfall を解消。 時間帯挨拶のみ <HomeGreeting /> Client Component に切り出し。
 
-type Me = { id: string; email: string | null; display_name: string | null }
-type Child = { id: string; name: string; birthdate: string; created_at: string }
-type Memory = {
-  id: string
-  title: string
-  recorded_at: string
-  weather: string | null
-  image_ids: string[]
-  cover_thumbnail_url?: string | null
-}
-
-type Phase = 'loading' | 'no_child' | 'ready' | 'error'
-
-function greeting(date = new Date()): string {
-  const h = date.getHours()
-  if (h >= 6 && h < 11) return 'おはようございます'
-  if (h >= 11 && h < 17) return 'こんにちは'
-  if (h >= 17 && h < 22) return 'こんばんは'
-  return 'おかえりなさい'
-}
+export const dynamic = 'force-dynamic'
 
 function daysBetween(from: Date, to: Date): number {
   const dayMs = 24 * 60 * 60 * 1000
@@ -45,96 +28,32 @@ function daysBetween(from: Date, to: Date): number {
   return Math.max(0, Math.floor((t - f) / dayMs))
 }
 
-export default function HomePage() {
-  const router = useRouter()
-  const [phase, setPhase] = useState<Phase>('loading')
-  const [, setMe] = useState<Me | null>(null)
-  const [child, setChild] = useState<Child | null>(null)
-  const [memories, setMemories] = useState<Memory[]>([])
-  // SSR hydration mismatch を避けるため client-only に計算する。
-  // useSyncExternalStore は server snapshot を別途返せるので setState in effect を避けられる。
-  const greetingText = useSyncExternalStore(
-    () => () => undefined,
-    () => greeting(),
-    () => 'こんにちは',
-  )
+export default async function HomePage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/sign-in')
 
-  useEffect(() => {
-    let cancelled = false
-    const client = getBrowserApiClient()
-    Promise.all([
-      client.GET('/me'),
-      client.GET('/children'),
-      client.GET('/memories', { params: { query: { limit: 5 } } }),
-    ])
-      .then(([meRes, childrenRes, memoriesRes]) => {
-        if (cancelled) return
-        if (meRes.data) setMe(meRes.data as Me)
-        const first = (childrenRes.data?.data as Child[] | undefined)?.[0]
-        if (!first) {
-          setPhase('no_child')
-          router.push('/onboarding')
-          return
-        }
-        setChild(first)
-        // ISSUE-018: list レスポンスに cover_thumbnail_url が含まれるので追加 fetch 不要
-        const list = (memoriesRes.data?.data ?? []) as Memory[]
-        setMemories(list)
-        setPhase('ready')
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        if (isApiProblemError(e) && e.reason === 'unauthorized') {
-          router.push('/sign-in')
-          return
-        }
-        setPhase('error')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [router])
+  // 並列フェッチ: child / memories(limit=5)。 me は getCurrentUser で取得済。
+  const [child, memoriesResult] = await Promise.all([
+    prisma.child.findFirst({
+      where: { userId: user.id, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    }),
+    fetchMemoriesWithCovers({ userId: user.id, limit: 5 }),
+  ])
 
-  if (phase === 'loading' || phase === 'no_child') {
-    return (
-      <main className="bg-canvas min-h-dvh px-6 pb-28 pt-12">
-        <p className="text-ink-tertiary text-center text-sm">よみこんでいます…</p>
-      </main>
-    )
-  }
+  if (!child) redirect('/onboarding')
 
-  if (phase === 'error') {
-    return (
-      <main className="bg-canvas min-h-dvh px-6 pb-28 pt-12">
-        <Card>
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">うまく ひらけませんでした</CardTitle>
-            <CardDescription className="mt-2">
-              ネットワークの ちょうしを たしかめて、もういちど ためしてみてください。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => location.reload()} className="w-full">
-              もういちど ひらく
-            </Button>
-          </CardContent>
-        </Card>
-      </main>
-    )
-  }
-
-  if (!child) return null
-
+  const memories = memoriesResult.items
   const childInitial = Array.from(child.name)[0] ?? '?'
-  const ageLabel = formatAgeLabel(computeAge(new Date(`${child.birthdate}T00:00:00Z`), new Date()))
-  const togetherDays = daysBetween(new Date(child.created_at), new Date())
+  const ageLabel = formatAgeLabel(computeAge(child.birthdate, new Date()))
+  const togetherDays = daysBetween(child.createdAt, new Date())
 
   return (
     <main className="bg-canvas min-h-dvh px-6 pb-28 pt-8">
       <div className="mx-auto w-full max-w-md">
         {/* Top bar */}
         <header className="mb-8 flex items-center justify-between">
-          <p className="text-ink font-serif text-base">{greetingText}</p>
+          <HomeGreeting />
           <Link
             href="/settings"
             aria-label={`${child.name} の せってい`}
@@ -189,7 +108,7 @@ export default function HomePage() {
               </div>
               <ul className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-2">
                 {memories.map((m) => {
-                  const url = m.cover_thumbnail_url ?? null
+                  const url = m.coverThumbnailUrl
                   return (
                     <li key={m.id} className="w-[140px] shrink-0">
                       <Link

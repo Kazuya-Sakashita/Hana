@@ -2,7 +2,7 @@
 id: ISSUE-026
 title: / (home) を Server Component 化 (初期データを SSR)
 priority: P1
-status: todo
+status: review
 size: M
 created_at: 2026-05-26
 parent: PERF
