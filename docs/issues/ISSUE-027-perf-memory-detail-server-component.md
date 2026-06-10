@@ -2,9 +2,11 @@
 id: ISSUE-027
 title: /memory/[memoryId] を Server Component 化 (初期データを SSR)
 priority: P2
-status: review
+status: done
 size: M
 created_at: 2026-05-26
+merged_at: 2026-06-11
+pr: 52
 parent: PERF
 ---
 
