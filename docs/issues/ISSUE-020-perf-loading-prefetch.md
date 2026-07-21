@@ -96,6 +96,9 @@ V0 §1「Whisper not shout」に合わせて主張しすぎない。
 - [x] skeleton の色味・形状が「whisper」原則に沿う (V0 §1)
 - [x] /record への prefetch は **入っていない** (集中フロー保護)
 
+未チェックの DevTools 2項目は、PR merge 前の人間確認ゲートとして残す。
+自動検証では `prefetch` prop と `loading.tsx` の存在、`pnpm pr:gate` まで確認済み。
+
 ---
 
 ## 動作確認手順
@@ -105,8 +108,9 @@ pnpm dev
 # 1. Chrome DevTools Throttling = Slow 4G
 # 2. /album を開く → skeleton ×6 が見える → リスト表示
 # 3. /album → /memory/{id} → 詳細 skeleton → 本画像
-# 4. / 読み込み後、Network panel で /album / /record の prefetch を確認
-# 5. /record を開いている時、BottomNav (非表示なので問題なし) の prefetch も発火しないことを確認
+# 4. / 読み込み後、Network panel で /album の prefetch を確認
+# 5. /record 宛て Link では prefetch が発火しないことを確認
+# 6. /record を開いている時、BottomNav (非表示なので問題なし) の prefetch も発火しないことを確認
 ```
 
 ---
