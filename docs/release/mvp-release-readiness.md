@@ -103,8 +103,8 @@ Measurement log:
 | AI payload           | birthdate, email, surname, address, raw location are not sent                                                     | todo   | yes               |
 | deletion             | logical deletion behavior and physical deletion gap are documented                                                | todo   | release decision  |
 
-Security / privacy details should be checked against `AGENTS.md`, ADR-0007, ADR-0009, ADR-0011, and ADR-0012.
-`docs/api-driven-development/security-and-privacy.md` is a release dependency once ISSUE-036 lands; until then, the table above remains self-contained and authoritative for this readiness pass.
+Security / privacy details should be checked against `AGENTS.md`, `docs/api-driven-development/security-and-privacy.md`, ADR-0007, ADR-0009, ADR-0011, and ADR-0012.
+The table above is the operational smoke checklist for release readiness; the security/privacy guide remains the source of truth for policy details.
 
 ## Rollback Readiness
 
@@ -153,16 +153,15 @@ DB migration や storage 変更がある場合は、rollback 手順なしで rel
 
 Blocker は release 前に解消するか、人間が明示的に waiver する。
 
-| blocker                                                    | owner       | status | unblock condition                                     |
-| ---------------------------------------------------------- | ----------- | ------ | ----------------------------------------------------- |
-| privacy policy / terms not reviewed for AI image sending   | human       | todo   | legal/privacy review complete                         |
-| AI vendor retention terms not confirmed                    | human       | todo   | vendor retention policy recorded                      |
-| route ownership tests missing for private APIs             | engineering | todo   | tests or waiver recorded                              |
-| account deletion / storage physical purge not implemented  | engineering | todo   | implemented or accepted risk signed                   |
-| PRD Must Have item is omitted without waiver               | human       | todo   | blocker / accepted risk / deferred work recorded      |
-| EXIF / GPS stripping has no test evidence or accepted risk | engineering | todo   | test evidence or ADR-0009 risk approval               |
-| ISSUE-036 security/privacy source has not landed           | engineering | todo   | merge ISSUE-036 or keep this checklist self-contained |
-| real-data screenshots/logs in repo or PR                   | engineering | todo   | remove and rotate affected secrets if needed          |
+| blocker                                                    | owner       | status | unblock condition                                |
+| ---------------------------------------------------------- | ----------- | ------ | ------------------------------------------------ |
+| privacy policy / terms not reviewed for AI image sending   | human       | todo   | legal/privacy review complete                    |
+| AI vendor retention terms not confirmed                    | human       | todo   | vendor retention policy recorded                 |
+| route ownership tests missing for private APIs             | engineering | todo   | tests or waiver recorded                         |
+| account deletion / storage physical purge not implemented  | engineering | todo   | implemented or accepted risk signed              |
+| PRD Must Have item is omitted without waiver               | human       | todo   | blocker / accepted risk / deferred work recorded |
+| EXIF / GPS stripping has no test evidence or accepted risk | engineering | todo   | test evidence or ADR-0009 risk approval          |
+| real-data screenshots/logs in repo or PR                   | engineering | todo   | remove and rotate affected secrets if needed     |
 
 ## Accepted Risks
 

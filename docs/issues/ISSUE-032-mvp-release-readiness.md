@@ -46,7 +46,7 @@ Codex が自動で開発を進めても、最後に人間が「今どこまで�
 
 - `docs/issues/`
 - `docs/perf/`
-- `docs/api-driven-development/security-and-privacy.md`（ISSUE-036 で作成予定）
+- `docs/api-driven-development/security-and-privacy.md`（ISSUE-036 で作成済みの security/privacy 正本）
 - PR / release 判断プロセス
 
 ## 受け入れ条件 (Acceptance Criteria)
