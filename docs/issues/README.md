@@ -2,13 +2,13 @@
 
 このファイルは、Codex が `docs/issues/` の現在地と次に進める Issue を短く把握するための入口です。
 
-各 Issue の正本は `docs/issues/ISSUE-XXX-*.md` です。この README は派生ビューなので、Issue の status / frontmatter を更新したら合わせて更新します。
+各 Issue の正本は `docs/issues/ISSUE-<number>[suffix]-*.md` です。この README は派生ビューなので、Issue の status / frontmatter を更新したら合わせて更新します。
 
 ---
 
 ## Source Of Truth
 
-- Issue 本文: `docs/issues/ISSUE-XXX-*.md`
+- Issue 本文: `docs/issues/ISSUE-<number>[suffix]-*.md`
 - プロダクト仕様: `Hana_PRD_v1.md`
 - API 契約: `docs/openapi/openapi.yaml`
 - 開発手順: `AGENTS.md`
@@ -20,7 +20,7 @@
 
 | field                   | required | values                                                 | meaning                                              |
 | ----------------------- | -------- | ------------------------------------------------------ | ---------------------------------------------------- |
-| `id`                    | yes      | `ISSUE-XXX`                                            | Issue ID。PR title は `[ISSUE-XXX] <summary>` にする |
+| `id`                    | yes      | `ISSUE-XXX` / `ISSUE-XXXa`                             | Issue ID。PR title は `[ISSUE-XXX] <summary>` にする |
 | `title`                 | yes      | short Japanese title                                   | Issue の要約                                         |
 | `priority`              | yes      | `P0` / `P1` / `P2`                                     | P0 は MVP / safety gate、P1 は改善、P2 は後続改善    |
 | `status`                | yes      | `todo` / `in_progress` / `review` / `done` / `blocked` | 現在状態                                             |
@@ -90,13 +90,13 @@ Codex-ready と判断する条件:
 | 1    | `ISSUE-020` | P1       | S    | perf / UX     | loading と prefetch の低リスク改善。OpenAPI 影響なし                      | `pnpm pr:gate`                   |
 | 2    | `ISSUE-021` | P1       | S    | perf / bundle | bundle analyzer と font weight の改善。dependency 追加と visual QA は注意 | `pnpm pr:gate`, bundle report    |
 | 3    | `ISSUE-023` | P1       | M    | data fetching | TanStack Query 導入。後続 `ISSUE-029` の前提                              | `pnpm pr:gate`                   |
-| 4    | `ISSUE-022` | P2       | S    | ai / perf     | AI generate 内の並列化。AI / image privacy gate は要確認                  | `pnpm pr:gate`, AI privacy check |
+| 4    | `ISSUE-022` | P2       | S    | ai / perf     | 実装着手は可能。AI / image privacy gate は PR review 前に必ず確認         | `pnpm pr:gate`, AI privacy check |
 
 ---
 
 ## GitHub Intake Queue
 
-以下は GitHub Issue 作成済みだが、ローカル正本 `docs/issues/ISSUE-XXX-*.md` はまだ main に存在しない。Codex が着手する前に、各 Issue のローカルコピーを追加する。
+以下は GitHub Issue 作成済みだが、ローカル正本 `docs/issues/ISSUE-<number>[suffix]-*.md` はまだ main に存在しない。Codex が着手する前に、各 Issue のローカルコピーを追加する。
 
 | issue       | github | area              | next action                                       |
 | ----------- | ------ | ----------------- | ------------------------------------------------- |
