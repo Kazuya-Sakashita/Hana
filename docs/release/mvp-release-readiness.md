@@ -31,9 +31,10 @@ Issue / PR / ADR / perf docs に分散した証跡をここへ集約し、最後
 | latest candidate PR   | #                     |
 | latest `pnpm pr:gate` | pass / fail / not run |
 
-## MVP Scope
+## MVP Core Loop Scope
 
-PRD §6 の Must Have から、MVP release gate では以下を対象にする。
+ISSUE-032 の主対象は、PRD §6 の Must Have のうち「写真 → AI 文章生成 → 編集 → 保存 → 見返す」の core loop に直結する機能です。
+core loop 以外の PRD Must Have は、次の reconciliation 表で release blocker / accepted risk / deferred work として明示的に扱います。
 
 | area             | MVP expectation                                                          | evidence                 | status |
 | ---------------- | ------------------------------------------------------------------------ | ------------------------ | ------ |
@@ -44,6 +45,16 @@ PRD §6 の Must Have から、MVP release gate では以下を対象にする�
 | edit/save memory | 生成文を保存前に編集し、記録として保存できる                             | PR / test / manual smoke | todo   |
 | album            | 保存した記録を一覧で確認できる                                           | PR / test / manual smoke | todo   |
 | memory detail    | 記録詳細で写真と本文を確認できる                                         | PR / test / manual smoke | todo   |
+
+## PRD Must Have Reconciliation
+
+PRD §6 の Must Have で core loop 表に入っていないものは、ここで release 判定を明示する。
+
+| PRD Must Have             | readiness treatment                                                                           | release decision needed |
+| ------------------------- | --------------------------------------------------------------------------------------------- | ----------------------- |
+| タイムライン表示（新→旧） | album / home 表示として確認。正式な timeline 仕様との差は accepted risk または blocker に記録 | yes                     |
+| 月別ふりかえり            | ISSUE-032 では実装しない。MVP に含めるなら blocker、外すなら waiver / deferred work を記録    | yes                     |
+| 「今日で○日目」バッジ表示 | ISSUE-032 では実装しない。MVP に含めるなら blocker、外すなら waiver / deferred work を記録    | yes                     |
 
 MVP 外として扱うもの: 家族共有、SNS 共有、外部共有リンク、動画、フォトブック、複数子ども、コメント・いいね、検索・タグ管理、課金。
 
@@ -78,20 +89,40 @@ Measurement log:
 
 ## Privacy And Security Smoke
 
-| check                | expectation                                                              | result | blocker if failed |
-| -------------------- | ------------------------------------------------------------------------ | ------ | ----------------- |
-| auth required        | private API calls require a valid session                                | todo   | yes               |
-| ownership            | other-user children / memories / images return 403 or documented 404     | todo   | yes               |
-| public endpoints     | only explicitly public endpoints bypass auth                             | todo   | yes               |
-| image privacy        | app never uses public image URLs                                         | todo   | yes               |
-| signed URL TTL       | image download URLs are short-lived and private-cache only               | todo   | yes               |
-| storage key exposure | `storage_key` is not returned to normal UI responses or logs             | todo   | yes               |
-| logs                 | request logs exclude body, email, names, image URL, storage_key, AI text | todo   | yes               |
-| AI opt-in            | AI generation is blocked until consent exists                            | todo   | yes               |
-| AI payload           | birthdate, email, surname, address, raw location are not sent            | todo   | yes               |
-| deletion             | logical deletion behavior and physical deletion gap are documented       | todo   | release decision  |
+| check                | expectation                                                                                                       | result | blocker if failed |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ | ----------------- |
+| auth required        | private API calls require a valid session                                                                         | todo   | yes               |
+| ownership            | other-user children / memories / images return 403 or documented 404                                              | todo   | yes               |
+| public endpoints     | only explicitly public endpoints bypass auth                                                                      | todo   | yes               |
+| image privacy        | app never uses public image URLs                                                                                  | todo   | yes               |
+| EXIF / GPS stripping | EXIF is stripped before storage and AI send, or ADR-0009 accepted risk is explicitly approved by a human reviewer | todo   | yes               |
+| signed URL TTL       | image download URLs are short-lived and private-cache only                                                        | todo   | yes               |
+| storage key exposure | `storage_key` is not returned to normal UI responses or logs                                                      | todo   | yes               |
+| logs                 | request logs exclude body, email, names, image URL, storage_key, AI text                                          | todo   | yes               |
+| AI opt-in            | AI generation is blocked until consent exists                                                                     | todo   | yes               |
+| AI payload           | birthdate, email, surname, address, raw location are not sent                                                     | todo   | yes               |
+| deletion             | logical deletion behavior and physical deletion gap are documented                                                | todo   | release decision  |
 
-Security / privacy details should be checked against `AGENTS.md`, ADR-0007, ADR-0009, ADR-0011, ADR-0012, and `docs/api-driven-development/security-and-privacy.md` after ISSUE-036 is merged.
+Security / privacy details should be checked against `AGENTS.md`, ADR-0007, ADR-0009, ADR-0011, and ADR-0012.
+`docs/api-driven-development/security-and-privacy.md` is a release dependency once ISSUE-036 lands; until then, the table above remains self-contained and authoritative for this readiness pass.
+
+## Rollback Readiness
+
+各 release candidate ごとに、どこまで戻せるかを記録する。
+DB migration や storage 変更がある場合は、rollback 手順なしで release gate を通さない。
+
+| field                 | value                                              |
+| --------------------- | -------------------------------------------------- |
+| candidate PR          | #                                                  |
+| candidate commit      | SHA                                                |
+| environment           | local / staging / production                       |
+| deployed version      | version / deployment URL                           |
+| DB migration impact   | none / additive / destructive                      |
+| storage impact        | none / schema / object mutation                    |
+| rollback owner        | name                                               |
+| rollback command / PR | revert PR / deploy previous version / manual steps |
+| rollback verification | `pnpm pr:gate` / smoke / data check                |
+| rollback decision     | ready / needs work / not applicable                |
 
 ## AI Quality Review
 
@@ -122,13 +153,16 @@ Security / privacy details should be checked against `AGENTS.md`, ADR-0007, ADR-
 
 Blocker は release 前に解消するか、人間が明示的に waiver する。
 
-| blocker                                                   | owner       | status | unblock condition                            |
-| --------------------------------------------------------- | ----------- | ------ | -------------------------------------------- |
-| privacy policy / terms not reviewed for AI image sending  | human       | todo   | legal/privacy review complete                |
-| AI vendor retention terms not confirmed                   | human       | todo   | vendor retention policy recorded             |
-| route ownership tests missing for private APIs            | engineering | todo   | tests or waiver recorded                     |
-| account deletion / storage physical purge not implemented | engineering | todo   | implemented or accepted risk signed          |
-| real-data screenshots/logs in repo or PR                  | engineering | todo   | remove and rotate affected secrets if needed |
+| blocker                                                    | owner       | status | unblock condition                                     |
+| ---------------------------------------------------------- | ----------- | ------ | ----------------------------------------------------- |
+| privacy policy / terms not reviewed for AI image sending   | human       | todo   | legal/privacy review complete                         |
+| AI vendor retention terms not confirmed                    | human       | todo   | vendor retention policy recorded                      |
+| route ownership tests missing for private APIs             | engineering | todo   | tests or waiver recorded                              |
+| account deletion / storage physical purge not implemented  | engineering | todo   | implemented or accepted risk signed                   |
+| PRD Must Have item is omitted without waiver               | human       | todo   | blocker / accepted risk / deferred work recorded      |
+| EXIF / GPS stripping has no test evidence or accepted risk | engineering | todo   | test evidence or ADR-0009 risk approval               |
+| ISSUE-036 security/privacy source has not landed           | engineering | todo   | merge ISSUE-036 or keep this checklist self-contained |
+| real-data screenshots/logs in repo or PR                   | engineering | todo   | remove and rotate affected secrets if needed          |
 
 ## Accepted Risks
 
