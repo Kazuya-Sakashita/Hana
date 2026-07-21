@@ -239,7 +239,7 @@ tests/
 - [ ] `pnpm test` が通る
 - [ ] 認可テスト：他ユーザーで 403 を確認
 - [ ] ログに PII が含まれない（目視 + テスト）
-- [ ] AI 送信に氏名・生年月日が含まれない
+- [ ] AI 送信は ADR-0011 に準拠している（child given/display name は opt-in 後のみ可。full name / surname / 生年月日 / メール / 住所 / raw location は不可）
 - [ ] 画像が公開 URL に漏れない
 - [ ] 破壊変更を含む場合、`oasdiff` 実行 + ADR 追加
 - [ ] Issue の受け入れ条件すべてチェック済み
