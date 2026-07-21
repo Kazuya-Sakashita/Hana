@@ -109,4 +109,49 @@ describe('check-openapi-route-map', () => {
     expect(result.stderr).toContain('Extra methods')
     expect(result.stderr).toContain('POST /v1/health')
   })
+
+  it('fails when a route exists but an OpenAPI method is missing from its route file', () => {
+    const root = makeFixture()
+    writeOpenApi(
+      root,
+      `  /health:
+    get:
+      responses:
+        '200':
+          description: ok
+    post:
+      responses:
+        '204':
+          description: ok
+`,
+    )
+    writeRoute(root, 'health', 'export async function GET() {}')
+
+    const result = runCheck(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Missing methods')
+    expect(result.stderr).toContain('POST /v1/health')
+  })
+
+  it('fails when a Route Handler path is not declared in OpenAPI', () => {
+    const root = makeFixture()
+    writeOpenApi(
+      root,
+      `  /health:
+    get:
+      responses:
+        '200':
+          description: ok
+`,
+    )
+    writeRoute(root, 'health', 'export async function GET() {}')
+    writeRoute(root, 'debug', 'export async function GET() {}')
+
+    const result = runCheck(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Extra routes')
+    expect(result.stderr).toContain('GET /v1/debug')
+  })
 })
