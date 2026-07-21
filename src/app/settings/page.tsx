@@ -1,5 +1,6 @@
 'use client'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,7 @@ import { useCurrentUserQuery } from '@/features/me/client/use-current-user'
 
 export default function SettingsPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [signingOut, setSigningOut] = useState(false)
   const meQuery = useCurrentUserQuery()
   const childrenQuery = useChildrenQuery()
@@ -36,6 +38,7 @@ export default function SettingsPage() {
     } catch {
       // ignore: even on failure, push to /sign-in
     }
+    queryClient.clear()
     imageUrlCache.clearAll()
     router.push('/sign-in')
   }
