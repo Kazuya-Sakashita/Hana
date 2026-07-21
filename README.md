@@ -8,14 +8,16 @@
 
 ## このリポジトリで読むべきドキュメント
 
-| ドキュメント                                                                       | 役割                                   |
-| ---------------------------------------------------------------------------------- | -------------------------------------- |
-| [`Hana_PRD_v1.md`](./Hana_PRD_v1.md)                                               | プロダクト仕様（ビジネス側の真実の源） |
-| [`CLAUDE.md`](./CLAUDE.md)                                                         | 開発運用ルール（人間・AI 共通）        |
-| [`docs/api-driven-development/README.md`](./docs/api-driven-development/README.md) | API 駆動開発フロー                     |
-| [`docs/openapi/openapi.yaml`](./docs/openapi/openapi.yaml)                         | API 仕様（技術側の真実の源）           |
-| [`docs/issues/`](./docs/issues/)                                                   | Issue の永続コピー                     |
-| [`docs/adr/`](./docs/adr/)                                                         | アーキテクチャ判断記録                 |
+| ドキュメント                                                                                                           | 役割                                   |
+| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| [`Hana_PRD_v1.md`](./Hana_PRD_v1.md)                                                                                   | プロダクト仕様（ビジネス側の真実の源） |
+| [`AGENTS.md`](./AGENTS.md)                                                                                             | Codex 用の開発運用ルール               |
+| [`CLAUDE.md`](./CLAUDE.md)                                                                                             | Claude Code 用の開発運用ルール         |
+| [`docs/api-driven-development/README.md`](./docs/api-driven-development/README.md)                                     | API 駆動開発フロー                     |
+| [`docs/api-driven-development/codex-automation-runbook.md`](./docs/api-driven-development/codex-automation-runbook.md) | Codex 自動開発 Runbook                 |
+| [`docs/openapi/openapi.yaml`](./docs/openapi/openapi.yaml)                                                             | API 仕様（技術側の真実の源）           |
+| [`docs/issues/`](./docs/issues/)                                                                                       | Issue の永続コピー                     |
+| [`docs/adr/`](./docs/adr/)                                                                                             | アーキテクチャ判断記録                 |
 
 ---
 
@@ -90,7 +92,8 @@ pnpm db:studio            # Prisma Studio (DB GUI) を起動
 
 ```text
 .
-├── CLAUDE.md                          開発運用ルール
+├── AGENTS.md                          Codex 用の開発運用ルール
+├── CLAUDE.md                          Claude Code 用の開発運用ルール
 ├── Hana_PRD_v1.md                     プロダクト仕様
 ├── README.md                          このファイル
 ├── docs/
@@ -116,13 +119,19 @@ pnpm db:studio            # Prisma Studio (DB GUI) を起動
 
 ## 開発のお約束（要約）
 
-詳細は [`CLAUDE.md`](./CLAUDE.md) を参照。
+詳細は Codex では [`AGENTS.md`](./AGENTS.md)、Claude Code では [`CLAUDE.md`](./CLAUDE.md) を参照。
 
 - **OpenAPI が真実**: API 変更は `docs/openapi/openapi.yaml` を先に直す
 - **生成物は直接編集禁止**: `src/lib/api/generated/` は再生成のみ
 - **1 Issue 1 PR**: 受け入れ条件を書いてから着手
 - **個人情報は出さない**: ログ・コミット・テストフィクスチャに PII を含めない
 - **子どもの写真・実データをコミットしない**: テスト用も架空データで
+
+### Codex で開発する場合
+
+Codex は作業前に `AGENTS.md` を入口として読み、必要に応じて PRD / OpenAPI / Issue / ADR を確認する。
+Hana 固有の作業を明示したいときは、個人 Codex 環境の `$hana-development` Skill を使う。
+Issue を自動で Draft PR / ready_to_merge 候補まで進める場合は [`docs/api-driven-development/codex-automation-runbook.md`](./docs/api-driven-development/codex-automation-runbook.md) を参照する。
 
 ---
 
