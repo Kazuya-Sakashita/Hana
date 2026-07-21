@@ -39,13 +39,13 @@
 
 2026-07-21 時点:
 
-| status        | count | notes                                         |
-| ------------- | ----- | --------------------------------------------- |
-| `todo`        | 6     | ready queue / blocked queue を参照            |
-| `in_progress` | 0     | 並行実行枠は空き                              |
-| `review`      | 8     | foundation 5件 + automation setup 3件         |
-| `done`        | 22    | archive を参照                                |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載 |
+| status        | count | notes                                                     |
+| ------------- | ----- | --------------------------------------------------------- |
+| `todo`        | 6     | ready queue / blocked queue を参照                        |
+| `in_progress` | 0     | 並行実行枠は空き                                          |
+| `review`      | 9     | foundation 5件 + automation setup 3件 + release readiness |
+| `done`        | 22    | archive を参照                                            |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載             |
 
 ---
 
@@ -100,7 +100,6 @@ Codex-ready と判断する条件:
 
 | issue       | github | area              | next action                                       |
 | ----------- | ------ | ----------------- | ------------------------------------------------- |
-| `ISSUE-032` | `#62`  | release           | `docs/issues/ISSUE-032-*.md` を追加して棚卸し     |
 | `ISSUE-036` | `#60`  | security          | `docs/issues/ISSUE-036-*.md` を追加して整理開始   |
 | `ISSUE-037` | `#57`  | openapi / tooling | `docs/issues/ISSUE-037-*.md` を追加して実装計画化 |
 
@@ -127,6 +126,7 @@ Codex-ready と判断する条件:
 | `ISSUE-033` | Codex 自動開発 Runbook の review 待ち                                            |
 | `ISSUE-034` | PR gate CI の review 待ち                                                        |
 | `ISSUE-035` | Issue index / ready queue の review 待ち                                         |
+| `ISSUE-032` | MVP release readiness の review 待ち                                             |
 
 ---
 
