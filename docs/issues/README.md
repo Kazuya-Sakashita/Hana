@@ -39,13 +39,13 @@
 
 2026-07-21 時点:
 
-| status        | count | notes                                                                        |
-| ------------- | ----- | ---------------------------------------------------------------------------- |
-| `todo`        | 6     | ready queue / blocked queue を参照                                           |
-| `in_progress` | 0     | 並行実行枠は空き                                                             |
-| `review`      | 10    | foundation 5件 + automation setup 3件 + security/privacy + release readiness |
-| `done`        | 22    | archive を参照                                                               |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                |
+| status        | count | notes                                                                                          |
+| ------------- | ----- | ---------------------------------------------------------------------------------------------- |
+| `todo`        | 6     | ready queue / blocked queue を参照                                                             |
+| `in_progress` | 0     | 並行実行枠は空き                                                                               |
+| `review`      | 11    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check |
+| `done`        | 22    | archive を参照                                                                                 |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                  |
 
 ---
 
@@ -98,9 +98,7 @@ Codex-ready と判断する条件:
 
 以下は GitHub Issue 作成済みだが、ローカル正本 `docs/issues/ISSUE-<number>[suffix]-*.md` はまだ main に存在しない。Codex が着手する前に、各 Issue のローカルコピーを追加する。
 
-| issue       | github | area              | next action                                       |
-| ----------- | ------ | ----------------- | ------------------------------------------------- |
-| `ISSUE-037` | `#57`  | openapi / tooling | `docs/issues/ISSUE-037-*.md` を追加して実装計画化 |
+現在はありません。
 
 ---
 
@@ -127,6 +125,7 @@ Codex-ready と判断する条件:
 | `ISSUE-035` | Issue index / ready queue の review 待ち                                         |
 | `ISSUE-032` | MVP release readiness の review 待ち                                             |
 | `ISSUE-036` | security/privacy 正本の review 待ち                                              |
+| `ISSUE-037` | OpenAPI route-map check の review 待ち                                           |
 
 ---
 
