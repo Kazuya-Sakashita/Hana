@@ -252,11 +252,11 @@ todo → in_progress → review → done
 
 ## 10. セキュリティ・プライバシー（要約）
 
-詳細は `security-and-privacy.md` を参照（別途追加予定）。
+詳細は `security-and-privacy.md` を参照。
 
 - 画像は Presigned URL（30 分）経由のみ
-- `Cache-Control: private, no-store`
-- AI 送信前に EXIF 除去 + PII マスキング
+- `Cache-Control: private, max-age=300`（ADR-0012）
+- AI 送信前に EXIF 除去 + PII マスキング（MVP の EXIF 除去は ADR-0009 の通りクライアント側）
 - ログ出力は許可リスト方式
 - 退会時は 30 日後に物理削除（DB + Storage）
 

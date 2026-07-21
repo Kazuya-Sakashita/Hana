@@ -431,7 +431,9 @@ export interface components {
              */
             id: string;
             /**
-             * @description 表示名。本名でも愛称でも OK。AI プロンプトには送られない
+             * @description 表示名。本名ではなく愛称を推奨。
+             *     AI 文章生成では、ユーザーの opt-in 後に given name / display name として送信されうる。
+             *     birthdate / surname / email / address / raw location は AI プロンプトに送らない。
              * @example はると
              */
             name: string;
