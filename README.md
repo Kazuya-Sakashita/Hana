@@ -74,10 +74,11 @@ pnpm test:watch           # Vitest watch モード
 
 # OpenAPI
 pnpm openapi:lint         # redocly + spectral で OpenAPI を検証
+pnpm openapi:route-map    # OpenAPI paths と src/app/v1 Route Handler を照合
 pnpm openapi:bundle       # 分割ファイルを 1 つに集約
 pnpm openapi:gen          # OpenAPI → TypeScript 型を再生成
 pnpm openapi:check-breaking  # main ブランチに対する破壊変更を検出 (warn)
-pnpm openapi:all          # lint → bundle → gen
+pnpm openapi:all          # lint → route-map → bundle → gen
 
 # Database (Supabase + Prisma)
 pnpm db:generate          # Prisma Client の型を生成
