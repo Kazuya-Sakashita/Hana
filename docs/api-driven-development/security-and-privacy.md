@@ -34,17 +34,17 @@ Known superseded / clarified items:
 
 ## Data Classification
 
-| data                    | classification                   | storage / logging rule                                                |
-| ----------------------- | -------------------------------- | --------------------------------------------------------------------- |
-| child given name        | PII                              | DB 保存可。ログ禁止。AI 送信は opt-in 後、ADR-0011 の範囲のみ         |
-| child birthdate         | PII                              | DB 保存可。AI には月齢へ変換して送る。ログ禁止                        |
-| parent email            | PII                              | Supabase Auth / profile で扱う。ログ・AI 送信禁止                     |
-| child photo             | highly sensitive                 | private bucket。public URL 禁止。AI 送信は opt-in 後のみ              |
-| presigned URL           | secret-like temporary credential | API response 以外に出さない。ログ・PR・スクリーンショット禁止         |
-| storage_key             | secret-like internal locator     | normal UI response / log / PR 証跡に出さない                          |
-| AI generated title/body | sensitive user content           | memory として保存可。AI generation log / PR / test fixture へ貼らない |
-| AI generation metadata  | operational                      | model / prompt version / token count / duration / reason のみ保存可   |
-| Web Vitals payload      | anonymous operational            | allowlist の metric fields のみ。URL query や user text を入れない    |
+| data                    | classification                   | storage / logging rule                                                                                                                 |
+| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| child given name        | PII                              | DB 保存可。ログ禁止。AI 送信は opt-in 後、ADR-0011 の範囲のみ                                                                          |
+| child birthdate         | PII                              | DB 保存可。AI には月齢へ変換して送る。ログ禁止                                                                                         |
+| parent email            | PII                              | Supabase Auth / profile で扱う。ログ・AI 送信禁止                                                                                      |
+| child photo             | highly sensitive                 | private bucket。public URL 禁止。AI 送信は opt-in 後のみ                                                                               |
+| presigned URL           | secret-like temporary credential | API response 以外に出さない。ログ・PR・スクリーンショット禁止                                                                          |
+| storage_key             | secret-like internal locator     | normal UI response / log / PR 証跡に出さない                                                                                           |
+| AI generated title/body | sensitive user content           | memory として保存可。AI generation log / PR / test fixture へ貼らない                                                                  |
+| AI generation metadata  | operational                      | user_id / child_id / model / prompt version / token count / duration / reason / created_at は保存可。prompt 本文と生成本文は保存しない |
+| Web Vitals payload      | anonymous operational            | allowlist の metric fields のみ。URL query や user text を入れない                                                                     |
 
 ## Auth And Authorization
 
@@ -79,7 +79,7 @@ Current public / anonymous exceptions:
 - Anthropic Claude に送るデータは ADR-0011 の範囲だけにする。
 - 送信可: child given name、計算済み月齢、撮影日、天気、親のひとこと、EXIF 削除済み写真。
 - 送信禁止: parent email、parent name、surname / full name、birthdate、生年月日、住所、raw location、storage_key、presigned URL。
-- generation log は model / prompt version / token / duration / success / error reason のみ。
+- generation log は user_id / child_id / model / prompt version / token / duration / success / error reason / created_at まで。prompt 本文と生成本文は保存しない。
 - prompt 本文と生成本文は AI log に保存しない。
 - vendor retention / zero data retention / training non-use は release 前の人間確認 gate とする。
 
@@ -133,13 +133,14 @@ ProblemDetails may expose `detail` to users, but server logs should branch on st
 ## Pre-Release Blockers
 
 These require implementation, documented waiver, or human decision before public MVP release.
+The waiver path applies only to planned release risks. Hard-rule incidents, especially real child data or secret-like credentials in repo artifacts, are not waivable and must be cleaned before merge.
 
 | blocker                                                                         | required decision              |
 | ------------------------------------------------------------------------------- | ------------------------------ |
 | privacy policy / terms for AI image sending not reviewed                        | human privacy review           |
 | Anthropic data retention / training-use conditions not recorded                 | human privacy review           |
 | App Store privacy label not drafted                                             | human release review           |
-| all private Route Handlers lack ownership tests                                 | engineering review             |
+| any private Route Handler lacks required ownership tests or documented coverage | engineering review             |
 | deletion flow does not remove Storage objects or accepted waiver is absent      | security / release review      |
 | production logs can include body, storage_key, presigned URL, AI text, or email | security review                |
 | real child data appears in repo, tests, docs, screenshots, or PR body           | immediate cleanup before merge |
