@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:ci": "NEXT_FONT_GOOGLE_MOCKED_RESPONSES=$PWD/tests/fixtures/next-font-google-mocked-responses.cjs NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_APP_URL=http://localhost:3000 NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-dummy-anon-key SUPABASE_SERVICE_ROLE_KEY=ci-dummy-service-role-key DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hana_ci DIRECT_URL=postgresql://postgres:postgres@localhost:5432/hana_ci ANTHROPIC_API_KEY=ci-dummy-anthropic-key AI_MODEL=claude-haiku-4-5 pnpm build",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -18,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pr:gate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build:ci",
     "openapi:lint": "redocly lint docs/openapi/openapi.yaml && spectral lint --ruleset .spectral.yaml docs/openapi/openapi.yaml",
     "openapi:bundle": "redocly bundle docs/openapi/openapi.yaml -o docs/openapi/openapi.bundled.yaml",
     "openapi:gen": "openapi-typescript docs/openapi/openapi.yaml -o src/lib/api/generated/schema.d.ts",

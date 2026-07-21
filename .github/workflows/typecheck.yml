@@ -1,4 +1,4 @@
-name: typecheck
+name: pr-gate
 
 on:
   pull_request:
@@ -7,9 +7,19 @@ on:
     branches: [main]
 
 jobs:
-  typecheck-and-lint:
+  pr-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-role-key
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hana_ci
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/hana_ci
+      ANTHROPIC_API_KEY: ci-dummy-anthropic-key
+      AI_MODEL: claude-haiku-4-5
     steps:
       - uses: actions/checkout@v4
 
@@ -23,11 +33,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Type check
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Format check
-        run: pnpm format:check
+      - name: Run PR gate
+        run: pnpm pr:gate

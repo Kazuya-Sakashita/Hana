@@ -15,10 +15,10 @@ Closes #
 
 - [ ] OpenAPI (`docs/openapi/*`)
 - [ ] 生成型 (`src/lib/api/generated/*`)
-- [ ] サーバ実装 (`src/server/*`, `src/app/api/*`)
+- [ ] サーバ実装 (`src/server/*`, `src/app/v1/*`)
 - [ ] フロント実装 (`src/features/*`, `src/app/*`)
 - [ ] テスト (`tests/*`)
-- [ ] ドキュメント (`docs/*`, `README.md`, `CLAUDE.md`)
+- [ ] ドキュメント (`docs/*`, `README.md`, `AGENTS.md`)
 - [ ] 設定 / CI
 
 ## 実装前チェックリスト（着手時）
@@ -32,9 +32,7 @@ Closes #
 
 - [ ] `pnpm openapi:lint` 通過（OpenAPI 変更がある場合）
 - [ ] `pnpm openapi:gen` 実行済み・差分コミット済み（同上）
-- [ ] `pnpm typecheck` 通過
-- [ ] `pnpm lint` 通過
-- [ ] `pnpm test` 通過
+- [ ] `pnpm pr:gate` 通過
 - [ ] 認可テスト追加（API 変更がある場合）
 - [ ] ログ出力に PII が含まれていない（目視 + テスト）
 - [ ] AI 送信内容に氏名・生年月日が含まれていない（該当時）
@@ -58,5 +56,13 @@ Closes #
 - [ ] DB マイグレーションを含む
 - [ ] 環境変数の追加・変更を含む（`.env.example` 更新済み）
 - [ ] 破壊変更を含む
+
+## Rollback Record
+
+Rollback:
+Data impact:
+User impact:
+Recovery steps:
+Verification after rollback:
 
 ## その他メモ
