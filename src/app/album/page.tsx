@@ -22,7 +22,9 @@ export default async function AlbumPage() {
         <header className="mb-8 flex items-center justify-between">
           <h1 className="font-serif text-2xl">アルバム</h1>
           <Button asChild size="sm" variant="outline">
-            <Link href="/record">のこす</Link>
+            <Link href="/record" prefetch={false}>
+              のこす
+            </Link>
           </Button>
         </header>
 
@@ -49,6 +51,7 @@ async function AlbumList({ userId }: { userId: string }) {
           <li key={m.id}>
             <Link
               href={`/memory/${m.id}`}
+              prefetch={true}
               className="ease-organic block transition-transform active:scale-[0.98]"
             >
               <Card>
@@ -86,7 +89,9 @@ function EmptyState() {
       </CardHeader>
       <CardContent>
         <Button asChild size="lg" className="w-full">
-          <Link href="/record">のこす</Link>
+          <Link href="/record" prefetch={false}>
+            のこす
+          </Link>
         </Button>
       </CardContent>
     </Card>

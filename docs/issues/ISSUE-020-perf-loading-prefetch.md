@@ -2,7 +2,7 @@
 id: ISSUE-020
 title: loading.tsx + Link prefetch で体感速度を向上
 priority: P1
-status: todo
+status: review
 size: S
 created_at: 2026-05-26
 parent: PERF
@@ -24,24 +24,24 @@ parent: PERF
 
 ### 新規
 
-- [ ] `src/app/album/loading.tsx`
+- [x] `src/app/album/loading.tsx`
   - card 形状の skeleton ×6 + ヘッダー skeleton
-- [ ] `src/app/memory/[memoryId]/loading.tsx`
+- [x] `src/app/memory/[memoryId]/loading.tsx`
   - 大画像 4:5 skeleton + テキスト skeleton 3 行
-- [ ] `src/app/loading.tsx`
+- [x] `src/app/loading.tsx`
   - hero card skeleton + horizontal carousel skeleton
 
 ### 修正
 
-- [ ] 主要動線の `<Link>` に `prefetch={true}` を明示
+- [x] 主要動線の `<Link>` に `prefetch={true}` を明示
   - `/` → `/album` (もっとみる)
   - `/album` → `/memory/[id]` (リスト各行)
-  - `/` → `/record` (hero card)
   - `/settings` → `/album` / `/` (戻り動線)
-- [ ] **prefetch しない** 動線:
+- [x] **prefetch しない** 動線:
+  - `/record` 宛ての動線 (集中フロー保護)
   - `/sign-in` 周り
   - `/record` → どこか (集中フロー)
-- [ ] BottomNav の Link は **prefetch on viewport** (`prefetch={true}` で OK)
+- [x] BottomNav の Link は **prefetch on viewport** (`prefetch={true}` で OK)
 
 ### やらないこと
 
@@ -90,11 +90,11 @@ V0 §1「Whisper not shout」に合わせて主張しすぎない。
 
 ## 受け入れ条件
 
-- [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
+- [x] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
 - [ ] DevTools Throttling Slow 4G で遷移時に skeleton が見える
 - [ ] `/` 読み込み後、 DevTools Network で `/album` の HTML が prefetch されている
-- [ ] skeleton の色味・形状が「whisper」原則に沿う (V0 §1)
-- [ ] /record への prefetch は **入っていない** (集中フロー保護)
+- [x] skeleton の色味・形状が「whisper」原則に沿う (V0 §1)
+- [x] /record への prefetch は **入っていない** (集中フロー保護)
 
 ---
 
