@@ -150,7 +150,8 @@ tests/
 ### AI 送信
 
 - ユーザーの **事前同意（opt-in）** が前提
-- プロンプトに氏名・住所・生年月日を含めない
+- AI 送信の詳細は ADR-0011 と `docs/api-driven-development/security-and-privacy.md` を正とする
+- 子どもの given name は opt-in 後に限り送信可。surname / full name / 生年月日 / メール / 住所 / raw location は送信しない
 - 画像メタデータ（EXIF）を削除してから送信
 - AI ベンダーの zero data retention を可能なら有効化
 
@@ -229,7 +230,7 @@ tests/
 - [ ] `npm run test` が通る
 - [ ] 認可テスト：他ユーザーで 403 を確認
 - [ ] ログに PII が含まれない（目視 + テスト）
-- [ ] AI 送信に氏名・生年月日が含まれない
+- [ ] AI 送信は ADR-0011 に準拠している（child given/display name は opt-in 後のみ可。full name / surname / 生年月日 / メール / 住所 / raw location は不可）
 - [ ] 画像が公開 URL に漏れない
 - [ ] 破壊変更を含む場合、`oasdiff` 実行 + ADR 追加
 - [ ] Issue の受け入れ条件すべてチェック済み

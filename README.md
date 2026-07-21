@@ -15,6 +15,7 @@
 | [`CLAUDE.md`](./CLAUDE.md)                                                                                             | Claude Code 用の開発運用ルール         |
 | [`docs/api-driven-development/README.md`](./docs/api-driven-development/README.md)                                     | API 駆動開発フロー                     |
 | [`docs/api-driven-development/codex-automation-runbook.md`](./docs/api-driven-development/codex-automation-runbook.md) | Codex 自動開発 Runbook                 |
+| [`docs/api-driven-development/security-and-privacy.md`](./docs/api-driven-development/security-and-privacy.md)         | セキュリティ・プライバシー運用ガイド   |
 | [`docs/openapi/openapi.yaml`](./docs/openapi/openapi.yaml)                                                             | API 仕様（技術側の真実の源）           |
 | [`docs/issues/`](./docs/issues/)                                                                                       | Issue の永続コピー                     |
 | [`docs/adr/`](./docs/adr/)                                                                                             | アーキテクチャ判断記録                 |
