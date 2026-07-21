@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useChildrenQuery } from '@/features/children/client/use-children'
+import { useCreateMemoryMutation } from '@/features/memories/client/use-memories'
+import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 
@@ -73,10 +76,9 @@ async function reencodeImage(
 
 export default function RecordPage() {
   const router = useRouter()
-  const [phase, setPhase] = useState<Phase>('loading')
-  const [childId, setChildId] = useState<string | null>(null)
-  const [childName, setChildName] = useState<string>('')
-  const [aiConsentAt, setAiConsentAt] = useState<string | null>(null)
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const [submissionPhase, setSubmissionPhase] = useState<'idle' | 'success'>('idle')
+  const [aiConsentAtOverride, setAiConsentAtOverride] = useState<string | null>(null)
 
   const [file, setFile] = useState<File | null>(null)
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
@@ -90,15 +92,32 @@ export default function RecordPage() {
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [recordedAt, setRecordedAt] = useState('')
+  const [recordedAt, setRecordedAt] = useState(todayIso)
   const [weather, setWeather] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [topMessage, setTopMessage] = useState<string | null>(null)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const currentUserQuery = useCurrentUserQuery()
+  const childrenQuery = useChildrenQuery()
+  const setAiConsentMutation = useSetAiConsentMutation()
+  const createMemoryMutation = useCreateMemoryMutation()
 
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const selectedChild = childrenQuery.data?.data[0] ?? null
+  const childId = selectedChild?.id ?? null
+  const childName = selectedChild?.name ?? ''
+  const aiConsentAt = aiConsentAtOverride ?? currentUserQuery.data?.ai_consent_at ?? null
+  const phase: Phase =
+    submissionPhase === 'success'
+      ? 'success'
+      : currentUserQuery.isPending || childrenQuery.isPending
+        ? 'loading'
+        : currentUserQuery.isError || childrenQuery.isError
+          ? 'error'
+          : selectedChild
+            ? 'form'
+            : 'no-child'
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
   const canGenerateAi = !!uploadedImage && aiStatus !== 'generating' && !aiQuotaExceeded
@@ -113,34 +132,11 @@ export default function RecordPage() {
   }
 
   useEffect(() => {
-    let cancelled = false
-    const client = getBrowserApiClient()
-    Promise.all([client.GET('/me'), client.GET('/children')])
-      .then(([meRes, childrenRes]) => {
-        if (cancelled) return
-        setAiConsentAt(meRes.data?.ai_consent_at ?? null)
-        const first = childrenRes.data?.data?.[0]
-        if (!first) {
-          setPhase('no-child')
-          return
-        }
-        setChildId(first.id)
-        setChildName(first.name)
-        setRecordedAt(todayIso)
-        setPhase('form')
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        if (isApiProblemError(e) && e.reason === 'unauthorized') {
-          router.push('/sign-in')
-          return
-        }
-        setPhase('error')
-      })
-    return () => {
-      cancelled = true
+    const error = currentUserQuery.error ?? childrenQuery.error
+    if (isApiProblemError(error) && error.reason === 'unauthorized') {
+      router.push('/sign-in')
     }
-  }, [router, todayIso])
+  }, [childrenQuery.error, currentUserQuery.error, router])
 
   useEffect(() => {
     if (!filePreviewUrl) return
@@ -240,12 +236,9 @@ export default function RecordPage() {
   }
 
   async function acceptAiConsent() {
-    const client = getBrowserApiClient()
     try {
-      const res = await client.POST('/me/ai-consent')
-      if (res.data?.ai_consent_at) {
-        setAiConsentAt(res.data.ai_consent_at)
-      }
+      const user = await setAiConsentMutation.mutateAsync()
+      setAiConsentAtOverride(user.ai_consent_at)
       setAiStatus('idle')
       // 同意完了 → 自動で生成リトライ
       void callAiGenerate()
@@ -268,20 +261,17 @@ export default function RecordPage() {
 
     const trimmedTitle = title.trim()
     const wasAiGenerated = aiStatus === 'done'
-    const client = getBrowserApiClient()
     try {
-      await client.POST('/memories', {
-        body: {
-          child_id: childId,
-          title: trimmedTitle,
-          body: body.trim() === '' ? null : body,
-          recorded_at: recordedAt,
-          weather: weather.trim() === '' ? null : weather,
-          image_ids: [uploadedImage.id],
-          ai_generated: wasAiGenerated,
-        },
+      await createMemoryMutation.mutateAsync({
+        child_id: childId,
+        title: trimmedTitle,
+        body: body.trim() === '' ? null : body,
+        recorded_at: recordedAt,
+        weather: weather.trim() === '' ? null : weather,
+        image_ids: [uploadedImage.id],
+        ai_generated: wasAiGenerated,
       })
-      setPhase('success')
+      setSubmissionPhase('success')
       setTimeout(() => router.push('/album'), 1500)
     } catch (e) {
       if (isApiProblemError(e)) {

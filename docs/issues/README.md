@@ -39,13 +39,13 @@
 
 2026-07-21 時点:
 
-| status        | count | notes                                                                                          |
-| ------------- | ----- | ---------------------------------------------------------------------------------------------- |
-| `todo`        | 6     | ready queue / blocked queue を参照                                                             |
-| `in_progress` | 0     | 並行実行枠は空き                                                                               |
-| `review`      | 11    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check |
-| `done`        | 22    | archive を参照                                                                                 |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                  |
+| status        | count | notes                                                                                                           |
+| ------------- | ----- | --------------------------------------------------------------------------------------------------------------- |
+| `todo`        | 5     | ready queue / blocked queue を参照                                                                              |
+| `in_progress` | 0     | 並行実行枠は空き                                                                                                |
+| `review`      | 12    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + TanStack Query |
+| `done`        | 22    | archive を参照                                                                                                  |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                   |
 
 ---
 
@@ -89,8 +89,7 @@ Codex-ready と判断する条件:
 | ---- | ----------- | -------- | ---- | ------------- | ------------------------------------------------------------------------- | -------------------------------- |
 | 1    | `ISSUE-020` | P1       | S    | perf / UX     | loading と prefetch の低リスク改善。OpenAPI 影響なし                      | `pnpm pr:gate`                   |
 | 2    | `ISSUE-021` | P1       | S    | perf / bundle | bundle analyzer と font weight の改善。dependency 追加と visual QA は注意 | `pnpm pr:gate`, bundle report    |
-| 3    | `ISSUE-023` | P1       | M    | data fetching | TanStack Query 導入。後続 `ISSUE-029` の前提                              | `pnpm pr:gate`                   |
-| 4    | `ISSUE-022` | P2       | S    | ai / perf     | 実装着手は可能。AI / image privacy gate は PR review 前に必ず確認         | `pnpm pr:gate`, AI privacy check |
+| 3    | `ISSUE-022` | P2       | S    | ai / perf     | 実装着手は可能。AI / image privacy gate は PR review 前に必ず確認         | `pnpm pr:gate`, AI privacy check |
 
 ---
 
@@ -113,19 +112,20 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | reason to review / close                                                         |
-| ----------- | -------------------------------------------------------------------------------- |
-| `ISSUE-001` | 初期設定の review 滞留。現状確認後に `done` 化候補                               |
-| `ISSUE-002` | OpenAPI foundation の review 滞留。現 OpenAPI と CI の確認が必要                 |
-| `ISSUE-003` | type generation pipeline の review 滞留。生成差分検知が動いているか確認          |
-| `ISSUE-004` | API client foundation の review 滞留。現行 client と ProblemDetails 処理を確認   |
-| `ISSUE-005` | Supabase + Prisma foundation の review 滞留。DB 接続・migration 方針の確認が必要 |
-| `ISSUE-033` | Codex 自動開発 Runbook の review 待ち                                            |
-| `ISSUE-034` | PR gate CI の review 待ち                                                        |
-| `ISSUE-035` | Issue index / ready queue の review 待ち                                         |
-| `ISSUE-032` | MVP release readiness の review 待ち                                             |
-| `ISSUE-036` | security/privacy 正本の review 待ち                                              |
-| `ISSUE-037` | OpenAPI route-map check の review 待ち                                           |
+| issue       | reason to review / close                                                           |
+| ----------- | ---------------------------------------------------------------------------------- |
+| `ISSUE-001` | 初期設定の review 滞留。現状確認後に `done` 化候補                                 |
+| `ISSUE-002` | OpenAPI foundation の review 滞留。現 OpenAPI と CI の確認が必要                   |
+| `ISSUE-003` | type generation pipeline の review 滞留。生成差分検知が動いているか確認            |
+| `ISSUE-004` | API client foundation の review 滞留。現行 client と ProblemDetails 処理を確認     |
+| `ISSUE-005` | Supabase + Prisma foundation の review 滞留。DB 接続・migration 方針の確認が必要   |
+| `ISSUE-033` | Codex 自動開発 Runbook の review 待ち                                              |
+| `ISSUE-034` | PR gate CI の review 待ち                                                          |
+| `ISSUE-035` | Issue index / ready queue の review 待ち                                           |
+| `ISSUE-032` | MVP release readiness の review 待ち                                               |
+| `ISSUE-036` | security/privacy 正本の review 待ち                                                |
+| `ISSUE-037` | OpenAPI route-map check の review 待ち                                             |
+| `ISSUE-023` | TanStack Query 導入の review 待ち。DevTools Network 確認は PR merge 前の人間ゲート |
 
 ---
 

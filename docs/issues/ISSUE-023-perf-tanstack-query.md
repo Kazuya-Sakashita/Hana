@@ -2,7 +2,7 @@
 id: ISSUE-023
 title: Tanstack Query 導入 + /me /children のグローバルキャッシュ
 priority: P1
-status: todo
+status: review
 size: M
 created_at: 2026-05-26
 parent: PERF
@@ -28,28 +28,30 @@ parent: PERF
 
 ### 新規
 
-- [ ] `@tanstack/react-query` を dependencies に追加
-- [ ] `src/lib/query/client.tsx` を新設
+- [x] `@tanstack/react-query` を dependencies に追加
+- [x] `src/lib/query/client.tsx` を新設
   - `QueryClientProvider` を提供する `<Providers>` Client Component
   - `defaultOptions.queries.staleTime: 5 * 60 * 1000` (5min)
   - `defaultOptions.queries.retry: 1` (失敗は控えめに)
-- [ ] `src/app/layout.tsx` の `<body>` 内を `<Providers>` でラップ
-- [ ] `src/features/me/client/use-current-user.ts`
+- [x] `src/app/layout.tsx` の `<body>` 内を `<Providers>` でラップ
+- [x] `src/features/me/client/use-current-user.ts`
   - `useQuery({ queryKey: ['me'], ... })`
-- [ ] `src/features/children/client/use-children.ts`
+- [x] `src/features/children/client/use-children.ts`
   - `useQuery({ queryKey: ['children'], ... })`
-- [ ] `src/features/memories/client/use-memories.ts`
+- [x] `src/features/memories/client/use-memories.ts`
   - `useQuery({ queryKey: ['memories', { limit }], ... })`
 
 ### 修正 (段階移行)
 
-- [ ] `/` `/record` `/onboarding` `/settings` を順に hook 経由に置換
+- [x] `/record` `/onboarding` `/settings` を順に hook 経由に置換
   - 各ページの `useEffect + fetch + phase 状態` を `const { data, isLoading, error } = useQuery(...)` に
-- [ ] mutation 系 (`POST /memories`, `POST /children`, `POST /me/ai-consent`) を `useMutation` に
+- [x] mutation 系 (`POST /memories`, `POST /children`, `POST /me/ai-consent`) を `useMutation` に
   - 成功時 `queryClient.invalidateQueries({ queryKey: ['memories'] })` などで自動 refetch
 
 ### やらないこと
 
+- `/` の Client hook 置換
+  - `ISSUE-026` で Server Component 化済みのため、本 Issue では Client Component に戻さない
 - Server Component 化 (ISSUE-025〜027)
 - `/album` `/memory/[id]` の hook 置換 → Server Component 化と同時に行う方が効率
 - DevTools 導入 (任意、`@tanstack/react-query-devtools`)
@@ -79,27 +81,29 @@ ISSUE-018 で `cover_thumbnail_url` を BFF 化済み、 ISSUE-025〜027 で Ser
 
 ## 影響範囲
 
-| 領域         | 影響                                                    |
-| ------------ | ------------------------------------------------------- |
-| OpenAPI      | なし                                                    |
-| 生成型       | なし                                                    |
-| データ       | なし                                                    |
-| 画面         | `/`, `/record`, `/onboarding`, `/settings` のフェッチ層 |
-| API          | なし                                                    |
-| テスト       | 既存テスト + hook の unit test                          |
-| CI           | typecheck / lint / format / build / test                |
-| ドキュメント | このIssueファイル                                       |
-| 環境変数     | なし                                                    |
+| 領域         | 影響                                               |
+| ------------ | -------------------------------------------------- |
+| OpenAPI      | なし                                               |
+| 生成型       | なし                                               |
+| データ       | なし                                               |
+| 画面         | `/record`, `/onboarding`, `/settings` のフェッチ層 |
+| API          | なし                                               |
+| テスト       | 既存テスト + hook の unit test                     |
+| CI           | typecheck / lint / format / build / test           |
+| ドキュメント | このIssueファイル                                  |
+| 環境変数     | なし                                               |
 
 ---
 
 ## 受け入れ条件
 
-- [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
-- [ ] `/` → `/settings` 遷移時に `/me` `/children` が **再 fetch されない** (DevTools Network 確認)
-- [ ] `/record` で POST 成功後、 次に `/album` (将来) で memory list が refetch される (invalidate)
-- [ ] 各 hook の error / loading が UI に正しく反映
-- [ ] BottomNav は影響を受けない
+- [x] `pnpm pr:gate` グリーン
+- [ ] `/record` → `/settings` 遷移時に `/me` `/children` が **再 fetch されない** (DevTools Network 確認)
+- [x] `/record` で POST 成功後、 memory list query が invalidate される
+- [x] 各 hook の error / loading が UI に正しく反映
+- [x] BottomNav は Query Provider 配下で表示され、ナビゲーションに影響しない
+
+DevTools Network 確認はブラウザ実機での人間確認ゲート。PR merge 前に `/record` → `/settings` の遷移で `/me` `/children` が cache hit になることを確認する。
 
 ---
 
@@ -107,9 +111,9 @@ ISSUE-018 で `cover_thumbnail_url` を BFF 化済み、 ISSUE-025〜027 で Ser
 
 ```bash
 pnpm dev
-# 1. / にアクセス → /me /children fetch
+# 1. /record にアクセス → /me /children fetch
 # 2. /settings へ遷移 → /me /children は呼ばれない (cache hit)
-# 3. /record で memory を作成 → 完了後 / に戻ると memories が新鮮
+# 3. /record で memory を作成 → memory list query が invalidate される
 # 4. 5 分待ってから再アクセス → background refetch を確認
 # 5. ネット切断時の error 表示を確認
 ```

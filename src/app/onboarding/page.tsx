@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
+import { useChildrenQuery, useCreateChildMutation } from '@/features/children/client/use-children'
 
 type FieldErrors = Partial<Record<'name' | 'birthdate' | 'avatar_url', string>>
 type Phase = 'loading' | 'form' | 'already' | 'success' | 'error'
+type PhaseOverride = 'idle' | 'already' | 'success'
 
 interface RegisteredChild {
   name: string
@@ -31,63 +32,49 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
 export default function OnboardingPage() {
   const router = useRouter()
 
-  const [phase, setPhase] = useState<Phase>('loading')
   const [existingChild, setExistingChild] = useState<RegisteredChild | null>(null)
+  const [phaseOverride, setPhaseOverride] = useState<PhaseOverride>('idle')
   const [name, setName] = useState('')
   const [birthdate, setBirthdate] = useState('')
-  const [pending, setPending] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitMessage, setSubmitMessage] = useState<string | null>(null)
+  const childrenQuery = useChildrenQuery()
+  const createChildMutation = useCreateChildMutation()
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const pending = createChildMutation.isPending
   const canSubmit = name.trim().length > 0 && birthdate.length > 0 && !pending
+  const fetchedChild = childrenQuery.data?.data[0] ?? null
+  const displayedChild =
+    existingChild ??
+    (fetchedChild ? { name: fetchedChild.name, birthdate: fetchedChild.birthdate } : null)
+  const phase: Phase = childrenQuery.isPending
+    ? 'loading'
+    : childrenQuery.isError
+      ? 'error'
+      : phaseOverride === 'success'
+        ? 'success'
+        : phaseOverride === 'already' || displayedChild
+          ? 'already'
+          : 'form'
 
-  // 初期マウント時に既存の子どもプロフィールを取得し、状態を切替
   useEffect(() => {
-    let cancelled = false
-    const client = getBrowserApiClient()
-
-    client
-      .GET('/children')
-      .then(({ data }) => {
-        if (cancelled) return
-        const first = data?.data?.[0]
-        if (first) {
-          setExistingChild({ name: first.name, birthdate: first.birthdate })
-          setPhase('already')
-        } else {
-          setPhase('form')
-        }
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        if (isApiProblemError(e) && e.reason === 'unauthorized') {
-          router.push('/sign-in')
-          return
-        }
-        setPhase('error')
-      })
-
-    return () => {
-      cancelled = true
+    if (isApiProblemError(childrenQuery.error) && childrenQuery.error.reason === 'unauthorized') {
+      router.push('/sign-in')
     }
-  }, [router])
+  }, [childrenQuery.error, router])
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setPending(true)
     setFieldErrors({})
     setSubmitMessage(null)
 
     const trimmedName = name.trim()
-    const client = getBrowserApiClient()
     try {
-      await client.POST('/children', {
-        body: { name: trimmedName, birthdate, avatar_url: null },
-      })
+      await createChildMutation.mutateAsync({ name: trimmedName, birthdate, avatar_url: null })
       // 短い成功画面 → ホームへ
       setExistingChild({ name: trimmedName, birthdate })
-      setPhase('success')
+      setPhaseOverride('success')
       setTimeout(() => router.push('/'), 1500)
     } catch (e) {
       if (isApiProblemError(e)) {
@@ -98,7 +85,7 @@ export default function OnboardingPage() {
           case 'child_limit_reached':
             // 別タブで登録した等の race。最新状態で再描画
             setExistingChild({ name: trimmedName, birthdate })
-            setPhase('already')
+            setPhaseOverride('already')
             return
           case 'unauthorized':
             router.push('/sign-in')
@@ -111,7 +98,6 @@ export default function OnboardingPage() {
       } else {
         setSubmitMessage('うまく つうしんできませんでした。もういちど ためしてみてください。')
       }
-      setPending(false)
     }
   }
 
@@ -149,16 +135,16 @@ export default function OnboardingPage() {
     )
   }
 
-  if (phase === 'already' && existingChild) {
+  if (phase === 'already' && displayedChild) {
     return (
       <Shell>
         <Card className="w-full max-w-md">
           <CardHeader className="items-center text-center">
             <CardTitle className="font-serif text-2xl">
-              {existingChild.name} ちゃんの ページは すでに あります
+              {displayedChild.name} ちゃんの ページは すでに あります
             </CardTitle>
             <CardDescription className="mt-2">
-              うまれたひ: {existingChild.birthdate}
+              うまれたひ: {displayedChild.birthdate}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -174,13 +160,13 @@ export default function OnboardingPage() {
     )
   }
 
-  if (phase === 'success' && existingChild) {
+  if (phase === 'success' && displayedChild) {
     return (
       <Shell>
         <Card className="w-full max-w-md">
           <CardHeader className="items-center text-center">
             <CardTitle className="font-serif text-2xl">
-              {existingChild.name} ちゃん、はじめまして
+              {displayedChild.name} ちゃん、はじめまして
             </CardTitle>
             <CardDescription className="mt-2">これが、ふたりの 1ページ目です。</CardDescription>
           </CardHeader>
