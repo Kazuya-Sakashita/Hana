@@ -1,13 +1,19 @@
 import type { NextConfig } from 'next'
-import bundleAnalyzer from '@next/bundle-analyzer'
+import { createRequire } from 'node:module'
 
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
 }
 
-const withBundleAnalyzer = bundleAnalyzer({
-  enabled: process.env.ANALYZE === 'true',
-})
+let outputConfig = config
 
-export default withBundleAnalyzer(config)
+if (process.env.ANALYZE === 'true') {
+  const require = createRequire(import.meta.url)
+  const bundleAnalyzer = require('@next/bundle-analyzer') as (options: {
+    enabled: boolean
+  }) => (nextConfig: NextConfig) => NextConfig
+  outputConfig = bundleAnalyzer({ enabled: true })(config)
+}
+
+export default outputConfig

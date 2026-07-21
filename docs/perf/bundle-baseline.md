@@ -43,13 +43,31 @@ Noto Serif JP の 500 weight を直接要求する箇所はないため、読み
 | `/v1/*`                            | dynamic   | API Route Handlers         |
 | `/_not-found`, onboarding, sign-in | static    | public/static shell routes |
 
-Analyzer artifacts from this run:
+Analyzer artifacts were generated under `.next/analyze/`.
 
-| artifact                    | size |
-| --------------------------- | ---- |
-| `.next/analyze/nodejs.html` | 632K |
-| `.next/analyze/edge.html`   | 272K |
-| `.next/analyze/client.html` | 420K |
+## First Load JS Baseline
+
+Route first-load values come from `.next/diagnostics/route-bundle-stats.json` after the same branch build.
+They are uncompressed bytes; gzip values are calculated from the emitted chunk files.
+
+| item                               | chunk count | emitted size | gzip size | first-load uncompressed |
+| ---------------------------------- | ----------- | ------------ | --------- | ----------------------- |
+| shared root main files             | 5           | 456.7 KB     | 132.4 KB  | -                       |
+| `/` unique chunks                  | 3           | 72.1 KB      | 20.1 KB   | 528.9 KB                |
+| `/album` unique chunks             | 2           | 71.6 KB      | 19.7 KB   | 528.4 KB                |
+| `/record` unique chunks            | 4           | 366.8 KB     | 100.6 KB  | 823.5 KB                |
+| `/settings` unique chunks          | 4           | 356.0 KB     | 97.6 KB   | 812.7 KB                |
+| `/memory/[memoryId]` unique chunks | 4           | 354.6 KB     | 97.1 KB   | 811.3 KB                |
+
+`/record`, `/settings`, and `/memory/[memoryId]` carry the largest client-side first-load cost. This PR does not add runtime client dependencies, and the measured first-load values matched `origin/main` after `pnpm build:ci`:
+
+| route                | origin/main | this branch | delta |
+| -------------------- | ----------- | ----------- | ----- |
+| `/`                  | 528.9 KB    | 528.9 KB    | 0%    |
+| `/album`             | 528.4 KB    | 528.4 KB    | 0%    |
+| `/record`            | 823.5 KB    | 823.5 KB    | 0%    |
+| `/settings`          | 812.7 KB    | 812.7 KB    | 0%    |
+| `/memory/[memoryId]` | 811.3 KB    | 811.3 KB    | 0%    |
 
 ## Visual QA Scope
 
@@ -62,6 +80,8 @@ Analyzer artifacts from this run:
 | `/memory/{id}` | detail title / body serif readability   | todo   |
 | `/record`      | form labels / title / AI consent dialog | todo   |
 | `/settings`    | account and child cards                 | todo   |
+
+This table is a merge-before-release human gate. The automated checks confirm the font file request changed from `400;500;700` to `400;700`; visual acceptability still requires browser review.
 
 ## Follow-up Rule
 

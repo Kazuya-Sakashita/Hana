@@ -85,6 +85,9 @@ parent: PERF
 - [ ] 全画面で見た目が大きく変わらない (Visual QA で 5 画面確認)
 - [x] First Load JS が main で **+0% 以下** (回帰しない)
 
+Visual QA は PR merge 前の人間確認ゲートとして残す。
+自動検証では `pnpm analyze` の analyzer 出力、`pnpm build:ci` の main 比較、`pnpm pr:gate` まで確認済み。
+
 ---
 
 ## 動作確認手順
