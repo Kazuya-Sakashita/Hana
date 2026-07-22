@@ -39,13 +39,13 @@
 
 2026-07-23 時点:
 
-| status        | count | notes                                                                                                                                                                                                                         |
-| ------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `todo`        | 0     | ready queue / blocked queue ともに空                                                                                                                                                                                          |
-| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                                                                                              |
-| `review`      | 18    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query + next/image + AI generate parallel + optimistic UI + authenticated image QA |
-| `done`        | 22    | archive を参照                                                                                                                                                                                                                |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                                                                                                                 |
+| status        | count | notes                                                                                                                                                                                                |
+| ------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `todo`        | 0     | ready queue / blocked queue ともに空                                                                                                                                                                 |
+| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                                                                     |
+| `review`      | 17    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query + next/image + AI generate parallel + optimistic UI |
+| `done`        | 24    | archive を参照                                                                                                                                                                                       |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                                                                                        |
 
 ---
 
@@ -124,7 +124,6 @@ Codex-ready と判断する条件:
 | `ISSUE-028` | next/image 移行の review 待ち。DevTools / Lighthouse 確認は post-merge QA          |
 | `ISSUE-022` | AI generate 画像 DL + sharp resize 並列化の review 待ち                            |
 | `ISSUE-029` | optimistic UI の review 待ち                                                       |
-| `ISSUE-038` | 認証済み画像 QA の CDP helper review 待ち                                          |
 
 ---
 
@@ -133,6 +132,8 @@ Codex-ready と判断する条件:
 - foundation: `ISSUE-006`, `ISSUE-006b`, `ISSUE-006c`, `ISSUE-007`, `ISSUE-008`, `ISSUE-009`, `ISSUE-010`
 - product UI: `ISSUE-012`, `ISSUE-013`, `ISSUE-014`, `ISSUE-014a`, `ISSUE-015`, `ISSUE-030`
 - perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-031`
+- qa tooling completed: `ISSUE-038`
+- maintenance completed: `ISSUE-039`
 
 ---
 
