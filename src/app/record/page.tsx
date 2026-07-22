@@ -676,9 +676,9 @@ function AiConsentDialog({
             あなたの しゃしんを、ことばに します
           </CardTitle>
           <CardDescription id="ai-consent-description" className="leading-narrative mt-2">
-            Hana は、{childName} ちゃんの しゃしんを そとの AI に いちじてきに おくり、 ぶんしょうの
-            ていあんを もらいます。 なまえと月齢は おくりますが、たんじょうびと じゅうしょは
-            おくりません。 学習にも つかわれません。
+            Hana は、{childName} ちゃんの しゃしんを Anthropic Claude API に いちじてきに
+            おくり、ぶんしょうの ていあんを もらいます。なまえと月齢は おくりますが、
+            たんじょうび、メール、じゅうしょ、画像URLは おくりません。
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -696,7 +696,7 @@ function AiConsentDialog({
             AI を つかわない
           </Button>
           <p className="text-ink-tertiary text-center text-xs">
-            せっていから いつでも かえられます。
+            くわしい データの あつかいは、せっていで 確認できます。
           </p>
         </CardContent>
       </Card>

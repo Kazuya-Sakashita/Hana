@@ -112,6 +112,35 @@ export default function SettingsPage() {
             </Card>
           ) : null}
 
+          {me ? (
+            <Card>
+              <CardHeader>
+                <p className="meta-label">AI と しゃしん</p>
+                <CardTitle className="font-serif mt-2 text-xl">
+                  {me.ai_consent_at ? 'AI に同意しています' : 'AI は同意後だけ使います'}
+                </CardTitle>
+                <CardDescription className="text-ink-secondary mt-2 leading-narrative text-sm">
+                  文章をつくるときだけ、しゃしんと最小限の情報を Anthropic Claude API に
+                  おくります。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4 text-sm">
+                <DataRow
+                  label="おくるもの"
+                  value="しゃしん / なまえ / 月齢 / ひにち / てんき / ひとこと"
+                />
+                <DataRow
+                  label="おくらないもの"
+                  value="たんじょうび / メール / じゅうしょ / 位置情報 / 画像URL / 保存先のキー"
+                />
+                <DataRow
+                  label="データの扱い"
+                  value="Anthropic の商用API条件と Hana のプライバシー方針に沿って、公開前に明記します"
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <p className="meta-label">そのほか</p>
@@ -136,5 +165,14 @@ export default function SettingsPage() {
         </section>
       </div>
     </main>
+  )
+}
+
+function DataRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-hairline flex flex-col gap-1 border-t pt-3 first:border-t-0 first:pt-0">
+      <span className="text-ink-tertiary text-xs">{label}</span>
+      <span className="text-ink-secondary leading-narrative">{value}</span>
+    </div>
   )
 }
