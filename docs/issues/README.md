@@ -39,13 +39,13 @@
 
 2026-07-21 時点:
 
-| status        | count | notes                                                                                                             |
-| ------------- | ----- | ----------------------------------------------------------------------------------------------------------------- |
-| `todo`        | 5     | ready queue / blocked queue を参照                                                                                |
-| `in_progress` | 0     | 並行実行枠は空き                                                                                                  |
-| `review`      | 12    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch |
-| `done`        | 22    | archive を参照                                                                                                    |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                     |
+| status        | count | notes                                                                                                                           |
+| ------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `todo`        | 5     | ready queue / blocked queue を参照                                                                                              |
+| `in_progress` | 0     | 並行実行枠は空き                                                                                                                |
+| `review`      | 13    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font |
+| `done`        | 22    | archive を参照                                                                                                                  |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                   |
 
 ---
 
@@ -125,6 +125,7 @@ Codex-ready と判断する条件:
 | `ISSUE-032` | MVP release readiness の review 待ち                                             |
 | `ISSUE-036` | security/privacy 正本の review 待ち                                              |
 | `ISSUE-037` | OpenAPI route-map check の review 待ち                                           |
+| `ISSUE-021` | bundle analyzer + Noto Serif JP weight 削減の review 待ち                        |
 | `ISSUE-020` | loading.tsx + Link prefetch の review 待ち                                       |
 
 ---

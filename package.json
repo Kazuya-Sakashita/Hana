@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "analyze": "ANALYZE=true pnpm build:ci --webpack",
     "build": "next build",
     "build:ci": "NEXT_FONT_GOOGLE_MOCKED_RESPONSES=$PWD/tests/fixtures/next-font-google-mocked-responses.cjs NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_APP_URL=http://localhost:3000 NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-dummy-anon-key SUPABASE_SERVICE_ROLE_KEY=ci-dummy-service-role-key DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hana_ci DIRECT_URL=postgresql://postgres:postgres@localhost:5432/hana_ci ANTHROPIC_API_KEY=ci-dummy-anthropic-key AI_MODEL=claude-haiku-4-5 pnpm build",
     "start": "next start",
@@ -54,6 +55,7 @@
     "web-vitals": "^5.3.0"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.11",
     "@redocly/cli": "^2.30.5",
     "@stoplight/spectral-cli": "^6.16.0",
     "@tailwindcss/postcss": "^4.3.0",
