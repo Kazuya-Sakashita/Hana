@@ -2,7 +2,7 @@
 id: ISSUE-022
 title: AI generate の画像 DL + sharp resize を並列化
 priority: P2
-status: review
+status: done
 size: S
 created_at: 2026-05-26
 parent: PERF

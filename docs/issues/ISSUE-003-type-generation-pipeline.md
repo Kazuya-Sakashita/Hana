@@ -2,9 +2,10 @@
 id: ISSUE-003
 title: 型生成パイプライン構築
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-05-14
+github_issue: 5
 ---
 
 ## 目的 (Why)

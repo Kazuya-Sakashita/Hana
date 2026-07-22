@@ -2,9 +2,10 @@
 id: ISSUE-005
 title: Supabase + Prisma 基盤 (DB 接続・スキーマ・migrations)
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-14
+github_issue: 9
 ---
 
 ## 目的 (Why)

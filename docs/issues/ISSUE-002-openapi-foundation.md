@@ -2,9 +2,10 @@
 id: ISSUE-002
 title: OpenAPI 基盤 & ProblemDetails 定義
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-14
+github_issue: 3
 ---
 
 ## 目的 (Why)

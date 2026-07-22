@@ -2,9 +2,10 @@
 id: ISSUE-032
 title: MVP release readiness を一元管理する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-21
+github_issue: 62
 release_gate: mvp_core
 ready_for_codex: true
 automation_level: pr_ready

@@ -2,7 +2,7 @@
 id: ISSUE-029
 title: 「のこす」「お気に入り」「削除」を optimistic UI に
 priority: P2
-status: review
+status: done
 size: M
 created_at: 2026-05-26
 parent: PERF

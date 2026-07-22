@@ -2,7 +2,7 @@
 id: ISSUE-034
 title: Codex 自動開発向け PR gate を CI に追加する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-21
 github_issue: 61

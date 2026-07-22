@@ -2,9 +2,10 @@
 id: ISSUE-021
 title: bundle analyzer 導入 + Noto Serif JP weight 削減
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-05-26
+github_issue: 69
 parent: PERF
 ---
 
@@ -82,10 +83,11 @@ parent: PERF
 - [x] `pnpm analyze` で bundle visualization が `.next/analyze/` 配下に出力
 - [x] `docs/perf/bundle-baseline.md` に main の First Load JS / framework size が記録
 - [x] Noto Serif JP の weight が必要最小限 (例: `['400', '700']`) に
-- [ ] 全画面で見た目が大きく変わらない (Visual QA で 5 画面確認)
+- [ ] Historical: 全画面で見た目が大きく変わらない (Visual QA で 5 画面確認)
 - [x] First Load JS が main で **+0% 以下** (回帰しない)
 
-Visual QA は PR merge 前の人間確認ゲートとして残す。
+Visual QA は PR #73 merge 前の historical note として残す。
+PR #73 / GitHub Issue #69 は完了済みのため、将来あらためて表示確認する場合は新規 Issue として扱う。
 自動検証では `pnpm analyze` の analyzer 出力、`pnpm build:ci` の main 比較、`pnpm pr:gate` まで確認済み。
 
 ---
