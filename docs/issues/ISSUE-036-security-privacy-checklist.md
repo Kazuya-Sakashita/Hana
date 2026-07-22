@@ -2,9 +2,10 @@
 id: ISSUE-036
 title: security-and-privacy.md を作成し launch blocker を整理する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-21
+github_issue: 60
 release_gate: mvp_core
 ready_for_codex: true
 automation_level: pr_ready

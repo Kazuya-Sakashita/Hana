@@ -2,9 +2,10 @@
 id: ISSUE-037
 title: OpenAPI と Next.js Route Handler の route-map check を追加する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-21
+github_issue: 57
 release_gate: mvp_quality
 ready_for_codex: true
 automation_level: pr_ready

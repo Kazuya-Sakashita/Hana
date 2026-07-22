@@ -2,9 +2,10 @@
 id: ISSUE-020
 title: loading.tsx + Link prefetch で体感速度を向上
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-05-26
+github_issue: 70
 parent: PERF
 ---
 

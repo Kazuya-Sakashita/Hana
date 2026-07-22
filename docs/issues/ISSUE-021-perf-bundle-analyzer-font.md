@@ -2,9 +2,10 @@
 id: ISSUE-021
 title: bundle analyzer 導入 + Noto Serif JP weight 削減
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-05-26
+github_issue: 69
 parent: PERF
 ---
 

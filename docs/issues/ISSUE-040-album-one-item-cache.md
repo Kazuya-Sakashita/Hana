@@ -2,7 +2,7 @@
 id: ISSUE-040
 title: アルバム一覧が新規保存後に1件だけになる問題を修正
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 github_issue: 85

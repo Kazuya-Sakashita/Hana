@@ -2,9 +2,10 @@
 id: ISSUE-001
 title: プロジェクト初期設定
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-05-14
+github_issue: 1
 ---
 
 ## 目的 (Why)

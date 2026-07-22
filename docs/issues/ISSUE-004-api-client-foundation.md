@@ -2,9 +2,10 @@
 id: ISSUE-004
 title: API クライアント基盤 (openapi-fetch + ProblemDetails 型ガード)
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-05-14
+github_issue: 7
 ---
 
 ## 目的 (Why)

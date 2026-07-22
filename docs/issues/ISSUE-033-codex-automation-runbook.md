@@ -2,7 +2,7 @@
 id: ISSUE-033
 title: Codex 自動開発 Runbook を整備する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-21
 github_issue: 58

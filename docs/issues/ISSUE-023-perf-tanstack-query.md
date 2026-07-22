@@ -2,9 +2,10 @@
 id: ISSUE-023
 title: Tanstack Query 導入 + /me /children のグローバルキャッシュ
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-05-26
+github_issue: 71
 parent: PERF
 ---
 
