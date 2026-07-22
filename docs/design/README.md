@@ -11,6 +11,8 @@
 docs/design/
 ├── README.md                このファイル
 ├── design-organization.md   Hana のデザイン組織と役割定義
+├── design-evaluation-rubric.md
+│                            Hana Design Evaluation Rubric と PR添付テンプレート
 ├── design-review-playbook.md
 │                            Design Review の入口条件・完了条件・証跡運用
 ├── subagent-prompt-templates.md
