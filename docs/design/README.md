@@ -13,6 +13,8 @@ docs/design/
 ├── design-organization.md   Hana のデザイン組織と役割定義
 ├── design-evaluation-rubric.md
 │                            Hana Design Evaluation Rubric と PR添付テンプレート
+├── design-inventory-roadmap.md
+│                            現行デザイン棚卸しと再構築ロードマップ（ISSUE-045）
 ├── design-review-playbook.md
 │                            Design Review の入口条件・完了条件・証跡運用
 ├── subagent-prompt-templates.md

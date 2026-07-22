@@ -41,13 +41,13 @@
 
 2026-07-23 時点:
 
-| status        | count | notes                              |
-| ------------- | ----- | ---------------------------------- |
-| `todo`        | 0     | ready queue は空                   |
-| `in_progress` | 0     | 並行実行枠は空き                   |
-| `review`      | 1     | `ISSUE-044` の PR review 待ち      |
-| `done`        | 44    | archive を参照                     |
-| `blocked`     | 2     | 認証済み実データ QA と `ISSUE-045` |
+| status        | count | notes                         |
+| ------------- | ----- | ----------------------------- |
+| `todo`        | 0     | ready queue は空              |
+| `in_progress` | 0     | 並行実行枠は空き              |
+| `review`      | 1     | `ISSUE-045` の PR review 待ち |
+| `done`        | 45    | archive を参照                |
+| `blocked`     | 1     | 認証済み実データ QA           |
 
 ---
 
@@ -106,15 +106,14 @@ Codex-ready と判断する条件:
 | issue       | blocker                                                                                                 |
 | ----------- | ------------------------------------------------------------------------------------------------------- |
 | `ISSUE-041` | 認証済みブラウザセッション、または QA 用ログイン手段と、viewport 外 lazy 判定に足りる画像付き QA データ |
-| `ISSUE-045` | `ISSUE-044` を完了し、評価体制と Rubric を確定する                                                      |
 
 ---
 
 ## Review Queue
 
-| issue       | reason to review / close                                  |
-| ----------- | --------------------------------------------------------- |
-| `ISSUE-044` | Hana Design Evaluation Rubric と PR report template の PR |
+| issue       | reason to review / close                    |
+| ----------- | ------------------------------------------- |
+| `ISSUE-045` | 現行デザイン棚卸しと再構築ロードマップの PR |
 
 ---
 
@@ -125,7 +124,7 @@ Codex-ready と判断する条件:
 - perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-020`, `ISSUE-021`, `ISSUE-022`, `ISSUE-023`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-029`, `ISSUE-031`, `ISSUE-040`
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
-- design process completed: `ISSUE-043`
+- design process completed: `ISSUE-043`, `ISSUE-044`
 - maintenance completed: `ISSUE-039`, `ISSUE-042`
 
 ---

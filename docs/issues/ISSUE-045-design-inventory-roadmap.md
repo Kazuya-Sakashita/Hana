@@ -2,13 +2,11 @@
 id: ISSUE-045
 title: Hana アプリ現行デザインを棚卸しして再構築ロードマップを作る
 priority: P1
-status: blocked
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN
 github_issue: 92
-blocked_by:
-  - ISSUE-044
 requires_human_review:
   - design
   - privacy
@@ -71,13 +69,45 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 現行画面 inventory がある
-- [ ] 画面ごとの課題・強み・リスクが整理されている
-- [ ] Hana Design Evaluation Rubric に基づく初回評価がある
-- [ ] 再構築ロードマップが P0 / P1 / P2 に分かれている
-- [ ] 後続 Issue 候補が半日〜2日粒度で分割されている
-- [ ] サブエージェント組織でレビューする観点と順番が定義されている
-- [ ] 実装前に必要なデザイン成果物が明確になっている
+- [x] 現行画面 inventory がある
+- [x] 画面ごとの課題・強み・リスクが整理されている
+- [x] Hana Design Evaluation Rubric に基づく初回評価がある
+- [x] 再構築ロードマップが P0 / P1 / P2 に分かれている
+- [x] 後続 Issue 候補が半日〜2日粒度で分割されている
+- [x] サブエージェント組織でレビューする観点と順番が定義されている
+- [x] 実装前に必要なデザイン成果物が明確になっている
+
+## 成果物
+
+- `docs/design/design-inventory-roadmap.md`
+- `docs/design/README.md` への参照追加
+
+## サブエージェント検討
+
+3名の read-only サブエージェントで並行検討した。
+
+| 観点                        | 主な指摘                                                                             | 反映先                  |
+| --------------------------- | ------------------------------------------------------------------------------------ | ----------------------- |
+| Product UX / Task Success   | `/record` の認知負荷、保存成功の達成感、settings trust surface、album 多件数証跡     | P0/P1 roadmap           |
+| Privacy / Trust / Content   | AI vendor claim、delete restore copy、synthetic evidence、`storage_key` 証跡管理     | P0 gate / evidence rule |
+| Visual / A11y / Engineering | 低コントラスト token、dialog focus、zoom lock、photo alt policy、RSC/Suspense の強み | scorecard / P0 roadmap  |
+
+## 初回評価
+
+- 総合判定: Hold
+- No-Go 露出: 棚卸し上は見つけていない
+- Hold 理由:
+  - `/record` の 30秒記録証跡がない
+  - AI 同意 copy の vendor evidence が未整理
+  - delete copy と restore flow の整合が未確認
+  - contrast / dialog focus / zoom / photo alt policy が未解決
+
+詳細は `docs/design/design-inventory-roadmap.md` を参照。
+
+## 検証
+
+- `git diff --check`
+- `pnpm pr:gate`
 
 ## セキュリティ・プライバシー考慮
 
@@ -88,7 +118,7 @@ requires_human_review:
 ## 依存関係
 
 - ISSUE-043: デザイン組織とサブエージェント体制
-- ISSUE-044: Hana Design Evaluation Rubric
+- ISSUE-044: Hana Design Evaluation Rubric（完了済み）
 
 ## 参考
 
