@@ -54,6 +54,31 @@ describe('optimistic memory list helpers', () => {
     expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)?.data).toEqual([existing])
   })
 
+  it('removes only the optimistic memory on add rollback', () => {
+    const queryClient = new QueryClient()
+    const existing = makeMemory({ id: '00000000-0000-4000-8000-000000000002' })
+    const next = makeMemory({ id: 'optimistic-1', title: 'いま のこしたページ' })
+    queryClient.setQueryData(LIST_KEY, makeList([existing]))
+
+    const rollback = optimisticAddMemoryToLists(queryClient, next)
+    queryClient.setQueryData<MemoryListResponse>(LIST_KEY, (current) =>
+      current
+        ? {
+            ...current,
+            data: current.data.map((memory) =>
+              memory.id === existing.id ? { ...memory, is_favorite: true } : memory,
+            ),
+          }
+        : current,
+    )
+
+    rollback()
+
+    expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)?.data).toEqual([
+      { ...existing, is_favorite: true },
+    ])
+  })
+
   it('creates a target album list cache when none exists and removes it on rollback', () => {
     const queryClient = new QueryClient()
     const next = makeMemory({ id: 'optimistic-1' })
@@ -84,6 +109,35 @@ describe('optimistic memory list helpers', () => {
     expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)?.data[0]?.is_favorite).toBe(false)
   })
 
+  it('keeps unrelated memory changes when update rollback runs', () => {
+    const queryClient = new QueryClient()
+    const target = makeMemory({ id: '00000000-0000-4000-8000-000000000002' })
+    const unrelated = makeMemory({ id: '00000000-0000-4000-8000-000000000003' })
+    queryClient.setQueryData(LIST_KEY, makeList([target, unrelated]))
+
+    const rollback = optimisticUpdateMemoryInLists(queryClient, target.id, (current) => ({
+      ...current,
+      is_favorite: true,
+    }))
+    queryClient.setQueryData<MemoryListResponse>(LIST_KEY, (current) =>
+      current
+        ? {
+            ...current,
+            data: current.data.map((memory) =>
+              memory.id === unrelated.id ? { ...memory, title: '更新済み' } : memory,
+            ),
+          }
+        : current,
+    )
+
+    rollback()
+
+    expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)?.data).toEqual([
+      target,
+      { ...unrelated, title: '更新済み' },
+    ])
+  })
+
   it('replaces a temporary memory with the server response', () => {
     const queryClient = new QueryClient()
     const optimistic = makeMemory({ id: 'optimistic-1' })
@@ -107,5 +161,31 @@ describe('optimistic memory list helpers', () => {
     rollback()
 
     expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)?.data).toEqual([memory])
+  })
+
+  it('keeps unrelated memory changes when remove rollback runs', () => {
+    const queryClient = new QueryClient()
+    const target = makeMemory({ id: '00000000-0000-4000-8000-000000000002' })
+    const unrelated = makeMemory({ id: '00000000-0000-4000-8000-000000000003' })
+    queryClient.setQueryData(LIST_KEY, makeList([target, unrelated]))
+
+    const rollback = optimisticRemoveMemoryFromLists(queryClient, target.id)
+    queryClient.setQueryData<MemoryListResponse>(LIST_KEY, (current) =>
+      current
+        ? {
+            ...current,
+            data: current.data.map((memory) =>
+              memory.id === unrelated.id ? { ...memory, title: '更新済み' } : memory,
+            ),
+          }
+        : current,
+    )
+
+    rollback()
+
+    expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)?.data).toEqual([
+      target,
+      { ...unrelated, title: '更新済み' },
+    ])
   })
 })

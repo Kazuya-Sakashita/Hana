@@ -90,7 +90,7 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
 
   async function toggleFavorite() {
     const next = !memory.is_favorite
-    void queryClient.cancelQueries({ queryKey: memoriesQueryKey })
+    await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
     const rollback = optimisticUpdateMemoryInLists(queryClient, memory.id, (current) => ({
       ...current,
       is_favorite: next,
@@ -105,6 +105,7 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
       router.refresh()
     } catch (e) {
       rollback()
+      void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e) && e.reason === 'unauthorized') {
         router.push('/sign-in')
         return

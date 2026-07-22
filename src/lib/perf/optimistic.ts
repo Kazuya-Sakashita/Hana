@@ -6,28 +6,24 @@ import {
   type MemoryListResponse,
 } from '@/features/memories/client/use-memories'
 
-type MemoryListSnapshot = Array<[QueryKey, MemoryListResponse | undefined]>
-
-function queryKeyId(queryKey: QueryKey): string {
-  return JSON.stringify(queryKey)
+interface MemoryListItemSnapshot {
+  queryKey: QueryKey
+  index: number
+  memory: Memory
 }
 
-function snapshotMemoryLists(queryClient: QueryClient, ensureKey?: QueryKey): MemoryListSnapshot {
-  const snapshots = queryClient.getQueriesData<MemoryListResponse>({ queryKey: memoriesQueryKey })
-  if (ensureKey && !snapshots.some(([key]) => queryKeyId(key) === queryKeyId(ensureKey))) {
-    snapshots.push([ensureKey, queryClient.getQueryData<MemoryListResponse>(ensureKey)])
-  }
-  return snapshots
-}
-
-function restoreMemoryLists(queryClient: QueryClient, snapshots: MemoryListSnapshot) {
-  for (const [queryKey, data] of snapshots) {
-    if (data === undefined) {
-      queryClient.removeQueries({ queryKey, exact: true })
-    } else {
-      queryClient.setQueryData(queryKey, data)
+function snapshotMemoryItems(queryClient: QueryClient, memoryId: string): MemoryListItemSnapshot[] {
+  const snapshots: MemoryListItemSnapshot[] = []
+  for (const [queryKey, data] of queryClient.getQueriesData<MemoryListResponse>({
+    queryKey: memoriesQueryKey,
+  })) {
+    const index = data?.data.findIndex((memory) => memory.id === memoryId) ?? -1
+    const memory = index >= 0 ? data?.data[index] : undefined
+    if (memory) {
+      snapshots.push({ queryKey, index, memory })
     }
   }
+  return snapshots
 }
 
 export function optimisticAddMemoryToLists(
@@ -37,9 +33,9 @@ export function optimisticAddMemoryToLists(
 ) {
   const limit = options.limit ?? 50
   const ensuredKey = memoryListQueryKey(limit)
-  const snapshots = snapshotMemoryLists(queryClient, ensuredKey)
+  const createdEnsuredList = !queryClient.getQueryData<MemoryListResponse>(ensuredKey)
 
-  if (!queryClient.getQueryData<MemoryListResponse>(ensuredKey)) {
+  if (createdEnsuredList) {
     queryClient.setQueryData<MemoryListResponse>(ensuredKey, {
       data: [],
       page: { next_cursor: null },
@@ -55,7 +51,20 @@ export function optimisticAddMemoryToLists(
       : current,
   )
 
-  return () => restoreMemoryLists(queryClient, snapshots)
+  return () => {
+    queryClient.setQueriesData<MemoryListResponse>({ queryKey: memoriesQueryKey }, (current) =>
+      current
+        ? { ...current, data: current.data.filter((item) => item.id !== memory.id) }
+        : current,
+    )
+
+    if (createdEnsuredList) {
+      const ensuredList = queryClient.getQueryData<MemoryListResponse>(ensuredKey)
+      if (ensuredList?.data.length === 0) {
+        queryClient.removeQueries({ queryKey: ensuredKey, exact: true })
+      }
+    }
+  }
 }
 
 export function optimisticUpdateMemoryInLists(
@@ -63,7 +72,7 @@ export function optimisticUpdateMemoryInLists(
   memoryId: string,
   update: (memory: Memory) => Memory,
 ) {
-  const snapshots = snapshotMemoryLists(queryClient)
+  const snapshots = snapshotMemoryItems(queryClient, memoryId)
 
   queryClient.setQueriesData<MemoryListResponse>({ queryKey: memoriesQueryKey }, (current) =>
     current
@@ -74,7 +83,20 @@ export function optimisticUpdateMemoryInLists(
       : current,
   )
 
-  return () => restoreMemoryLists(queryClient, snapshots)
+  return () => {
+    for (const snapshot of snapshots) {
+      queryClient.setQueryData<MemoryListResponse>(snapshot.queryKey, (current) =>
+        current
+          ? {
+              ...current,
+              data: current.data.map((memory) =>
+                memory.id === memoryId ? snapshot.memory : memory,
+              ),
+            }
+          : current,
+      )
+    }
+  }
 }
 
 export function optimisticReplaceMemoryInLists(
@@ -93,7 +115,7 @@ export function optimisticReplaceMemoryInLists(
 }
 
 export function optimisticRemoveMemoryFromLists(queryClient: QueryClient, memoryId: string) {
-  const snapshots = snapshotMemoryLists(queryClient)
+  const snapshots = snapshotMemoryItems(queryClient, memoryId)
 
   queryClient.setQueriesData<MemoryListResponse>({ queryKey: memoriesQueryKey }, (current) =>
     current
@@ -104,5 +126,23 @@ export function optimisticRemoveMemoryFromLists(queryClient: QueryClient, memory
       : current,
   )
 
-  return () => restoreMemoryLists(queryClient, snapshots)
+  return () => {
+    for (const snapshot of snapshots) {
+      queryClient.setQueryData<MemoryListResponse>(snapshot.queryKey, (current) => {
+        if (!current) return current
+
+        const existingIndex = current.data.findIndex((memory) => memory.id === memoryId)
+        if (existingIndex >= 0) {
+          return {
+            ...current,
+            data: current.data.map((memory) => (memory.id === memoryId ? snapshot.memory : memory)),
+          }
+        }
+
+        const data = [...current.data]
+        data.splice(Math.min(snapshot.index, data.length), 0, snapshot.memory)
+        return { ...current, data }
+      })
+    }
+  }
 }

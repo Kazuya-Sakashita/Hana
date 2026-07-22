@@ -42,7 +42,7 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
     const previous = isFavorite
     const next = !isFavorite
     setIsFavorite(next)
-    void queryClient.cancelQueries({ queryKey: memoriesQueryKey })
+    await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
     const rollback = optimisticUpdateMemoryInLists(queryClient, memoryId, (memory) => ({
       ...memory,
       is_favorite: next,
@@ -59,6 +59,7 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
     } catch (e) {
       setIsFavorite(previous)
       rollback()
+      void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e) && e.reason === 'unauthorized') {
         router.push('/sign-in')
         return
@@ -72,7 +73,7 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
 
   async function confirmDelete() {
     setDeleteDialog({ open: false, pending: false })
-    void queryClient.cancelQueries({ queryKey: memoriesQueryKey })
+    await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
     const rollback = optimisticRemoveMemoryFromLists(queryClient, memoryId)
     router.push('/album')
 
@@ -81,6 +82,7 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
       router.refresh()
     } catch (e) {
       rollback()
+      void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e) && e.reason === 'unauthorized') {
         router.push('/sign-in')
         return

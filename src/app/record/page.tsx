@@ -299,7 +299,7 @@ export default function RecordPage() {
       updated_at: now,
     }
 
-    void queryClient.cancelQueries({ queryKey: memoriesQueryKey })
+    await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
     const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
     router.push('/album')
 
@@ -309,6 +309,7 @@ export default function RecordPage() {
       router.refresh()
     } catch (e) {
       rollback()
+      void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e)) {
         switch (e.reason) {
           case 'validation_error':

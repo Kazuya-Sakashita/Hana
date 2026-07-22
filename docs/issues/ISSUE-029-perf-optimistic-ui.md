@@ -104,9 +104,10 @@ toast で謝り、 ユーザーに再操作してもらう (V0 §1 「Forgive th
 
 ### 確認結果
 
-- `pnpm test tests/unit/lib/perf/optimistic.test.ts` → 5 tests passed
+- `pnpm test tests/unit/lib/perf/optimistic.test.ts` → 8 tests passed
 - `pnpm pr:gate` → format / lint / openapi route-map / typecheck / test 276 件 / build:ci passed
-- 即時反応条件は、click handler 内で `router.push` / `queryClient.setQueryData` を await せず先に実行する構造と rollback unit test で確認
+- Review 対応後: PR 対象ファイルの format / lint / openapi route-map / typecheck / test 279 件 / build:ci passed
+- 即時反応条件は、click handler 内で network mutation を await する前に `router.push` / `queryClient.setQueryData` を実行する構造と rollback unit test で確認
 
 ---
 
