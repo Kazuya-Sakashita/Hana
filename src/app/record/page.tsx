@@ -3,18 +3,26 @@
 import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useChildrenQuery } from '@/features/children/client/use-children'
-import { useCreateMemoryMutation } from '@/features/memories/client/use-memories'
+import {
+  memoriesQueryKey,
+  useCreateMemoryMutation,
+  type Memory,
+  type MemoryCreateRequest,
+} from '@/features/memories/client/use-memories'
 import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
+import { optimisticAddMemoryToLists, optimisticReplaceMemoryInLists } from '@/lib/perf/optimistic'
+import { useToast } from '@/components/ui/toast'
 
-type Phase = 'loading' | 'no-child' | 'form' | 'success' | 'error'
+type Phase = 'loading' | 'no-child' | 'form' | 'error'
 type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'confirming' | 'done' | 'failed'
 type AiStatus = 'idle' | 'consent_pending' | 'generating' | 'done' | 'failed'
 
@@ -77,8 +85,9 @@ async function reencodeImage(
 
 export default function RecordPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const [submissionPhase, setSubmissionPhase] = useState<'idle' | 'success'>('idle')
   const [aiConsentAtOverride, setAiConsentAtOverride] = useState<string | null>(null)
 
   const [file, setFile] = useState<File | null>(null)
@@ -112,15 +121,13 @@ export default function RecordPage() {
   const authError = currentUserQuery.error ?? childrenQuery.error
   const isUnauthorized = isApiProblemError(authError) && authError.reason === 'unauthorized'
   const phase: Phase =
-    submissionPhase === 'success'
-      ? 'success'
-      : isUnauthorized || currentUserQuery.isPending || childrenQuery.isPending
-        ? 'loading'
-        : currentUserQuery.isError || childrenQuery.isError
-          ? 'error'
-          : selectedChild
-            ? 'form'
-            : 'no-child'
+    isUnauthorized || currentUserQuery.isPending || childrenQuery.isPending
+      ? 'loading'
+      : currentUserQuery.isError || childrenQuery.isError
+        ? 'error'
+        : selectedChild
+          ? 'form'
+          : 'no-child'
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
   const canGenerateAi = !!uploadedImage && aiStatus !== 'generating' && !aiQuotaExceeded
@@ -263,32 +270,73 @@ export default function RecordPage() {
 
     const trimmedTitle = title.trim()
     const wasAiGenerated = aiStatus === 'done'
+    const requestBody: MemoryCreateRequest = {
+      child_id: childId,
+      title: trimmedTitle,
+      body: body.trim() === '' ? null : body,
+      recorded_at: recordedAt,
+      weather: weather.trim() === '' ? null : weather,
+      image_ids: [uploadedImage.id],
+      ai_generated: wasAiGenerated,
+    }
+    const now = new Date().toISOString()
+    const optimisticId =
+      typeof crypto.randomUUID === 'function'
+        ? `optimistic-${crypto.randomUUID()}`
+        : `optimistic-${Date.now()}`
+    const optimisticMemory: Memory = {
+      id: optimisticId,
+      child_id: childId,
+      title: requestBody.title,
+      body: requestBody.body ?? null,
+      recorded_at: requestBody.recorded_at,
+      weather: requestBody.weather ?? null,
+      is_favorite: false,
+      ai_generated: requestBody.ai_generated,
+      image_ids: requestBody.image_ids,
+      cover_thumbnail_url: null,
+      created_at: now,
+      updated_at: now,
+    }
+
+    void queryClient.cancelQueries({ queryKey: memoriesQueryKey })
+    const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
+    router.push('/album')
+
     try {
-      await createMemoryMutation.mutateAsync({
-        child_id: childId,
-        title: trimmedTitle,
-        body: body.trim() === '' ? null : body,
-        recorded_at: recordedAt,
-        weather: weather.trim() === '' ? null : weather,
-        image_ids: [uploadedImage.id],
-        ai_generated: wasAiGenerated,
-      })
-      setSubmissionPhase('success')
-      setTimeout(() => router.push('/album'), 1500)
+      const created = await createMemoryMutation.mutateAsync(requestBody)
+      optimisticReplaceMemoryInLists(queryClient, optimisticId, created)
+      router.refresh()
     } catch (e) {
+      rollback()
       if (isApiProblemError(e)) {
         switch (e.reason) {
           case 'validation_error':
             setFieldErrors(extractFieldErrors(e.problem))
+            showToast({
+              title: 'ほぞんに しっぱい しました',
+              description: '入力を たしかめて、もういちど ためしてください。',
+            })
+            router.push('/record')
             break
           case 'unauthorized':
             router.push('/sign-in')
             return
           default:
             setTopMessage(`うまく ほぞんできませんでした。 (${e.reason})`)
+            showToast({
+              title: 'ほぞんに しっぱい しました',
+              description: 'もういちど ためしてみてください。',
+            })
+            router.push('/record')
         }
       } else {
         setTopMessage('うまく つうしんできませんでした。もういちど ためしてみてください。')
+        showToast({
+          title: 'ほぞんに しっぱい しました',
+          description: 'もういちど ためしてみてください。',
+        })
+        router.push('/record')
       }
       setSubmitting(false)
     }
@@ -345,21 +393,6 @@ export default function RecordPage() {
               もういちど ひらく
             </Button>
           </CardContent>
-        </Card>
-      </Shell>
-    )
-  }
-
-  if (phase === 'success') {
-    return (
-      <Shell>
-        <Card className="w-full max-w-md">
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-2xl">
-              {childName} ちゃんの きょうが、のこりました
-            </CardTitle>
-            <CardDescription className="mt-2">アルバムへ いどう しています…</CardDescription>
-          </CardHeader>
         </Card>
       </Shell>
     )
