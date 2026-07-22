@@ -47,6 +47,9 @@ rg -n "deriveVariantKey|generateSignedImageUrl\\(|'thumbnail'|'preview'|_thumb|_
 - Lighthouse mobile で "Properly size images" が悪化していないことを確認する
 - `/memory/{id}` の LCP を 2026-05-27 baseline と比較して再計測する
 
+Network 側の確認は ISSUE-038 で追加した `pnpm qa:issue028:images` から実行できる。
+手順は `docs/perf/issue-028-authenticated-browser-qa.md` を参照する。
+
 ## 推奨
 
 上記の認証済みブラウザ QA が記録されるまでは、GitHub Issue #43 は open のままにする。
