@@ -6,6 +6,7 @@ import { Heart, Pencil, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AccessibleDialog } from '@/components/ui/dialog'
 import {
   memoriesQueryKey,
   useDeleteMemoryMutation,
@@ -176,15 +177,18 @@ function DeleteConfirmDialog({
   onCancel: () => void
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center"
+    <AccessibleDialog
+      titleId="delete-confirm-title"
+      descriptionId="delete-confirm-description"
+      pending={pending}
+      onClose={onCancel}
     >
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
-          <CardTitle className="font-serif text-xl">このページを、けしますか</CardTitle>
-          <CardDescription className="leading-narrative mt-2">
+          <CardTitle id="delete-confirm-title" className="font-serif text-xl">
+            このページを、けしますか
+          </CardTitle>
+          <CardDescription id="delete-confirm-description" className="leading-narrative mt-2">
             {childName ? `${childName} ちゃんの こ` : 'こ'}のページは、けしてから 7にちは
             もどせます。
           </CardDescription>
@@ -212,6 +216,6 @@ function DeleteConfirmDialog({
           </Button>
         </CardContent>
       </Card>
-    </div>
+    </AccessibleDialog>
   )
 }
