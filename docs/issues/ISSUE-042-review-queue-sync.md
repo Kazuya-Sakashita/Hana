@@ -79,6 +79,9 @@ GitHub の closed issue / merged PR と、ローカル Issue の status を同�
 これらは対応 PR merge と GitHub issue close により local status を同期するが、将来の
 性能・表示 QA を行う場合は新規 Issue として扱う。
 
+この maintenance Issue 自体は PR #93 の merge によって完了するため、この PR 内で
+`status: done` として archive へ入れる。これは `ISSUE-039` と同じ台帳同期用の扱い。
+
 ## セキュリティ・プライバシー考慮
 
 - 実データ、画像 URL、storage_key、signed URL、AI 生成本文は扱わない

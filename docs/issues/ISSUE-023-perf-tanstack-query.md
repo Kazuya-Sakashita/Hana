@@ -99,12 +99,13 @@ ISSUE-018 で `cover_thumbnail_url` を BFF 化済み、 ISSUE-025〜027 で Ser
 ## 受け入れ条件
 
 - [x] `pnpm pr:gate` グリーン
-- [ ] `/record` → `/settings` 遷移時に `/me` `/children` が **再 fetch されない** (DevTools Network 確認)
+- [ ] Historical: `/record` → `/settings` 遷移時に `/me` `/children` が **再 fetch されない** (DevTools Network 確認)
 - [x] `/record` で POST 成功後、 memory list query が invalidate される
 - [x] 各 hook の error / loading が UI に正しく反映
 - [x] BottomNav は Query Provider 配下で表示され、ナビゲーションに影響しない
 
-DevTools Network 確認はブラウザ実機での人間確認ゲート。PR merge 前に `/record` → `/settings` の遷移で `/me` `/children` が cache hit になることを確認する。
+DevTools Network 確認は PR #74 merge 前の historical note として残す。
+PR #74 / GitHub Issue #71 は完了済みのため、将来あらためて cache hit を確認する場合は新規 Issue として扱う。
 
 ---
 

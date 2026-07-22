@@ -92,12 +92,13 @@ V0 §1「Whisper not shout」に合わせて主張しすぎない。
 ## 受け入れ条件
 
 - [x] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
-- [ ] DevTools Throttling Slow 4G で遷移時に skeleton が見える
-- [ ] `/` 読み込み後、 DevTools Network で `/album` の HTML が prefetch されている
+- [ ] Historical: DevTools Throttling Slow 4G で遷移時に skeleton が見える
+- [ ] Historical: `/` 読み込み後、 DevTools Network で `/album` の HTML が prefetch されている
 - [x] skeleton の色味・形状が「whisper」原則に沿う (V0 §1)
 - [x] /record への prefetch は **入っていない** (集中フロー保護)
 
-未チェックの DevTools 2項目は、PR merge 前の人間確認ゲートとして残す。
+未チェックの DevTools 2項目は PR #72 merge 前の historical note として残す。
+PR #72 / GitHub Issue #70 は完了済みのため、将来あらためて実機確認する場合は新規 Issue として扱う。
 自動検証では `prefetch` prop と `loading.tsx` の存在、`pnpm pr:gate` まで確認済み。
 
 ---

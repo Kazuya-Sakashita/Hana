@@ -26,6 +26,7 @@
 | `status`                | yes      | `todo` / `in_progress` / `review` / `done` / `blocked` | 現在状態                                             |
 | `size`                  | yes      | `S` / `M` / `L` / `M+`                                 | 半日〜2日を超える場合は分割候補                      |
 | `created_at`            | yes      | `YYYY-MM-DD`                                           | Issue 作成日                                         |
+| `github_issue`          | no       | number                                                 | 対応する GitHub Issue 番号                           |
 | `parent`                | no       | Issue ID / initiative key                              | 親 Issue または横断テーマ                            |
 | `release_gate`          | no       | `mvp_core` / `mvp_quality`                             | release readiness との関係                           |
 | `blocked_by`            | no       | issue list                                             | 完了または人間 waiver が必要な Issue 依存            |
@@ -61,6 +62,8 @@
 | `blocked`     | 人間判断、外部依存、credential、設計未決定で止めている |
 
 1 Issue 1 PR を守り、複数 Issue の差分を混ぜません。
+merge 済み Issue の状態同期だけを目的にした maintenance Issue は、対応 PR の merge によって
+完了するため、その PR 内で `done` として archive に入れてよい。
 
 ---
 
