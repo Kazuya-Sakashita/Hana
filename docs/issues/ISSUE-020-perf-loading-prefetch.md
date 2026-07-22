@@ -2,7 +2,7 @@
 id: ISSUE-020
 title: loading.tsx + Link prefetch で体感速度を向上
 priority: P1
-status: todo
+status: review
 size: S
 created_at: 2026-05-26
 parent: PERF
@@ -24,24 +24,24 @@ parent: PERF
 
 ### 新規
 
-- [ ] `src/app/album/loading.tsx`
+- [x] `src/app/album/loading.tsx`
   - card 形状の skeleton ×6 + ヘッダー skeleton
-- [ ] `src/app/memory/[memoryId]/loading.tsx`
+- [x] `src/app/memory/[memoryId]/loading.tsx`
   - 大画像 4:5 skeleton + テキスト skeleton 3 行
-- [ ] `src/app/loading.tsx`
+- [x] `src/app/loading.tsx`
   - hero card skeleton + horizontal carousel skeleton
 
 ### 修正
 
-- [ ] 主要動線の `<Link>` に `prefetch={true}` を明示
+- [x] 主要動線の `<Link>` に `prefetch={true}` を明示
   - `/` → `/album` (もっとみる)
-  - `/album` → `/memory/[id]` (リスト各行)
-  - `/` → `/record` (hero card)
   - `/settings` → `/album` / `/` (戻り動線)
-- [ ] **prefetch しない** 動線:
+- [x] **prefetch しない** 動線:
+  - `/memory/[id]` 宛ての動線 (DB 参照 + signed URL 発行を伴う動的詳細の先読み負荷を避ける)
+  - `/record` 宛ての動線 (集中フロー保護)
   - `/sign-in` 周り
   - `/record` → どこか (集中フロー)
-- [ ] BottomNav の Link は **prefetch on viewport** (`prefetch={true}` で OK)
+- [x] BottomNav の Link は **prefetch on viewport** (`prefetch={true}` で OK)
 
 ### やらないこと
 
@@ -66,54 +66,60 @@ V0 §1「Whisper not shout」に合わせて主張しすぎない。
 
 ### prefetch の副作用
 
-`prefetch={true}` は viewport に入ると HTML を事前取得。
+`prefetch={true}` は production build で viewport に入ると route を事前取得する。
 
-- 帯域コスト: メタタグ + 軽量 HTML なので影響小
+- 帯域/サーバコスト: `/album` など軽い動線に限定し、`/memory/[id]` のような DB 参照 + signed URL 発行を伴う動的詳細は明示 prefetch しない
 - セキュリティ: 既存の auth は維持されるので問題なし
 
 ---
 
 ## 影響範囲
 
-| 領域         | 影響                                         |
-| ------------ | -------------------------------------------- |
-| OpenAPI      | なし                                         |
-| 生成型       | なし                                         |
-| データ       | なし                                         |
-| 画面         | `/`, `/album`, `/memory/[id]` に loading.tsx |
-| Link         | 主要動線で prefetch={true}                   |
-| CI           | typecheck / lint / format / build / test     |
-| ドキュメント | このIssueファイル                            |
-| 環境変数     | なし                                         |
+| 領域         | 影響                                                   |
+| ------------ | ------------------------------------------------------ |
+| OpenAPI      | なし                                                   |
+| 生成型       | なし                                                   |
+| データ       | なし                                                   |
+| 画面         | `/`, `/album`, `/memory/[id]` に loading.tsx           |
+| Link         | 軽い主要動線で prefetch={true}、重い動的詳細は既定動作 |
+| CI           | typecheck / lint / format / build / test               |
+| ドキュメント | このIssueファイル                                      |
+| 環境変数     | なし                                                   |
 
 ---
 
 ## 受け入れ条件
 
-- [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
+- [x] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
 - [ ] DevTools Throttling Slow 4G で遷移時に skeleton が見える
 - [ ] `/` 読み込み後、 DevTools Network で `/album` の HTML が prefetch されている
-- [ ] skeleton の色味・形状が「whisper」原則に沿う (V0 §1)
-- [ ] /record への prefetch は **入っていない** (集中フロー保護)
+- [x] skeleton の色味・形状が「whisper」原則に沿う (V0 §1)
+- [x] /record への prefetch は **入っていない** (集中フロー保護)
+
+未チェックの DevTools 2項目は、PR merge 前の人間確認ゲートとして残す。
+自動検証では `prefetch` prop と `loading.tsx` の存在、`pnpm pr:gate` まで確認済み。
 
 ---
 
 ## 動作確認手順
 
 ```bash
-pnpm dev
+pnpm build
+pnpm start
 # 1. Chrome DevTools Throttling = Slow 4G
 # 2. /album を開く → skeleton ×6 が見える → リスト表示
 # 3. /album → /memory/{id} → 詳細 skeleton → 本画像
-# 4. / 読み込み後、Network panel で /album / /record の prefetch を確認
-# 5. /record を開いている時、BottomNav (非表示なので問題なし) の prefetch も発火しないことを確認
+# 4. / 読み込み後、Network panel で /album の prefetch を確認
+# 5. /memory/{id} 宛て Link で未訪問詳細の full route/data prefetch が過剰発火しないことを確認
+# 6. /record 宛て Link では prefetch が発火しないことを確認
+# 7. /record を開いている時、BottomNav (非表示なので問題なし) の prefetch も発火しないことを確認
 ```
 
 ---
 
 ## リスク
 
-- prefetch しすぎでモバイル回線を圧迫 → 主要動線のみに限定
+- prefetch しすぎでモバイル回線や signed URL 発行を圧迫 → 軽い主要動線のみに限定
 - skeleton と実コンテンツの差で CLS 増 → 形状一致でほぼゼロを目指す
 
 ---

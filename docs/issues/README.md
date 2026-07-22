@@ -39,13 +39,13 @@
 
 2026-07-21 時点:
 
-| status        | count | notes                                                                                                        |
-| ------------- | ----- | ------------------------------------------------------------------------------------------------------------ |
-| `todo`        | 5     | ready queue / blocked queue を参照                                                                           |
-| `in_progress` | 0     | 並行実行枠は空き                                                                                             |
-| `review`      | 12    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + bundle/font |
-| `done`        | 22    | archive を参照                                                                                               |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                |
+| status        | count | notes                                                                                                                           |
+| ------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `todo`        | 5     | ready queue / blocked queue を参照                                                                                              |
+| `in_progress` | 0     | 並行実行枠は空き                                                                                                                |
+| `review`      | 13    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font |
+| `done`        | 22    | archive を参照                                                                                                                  |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                   |
 
 ---
 
@@ -85,11 +85,11 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-| rank | issue       | priority | size | area          | readiness                                                         | checks                           |
-| ---- | ----------- | -------- | ---- | ------------- | ----------------------------------------------------------------- | -------------------------------- |
-| 1    | `ISSUE-020` | P1       | S    | perf / UX     | loading と prefetch の低リスク改善。OpenAPI 影響なし              | `pnpm pr:gate`                   |
-| 2    | `ISSUE-023` | P1       | M    | data fetching | TanStack Query 導入。後続 `ISSUE-029` の前提                      | `pnpm pr:gate`                   |
-| 3    | `ISSUE-022` | P2       | S    | ai / perf     | 実装着手は可能。AI / image privacy gate は PR review 前に必ず確認 | `pnpm pr:gate`, AI privacy check |
+| rank | issue       | priority | size | area          | readiness                                                                 | checks                           |
+| ---- | ----------- | -------- | ---- | ------------- | ------------------------------------------------------------------------- | -------------------------------- |
+| 1    | `ISSUE-021` | P1       | S    | perf / bundle | bundle analyzer と font weight の改善。dependency 追加と visual QA は注意 | `pnpm pr:gate`, bundle report    |
+| 2    | `ISSUE-023` | P1       | M    | data fetching | TanStack Query 導入。後続 `ISSUE-029` の前提                              | `pnpm pr:gate`                   |
+| 3    | `ISSUE-022` | P2       | S    | ai / perf     | 実装着手は可能。AI / image privacy gate は PR review 前に必ず確認         | `pnpm pr:gate`, AI privacy check |
 
 ---
 
@@ -126,6 +126,7 @@ Codex-ready と判断する条件:
 | `ISSUE-036` | security/privacy 正本の review 待ち                                              |
 | `ISSUE-037` | OpenAPI route-map check の review 待ち                                           |
 | `ISSUE-021` | bundle analyzer + Noto Serif JP weight 削減の review 待ち                        |
+| `ISSUE-020` | loading.tsx + Link prefetch の review 待ち                                       |
 
 ---
 
