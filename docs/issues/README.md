@@ -28,7 +28,8 @@
 | `created_at`            | yes      | `YYYY-MM-DD`                                           | Issue 作成日                                         |
 | `parent`                | no       | Issue ID / initiative key                              | 親 Issue または横断テーマ                            |
 | `release_gate`          | no       | `mvp_core` / `mvp_quality`                             | release readiness との関係                           |
-| `blocked_by`            | no       | issue list                                             | 完了または人間 waiver が必要な依存                   |
+| `blocked_by`            | no       | issue list                                             | 完了または人間 waiver が必要な Issue 依存            |
+| `external_blockers`     | no       | blocker list                                           | credential / QA データ / 人間操作などの外部 blocker  |
 | `requires_human_review` | no       | topic list                                             | privacy / security / release など人間確認の種類      |
 
 `ready_for_codex` は新規自動化 Issue に残してよいが、ready queue の正本にはしません。実際の ready 判定は下のルールから派生させます。
@@ -39,13 +40,13 @@
 
 2026-07-23 時点:
 
-| status        | count | notes                                                                                                                                                                                                |
-| ------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `todo`        | 0     | ready queue / blocked queue ともに空                                                                                                                                                                 |
-| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                                                                     |
-| `review`      | 17    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query + next/image + AI generate parallel + optimistic UI |
-| `done`        | 24    | archive を参照                                                                                                                                                                                       |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                                                                                        |
+| status        | count | notes                                                                                                                                                                                                 |
+| ------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `todo`        | 0     | ready queue は空                                                                                                                                                                                      |
+| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                                                                      |
+| `review`      | 17    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query + AI generate parallel + optimistic UI + album cache |
+| `done`        | 25    | archive を参照                                                                                                                                                                                        |
+| `blocked`     | 1     | 認証済み実データ QA は下記 blocker 表へ記載                                                                                                                                                           |
 
 ---
 
@@ -99,7 +100,9 @@ Codex-ready と判断する条件:
 
 ## Blocked Or Needs Human Decision
 
-現在はありません。
+| issue       | blocker                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| `ISSUE-041` | 認証済みブラウザセッション、または QA 用ログイン手段と、viewport 外 lazy 判定に足りる画像付き QA データ |
 
 ---
 
@@ -121,7 +124,6 @@ Codex-ready と判断する条件:
 | `ISSUE-023` | TanStack Query 導入の review 待ち。DevTools Network 確認は PR merge 前の人間ゲート |
 | `ISSUE-020` | loading.tsx + Link prefetch の review 待ち                                         |
 | `ISSUE-021` | bundle analyzer + Noto Serif JP weight 削減の review 待ち                          |
-| `ISSUE-028` | next/image 移行の review 待ち。DevTools / Lighthouse 確認は post-merge QA          |
 | `ISSUE-022` | AI generate 画像 DL + sharp resize 並列化の review 待ち                            |
 | `ISSUE-029` | optimistic UI の review 待ち                                                       |
 
@@ -131,7 +133,7 @@ Codex-ready と判断する条件:
 
 - foundation: `ISSUE-006`, `ISSUE-006b`, `ISSUE-006c`, `ISSUE-007`, `ISSUE-008`, `ISSUE-009`, `ISSUE-010`
 - product UI: `ISSUE-012`, `ISSUE-013`, `ISSUE-014`, `ISSUE-014a`, `ISSUE-015`, `ISSUE-030`
-- perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-031`
+- perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-031`
 - qa tooling completed: `ISSUE-038`
 - maintenance completed: `ISSUE-039`
 

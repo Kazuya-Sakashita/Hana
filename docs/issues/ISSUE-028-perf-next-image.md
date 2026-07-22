@@ -2,11 +2,12 @@
 id: ISSUE-028
 title: 画像表示を next/image に移行 (WebP variants + lazy + priority)
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-05-26
 parent: PERF
 github_issue: 43
+follow_up_github_issue: 87
 ---
 
 ## 目的 (Why)
@@ -96,10 +97,17 @@ private signed URL を Vercel の optimizer に渡すと、 token 付き URL が
 
 - [x] ADR-0013 が存在し、 upload-time variants + next/image の分担が明記されている
 - [x] `pnpm pr:gate` グリーン
+- [x] LCP 画像 (memory detail の 1 枚目) は `priority` で eagerly loaded
+
+### スコープ変更 (2026-07-23)
+
+以下は ISSUE-028 / GitHub #43 の完了条件から外し、ISSUE-041 / GitHub #87 の未完 QA として
+移管する。実施済みとは扱わない。
+
 - [ ] DevTools Network で `/album` / `/memory/[id]` の画像が WebP variant signed URL で配信されている
 - [ ] viewport 外の画像が初期ロードに含まれない (lazy)
-- [x] LCP 画像 (memory detail の 1 枚目) は `priority` で eagerly loaded
 - [ ] Lighthouse "Properly size images" が悪化していない
+- [ ] `/memory/[id]` の LCP を 2026-05-27 baseline と比較して再計測する
 
 ### マージ後 QA (2026-07-22)
 
@@ -108,15 +116,30 @@ private signed URL を Vercel の optimizer に渡すと、 token 付き URL が
 - variant 関連 integration tests が成功 (`uploads-url`, `memories`, `uploads`: 46 tests)
 - `src/app` / `src/components` に従来の `<img>` は残っていない
 - `/album` thumbnail / `/memory/[id]` preview の signed URL 経路は code + test で確認済み
-- 未完: 認証済み実データ環境での DevTools Network / Lighthouse / LCP 再計測
+- 未完だった認証済み実データ環境での DevTools Network / Lighthouse / LCP 再計測は ISSUE-041 / GitHub #87 に移管
 
 ### ブラウザ QA 試行 (2026-07-23)
 
 - 詳細: `docs/perf/issue-028-browser-qa-attempt-2026-07-23.md`
 - `origin/main` から別 worktree / branch を作成し、メイン worktree に触れず確認
-- `.env.local` の必要キーは存在するが、`DATABASE_URL` / `DIRECT_URL` ともに Supabase DB へ接続不可
-- そのため、認証済み実データでの DevTools Network / Lighthouse / LCP 再計測は未実施
-- #43 の未完受け入れ条件はまだ満たしていないため、GitHub Issue #43 は open のまま維持する
+- `.env.local` の必要キーは存在する
+- sandbox 内では DNS 解決に失敗したが、権限昇格した実ネットワーク確認では `DATABASE_URL` / `DIRECT_URL` ともに接続可能
+- ただし Codex だけでは認証済み Google OAuth セッションを安全に作れないため、DevTools Network / Lighthouse / LCP 再計測は未実施
+- 認証済み実データ QA は ISSUE-041 / GitHub #87 に未完のまま移管する
+- GitHub #43 は next/image 実装と静的/テスト確認の完了として close 対象にするが、#87 が残 QA の open tracker であることを PR / Issue コメントで明記する
+
+### 完了判断 (2026-07-23)
+
+ISSUE-028 は、次の範囲を完了として扱う。
+
+- `next/image` への主要画像表示移行
+- `images.unoptimized: true` による private signed URL proxy 回避
+- thumbnail / preview signed URL 経路の code + integration test 確認
+- memory detail 1 枚目の `priority` 指定
+- 認証済み実データ QA を未完のまま ISSUE-041 / GitHub #87 へ移管したこと
+
+ISSUE-041 は人間の認証済みブラウザセッションまたは QA 用ログイン手段が必要なため、`blocked`
+として管理する。
 
 ---
 
