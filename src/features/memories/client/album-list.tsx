@@ -47,7 +47,7 @@ function AlbumListItem({ memory }: { memory: Memory }) {
         <CardContent className="flex items-center gap-3 p-4">
           {isOptimistic ? (
             <div className="flex min-w-0 flex-1 gap-4 opacity-80">
-              <Thumbnail url={memory.cover_thumbnail_url ?? null} alt={memory.title} />
+              <Thumbnail url={memory.cover_thumbnail_url ?? null} />
               <MemoryText memory={memory} recordedAt={recordedAt} />
             </div>
           ) : (
@@ -55,7 +55,7 @@ function AlbumListItem({ memory }: { memory: Memory }) {
               href={`/memory/${memory.id}`}
               className="ease-organic flex min-w-0 flex-1 gap-4 transition-transform active:scale-[0.98]"
             >
-              <Thumbnail url={memory.cover_thumbnail_url ?? null} alt={memory.title} />
+              <Thumbnail url={memory.cover_thumbnail_url ?? null} />
               <MemoryText memory={memory} recordedAt={recordedAt} />
             </Link>
           )}
@@ -153,14 +153,14 @@ function EmptyState() {
   )
 }
 
-function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
+function Thumbnail({ url }: { url: string | null }) {
   const baseClass = 'aspect-[4/5] w-20 shrink-0 rounded-2xl border border-hairline'
 
   if (typeof url === 'string') {
     return (
       <Image
         src={url}
-        alt={alt}
+        alt=""
         width={80}
         height={100}
         className={`${baseClass} object-cover`}

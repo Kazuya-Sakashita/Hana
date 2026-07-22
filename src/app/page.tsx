@@ -148,7 +148,7 @@ async function HomeBody({ userId }: { userId: string }) {
                       {typeof url === 'string' ? (
                         <Image
                           src={url}
-                          alt={m.title}
+                          alt=""
                           width={140}
                           height={175}
                           sizes="140px"

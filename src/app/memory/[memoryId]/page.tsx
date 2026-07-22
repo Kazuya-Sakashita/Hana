@@ -71,7 +71,7 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
           <Image
             key={img.id}
             src={img.previewUrl}
-            alt=""
+            alt="記録のしゃしん"
             width={1024}
             height={1280}
             sizes="(max-width: 480px) 100vw, 480px"
