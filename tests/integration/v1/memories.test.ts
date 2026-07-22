@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  profileUpsert: vi.fn(),
+  profileFindUnique: vi.fn(),
+  profileCreate: vi.fn(),
   childFindFirst: vi.fn(),
   imageFindMany: vi.fn(),
   memoryFindFirst: vi.fn(),
@@ -33,7 +34,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
-    profile: { upsert: mocks.profileUpsert },
+    profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
     child: { findFirst: mocks.childFindFirst },
     image: { findMany: mocks.imageFindMany },
     memory: {
@@ -99,7 +100,7 @@ const memoryRow = {
 
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-  mocks.profileUpsert.mockResolvedValue(profileRow)
+  mocks.profileFindUnique.mockResolvedValue(profileRow)
 }
 
 function unauthed() {
@@ -150,7 +151,7 @@ describe('GET /v1/memories', () => {
     expect(body.page.next_cursor).toBeNull()
   })
 
-  it('includes cover_thumbnail_url via Supabase thumbnail transform (BFF)', async () => {
+  it('includes cover_thumbnail_url via pre-generated _thumb.webp variant (BFF, ISSUE-031)', async () => {
     authed()
     mocks.memoryFindMany.mockResolvedValue([memoryRow])
     mocks.createSignedUrl.mockResolvedValue({
@@ -159,9 +160,7 @@ describe('GET /v1/memories', () => {
     })
 
     await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img.jpg', 1800, {
-      transform: { width: 320, resize: 'contain', quality: 70 },
-    })
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img_thumb.webp', 1800)
   })
 
   it('returns cover_thumbnail_url=null when memory has no images', async () => {

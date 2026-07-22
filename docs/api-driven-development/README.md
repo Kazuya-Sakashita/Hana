@@ -98,7 +98,8 @@ Hana/
     "openapi:bundle": "redocly bundle docs/openapi/openapi.yaml -o docs/openapi/openapi.bundled.yaml",
     "openapi:gen": "openapi-typescript docs/openapi/openapi.yaml -o src/lib/api/generated/schema.d.ts",
     "openapi:check-breaking": "oasdiff breaking origin/main:docs/openapi/openapi.yaml docs/openapi/openapi.yaml",
-    "openapi:all": "npm run openapi:lint && npm run openapi:bundle && npm run openapi:gen",
+    "openapi:route-map": "node scripts/check-openapi-route-map.mjs",
+    "openapi:all": "npm run openapi:lint && npm run openapi:route-map && npm run openapi:bundle && npm run openapi:gen",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -252,11 +253,11 @@ todo → in_progress → review → done
 
 ## 10. セキュリティ・プライバシー（要約）
 
-詳細は `security-and-privacy.md` を参照（別途追加予定）。
+詳細は `security-and-privacy.md` を参照。
 
 - 画像は Presigned URL（30 分）経由のみ
-- `Cache-Control: private, no-store`
-- AI 送信前に EXIF 除去 + PII マスキング
+- `Cache-Control: private, max-age=300`（ADR-0012）
+- AI 送信前に EXIF 除去 + PII マスキング（MVP の EXIF 除去は ADR-0009 の通りクライアント側）
 - ログ出力は許可リスト方式
 - 退会時は 30 日後に物理削除（DB + Storage）
 

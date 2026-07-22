@@ -1,43 +1,21 @@
-'use client'
-
 import Image from 'next/image'
+import { Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getBrowserApiClient } from '@/lib/api/browser-client'
-import { isApiProblemError } from '@/lib/api/error'
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { HomeGreeting } from '@/components/home-greeting'
 import { computeAge, formatAgeLabel } from '@/lib/age'
+import { getCurrentUser } from '@/server/auth/current-user'
+import { prisma } from '@/server/db/prisma'
+import { fetchMemoriesWithCovers } from '@/features/memories/server/queries'
 
-// V0 prompt §5.2 ホーム画面:
-//   1. Top bar: 時間帯挨拶 + 子どもアバター
-//   2. Hero card → /record
-//   3. (1年前の今日: MVP ではスキップ・ISSUE-017 で本格対応)
-//   4. 最近のページ (横スクロール)
-//   5. これまでの あゆみ stat (全体カウントベースで代替・月別フィルタは ISSUE-016)
-//   6. 空状態: 「○○ちゃんとの 1まいめを、ひらきましょう」
+// V0 prompt §5.2 ホーム画面 (ISSUE-026: Server Component 化 + Suspense streaming)
+//   - 認証チェックだけ最上位で実行 (失敗時 redirect)
+//   - shell + skeleton を即送出 → FCP を早める
+//   - データ依存部分は Suspense 内で async fetch → HTML 同梱で LCP は維持
 
-type Me = { id: string; email: string | null; display_name: string | null }
-type Child = { id: string; name: string; birthdate: string; created_at: string }
-type Memory = {
-  id: string
-  title: string
-  recorded_at: string
-  weather: string | null
-  image_ids: string[]
-  cover_thumbnail_url?: string | null
-}
-
-type Phase = 'loading' | 'no_child' | 'ready' | 'error'
-
-function greeting(date = new Date()): string {
-  const h = date.getHours()
-  if (h >= 6 && h < 11) return 'おはようございます'
-  if (h >= 11 && h < 17) return 'こんにちは'
-  if (h >= 17 && h < 22) return 'こんばんは'
-  return 'おかえりなさい'
-}
+export const dynamic = 'force-dynamic'
 
 function daysBetween(from: Date, to: Date): number {
   const dayMs = 24 * 60 * 60 * 1000
@@ -46,203 +24,185 @@ function daysBetween(from: Date, to: Date): number {
   return Math.max(0, Math.floor((t - f) / dayMs))
 }
 
-export default function HomePage() {
-  const router = useRouter()
-  const [phase, setPhase] = useState<Phase>('loading')
-  const [, setMe] = useState<Me | null>(null)
-  const [child, setChild] = useState<Child | null>(null)
-  const [memories, setMemories] = useState<Memory[]>([])
-  // SSR hydration mismatch を避けるため client-only に計算する。
-  // useSyncExternalStore は server snapshot を別途返せるので setState in effect を避けられる。
-  const greetingText = useSyncExternalStore(
-    () => () => undefined,
-    () => greeting(),
-    () => 'こんにちは',
-  )
-
-  useEffect(() => {
-    let cancelled = false
-    const client = getBrowserApiClient()
-    Promise.all([
-      client.GET('/me'),
-      client.GET('/children'),
-      client.GET('/memories', { params: { query: { limit: 5 } } }),
-    ])
-      .then(([meRes, childrenRes, memoriesRes]) => {
-        if (cancelled) return
-        if (meRes.data) setMe(meRes.data as Me)
-        const first = (childrenRes.data?.data as Child[] | undefined)?.[0]
-        if (!first) {
-          setPhase('no_child')
-          router.push('/onboarding')
-          return
-        }
-        setChild(first)
-        // ISSUE-018: list レスポンスに cover_thumbnail_url が含まれるので追加 fetch 不要
-        const list = (memoriesRes.data?.data ?? []) as Memory[]
-        setMemories(list)
-        setPhase('ready')
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        if (isApiProblemError(e) && e.reason === 'unauthorized') {
-          router.push('/sign-in')
-          return
-        }
-        setPhase('error')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [router])
-
-  if (phase === 'loading' || phase === 'no_child') {
-    return (
-      <main className="bg-canvas min-h-dvh px-6 pb-28 pt-12">
-        <p className="text-ink-tertiary text-center text-sm">よみこんでいます…</p>
-      </main>
-    )
-  }
-
-  if (phase === 'error') {
-    return (
-      <main className="bg-canvas min-h-dvh px-6 pb-28 pt-12">
-        <Card>
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">うまく ひらけませんでした</CardTitle>
-            <CardDescription className="mt-2">
-              ネットワークの ちょうしを たしかめて、もういちど ためしてみてください。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => location.reload()} className="w-full">
-              もういちど ひらく
-            </Button>
-          </CardContent>
-        </Card>
-      </main>
-    )
-  }
-
-  if (!child) return null
-
-  const childInitial = Array.from(child.name)[0] ?? '?'
-  const ageLabel = formatAgeLabel(computeAge(new Date(`${child.birthdate}T00:00:00Z`), new Date()))
-  const togetherDays = daysBetween(new Date(child.created_at), new Date())
+export default async function HomePage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/sign-in')
 
   return (
     <main className="bg-canvas min-h-dvh px-6 pb-28 pt-8">
       <div className="mx-auto w-full max-w-md">
-        {/* Top bar */}
+        {/* Top bar: Greeting は即出る (Client Component), avatar は Suspense でストリーム */}
         <header className="mb-8 flex items-center justify-between">
-          <p className="text-ink font-serif text-base">{greetingText}</p>
-          <Link
-            href="/settings"
-            aria-label={`${child.name} の せってい`}
-            className="bg-warm text-sakura-deep ring-elevated flex h-10 w-10 items-center justify-center rounded-full font-serif text-base ring-2"
-          >
-            {childInitial}
-          </Link>
+          <HomeGreeting />
+          <Suspense fallback={<AvatarPlaceholder />}>
+            <HomeAvatar userId={user.id} />
+          </Suspense>
         </header>
-
-        {/* Hero card */}
-        <Link
-          href="/record"
-          className="ease-organic block transition-transform active:scale-[0.97]"
-        >
-          <Card className="bg-elevated shadow-soft">
-            <CardHeader>
-              <CardTitle className="font-serif text-xl leading-snug">
-                今日の {child.name} ちゃんを、のこしませんか
-              </CardTitle>
-              <CardDescription className="text-ink-secondary mt-2 text-sm">
-                しゃしん 1まいから、30びょうで かんりょうします
-              </CardDescription>
-              <p className="text-sakura-deep mt-3 text-right text-xl" aria-hidden="true">
-                →
-              </p>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {memories.length === 0 ? (
-          <section className="mt-10 flex flex-col items-center text-center">
-            <span className="text-hairline mb-6 text-7xl" aria-hidden="true">
-              ❀
-            </span>
-            <p className="text-ink-secondary leading-narrative font-serif text-base">
-              {child.name} ちゃんとの 1まいめを、
-              <br />
-              ひらきましょう
-            </p>
-            <Button asChild size="lg" className="mt-6">
-              <Link href="/record">はじめての ページを つくる</Link>
-            </Button>
-          </section>
-        ) : (
-          <>
-            <section className="mt-10">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="meta-label">さいきんの ページ</p>
-                <Link href="/album" className="text-ink-tertiary text-xs">
-                  もっとみる →
-                </Link>
-              </div>
-              <ul className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-2">
-                {memories.map((m) => {
-                  const url = m.cover_thumbnail_url ?? null
-                  return (
-                    <li key={m.id} className="w-[140px] shrink-0">
-                      <Link
-                        href={`/memory/${m.id}`}
-                        className="ease-organic block transition-transform active:scale-[0.97]"
-                      >
-                        {typeof url === 'string' ? (
-                          // ADR-0013 (改訂): Supabase Free plan は transformation 未対応のため、
-                          //   Vercel Image Optimization で WebP/AVIF + resize を担う。
-                          <Image
-                            src={url}
-                            alt={m.title}
-                            width={140}
-                            height={175}
-                            sizes="140px"
-                            className="border-hairline aspect-[4/5] w-full rounded-2xl border object-cover"
-                          />
-                        ) : (
-                          <div className="bg-warm text-sakura-deep border-hairline flex aspect-[4/5] w-full items-center justify-center rounded-2xl border text-3xl">
-                            ❀
-                          </div>
-                        )}
-                        <p className="text-ink mt-2 line-clamp-2 font-serif text-sm leading-tight">
-                          {m.title}
-                        </p>
-                      </Link>
-                    </li>
-                  )
-                })}
-                <li className="w-[140px] shrink-0">
-                  <Link
-                    href="/album"
-                    className="bg-warm text-ink-secondary border-hairline ease-organic flex aspect-[4/5] w-full items-center justify-center rounded-2xl border font-serif text-sm transition-transform active:scale-[0.97]"
-                  >
-                    もっとみる →
-                  </Link>
-                </li>
-              </ul>
-            </section>
-
-            <section className="mt-10">
-              <p className="meta-label mb-3">これまでの あゆみ</p>
-              <div className="bg-elevated border-hairline grid grid-cols-3 divide-x divide-[var(--hairline)] rounded-2xl border">
-                <Stat number={String(memories.length)} unit="ページ" />
-                <Stat number={ageLabel.replace('生後 ', '')} unit={`${child.name} ちゃん`} />
-                <Stat number={String(togetherDays)} unit="日 いっしょ" />
-              </div>
-            </section>
-          </>
-        )}
+        {/* Body: hero + carousel + stat */}
+        <Suspense fallback={<HomeBodySkeleton />}>
+          <HomeBody userId={user.id} />
+        </Suspense>
       </div>
     </main>
+  )
+}
+
+async function HomeAvatar({ userId }: { userId: string }) {
+  // 軽量 query: child.name のみ。 child 不在は HomeBody が onboarding に redirect するので
+  // ここでは null を返して空にしておく (placeholder のまま残る)。
+  const child = await prisma.child.findFirst({
+    where: { userId, deletedAt: null },
+    orderBy: { createdAt: 'asc' },
+    select: { name: true },
+  })
+  if (!child) return null
+  const initial = Array.from(child.name)[0] ?? '?'
+  return (
+    <Link
+      href="/settings"
+      aria-label={`${child.name} の せってい`}
+      className="bg-warm text-sakura-deep ring-elevated flex h-10 w-10 items-center justify-center rounded-full font-serif text-base ring-2"
+    >
+      {initial}
+    </Link>
+  )
+}
+
+function AvatarPlaceholder() {
+  return <div className="bg-warm h-10 w-10 animate-pulse rounded-full" aria-hidden="true" />
+}
+
+async function HomeBody({ userId }: { userId: string }) {
+  // 並列フェッチ: child + memories(limit=5)
+  const [child, memoriesResult] = await Promise.all([
+    prisma.child.findFirst({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    }),
+    fetchMemoriesWithCovers({ userId, limit: 5 }),
+  ])
+  if (!child) redirect('/onboarding')
+
+  const memories = memoriesResult.items
+  const ageLabel = formatAgeLabel(computeAge(child.birthdate, new Date()))
+  const togetherDays = daysBetween(child.createdAt, new Date())
+
+  return (
+    <>
+      {/* Hero card */}
+      <Link href="/record" className="ease-organic block transition-transform active:scale-[0.97]">
+        <Card className="bg-elevated shadow-soft">
+          <CardHeader>
+            <CardTitle className="font-serif text-xl leading-snug">
+              今日の {child.name} ちゃんを、のこしませんか
+            </CardTitle>
+            <CardDescription className="text-ink-secondary mt-2 text-sm">
+              しゃしん 1まいから、30びょうで かんりょうします
+            </CardDescription>
+            <p className="text-sakura-deep mt-3 text-right text-xl" aria-hidden="true">
+              →
+            </p>
+          </CardHeader>
+        </Card>
+      </Link>
+
+      {memories.length === 0 ? (
+        <section className="mt-10 flex flex-col items-center text-center">
+          <span className="text-hairline mb-6 text-7xl" aria-hidden="true">
+            ❀
+          </span>
+          <p className="text-ink-secondary leading-narrative font-serif text-base">
+            {child.name} ちゃんとの 1まいめを、
+            <br />
+            ひらきましょう
+          </p>
+          <Button asChild size="lg" className="mt-6">
+            <Link href="/record">はじめての ページを つくる</Link>
+          </Button>
+        </section>
+      ) : (
+        <>
+          <section className="mt-10">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="meta-label">さいきんの ページ</p>
+              <Link href="/album" className="text-ink-tertiary text-xs">
+                もっとみる →
+              </Link>
+            </div>
+            <ul className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-2">
+              {memories.map((m) => {
+                const url = m.coverThumbnailUrl
+                return (
+                  <li key={m.id} className="w-[140px] shrink-0">
+                    <Link
+                      href={`/memory/${m.id}`}
+                      className="ease-organic block transition-transform active:scale-[0.97]"
+                    >
+                      {typeof url === 'string' ? (
+                        <Image
+                          src={url}
+                          alt={m.title}
+                          width={140}
+                          height={175}
+                          sizes="140px"
+                          className="border-hairline aspect-[4/5] w-full rounded-2xl border object-cover"
+                        />
+                      ) : (
+                        <div className="bg-warm text-sakura-deep border-hairline flex aspect-[4/5] w-full items-center justify-center rounded-2xl border text-3xl">
+                          ❀
+                        </div>
+                      )}
+                      <p className="text-ink mt-2 line-clamp-2 font-serif text-sm leading-tight">
+                        {m.title}
+                      </p>
+                    </Link>
+                  </li>
+                )
+              })}
+              <li className="w-[140px] shrink-0">
+                <Link
+                  href="/album"
+                  className="bg-warm text-ink-secondary border-hairline ease-organic flex aspect-[4/5] w-full items-center justify-center rounded-2xl border font-serif text-sm transition-transform active:scale-[0.97]"
+                >
+                  もっとみる →
+                </Link>
+              </li>
+            </ul>
+          </section>
+
+          <section className="mt-10">
+            <p className="meta-label mb-3">これまでの あゆみ</p>
+            <div className="bg-elevated border-hairline grid grid-cols-3 divide-x divide-[var(--hairline)] rounded-2xl border">
+              <Stat number={String(memories.length)} unit="ページ" />
+              <Stat number={ageLabel.replace('生後 ', '')} unit={`${child.name} ちゃん`} />
+              <Stat number={String(togetherDays)} unit="日 いっしょ" />
+            </div>
+          </section>
+        </>
+      )}
+    </>
+  )
+}
+
+function HomeBodySkeleton() {
+  // hero card と carousel の **形状一致** で CLS ゼロを維持。
+  return (
+    <>
+      <div
+        className="bg-warm h-32 w-full animate-pulse rounded-[var(--radius)]"
+        aria-hidden="true"
+      />
+      <section className="mt-10">
+        <div className="bg-warm mb-3 h-4 w-24 animate-pulse rounded" aria-hidden="true" />
+        <ul className="-mx-6 flex gap-3 px-6 pb-2">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="w-[140px] shrink-0" aria-hidden="true">
+              <div className="bg-warm aspect-[4/5] w-full animate-pulse rounded-2xl" />
+            </li>
+          ))}
+        </ul>
+      </section>
+    </>
   )
 }
 

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  profileUpsert: vi.fn(),
+  profileFindUnique: vi.fn(),
+  profileCreate: vi.fn(),
   imageFindFirst: vi.fn(),
   createSignedUrl: vi.fn(),
 }))
@@ -25,7 +26,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
-    profile: { upsert: mocks.profileUpsert },
+    profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
     image: { findFirst: mocks.imageFindFirst },
   },
 }))
@@ -52,7 +53,7 @@ const imageRow = {
 
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-  mocks.profileUpsert.mockResolvedValue(profileRow)
+  mocks.profileFindUnique.mockResolvedValue(profileRow)
 }
 
 function unauthed() {
@@ -103,7 +104,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     expect(res.status).toBe(422)
   })
 
-  it('returns 200 with no transform when size is omitted', async () => {
+  it('returns 200 with original key when size is omitted', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -113,13 +114,13 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID)
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, undefined)
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800)
     const body = (await res.json()) as { url: string; expires_at: string }
     expect(body.url).toBe('https://example.com/signed')
     expect(body.expires_at).toMatch(/T.*Z$/)
   })
 
-  it('passes resize=contain transform when size=thumbnail', async () => {
+  it('uses derived _thumb.webp key when size=thumbnail (ISSUE-031)', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -129,12 +130,10 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID, 'thumbnail')
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, {
-      transform: { width: 320, resize: 'contain', quality: 70 },
-    })
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img_thumb.webp', 1800)
   })
 
-  it('passes resize=contain transform when size=preview', async () => {
+  it('uses derived _preview.webp key when size=preview (ISSUE-031)', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -144,12 +143,10 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID, 'preview')
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, {
-      transform: { width: 1024, resize: 'contain', quality: 80 },
-    })
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith('uploads/abc/202605/img_preview.webp', 1800)
   })
 
-  it('passes no transform when size=original', async () => {
+  it('uses original key when size=original', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({
@@ -159,7 +156,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
 
     const res = await call(IMG_ID, 'original')
     expect(res.status).toBe(200)
-    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800, undefined)
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(imageRow.storageKey, 1800)
   })
 
   it('sets Cache-Control: private, max-age=300', async () => {
@@ -174,13 +171,51 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     expect(res.headers.get('Cache-Control')).toBe('private, max-age=300')
   })
 
-  it('returns 500 when Storage createSignedUrl fails', async () => {
+  it('returns 500 when Storage createSignedUrl fails (size=original)', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
     mocks.createSignedUrl.mockResolvedValue({ data: null, error: { message: 'boom' } })
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const res = await call(IMG_ID)
+    const res = await call(IMG_ID, 'original')
+    expect(res.status).toBe(500)
+
+    spy.mockRestore()
+  })
+
+  it('falls back to original when variant key is missing (ISSUE-031 既存データ救済)', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue(imageRow)
+    // 1 回目 (variant key) は失敗、 2 回目 (original key) で成功する mock
+    mocks.createSignedUrl
+      .mockResolvedValueOnce({ data: null, error: { message: 'Object not found' } })
+      .mockResolvedValueOnce({
+        data: { signedUrl: 'https://example.com/original-fallback' },
+        error: null,
+      })
+
+    const res = await call(IMG_ID, 'preview')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { url: string }
+    expect(body.url).toBe('https://example.com/original-fallback')
+
+    // variant key → original key の順で 2 回呼ばれること
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(2)
+    expect(mocks.createSignedUrl).toHaveBeenNthCalledWith(
+      1,
+      'uploads/abc/202605/img_preview.webp',
+      1800,
+    )
+    expect(mocks.createSignedUrl).toHaveBeenNthCalledWith(2, imageRow.storageKey, 1800)
+  })
+
+  it('returns 500 when both variant and original fail', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue(imageRow)
+    mocks.createSignedUrl.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await call(IMG_ID, 'preview')
     expect(res.status).toBe(500)
 
     spy.mockRestore()

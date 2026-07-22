@@ -11,8 +11,62 @@ import {
 } from '@/features/uploads/server/storage-key'
 import { parseUploadConfirmRequest, readJsonBody } from '@/features/uploads/server/parse'
 import { toImageResponse } from '@/features/uploads/view-models/image'
+import { deriveVariantKey } from '@/features/uploads/server/signed-url'
+import {
+  generatePreviewVariant,
+  generateThumbnailVariant,
+} from '@/features/uploads/server/variants'
+import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
+
+const BUCKET = 'images'
+
+/**
+ * ISSUE-031: original を download → sharp で thumbnail/preview を生成 → Storage に upload。
+ * 失敗時はサーバログに残して **無視** (Image row は作成して 200 を返す。 ユーザーの
+ * 「アップロード成功」 体験を壊さない。 variant が無いと一覧で 404 → ❀ placeholder)。
+ */
+async function generateAndUploadVariants(storageKey: string): Promise<void> {
+  const supabase = createSupabaseAdminClient()
+  const { data: blob, error: downloadError } = await supabase.storage
+    .from(BUCKET)
+    .download(storageKey)
+
+  if (downloadError || !blob) {
+    console.error('variant generation: original download failed', {
+      reason: downloadError?.message ?? 'no_data',
+    })
+    return
+  }
+
+  const original = Buffer.from(await blob.arrayBuffer())
+  const [thumb, preview] = await Promise.all([
+    generateThumbnailVariant(original),
+    generatePreviewVariant(original),
+  ])
+
+  const thumbKey = deriveVariantKey(storageKey, 'thumbnail')
+  const previewKey = deriveVariantKey(storageKey, 'preview')
+
+  const [thumbRes, previewRes] = await Promise.all([
+    supabase.storage.from(BUCKET).upload(thumbKey, thumb.buffer, {
+      contentType: thumb.contentType,
+      upsert: true,
+    }),
+    supabase.storage.from(BUCKET).upload(previewKey, preview.buffer, {
+      contentType: preview.contentType,
+      upsert: true,
+    }),
+  ])
+
+  if (thumbRes.error) {
+    console.error('variant upload (thumbnail) failed', { reason: thumbRes.error.message })
+  }
+  if (previewRes.error) {
+    console.error('variant upload (preview) failed', { reason: previewRes.error.message })
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -45,6 +99,16 @@ export async function POST(request: Request) {
           message: '拡張子が不正です',
         },
       ])
+    }
+
+    // variant 生成 + upload (失敗してもユーザー体験を壊さないので sequential 待機)
+    try {
+      await generateAndUploadVariants(input.storageKey)
+    } catch (variantErr) {
+      console.error('variant generation crashed', {
+        reason: variantErr instanceof Error ? variantErr.message : 'unknown',
+      })
+      // 続行: Image row は作成する
     }
 
     try {

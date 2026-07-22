@@ -2,9 +2,11 @@
 id: ISSUE-017
 title: requireUser() を request-scoped cache 化 + profile upsert 廃止
 priority: P0
-status: todo
+status: done
 size: S
 created_at: 2026-05-26
+merged_at: 2026-06-10
+pr: 48
 parent: PERF
 ---
 

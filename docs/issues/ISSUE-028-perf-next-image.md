@@ -1,6 +1,6 @@
 ---
 id: ISSUE-028
-title: 画像表示を next/image に全面移行 (AVIF/WebP + lazy + srcset)
+title: 画像表示を next/image に移行 (WebP variants + lazy + priority)
 priority: P1
 status: review
 size: M
@@ -10,14 +10,14 @@ parent: PERF
 
 ## 目的 (Why)
 
-現状すべての画像が **`<img>` 直接** で、 Next.js の image optimization (AVIF / WebP 配信、 自動 lazy、 srcset) を活用していない。
-ISSUE-018 / 019 で Supabase image transformation を使うので転送量は減ったが、 さらに:
+ISSUE-031 でアップロード時に `thumbnail` / `preview` の WebP variant を生成するようになった。 ISSUE-028 では、それらの軽量画像を画面側で安定して表示するため、主要な `<img>` 表示を `next/image` に移行する。
 
-- AVIF 配信で 20〜30% 削減
-- viewport 外の自動 lazy
-- レスポンシブ srcset で device に応じた最適サイズ
+狙いは以下:
 
-を取りたい。
+- 表示寸法をコード上で固定し、 CLS を起こしにくくする
+- viewport 外画像の lazy loading を `next/image` に任せる
+- `/memory/[memoryId]` の 1 枚目を LCP 候補として `priority` 指定する
+- private signed URL を Vercel Image Optimization に proxy せず、 upload-time variant をそのまま表示する
 
 ---
 
@@ -25,91 +25,92 @@ ISSUE-018 / 019 で Supabase image transformation を使うので転送量は減
 
 ### ADR
 
-- [ ] `docs/adr/ADR-0013-image-optimization-stack.md`
-  - Supabase Storage transformation と Vercel Image Optimization の **二重最適化を避ける** 判断
-  - 結論: Supabase で base resize (320 / 1024)、 Vercel で format conversion (AVIF/WebP) という分担
-  - もしくは: Supabase だけで完結し、 `<Image unoptimized>` を使う案との比較
+- [x] `docs/adr/0013-image-optimization-stack.md`
+  - Supabase Storage の private bucket + presigned URL
+  - upload-time `sharp` variants (ISSUE-031)
+  - `next/image` は寸法、 lazy、 priority を担当
+  - `images.unoptimized: true` で Vercel Image Optimization には通さない
 
 ### 修正
 
-- [ ] `next.config.ts` の `images` 設定
+- [x] `next.config.ts` の `images` 設定
   ```ts
   images: {
+    unoptimized: true,
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co' },
     ],
-    formats: ['image/avif', 'image/webp'],
   }
   ```
-- [ ] `<img>` 4 箇所を `<Image>` に置換:
+- [x] `<img>` 3 箇所を `<Image>` に置換:
   - `src/app/album/page.tsx` (Thumbnail)
   - `src/app/page.tsx` (cover carousel)
   - `src/app/memory/[memoryId]/page.tsx` (本画像)
-  - `src/app/record/page.tsx` (file preview — Object URL なので `unoptimized` 必要)
-- [ ] 各箇所で適切な `width` / `height` / `sizes` を指定
-- [ ] LCP 候補 (memory detail の本画像) には `priority` を付ける
+- [x] 各箇所で適切な `width` / `height` / `sizes` を指定
+- [x] LCP 候補 (memory detail の本画像 1 枚目) には `priority` を付ける
 
 ### やらないこと
 
 - blurhash / placeholder の生成 (将来 Issue)
 - Service Worker での画像キャッシュ
 - Cloudflare R2 への移行
+- Vercel Image Optimization による AVIF / responsive optimizer `srcset`
 
 ---
 
 ## 設計判断
 
-### Vercel Image Optimization を使う前提
+### upload-time variants を正とする
 
-Hana は Vercel デプロイ前提 (`CLAUDE.md` 暗黙、 vercel.ts も今後導入予定)。
-`unoptimized: false` で Vercel の最適化を活用。
+現行 main では ISSUE-031 により、 `generateSignedImageUrl(storageKey, size)` が `thumbnail` / `preview` / `original` を選び、 variant がなければ original にフォールバックする。
 
-### Supabase transformation との二重 fetch を回避
+この Issue ではその設計を維持し、 画面側は渡された signed URL を `next/image` で表示する。
 
-`<Image src={supabaseUrl}>` で Vercel が AVIF に変換するとき、 source は Supabase の transformation 済画像。
-これで「Supabase で resize → Vercel で format」 の流れが成立。 二重 resize にはならない。
+### Vercel Image Optimization は使わない
 
-### `Record` のプレビューは `unoptimized`
+private signed URL を Vercel の optimizer に渡すと、 token 付き URL が cache key になりやすく、 cache 効率と制限管理が複雑になる。 画像の byte-size reduction は upload-time WebP variant で担保する。
 
-`URL.createObjectURL(file)` は blob URL なので Vercel optimization の対象外。
-`unoptimized` を付けて素通り。
+### `Record` のプレビューは対象外
+
+`/record` のアップロード前 preview は blob URL (`URL.createObjectURL(file)`) を使う。 remote signed URL ではないため、本 Issue の主要移行対象から外す。
 
 ---
 
 ## 影響範囲
 
-| 領域         | 影響                                                |
-| ------------ | --------------------------------------------------- |
-| OpenAPI      | なし                                                |
-| 生成型       | なし                                                |
-| データ       | なし                                                |
-| 画面         | `/`, `/album`, `/memory/[id]`, `/record` の画像表示 |
-| 設定         | `next.config.ts`                                    |
-| CI           | typecheck / lint / format / build / test            |
-| ドキュメント | ADR-0013                                            |
-| 環境変数     | なし                                                |
+| 領域         | 影響                                     |
+| ------------ | ---------------------------------------- |
+| OpenAPI      | なし                                     |
+| 生成型       | なし                                     |
+| データ       | なし                                     |
+| 画面         | `/`, `/album`, `/memory/[id]` の画像表示 |
+| 設定         | `next.config.ts`                         |
+| CI           | typecheck / lint / format / build / test |
+| ドキュメント | ADR-0013                                 |
+| 環境変数     | なし                                     |
 
 ---
 
 ## 受け入れ条件
 
-- [ ] ADR-0013 が存在
-- [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
-- [ ] DevTools Network で画像が `image/avif` または `image/webp` で配信されている
+- [x] ADR-0013 が存在し、 upload-time variants + next/image の分担が明記されている
+- [x] `pnpm pr:gate` グリーン
+- [ ] DevTools Network で `/album` / `/memory/[id]` の画像が WebP variant signed URL で配信されている
 - [ ] viewport 外の画像が初期ロードに含まれない (lazy)
-- [ ] LCP 画像 (memory detail) は `priority` で eagerly loaded
-- [ ] Lighthouse "Use modern image formats" / "Properly size images" が 90+ スコア
+- [ ] LCP 画像 (memory detail の 1 枚目) は `priority` で eagerly loaded
+- [ ] Lighthouse "Properly size images" が悪化していない
 
 ---
 
 ## 動作確認手順
 
 ```bash
-pnpm dev
-# 1. /album を開く → Network filter "img" で Content-Type を確認
+pnpm build
+pnpm start
+# 1. /album を開く → Network filter "img" で *_thumb.webp signed URL を確認
 # 2. スクロールで lazy 画像が後追いロードされること
-# 3. /memory/{id} を開く → 本画像が即時表示
-# 4. /record で写真を選択 → preview が unoptimized で表示
+# 3. /memory/{id} を開く → 1 枚目 preview 画像が即時表示されること
+# 4. Network filter "img" で *_preview.webp signed URL を確認
 # 5. Lighthouse mobile で /album, /memory/{id} を再計測
 ```
 
@@ -117,14 +118,14 @@ pnpm dev
 
 ## リスク
 
-- Vercel Image Optimization の制限 (月 1000 transformations の Hobby) → 利用量モニタ
-- Object URL に `unoptimized` を付け忘れると build error → ESLint rule や Visual QA で確認
-- HMR で `next.config.ts` の変更が反映されない → server 再起動を README に記載
+- 既存データに variant がない場合、 original fallback により転送量が一時的に増える
+- `next/image` の `width` / `height` と CSS aspect ratio がずれると表示崩れの可能性がある
+- HMR で `next.config.ts` の変更が反映されないため、確認時は server 再起動が必要
 
 ---
 
 ## 参考
 
-- ISSUE-018 / 019 (前提、 Supabase transformation)
-- ISSUE-025〜027 (Server Component 化と同時進行可)
+- ISSUE-031 (upload-time image variants)
+- ISSUE-025〜027 (Server Component 化)
 - Next.js Image: https://nextjs.org/docs/app/api-reference/components/image

@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // Supabase / Prisma を vi.mock で差し替える。
-// 重要: 各テストの直前に getUser / upsert の挙動を差し替えるため、
-// vi.hoisted で参照を保持する。
+// ISSUE-017: upsert を捨て findUnique + 必要なら create に変えたので、 mock も両方提供。
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  upsert: vi.fn(),
+  findUnique: vi.fn(),
+  create: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -20,7 +20,8 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
     profile: {
-      upsert: mocks.upsert,
+      findUnique: mocks.findUnique,
+      create: mocks.create,
     },
   },
 }))
@@ -51,19 +52,17 @@ describe('getCurrentUser', () => {
   it('returns null when no Supabase session', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } })
     expect(await getCurrentUser()).toBeNull()
-    expect(mocks.upsert).not.toHaveBeenCalled()
+    expect(mocks.findUnique).not.toHaveBeenCalled()
+    expect(mocks.create).not.toHaveBeenCalled()
   })
 
-  it('returns AppUser shape on hit and upserts profile lazily', async () => {
+  it('hot path: existing profile uses findUnique only (no create)', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-    mocks.upsert.mockResolvedValue(profileRow)
+    mocks.findUnique.mockResolvedValue(profileRow)
 
     const user = await getCurrentUser()
-    expect(mocks.upsert).toHaveBeenCalledWith({
-      where: { id: USER_ID },
-      create: { id: USER_ID },
-      update: {},
-    })
+    expect(mocks.findUnique).toHaveBeenCalledWith({ where: { id: USER_ID } })
+    expect(mocks.create).not.toHaveBeenCalled()
     expect(user).toEqual({
       id: USER_ID,
       email: 'parent@example.com',
@@ -73,9 +72,20 @@ describe('getCurrentUser', () => {
     })
   })
 
+  it('cold path: missing profile triggers create (first sign-in)', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
+    mocks.findUnique.mockResolvedValue(null)
+    mocks.create.mockResolvedValue(profileRow)
+
+    const user = await getCurrentUser()
+    expect(mocks.findUnique).toHaveBeenCalledWith({ where: { id: USER_ID } })
+    expect(mocks.create).toHaveBeenCalledWith({ data: { id: USER_ID } })
+    expect(user?.id).toBe(USER_ID)
+  })
+
   it('serializes aiConsentAt when present', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-    mocks.upsert.mockResolvedValue({
+    mocks.findUnique.mockResolvedValue({
       ...profileRow,
       aiConsentAt: new Date('2026-06-01T00:00:00Z'),
     })
@@ -96,7 +106,7 @@ describe('requireUser', () => {
 
   it('returns AppUser when session exists', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
-    mocks.upsert.mockResolvedValue(profileRow)
+    mocks.findUnique.mockResolvedValue(profileRow)
     const user = await requireUser()
     expect(user.id).toBe(USER_ID)
   })

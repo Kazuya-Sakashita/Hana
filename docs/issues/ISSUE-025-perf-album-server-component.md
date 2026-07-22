@@ -2,9 +2,11 @@
 id: ISSUE-025
 title: /album を Server Component 化 (初期データを SSR)
 priority: P1
-status: todo
+status: done
 size: M
 created_at: 2026-05-26
+merged_at: 2026-06-11
+pr: 54
 parent: PERF
 ---
 

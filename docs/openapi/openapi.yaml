@@ -40,6 +40,8 @@ tags:
     description: 記録 (1 日 1 ページの育児ログ)
   - name: ai
     description: AI 文章生成 (Claude API)
+  - name: metrics
+    description: パフォーマンス計測 (Web Vitals RUM)
 paths:
   /health:
     get:
@@ -505,6 +507,31 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /metrics/vitals:
+    post:
+      operationId: reportWebVitals
+      summary: Web Vitals 計測の報告 (RUM、 ISSUE-024)
+      description: |
+        ブラウザの `web-vitals` ライブラリから `navigator.sendBeacon` で送られる
+        Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受け、 構造化ログに記録する。
+        DB 保存はしない (Vercel Logs で十分)。
+        サインアウト状態でも送れる (匿名で記録)。
+        PII を含めない (allowlist: name / value / id / navigationType / route + userIdHash)。
+      tags: [metrics]
+      security:
+        - bearerAuth: []
+        - {} # 匿名も受け入れる
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebVitalsReport'
+      responses:
+        '204':
+          description: 受信成功 (body なし)
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
   /ai/generate:
     post:
       operationId: generateAiText
@@ -577,6 +604,8 @@ components:
       $ref: './components/schemas/Memory.yaml'
     MemoryListResponse:
       $ref: './components/schemas/MemoryListResponse.yaml'
+    WebVitalsReport:
+      $ref: './components/schemas/WebVitalsReport.yaml'
     MemoryCreateRequest:
       $ref: './components/schemas/MemoryCreateRequest.yaml'
     MemoryUpdateRequest:
