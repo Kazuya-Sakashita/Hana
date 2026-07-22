@@ -9,10 +9,15 @@
 
 ```
 docs/design/
-├── README.md       このファイル
-├── v0-prompt.md    V0 AI に投げたプロンプト集（章 1〜9）— git 管理
-└── v0-output/      V0 AI が生成した Next.js プロジェクト一式
-                    （ローカル参照のみ・gitignored・参照不要になったら手元で削除）
+├── README.md                このファイル
+├── design-organization.md   Hana のデザイン組織と役割定義
+├── design-review-playbook.md
+│                            Design Review の入口条件・完了条件・証跡運用
+├── subagent-prompt-templates.md
+│                            Codex サブエージェント依頼テンプレート
+├── v0-prompt.md             V0 AI に投げたプロンプト集（章 1〜9）— git 管理
+└── v0-output/               V0 AI が生成した Next.js プロジェクト一式
+                             （ローカル参照のみ・gitignored・参照不要になったら手元で削除）
 ```
 
 ---
