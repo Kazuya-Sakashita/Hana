@@ -18,7 +18,7 @@ Hana のデザイン再構築は、見た目を一度きれいにする作業で
 | 責めない              | 空白期間、失敗、未入力、離脱を責める文言・通知・強調表現を禁止する                 |
 | Album, not feed       | 比較、人気、投稿、連続記録よりも、私的な記憶として見返せる密度を優先する           |
 | Whisper, not shout    | 色、motion、CTA、empty state が親を急かさないかを Brand / Content 両方で見る       |
-| AI is invisible       | AI を主役にせず、親の記憶をそっと整える黒子として扱う                              |
+| AI is invisible       | AI をUI上の主役にしない。ただし写真送信・AI利用の同意は明示する                    |
 | Privacy before polish | 子どもの写真、AI同意、削除、共有、エラー文言は見た目より先に trust risk を確認する |
 
 ---
@@ -107,65 +107,9 @@ Design Lead が最終判断を統合する。Codex ではメイン agent が Iss
 
 ## 6. Subagent Prompt Templates
 
-### Head of Design Reviewer
-
-```text
-Read-only review for Hana design work. Do not edit files.
-Evaluate whether the proposal follows Hana principles:
-30-second record flow, forgiving UX, Album not feed, Whisper not shout,
-AI is invisible, Privacy before polish.
-
-Return:
-- blocking findings
-- non-blocking risks
-- Go / Hold / No-Go
-- concrete next actions
-Do not include child/parent names, image URLs, storage keys, or AI generated text.
-```
-
-### Product UX Reviewer
-
-```text
-Read-only Product UX review for Hana.
-Focus on the target flow, state transitions, one-handed mobile usage,
-input minimization, recovery from error, and whether the parent can finish
-without feeling rushed or blamed.
-
-Return findings with screen/flow references and acceptance criteria gaps.
-Use only fictional or anonymized data in examples.
-```
-
-### Privacy / Trust Reviewer
-
-```text
-Read-only Privacy / Trust review for Hana.
-Focus on child photo trust, AI consent, deletion, sharing, logs, screenshots,
-review evidence, and wording that may imply surveillance or judgment.
-
-Flag any PII, image URL, storage_key, signed URL, request body, or AI generated text
-in proposed evidence. Return blocker/warning/pass and required mitigations.
-```
-
-### Accessibility Reviewer
-
-```text
-Read-only Accessibility review for Hana UI/design work.
-Check tap targets, contrast, text size, focus states, keyboard access,
-reduced motion, alt text, and whether emotional copy remains understandable.
-
-Return blockers first, then warnings, then manual QA that must be performed.
-```
-
-### Engineering Design Reviewer
-
-```text
-Read-only Engineering Design review for Hana.
-Check implementation feasibility, file scope, API/OpenAPI impact, generated type risk,
-test strategy, performance impact, rollback, and whether the Issue can stay
-within a half-day to two-day PR.
-
-Return scope split recommendations and merge blockers.
-```
+テンプレート本文の正本は `docs/design/subagent-prompt-templates.md` に置く。
+この文書では persona と使い分けだけを定義し、PII / AI / image evidence の禁止事項を
+二重管理しない。
 
 ---
 
