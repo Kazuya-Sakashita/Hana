@@ -2,7 +2,7 @@
 id: ISSUE-021
 title: bundle analyzer 導入 + Noto Serif JP weight 削減
 priority: P1
-status: todo
+status: review
 size: S
 created_at: 2026-05-26
 parent: PERF
@@ -24,18 +24,18 @@ parent: PERF
 
 ### 新規 / 修正
 
-- [ ] `@next/bundle-analyzer` を devDependencies に追加
-- [ ] `next.config.ts` を bundle-analyzer 対応に
+- [x] `@next/bundle-analyzer` を devDependencies に追加
+- [x] `next.config.ts` を bundle-analyzer 対応に
   ```ts
   import bundleAnalyzer from '@next/bundle-analyzer'
   const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === 'true' })
   export default withBundleAnalyzer({ ... })
   ```
-- [ ] `package.json` に script を追加
-  - `"analyze": "ANALYZE=true pnpm build"`
-- [ ] `docs/perf/bundle-baseline.md` を作成
+- [x] `package.json` に script を追加
+  - `"analyze": "ANALYZE=true pnpm build:ci --webpack"`
+- [x] `docs/perf/bundle-baseline.md` を作成
   - `ANALYZE=true pnpm build` の結果 (main / framework / app/page chunks のサイズ) を記録
-- [ ] **Noto Serif JP の weight 棚卸し**:
+- [x] **Noto Serif JP の weight 棚卸し**:
   - `src/` 全体で `font-serif` を使うコンポーネントを grep
   - 各箇所で実際に必要な weight (基本は normal=400 と bold=700) を特定
   - `layout.tsx` の weight 配列を必要最小限に削減 (おそらく `['400', '700']` で OK)
@@ -79,11 +79,14 @@ parent: PERF
 
 ## 受け入れ条件
 
-- [ ] `pnpm analyze` で bundle visualization が `.next/analyze/` 配下に出力
-- [ ] `docs/perf/bundle-baseline.md` に main の First Load JS / framework size が記録
-- [ ] Noto Serif JP の weight が必要最小限 (例: `['400', '700']`) に
+- [x] `pnpm analyze` で bundle visualization が `.next/analyze/` 配下に出力
+- [x] `docs/perf/bundle-baseline.md` に main の First Load JS / framework size が記録
+- [x] Noto Serif JP の weight が必要最小限 (例: `['400', '700']`) に
 - [ ] 全画面で見た目が大きく変わらない (Visual QA で 5 画面確認)
-- [ ] First Load JS が main で **+0% 以下** (回帰しない)
+- [x] First Load JS が main で **+0% 以下** (回帰しない)
+
+Visual QA は PR merge 前の人間確認ゲートとして残す。
+自動検証では `pnpm analyze` の analyzer 出力、`pnpm build:ci` の main 比較、`pnpm pr:gate` まで確認済み。
 
 ---
 

@@ -1,7 +1,6 @@
 const googleFontUrls = {
   inter: 'https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap',
-  notoSerifJp:
-    'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500;700&display=swap',
+  notoSerifJp: 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap',
 }
 
 module.exports = {
@@ -21,15 +20,6 @@ module.exports = {
   font-family: 'Noto Serif JP';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
-  src: local("Hiragino Mincho ProN"), local("Yu Mincho"), local("serif");
-}
-
-/* latin */
-@font-face {
-  font-family: 'Noto Serif JP';
-  font-style: normal;
-  font-weight: 500;
   font-display: swap;
   src: local("Hiragino Mincho ProN"), local("Yu Mincho"), local("serif");
 }
