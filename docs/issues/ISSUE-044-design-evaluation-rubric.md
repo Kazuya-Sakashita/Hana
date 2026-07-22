@@ -2,7 +2,7 @@
 id: ISSUE-044
 title: Hana に合うデザイン評価手法を定義する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN
@@ -87,6 +87,11 @@ Task Success の blocker は全体判定を Hold / No-Go にする。
 
 - `git diff --check`
 - `pnpm pr:gate`
+
+## 完了メモ
+
+- PR #95 で merge 済み
+- `docs/design/design-evaluation-rubric.md` を ISSUE-045 の棚卸しに使用可能な状態にした
 
 ## セキュリティ・プライバシー考慮
 
