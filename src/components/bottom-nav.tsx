@@ -58,6 +58,7 @@ export function BottomNav() {
         {/* 中央 + ボタン (floating、tab bar に重なる) */}
         <Link
           href="/record"
+          prefetch={false}
           aria-label="あたらしく のこす"
           className="bg-primary text-primary-foreground hover:bg-sakura-deep shadow-lift ease-organic absolute left-1/2 top-0 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-2xl transition-all active:scale-95"
         >
@@ -73,6 +74,7 @@ function TabLink({ tab, pathname }: { tab: TabDef; pathname: string | null }) {
   return (
     <Link
       href={tab.href}
+      prefetch={true}
       aria-current={active ? 'page' : undefined}
       className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 transition-colors ${
         active ? 'text-sakura-deep font-medium' : 'text-ink-tertiary'

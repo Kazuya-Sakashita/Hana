@@ -31,6 +31,7 @@ export default async function MemoryDetailPage({ params }: PageProps) {
         {/* Back link は即出る (static) */}
         <Link
           href="/album"
+          prefetch={true}
           aria-label="アルバムへ もどる"
           className="bg-canvas/90 text-ink absolute left-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full text-lg backdrop-blur-sm"
         >

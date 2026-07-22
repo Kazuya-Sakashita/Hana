@@ -328,7 +328,9 @@ export default function RecordPage() {
           </CardHeader>
           <CardContent>
             <Button asChild size="lg" className="w-full">
-              <Link href="/onboarding">プロフィールを ひらく</Link>
+              <Link href="/onboarding" prefetch={false}>
+                プロフィールを ひらく
+              </Link>
             </Button>
           </CardContent>
         </Card>
