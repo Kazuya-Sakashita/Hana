@@ -110,6 +110,14 @@ private signed URL を Vercel の optimizer に渡すと、 token 付き URL が
 - `/album` thumbnail / `/memory/[id]` preview の signed URL 経路は code + test で確認済み
 - 未完: 認証済み実データ環境での DevTools Network / Lighthouse / LCP 再計測
 
+### ブラウザ QA 試行 (2026-07-23)
+
+- 詳細: `docs/perf/issue-028-browser-qa-attempt-2026-07-23.md`
+- `origin/main` から別 worktree / branch を作成し、メイン worktree に触れず確認
+- `.env.local` の必要キーは存在するが、`DATABASE_URL` / `DIRECT_URL` ともに Supabase DB へ接続不可
+- そのため、認証済み実データでの DevTools Network / Lighthouse / LCP 再計測は未実施
+- #43 の未完受け入れ条件はまだ満たしていないため、GitHub Issue #43 は open のまま維持する
+
 ---
 
 ## 動作確認手順
