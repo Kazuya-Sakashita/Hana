@@ -82,7 +82,7 @@ const childRow = {
 const imageRow = {
   id: IMAGE_ID,
   userId: USER_ID,
-  storageKey: 'uploads/abc/202605/foo.jpg',
+  storageKey: 'image-fixture-key-001',
   contentType: 'image/jpeg',
 }
 
@@ -90,7 +90,7 @@ function makeImageRows(ids: string[]) {
   return ids.map((id, index) => ({
     ...imageRow,
     id,
-    storageKey: `uploads/abc/202605/${index + 1}.jpg`,
+    storageKey: `image-fixture-key-${String(index + 1).padStart(3, '0')}`,
   }))
 }
 
@@ -248,16 +248,19 @@ describe('POST /v1/ai/generate', () => {
       arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer,
     }
     const downloadResolvers: Array<(value: { data: typeof blob; error: null }) => void> = []
+    const resizeResolvers: Array<() => void> = []
     mocks.storageDownload.mockImplementation(
       () =>
         new Promise((resolve) => {
           downloadResolvers.push(resolve)
         }),
     )
-    mocks.resizeForClaude.mockImplementation(async (buf: Buffer) => ({
-      buffer: buf,
-      mediaType: 'image/jpeg' as const,
-    }))
+    mocks.resizeForClaude.mockImplementation(
+      (buf: Buffer) =>
+        new Promise((resolve) => {
+          resizeResolvers.push(() => resolve({ buffer: buf, mediaType: 'image/jpeg' as const }))
+        }),
+    )
 
     const resPromise = POST(jsonRequest({ ...validBody, image_ids: IMAGE_IDS }))
 
@@ -270,9 +273,17 @@ describe('POST /v1/ai/generate', () => {
       resolve({ data: blob, error: null })
     }
 
+    await vi.waitFor(() => {
+      expect(mocks.resizeForClaude).toHaveBeenCalledTimes(5)
+    })
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+
+    for (const resolve of resizeResolvers) {
+      resolve()
+    }
+
     const res = await resPromise
     expect(res.status).toBe(200)
-    expect(mocks.resizeForClaude).toHaveBeenCalledTimes(5)
   })
 
   it('returns 500 and skips Claude when one image download fails', async () => {
