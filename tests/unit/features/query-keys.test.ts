@@ -20,11 +20,48 @@ describe('client query keys', () => {
   })
 
   it('clears cached private data on auth session changes', () => {
-    expect(shouldClearQueryCacheOnAuthChange('SIGNED_IN')).toBe(true)
-    expect(shouldClearQueryCacheOnAuthChange('SIGNED_OUT')).toBe(true)
-    expect(shouldClearQueryCacheOnAuthChange('TOKEN_REFRESHED')).toBe(true)
-    expect(shouldClearQueryCacheOnAuthChange('USER_UPDATED')).toBe(true)
+    expect(
+      shouldClearQueryCacheOnAuthChange({
+        event: 'SIGNED_OUT',
+        previousUserId: 'user-a',
+        currentUserId: null,
+      }),
+    ).toBe(true)
+    expect(
+      shouldClearQueryCacheOnAuthChange({
+        event: 'SIGNED_IN',
+        previousUserId: 'user-a',
+        currentUserId: 'user-b',
+      }),
+    ).toBe(true)
+    expect(
+      shouldClearQueryCacheOnAuthChange({
+        event: 'TOKEN_REFRESHED',
+        previousUserId: 'user-a',
+        currentUserId: 'user-b',
+      }),
+    ).toBe(true)
 
-    expect(shouldClearQueryCacheOnAuthChange('INITIAL_SESSION')).toBe(false)
+    expect(
+      shouldClearQueryCacheOnAuthChange({
+        event: 'INITIAL_SESSION',
+        previousUserId: null,
+        currentUserId: 'user-a',
+      }),
+    ).toBe(false)
+    expect(
+      shouldClearQueryCacheOnAuthChange({
+        event: 'SIGNED_IN',
+        previousUserId: 'user-a',
+        currentUserId: 'user-a',
+      }),
+    ).toBe(false)
+    expect(
+      shouldClearQueryCacheOnAuthChange({
+        event: 'TOKEN_REFRESHED',
+        previousUserId: 'user-a',
+        currentUserId: 'user-a',
+      }),
+    ).toBe(false)
   })
 })

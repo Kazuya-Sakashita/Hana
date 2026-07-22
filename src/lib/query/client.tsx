@@ -5,8 +5,18 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AuthChangeEvent } from '@supabase/supabase-js'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 
-export function shouldClearQueryCacheOnAuthChange(event: AuthChangeEvent): boolean {
-  return event !== 'INITIAL_SESSION'
+export function shouldClearQueryCacheOnAuthChange({
+  event,
+  previousUserId,
+  currentUserId,
+}: {
+  event: AuthChangeEvent
+  previousUserId: string | null
+  currentUserId: string | null
+}): boolean {
+  if (event === 'INITIAL_SESSION') return false
+  if (event === 'SIGNED_OUT') return true
+  return previousUserId !== currentUserId
 }
 
 export function QueryProviders({ children }: { children: ReactNode }) {
@@ -22,15 +32,24 @@ export function QueryProviders({ children }: { children: ReactNode }) {
       }),
   )
   const supabaseRef = useRef<ReturnType<typeof createSupabaseBrowserClient> | null>(null)
+  const currentUserIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     supabaseRef.current ??= createSupabaseBrowserClient()
     const {
       data: { subscription },
-    } = supabaseRef.current.auth.onAuthStateChange((event) => {
-      if (shouldClearQueryCacheOnAuthChange(event)) {
+    } = supabaseRef.current.auth.onAuthStateChange((event, session) => {
+      const currentUserId = session?.user.id ?? null
+      if (
+        shouldClearQueryCacheOnAuthChange({
+          event,
+          previousUserId: currentUserIdRef.current,
+          currentUserId,
+        })
+      ) {
         queryClient.clear()
       }
+      currentUserIdRef.current = currentUserId
     })
 
     return () => {
