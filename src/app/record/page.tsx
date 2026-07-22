@@ -108,10 +108,12 @@ export default function RecordPage() {
   const childId = selectedChild?.id ?? null
   const childName = selectedChild?.name ?? ''
   const aiConsentAt = aiConsentAtOverride ?? currentUserQuery.data?.ai_consent_at ?? null
+  const authError = currentUserQuery.error ?? childrenQuery.error
+  const isUnauthorized = isApiProblemError(authError) && authError.reason === 'unauthorized'
   const phase: Phase =
     submissionPhase === 'success'
       ? 'success'
-      : currentUserQuery.isPending || childrenQuery.isPending
+      : isUnauthorized || currentUserQuery.isPending || childrenQuery.isPending
         ? 'loading'
         : currentUserQuery.isError || childrenQuery.isError
           ? 'error'
@@ -132,11 +134,10 @@ export default function RecordPage() {
   }
 
   useEffect(() => {
-    const error = currentUserQuery.error ?? childrenQuery.error
-    if (isApiProblemError(error) && error.reason === 'unauthorized') {
+    if (isUnauthorized) {
       router.push('/sign-in')
     }
-  }, [childrenQuery.error, currentUserQuery.error, router])
+  }, [isUnauthorized, router])
 
   useEffect(() => {
     if (!filePreviewUrl) return

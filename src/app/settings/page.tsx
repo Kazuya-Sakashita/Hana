@@ -23,13 +23,14 @@ export default function SettingsPage() {
   const [signingOut, setSigningOut] = useState(false)
   const meQuery = useCurrentUserQuery()
   const childrenQuery = useChildrenQuery()
+  const authError = meQuery.error ?? childrenQuery.error
+  const isUnauthorized = isApiProblemError(authError) && authError.reason === 'unauthorized'
 
   useEffect(() => {
-    const error = meQuery.error ?? childrenQuery.error
-    if (isApiProblemError(error) && error.reason === 'unauthorized') {
+    if (isUnauthorized) {
       router.push('/sign-in')
     }
-  }, [childrenQuery.error, meQuery.error, router])
+  }, [isUnauthorized, router])
 
   async function onSignOut() {
     setSigningOut(true)
@@ -43,7 +44,7 @@ export default function SettingsPage() {
     router.push('/sign-in')
   }
 
-  if (meQuery.isPending || childrenQuery.isPending) {
+  if (isUnauthorized || meQuery.isPending || childrenQuery.isPending) {
     return (
       <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
         <p className="text-ink-tertiary text-center text-sm">よみこんでいます…</p>

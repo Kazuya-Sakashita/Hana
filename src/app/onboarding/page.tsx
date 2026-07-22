@@ -48,21 +48,24 @@ export default function OnboardingPage() {
   const displayedChild =
     existingChild ??
     (fetchedChild ? { name: fetchedChild.name, birthdate: fetchedChild.birthdate } : null)
-  const phase: Phase = childrenQuery.isPending
-    ? 'loading'
-    : childrenQuery.isError
-      ? 'error'
-      : phaseOverride === 'success'
-        ? 'success'
-        : phaseOverride === 'already' || displayedChild
-          ? 'already'
-          : 'form'
+  const isUnauthorized =
+    isApiProblemError(childrenQuery.error) && childrenQuery.error.reason === 'unauthorized'
+  const phase: Phase =
+    isUnauthorized || childrenQuery.isPending
+      ? 'loading'
+      : childrenQuery.isError
+        ? 'error'
+        : phaseOverride === 'success'
+          ? 'success'
+          : phaseOverride === 'already' || displayedChild
+            ? 'already'
+            : 'form'
 
   useEffect(() => {
-    if (isApiProblemError(childrenQuery.error) && childrenQuery.error.reason === 'unauthorized') {
+    if (isUnauthorized) {
       router.push('/sign-in')
     }
-  }, [childrenQuery.error, router])
+  }, [isUnauthorized, router])
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
