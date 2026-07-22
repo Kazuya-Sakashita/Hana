@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
@@ -67,14 +68,15 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
     <>
       {memory.imagesWithPreviews.map((img, idx) =>
         img.previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             key={img.id}
             src={img.previewUrl}
             alt=""
+            width={1024}
+            height={1280}
+            sizes="(max-width: 480px) 100vw, 480px"
+            priority={idx === 0}
             className="aspect-[4/5] w-full rounded-b-3xl object-cover"
-            // 1 枚目は LCP 候補 → fetchpriority="high"
-            fetchPriority={idx === 0 ? 'high' : undefined}
           />
         ) : (
           <div

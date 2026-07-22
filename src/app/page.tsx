@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -145,10 +146,12 @@ async function HomeBody({ userId }: { userId: string }) {
                       className="ease-organic block transition-transform active:scale-[0.97]"
                     >
                       {typeof url === 'string' ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <Image
                           src={url}
                           alt={m.title}
+                          width={140}
+                          height={175}
+                          sizes="140px"
                           className="border-hairline aspect-[4/5] w-full rounded-2xl border object-cover"
                         />
                       ) : (

@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -103,8 +104,14 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
 
   if (typeof url === 'string') {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={alt} className={`${baseClass} object-cover`} />
+      <Image
+        src={url}
+        alt={alt}
+        width={80}
+        height={100}
+        className={`${baseClass} object-cover`}
+        sizes="80px"
+      />
     )
   }
   return (
