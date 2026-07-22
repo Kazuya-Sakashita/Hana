@@ -1,5 +1,6 @@
 'use client'
 
+import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
@@ -319,7 +320,9 @@ export default function RecordPage() {
           </CardHeader>
           <CardContent>
             <Button asChild size="lg" className="w-full">
-              <Link href="/onboarding">プロフィールを ひらく</Link>
+              <Link href="/onboarding" prefetch={false}>
+                プロフィールを ひらく
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -419,10 +422,15 @@ export default function RecordPage() {
                 <p className="text-amber text-xs">{uploadError}</p>
               ) : null}
               {filePreviewUrl && file ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                // NextImage import 名: HTMLImageElement の global `Image` と衝突回避。
+                // unoptimized 必須: blob: URL は Vercel image proxy が扱えない。
+                //   サイズは仮値、 CSS の max-h-48 で表示制御。
+                <NextImage
                   src={filePreviewUrl}
                   alt="えらんだ しゃしん"
+                  width={400}
+                  height={400}
+                  unoptimized
                   className="border-hairline mt-2 max-h-48 w-full rounded-xl border object-cover"
                 />
               ) : null}

@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -59,6 +60,7 @@ async function HomeAvatar({ userId }: { userId: string }) {
   return (
     <Link
       href="/settings"
+      prefetch={true}
       aria-label={`${child.name} の せってい`}
       className="bg-warm text-sakura-deep ring-elevated flex h-10 w-10 items-center justify-center rounded-full font-serif text-base ring-2"
     >
@@ -89,7 +91,11 @@ async function HomeBody({ userId }: { userId: string }) {
   return (
     <>
       {/* Hero card */}
-      <Link href="/record" className="ease-organic block transition-transform active:scale-[0.97]">
+      <Link
+        href="/record"
+        prefetch={false}
+        className="ease-organic block transition-transform active:scale-[0.97]"
+      >
         <Card className="bg-elevated shadow-soft">
           <CardHeader>
             <CardTitle className="font-serif text-xl leading-snug">
@@ -116,7 +122,9 @@ async function HomeBody({ userId }: { userId: string }) {
             ひらきましょう
           </p>
           <Button asChild size="lg" className="mt-6">
-            <Link href="/record">はじめての ページを つくる</Link>
+            <Link href="/record" prefetch={false}>
+              はじめての ページを つくる
+            </Link>
           </Button>
         </section>
       ) : (
@@ -124,7 +132,7 @@ async function HomeBody({ userId }: { userId: string }) {
           <section className="mt-10">
             <div className="mb-3 flex items-center justify-between">
               <p className="meta-label">さいきんの ページ</p>
-              <Link href="/album" className="text-ink-tertiary text-xs">
+              <Link href="/album" prefetch={true} className="text-ink-tertiary text-xs">
                 もっとみる →
               </Link>
             </div>
@@ -138,10 +146,12 @@ async function HomeBody({ userId }: { userId: string }) {
                       className="ease-organic block transition-transform active:scale-[0.97]"
                     >
                       {typeof url === 'string' ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <Image
                           src={url}
                           alt={m.title}
+                          width={140}
+                          height={175}
+                          sizes="140px"
                           className="border-hairline aspect-[4/5] w-full rounded-2xl border object-cover"
                         />
                       ) : (
@@ -159,6 +169,7 @@ async function HomeBody({ userId }: { userId: string }) {
               <li className="w-[140px] shrink-0">
                 <Link
                   href="/album"
+                  prefetch={true}
                   className="bg-warm text-ink-secondary border-hairline ease-organic flex aspect-[4/5] w-full items-center justify-center rounded-2xl border font-serif text-sm transition-transform active:scale-[0.97]"
                 >
                   もっとみる →

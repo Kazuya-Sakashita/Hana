@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -22,7 +23,9 @@ export default async function AlbumPage() {
         <header className="mb-8 flex items-center justify-between">
           <h1 className="font-serif text-2xl">アルバム</h1>
           <Button asChild size="sm" variant="outline">
-            <Link href="/record">のこす</Link>
+            <Link href="/record" prefetch={false}>
+              のこす
+            </Link>
           </Button>
         </header>
 
@@ -86,7 +89,9 @@ function EmptyState() {
       </CardHeader>
       <CardContent>
         <Button asChild size="lg" className="w-full">
-          <Link href="/record">のこす</Link>
+          <Link href="/record" prefetch={false}>
+            のこす
+          </Link>
         </Button>
       </CardContent>
     </Card>
@@ -99,8 +104,14 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
 
   if (typeof url === 'string') {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={alt} className={`${baseClass} object-cover`} />
+      <Image
+        src={url}
+        alt={alt}
+        width={80}
+        height={100}
+        className={`${baseClass} object-cover`}
+        sizes="80px"
+      />
     )
   }
   return (
