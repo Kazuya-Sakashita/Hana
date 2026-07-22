@@ -2,7 +2,7 @@
 id: ISSUE-038
 title: 認証済み画像QAをCDPで自動化
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: ISSUE-028
