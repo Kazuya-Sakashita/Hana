@@ -17,7 +17,7 @@ ISSUE-021 で `@next/bundle-analyzer` を導入した時点の手動 bundle base
 | ------- | --------------------------------- |
 | command | `pnpm analyze`                    |
 | app     | Next.js 16.2.6 / webpack analyzer |
-| node    | local development runtime         |
+| node    | v24.3.0                           |
 | date    | 2026-07-22                        |
 | output  | `.next/analyze/nodejs.html`       |
 | output  | `.next/analyze/edge.html`         |
@@ -26,7 +26,7 @@ ISSUE-021 で `@next/bundle-analyzer` を導入した時点の手動 bundle base
 ## Font Inventory
 
 `font-serif` の利用箇所を `rg` で棚卸しした結果、serif の強調は通常テキスト、`CardTitle` の `font-medium`、記録詳細タイトルの `font-medium`、一部の `font-normal` が中心。
-Noto Serif JP の 500 weight を直接要求する箇所はないため、読み込み weight は `400` と `700` に削減した。
+`font-medium` の serif 表示箇所は残るが、font loader で Noto Serif JP の 500 weight を直接読み込む指定はない。読み込み weight は `400` と `700` に削減し、500相当の見え方は merge-before-release の Visual QA で許容確認する。
 
 ## Build Output Baseline
 
