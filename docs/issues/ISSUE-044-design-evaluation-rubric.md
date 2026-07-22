@@ -2,13 +2,11 @@
 id: ISSUE-044
 title: Hana に合うデザイン評価手法を定義する
 priority: P1
-status: blocked
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN
 github_issue: 91
-blocked_by:
-  - ISSUE-043
 requires_human_review:
   - design
   - privacy
@@ -62,13 +60,33 @@ Hana のアプリ思想に合うデザイン評価手法を定義する。一般
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] Hana Design Evaluation Rubric が定義されている
-- [ ] 5段階または Go / Hold / No-Go の判定基準がある
-- [ ] HEART を Hana 向けに翻訳した指標がある
-- [ ] Privacy / Trust / Emotional Resonance が独立評価軸として含まれている
-- [ ] サブエージェント複数名で議論するためのレビュー依頼テンプレートがある
-- [ ] PR に添付する Design Review Report テンプレートがある
-- [ ] ISSUE-045 の棚卸しで使える評価表になっている
+- [x] Hana Design Evaluation Rubric が定義されている
+- [x] 5段階または Go / Hold / No-Go の判定基準がある
+- [x] HEART を Hana 向けに翻訳した指標がある
+- [x] Privacy / Trust / Emotional Resonance が独立評価軸として含まれている
+- [x] サブエージェント複数名で議論するためのレビュー依頼テンプレートがある
+- [x] PR に添付する Design Review Report テンプレートがある
+- [x] ISSUE-045 の棚卸しで使える評価表になっている
+- [x] `docs/design/design-evaluation-rubric.md` が追加されている
+- [x] `pnpm pr:gate` が通る
+
+## サブエージェント検討
+
+3名の read-only サブエージェントで並行検討した。
+
+| 観点                         | 反映内容                                                               |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| UX Research / HEART          | Hana版HEART、観察証跡、5段階評価、Go / Hold / No-Go 閾値を反映         |
+| Privacy / Trust / Content    | Privacy Trust、Emotional Resonance、Content Safety、No-Go 例を独立軸化 |
+| Product / A11y / Engineering | ISSUE-045用 inventory table、PR report、a11y/perf/実装可能性gateを反映 |
+
+平均点で blocker を相殺しない。Privacy Trust、Content Safety、Accessibility、
+Task Success の blocker は全体判定を Hold / No-Go にする。
+
+## 検証
+
+- `git diff --check`
+- `pnpm pr:gate`
 
 ## セキュリティ・プライバシー考慮
 
@@ -83,6 +101,7 @@ Hana のアプリ思想に合うデザイン評価手法を定義する。一般
 ## 参考
 
 - GitHub Issue #91
+- `docs/design/design-evaluation-rubric.md`
 - `Hana_PRD_v1.md` §13 UX設計
 - `Hana_PRD_v1.md` §14 HEART評価
 - `docs/release/mvp-release-readiness.md`

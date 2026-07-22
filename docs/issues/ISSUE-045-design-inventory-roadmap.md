@@ -8,7 +8,6 @@ created_at: 2026-07-23
 parent: DESIGN
 github_issue: 92
 blocked_by:
-  - ISSUE-043
   - ISSUE-044
 requires_human_review:
   - design

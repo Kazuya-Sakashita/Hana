@@ -2,7 +2,7 @@
 id: ISSUE-043
 title: Hana デザイン再構築の運営組織とサブエージェント体制を定義する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN
