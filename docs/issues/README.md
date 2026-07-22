@@ -39,13 +39,13 @@
 
 2026-07-21 時点:
 
-| status        | count | notes                                                                                                                                            |
-| ------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `todo`        | 5     | ready queue / blocked queue を参照                                                                                                               |
-| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                 |
-| `review`      | 14    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query |
-| `done`        | 22    | archive を参照                                                                                                                                   |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                                    |
+| status        | count | notes                                                                                                                                                         |
+| ------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `todo`        | 2     | ready queue / blocked queue を参照                                                                                                                            |
+| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                              |
+| `review`      | 15    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query + next/image |
+| `done`        | 22    | archive を参照                                                                                                                                                |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                                                 |
 
 ---
 
@@ -101,10 +101,9 @@ Codex-ready と判断する条件:
 
 ## Blocked Or Needs Human Decision
 
-| issue       | blocker                                  | unblock condition                       |
-| ----------- | ---------------------------------------- | --------------------------------------- |
-| `ISSUE-028` | ADR 番号が `ADR-0011` と衝突している     | `ADR-0013` などに採番を修正してから着手 |
-| `ISSUE-029` | `ISSUE-023` の TanStack Query 導入が前提 | `ISSUE-023` が `done` になる            |
+| issue       | blocker                                  | unblock condition            |
+| ----------- | ---------------------------------------- | ---------------------------- |
+| `ISSUE-029` | `ISSUE-023` の TanStack Query 導入が前提 | `ISSUE-023` が `done` になる |
 
 ---
 
@@ -126,6 +125,7 @@ Codex-ready と判断する条件:
 | `ISSUE-023` | TanStack Query 導入の review 待ち。DevTools Network 確認は PR merge 前の人間ゲート |
 | `ISSUE-020` | loading.tsx + Link prefetch の review 待ち                                         |
 | `ISSUE-021` | bundle analyzer + Noto Serif JP weight 削減の review 待ち                          |
+| `ISSUE-028` | next/image 移行の review 待ち。DevTools / Lighthouse 確認は post-merge QA          |
 
 ---
 

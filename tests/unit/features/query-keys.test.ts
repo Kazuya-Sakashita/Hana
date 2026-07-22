@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { childrenQueryKey } from '@/features/children/client/use-children'
 import { currentUserQueryKey } from '@/features/me/client/use-current-user'
 import { memoriesQueryKey, memoryListQueryKey } from '@/features/memories/client/use-memories'
+import { shouldClearQueryCacheOnAuthChange } from '@/lib/query/client'
 
 describe('client query keys', () => {
   it('keeps /me and /children keys stable across pages', () => {
@@ -16,5 +17,14 @@ describe('client query keys', () => {
       'memories',
       { limit: 20, cursor: 'cursor_1' },
     ])
+  })
+
+  it('clears cached private data on auth session changes', () => {
+    expect(shouldClearQueryCacheOnAuthChange('SIGNED_IN')).toBe(true)
+    expect(shouldClearQueryCacheOnAuthChange('SIGNED_OUT')).toBe(true)
+    expect(shouldClearQueryCacheOnAuthChange('TOKEN_REFRESHED')).toBe(true)
+    expect(shouldClearQueryCacheOnAuthChange('USER_UPDATED')).toBe(true)
+
+    expect(shouldClearQueryCacheOnAuthChange('INITIAL_SESSION')).toBe(false)
   })
 })
