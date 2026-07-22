@@ -1,13 +1,15 @@
 'use client'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError } from '@/lib/api/error'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { imageUrlCache } from '@/lib/cache/image-url-cache'
+import { useChildrenQuery } from '@/features/children/client/use-children'
+import { useCurrentUserQuery } from '@/features/me/client/use-current-user'
 
 // 最小スコープの設定画面 (ISSUE-014):
 //   - 親のメール表示
@@ -15,40 +17,20 @@ import { imageUrlCache } from '@/lib/cache/image-url-cache'
 //   - サインアウト
 // 完全版 (V0 §5.14) はリリース後の polish ISSUE で。
 
-type Me = { id: string; email: string | null; display_name: string | null }
-type Child = { id: string; name: string; birthdate: string }
-type Phase = 'loading' | 'ready' | 'error'
-
 export default function SettingsPage() {
   const router = useRouter()
-  const [phase, setPhase] = useState<Phase>('loading')
-  const [me, setMe] = useState<Me | null>(null)
-  const [child, setChild] = useState<Child | null>(null)
+  const queryClient = useQueryClient()
   const [signingOut, setSigningOut] = useState(false)
+  const meQuery = useCurrentUserQuery()
+  const childrenQuery = useChildrenQuery()
+  const authError = meQuery.error ?? childrenQuery.error
+  const isUnauthorized = isApiProblemError(authError) && authError.reason === 'unauthorized'
 
   useEffect(() => {
-    let cancelled = false
-    const client = getBrowserApiClient()
-    Promise.all([client.GET('/me'), client.GET('/children')])
-      .then(([meRes, childrenRes]) => {
-        if (cancelled) return
-        if (meRes.data) setMe(meRes.data as Me)
-        const first = (childrenRes.data?.data as Child[] | undefined)?.[0]
-        if (first) setChild(first)
-        setPhase('ready')
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        if (isApiProblemError(e) && e.reason === 'unauthorized') {
-          router.push('/sign-in')
-          return
-        }
-        setPhase('error')
-      })
-    return () => {
-      cancelled = true
+    if (isUnauthorized) {
+      router.push('/sign-in')
     }
-  }, [router])
+  }, [isUnauthorized, router])
 
   async function onSignOut() {
     setSigningOut(true)
@@ -57,11 +39,12 @@ export default function SettingsPage() {
     } catch {
       // ignore: even on failure, push to /sign-in
     }
+    queryClient.clear()
     imageUrlCache.clearAll()
     router.push('/sign-in')
   }
 
-  if (phase === 'loading') {
+  if (isUnauthorized || meQuery.isPending || childrenQuery.isPending) {
     return (
       <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
         <p className="text-ink-tertiary text-center text-sm">よみこんでいます…</p>
@@ -69,7 +52,7 @@ export default function SettingsPage() {
     )
   }
 
-  if (phase === 'error') {
+  if (meQuery.isError || childrenQuery.isError) {
     return (
       <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
         <Card>
@@ -89,6 +72,8 @@ export default function SettingsPage() {
     )
   }
 
+  const me = meQuery.data
+  const child = childrenQuery.data.data[0] ?? null
   const ageLabel = child
     ? formatAgeLabel(computeAge(new Date(`${child.birthdate}T00:00:00Z`), new Date()))
     : null

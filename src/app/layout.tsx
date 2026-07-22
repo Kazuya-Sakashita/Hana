@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Inter, Noto_Serif_JP } from 'next/font/google'
 import { BottomNav } from '@/components/bottom-nav'
 import { WebVitalsReporter } from '@/components/web-vitals-reporter'
+import { QueryProviders } from '@/lib/query/client'
 import './globals.css'
 
 const inter = Inter({
@@ -35,9 +36,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ja" className={`${inter.variable} ${notoSerifJP.variable}`}>
       <body>
-        {children}
-        <BottomNav />
-        <WebVitalsReporter />
+        <QueryProviders>
+          {children}
+          <BottomNav />
+          <WebVitalsReporter />
+        </QueryProviders>
       </body>
     </html>
   )
