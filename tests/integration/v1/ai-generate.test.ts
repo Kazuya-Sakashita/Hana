@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   aiGenerationCount: vi.fn(),
   aiGenerationCreate: vi.fn(),
   storageDownload: vi.fn(),
+  resizeForClaude: vi.fn(),
   messagesCreate: vi.fn(),
 }))
 
@@ -34,7 +35,7 @@ vi.mock('@/lib/ai/client', () => ({
 
 // resize は単体テストで検証。integration では bypass (identity transform)
 vi.mock('@/features/ai/server/resize', () => ({
-  resizeForClaude: async (buf: Buffer) => ({ buffer: buf, mediaType: 'image/jpeg' as const }),
+  resizeForClaude: mocks.resizeForClaude,
 }))
 
 vi.mock('@/server/db/prisma', () => ({
@@ -55,6 +56,13 @@ const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const OTHER_USER_ID = '11111111-2222-4333-8444-555555555555'
 const CHILD_ID = '4a2c89b6-1234-4d8e-9abc-fedcba987654'
 const IMAGE_ID = 'a1b2c3d4-1234-4d8e-9abc-fedcba987654'
+const IMAGE_IDS = [
+  IMAGE_ID,
+  'b1b2c3d4-1234-4d8e-9abc-fedcba987654',
+  'c1b2c3d4-1234-4d8e-9abc-fedcba987654',
+  'd1b2c3d4-1234-4d8e-9abc-fedcba987654',
+  'e1b2c3d4-1234-4d8e-9abc-fedcba987654',
+]
 
 const supabaseUser = { id: USER_ID, email: 'parent@example.com' }
 const profileConsented = {
@@ -74,8 +82,16 @@ const childRow = {
 const imageRow = {
   id: IMAGE_ID,
   userId: USER_ID,
-  storageKey: 'uploads/abc/202605/foo.jpg',
+  storageKey: 'image-fixture-key-001',
   contentType: 'image/jpeg',
+}
+
+function makeImageRows(ids: string[]) {
+  return ids.map((id, index) => ({
+    ...imageRow,
+    id,
+    storageKey: `image-fixture-key-${String(index + 1).padStart(3, '0')}`,
+  }))
 }
 
 function authedWithConsent() {
@@ -119,6 +135,13 @@ function mockStorageReturnsImage() {
     arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer,
   }
   mocks.storageDownload.mockResolvedValue({ data: blob, error: null })
+}
+
+function mockResizeIdentity() {
+  mocks.resizeForClaude.mockImplementation(async (buf: Buffer) => ({
+    buffer: buf,
+    mediaType: 'image/jpeg' as const,
+  }))
 }
 
 afterEach(() => vi.clearAllMocks())
@@ -189,6 +212,7 @@ describe('POST /v1/ai/generate', () => {
     mocks.childFindFirst.mockResolvedValue(childRow)
     mocks.imageFindMany.mockResolvedValue([imageRow])
     mockStorageReturnsImage()
+    mockResizeIdentity()
     mockClaudeSuccess('{"title":"はじめて","body":"きょうは...","tags":["はじめて","おそと"]}')
     mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-1' })
 
@@ -212,12 +236,94 @@ describe('POST /v1/ai/generate', () => {
     )
   })
 
+  it('starts download and resize for five images in parallel', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue(makeImageRows(IMAGE_IDS))
+    mockClaudeSuccess('{"title":"はじめて","body":"きょうは...","tags":["はじめて","おそと"]}')
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-1' })
+
+    const blob = {
+      arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer,
+    }
+    const downloadResolvers: Array<(value: { data: typeof blob; error: null }) => void> = []
+    const resizeResolvers: Array<() => void> = []
+    mocks.storageDownload.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          downloadResolvers.push(resolve)
+        }),
+    )
+    mocks.resizeForClaude.mockImplementation(
+      (buf: Buffer) =>
+        new Promise((resolve) => {
+          resizeResolvers.push(() => resolve({ buffer: buf, mediaType: 'image/jpeg' as const }))
+        }),
+    )
+
+    const resPromise = POST(jsonRequest({ ...validBody, image_ids: IMAGE_IDS }))
+
+    await vi.waitFor(() => {
+      expect(mocks.storageDownload).toHaveBeenCalledTimes(5)
+    })
+    expect(mocks.resizeForClaude).not.toHaveBeenCalled()
+
+    for (const resolve of downloadResolvers) {
+      resolve({ data: blob, error: null })
+    }
+
+    await vi.waitFor(() => {
+      expect(mocks.resizeForClaude).toHaveBeenCalledTimes(5)
+    })
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+
+    for (const resolve of resizeResolvers) {
+      resolve()
+    }
+
+    const res = await resPromise
+    expect(res.status).toBe(200)
+  })
+
+  it('returns 500 and skips Claude when one image download fails', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue(makeImageRows(IMAGE_IDS.slice(0, 2)))
+    mockResizeIdentity()
+
+    const blob = {
+      arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer,
+    }
+    mocks.storageDownload
+      .mockResolvedValueOnce({ data: blob, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'not found' } })
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'failed-gen-1' })
+
+    const res = await POST(jsonRequest({ ...validBody, image_ids: IMAGE_IDS.slice(0, 2) }))
+
+    expect(res.status).toBe(500)
+    const body = (await res.json()) as { reason: string }
+    expect(body.reason).toBe('ai_generation_failed')
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+    expect(mocks.aiGenerationCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          succeeded: false,
+          errorReason: 'internal_error',
+        }),
+      }),
+    )
+  })
+
   it('returns 500 ai_generation_failed when Claude returns invalid JSON', async () => {
     authedWithConsent()
     mocks.aiGenerationCount.mockResolvedValue(0)
     mocks.childFindFirst.mockResolvedValue(childRow)
     mocks.imageFindMany.mockResolvedValue([imageRow])
     mockStorageReturnsImage()
+    mockResizeIdentity()
     mockClaudeSuccess('完全に JSON でないテキスト')
 
     const res = await POST(jsonRequest(validBody))

@@ -22,6 +22,33 @@ export const maxDuration = 60
 
 const BUCKET = 'images'
 
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
+
+interface ImageForAiPreparation {
+  storageKey: string
+}
+
+async function prepareImageInputForClaude(
+  supabase: SupabaseAdminClient,
+  img: ImageForAiPreparation,
+): Promise<AiImageInput> {
+  const { data, error } = await supabase.storage.from(BUCKET).download(img.storageKey)
+  if (error || !data) {
+    console.error('storage.download failed', { reason: error ? 'storage_error' : 'no_data' })
+    throw new Error('image fetch failed')
+  }
+
+  const arrayBuffer = await data.arrayBuffer()
+  const originalBuffer = Buffer.from(arrayBuffer)
+  // 元画像は Storage にフル品質で残し、Claude に渡すコピーだけを縮める (ADR-0011 §11)
+  const resized = await resizeForClaude(originalBuffer)
+
+  return {
+    mediaType: resized.mediaType,
+    base64: resized.buffer.toString('base64'),
+  }
+}
+
 export async function POST(request: Request) {
   const startTime = Date.now()
   let userIdForLog: string | undefined
@@ -86,22 +113,9 @@ export async function POST(request: Request) {
 
     // 6. Storage から画像取得 → resize (Claude 5MB 制約) → base64
     const supabase = createSupabaseAdminClient()
-    const imageInputs: AiImageInput[] = []
-    for (const img of images) {
-      const { data, error } = await supabase.storage.from(BUCKET).download(img.storageKey)
-      if (error || !data) {
-        console.error('storage.download failed', { reason: error?.message ?? 'no_data' })
-        throw new Error('image fetch failed')
-      }
-      const arrayBuffer = await data.arrayBuffer()
-      const originalBuffer = Buffer.from(arrayBuffer)
-      // 元画像は Storage にフル品質で残し、Claude に渡すコピーだけを縮める (ADR-0011 §11)
-      const resized = await resizeForClaude(originalBuffer)
-      imageInputs.push({
-        mediaType: resized.mediaType,
-        base64: resized.buffer.toString('base64'),
-      })
-    }
+    const imageInputs = await Promise.all(
+      images.map((img) => prepareImageInputForClaude(supabase, img)),
+    )
 
     // 7. 月齢計算 (送信は month/day のみ。birthdate そのものは送らない・CLAUDE.md §7 PII)
     const recordedAtDate = input.recordedAt ?? new Date()

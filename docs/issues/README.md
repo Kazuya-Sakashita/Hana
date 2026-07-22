@@ -37,15 +37,15 @@
 
 ## Status Snapshot
 
-2026-07-21 時点:
+2026-07-22 時点:
 
-| status        | count | notes                                                                                                                                                         |
-| ------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `todo`        | 2     | ready queue / blocked queue を参照                                                                                                                            |
-| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                              |
-| `review`      | 15    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query + next/image |
-| `done`        | 22    | archive を参照                                                                                                                                                |
-| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                                                 |
+| status        | count | notes                                                                                                                                                                                |
+| ------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `todo`        | 1     | blocked queue を参照                                                                                                                                                                 |
+| `in_progress` | 0     | 並行実行枠は空き                                                                                                                                                                     |
+| `review`      | 16    | foundation 5件 + automation setup 3件 + security/privacy + release readiness + route-map check + loading/prefetch + bundle/font + TanStack Query + next/image + AI generate parallel |
+| `done`        | 22    | archive を参照                                                                                                                                                                       |
+| `blocked`     | 0     | README 上の注意 Issue は下記 blocker 表へ記載                                                                                                                                        |
 
 ---
 
@@ -85,9 +85,7 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-| rank | issue       | priority | size | area      | readiness                                                         | checks                           |
-| ---- | ----------- | -------- | ---- | --------- | ----------------------------------------------------------------- | -------------------------------- |
-| 1    | `ISSUE-022` | P2       | S    | ai / perf | 実装着手は可能。AI / image privacy gate は PR review 前に必ず確認 | `pnpm pr:gate`, AI privacy check |
+現在はありません。
 
 ---
 
@@ -126,6 +124,7 @@ Codex-ready と判断する条件:
 | `ISSUE-020` | loading.tsx + Link prefetch の review 待ち                                         |
 | `ISSUE-021` | bundle analyzer + Noto Serif JP weight 削減の review 待ち                          |
 | `ISSUE-028` | next/image 移行の review 待ち。DevTools / Lighthouse 確認は post-merge QA          |
+| `ISSUE-022` | AI generate 画像 DL + sharp resize 並列化の review 待ち                            |
 
 ---
 
