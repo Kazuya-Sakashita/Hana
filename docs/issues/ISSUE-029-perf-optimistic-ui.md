@@ -107,6 +107,7 @@ toast で謝り、 ユーザーに再操作してもらう (V0 §1 「Forgive th
 - `pnpm test tests/unit/lib/perf/optimistic.test.ts` → 8 tests passed
 - `pnpm pr:gate` → format / lint / openapi route-map / typecheck / test 276 件 / build:ci passed
 - Review 対応後: PR 対象ファイルの format / lint / openapi route-map / typecheck / test 279 件 / build:ci passed
+- Review Round 2 対応後: PR 対象ファイルの format / lint / typecheck / test 279 件 / build:ci passed。`/record` validation 失敗時は field error メタデータのみ sessionStorage に一時退避して復元
 - 即時反応条件は、click handler 内で network mutation を await する前に `router.push` / `queryClient.setQueryData` を実行する構造と rollback unit test で確認
 
 ---

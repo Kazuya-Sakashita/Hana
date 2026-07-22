@@ -39,6 +39,13 @@ interface FieldErrors {
   general?: string
 }
 
+interface SubmitErrorState {
+  fieldErrors: FieldErrors
+  topMessage: string | null
+}
+
+const SUBMIT_ERROR_STATE_KEY = 'hana.record.submit-error.v1'
+
 function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   const fields: FieldErrors = {}
   for (const err of problem.errors ?? []) {
@@ -48,6 +55,30 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
     else if (err.path.startsWith('body.image_ids')) fields.imageIds = err.message
   }
   return fields
+}
+
+function saveSubmitErrorState(state: SubmitErrorState) {
+  try {
+    window.sessionStorage.setItem(SUBMIT_ERROR_STATE_KEY, JSON.stringify(state))
+  } catch {
+    // sessionStorage が使えない環境では toast のみで回復する
+  }
+}
+
+function consumeSubmitErrorState(): SubmitErrorState | null {
+  try {
+    const raw = window.sessionStorage.getItem(SUBMIT_ERROR_STATE_KEY)
+    window.sessionStorage.removeItem(SUBMIT_ERROR_STATE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<SubmitErrorState>
+    return {
+      fieldErrors:
+        parsed.fieldErrors && typeof parsed.fieldErrors === 'object' ? parsed.fieldErrors : {},
+      topMessage: typeof parsed.topMessage === 'string' ? parsed.topMessage : null,
+    }
+  } catch {
+    return null
+  }
 }
 
 type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic'
@@ -151,6 +182,16 @@ export default function RecordPage() {
     if (!filePreviewUrl) return
     return () => URL.revokeObjectURL(filePreviewUrl)
   }, [filePreviewUrl])
+
+  useEffect(() => {
+    const saved = consumeSubmitErrorState()
+    if (!saved) return
+    const timeout = window.setTimeout(() => {
+      setFieldErrors(saved.fieldErrors)
+      setTopMessage(saved.topMessage)
+    }, 0)
+    return () => window.clearTimeout(timeout)
+  }, [])
 
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const f = event.target.files?.[0] ?? null
@@ -313,7 +354,14 @@ export default function RecordPage() {
       if (isApiProblemError(e)) {
         switch (e.reason) {
           case 'validation_error':
-            setFieldErrors(extractFieldErrors(e.problem))
+            {
+              const errors = extractFieldErrors(e.problem)
+              setFieldErrors(errors)
+              saveSubmitErrorState({
+                fieldErrors: errors,
+                topMessage: '入力を たしかめて、もういちど ためしてください。',
+              })
+            }
             showToast({
               title: 'ほぞんに しっぱい しました',
               description: '入力を たしかめて、もういちど ためしてください。',
