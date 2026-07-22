@@ -142,7 +142,6 @@ async function HomeBody({ userId }: { userId: string }) {
                   <li key={m.id} className="w-[140px] shrink-0">
                     <Link
                       href={`/memory/${m.id}`}
-                      prefetch={true}
                       className="ease-organic block transition-transform active:scale-[0.97]"
                     >
                       {typeof url === 'string' ? (

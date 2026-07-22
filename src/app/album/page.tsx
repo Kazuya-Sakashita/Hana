@@ -51,7 +51,6 @@ async function AlbumList({ userId }: { userId: string }) {
           <li key={m.id}>
             <Link
               href={`/memory/${m.id}`}
-              prefetch={true}
               className="ease-organic block transition-transform active:scale-[0.98]"
             >
               <Card>
