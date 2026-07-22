@@ -2,10 +2,11 @@
 id: ISSUE-022
 title: AI generate の画像 DL + sharp resize を並列化
 priority: P2
-status: todo
+status: review
 size: S
 created_at: 2026-05-26
 parent: PERF
+github_issue: 75
 ---
 
 ## 目的 (Why)
@@ -67,10 +68,15 @@ MVP では 1〜5 枚想定。 5 枚 × ~10MB の sharp buffer = ~50MB ピーク�
 
 ## 受け入れ条件
 
-- [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
-- [ ] 1 枚時のレスポンスタイムが変わらない (regression なし)
-- [ ] 5 枚モックで合計時間が 1 枚時 +少しになる (= 並列化が効いている)
-- [ ] 1 枚失敗時に全体が 5xx (現状動作維持) を確認
+- [x] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
+- [x] 1 枚時のレスポンスタイムが変わらない (regression なし)
+- [x] 5 枚モックで合計時間が 1 枚時 +少しになる (= 並列化が効いている)
+- [x] 1 枚失敗時に全体が 5xx (現状動作維持) を確認
+
+### 確認結果
+
+- `pnpm test tests/integration/v1/ai-generate.test.ts` → 11 tests passed
+- `pnpm pr:gate` → format / lint / openapi route-map / typecheck / test 271 件 / build:ci passed
 
 ---
 
