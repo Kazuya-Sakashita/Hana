@@ -340,13 +340,21 @@ export default function RecordPage() {
       updated_at: now,
     }
 
+    const hadMemoryListCache = queryClient
+      .getQueriesData({ queryKey: memoriesQueryKey })
+      .some(([, data]) => data !== undefined)
     await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
     const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
-    router.push('/album')
+    if (hadMemoryListCache) {
+      router.push('/album')
+    }
 
     try {
       const created = await createMemoryMutation.mutateAsync(requestBody)
       optimisticReplaceMemoryInLists(queryClient, optimisticId, created)
+      if (!hadMemoryListCache) {
+        router.push('/album')
+      }
       router.refresh()
     } catch (e) {
       rollback()

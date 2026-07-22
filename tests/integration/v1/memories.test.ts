@@ -151,6 +151,55 @@ describe('GET /v1/memories', () => {
     expect(body.page.next_cursor).toBeNull()
   })
 
+  it('returns multiple memories without collapsing the list', async () => {
+    authed()
+    const olderMemory = {
+      ...memoryRow,
+      id: '00000000-0000-4000-8000-000000000003',
+      title: 'ふたつめのページ',
+      recordedAt: new Date('2026-05-22T00:00:00Z'),
+      createdAt: new Date('2026-05-22T11:00:00Z'),
+      updatedAt: new Date('2026-05-22T11:00:00Z'),
+      images: [
+        {
+          id: '00000000-0000-4000-8000-000000000030',
+          createdAt: new Date('2026-05-22T10:00:00Z'),
+          storageKey: 'uploads/abc/202605/img-older.jpg',
+        },
+      ],
+    }
+    mocks.memoryFindMany.mockResolvedValue([memoryRow, olderMemory])
+    mocks.createSignedUrl
+      .mockResolvedValueOnce({ data: { signedUrl: 'https://example.com/thumb-1' }, error: null })
+      .mockResolvedValueOnce({ data: { signedUrl: 'https://example.com/thumb-2' }, error: null })
+
+    const res = await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
+
+    expect(res.status).toBe(200)
+    expect(mocks.memoryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: USER_ID, deletedAt: null },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+        take: 21,
+        include: expect.objectContaining({
+          images: expect.objectContaining({
+            where: { deletedAt: null },
+          }),
+        }),
+      }),
+    )
+    const body = (await res.json()) as {
+      data: Array<{ id: string; title: string; cover_thumbnail_url: string | null }>
+      page: { next_cursor: string | null }
+    }
+    expect(body.data.map((memory) => memory.id)).toEqual([MEMORY_ID, olderMemory.id])
+    expect(body.data.map((memory) => memory.cover_thumbnail_url)).toEqual([
+      'https://example.com/thumb-1',
+      'https://example.com/thumb-2',
+    ])
+    expect(body.page.next_cursor).toBeNull()
+  })
+
   it('includes cover_thumbnail_url via pre-generated _thumb.webp variant (BFF, ISSUE-031)', async () => {
     authed()
     mocks.memoryFindMany.mockResolvedValue([memoryRow])
