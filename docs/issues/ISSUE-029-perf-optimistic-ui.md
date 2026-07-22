@@ -2,10 +2,11 @@
 id: ISSUE-029
 title: 「のこす」「お気に入り」「削除」を optimistic UI に
 priority: P2
-status: todo
+status: review
 size: M
 created_at: 2026-05-26
 parent: PERF
+github_issue: 77
 ---
 
 ## 目的 (Why)
@@ -28,22 +29,22 @@ parent: PERF
 
 ### 修正
 
-- [ ] **「のこす」 ボタン**:
+- [x] **「のこす」 ボタン**:
   - 押下と同時に `/album` へ遷移、 `queryClient.setQueryData` で楽観追加
   - server 失敗時は `/record` に戻し、 toast で「ほぞんに しっぱい しました。 もういちど」
-- [ ] **お気に入りトグル** (`/memory/{id}` と `/album` のリスト):
+- [x] **お気に入りトグル** (`/memory/{id}` と `/album` のリスト):
   - 押下と同時に icon を切替
   - server 失敗時は icon を戻し、 toast
-- [ ] **削除** (`/memory/{id}`):
+- [x] **削除** (`/memory/{id}`):
   - 確認ダイアログ「とじる」 で `/album` に遷移しつつリストから消す
   - server 失敗時は復活させて toast
 
 ### 新規
 
-- [ ] `src/components/ui/toast.tsx` (シンプルな toast)
+- [x] `src/components/ui/toast.tsx` (シンプルな toast)
   - Sonner や Radix Toast 等のライブラリ採用も可
   - V0 §1「Whisper not shout」 に沿い、 控えめなデザイン
-- [ ] `src/lib/perf/optimistic.ts` ヘルパ (queryClient.setQueryData + rollback パターン)
+- [x] `src/lib/perf/optimistic.ts` ヘルパ (queryClient.setQueryData + rollback パターン)
 
 ### やらないこと
 
@@ -94,12 +95,20 @@ toast で謝り、 ユーザーに再操作してもらう (V0 §1 「Forgive th
 
 ## 受け入れ条件
 
-- [ ] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
-- [ ] 「のこす」 押下から `/album` 遷移まで **< 100ms**
-- [ ] お気に入りトグルの反応が **< 50ms** (体感的に即時)
-- [ ] 削除後の `/album` 遷移が **< 100ms**
-- [ ] サーバ失敗時に toast が出て、 UI が rollback される
-- [ ] toast デザインが「whisper」 原則
+- [x] `pnpm typecheck` / `lint` / `format:check` / `build` / `test` グリーン
+- [x] 「のこす」 押下から `/album` 遷移まで **< 100ms**
+- [x] お気に入りトグルの反応が **< 50ms** (体感的に即時)
+- [x] 削除後の `/album` 遷移が **< 100ms**
+- [x] サーバ失敗時に toast が出て、 UI が rollback される
+- [x] toast デザインが「whisper」 原則
+
+### 確認結果
+
+- `pnpm test tests/unit/lib/perf/optimistic.test.ts` → 8 tests passed
+- `pnpm pr:gate` → format / lint / openapi route-map / typecheck / test 276 件 / build:ci passed
+- Review 対応後: PR 対象ファイルの format / lint / openapi route-map / typecheck / test 279 件 / build:ci passed
+- Review Round 2 対応後: PR 対象ファイルの format / lint / typecheck / test 279 件 / build:ci passed。`/record` validation 失敗時は field error メタデータのみ sessionStorage に一時退避して復元
+- 即時反応条件は、click handler 内で network mutation を await する前に `router.push` / `queryClient.setQueryData` を実行する構造と rollback unit test で確認
 
 ---
 

@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AuthChangeEvent } from '@supabase/supabase-js'
+import { ToastProvider } from '@/components/ui/toast'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 
 export function shouldClearQueryCacheOnAuthChange({
@@ -57,5 +58,9 @@ export function QueryProviders({ children }: { children: ReactNode }) {
     }
   }, [queryClient])
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  )
 }

@@ -3,18 +3,26 @@
 import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useChildrenQuery } from '@/features/children/client/use-children'
-import { useCreateMemoryMutation } from '@/features/memories/client/use-memories'
+import {
+  memoriesQueryKey,
+  useCreateMemoryMutation,
+  type Memory,
+  type MemoryCreateRequest,
+} from '@/features/memories/client/use-memories'
 import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
+import { optimisticAddMemoryToLists, optimisticReplaceMemoryInLists } from '@/lib/perf/optimistic'
+import { useToast } from '@/components/ui/toast'
 
-type Phase = 'loading' | 'no-child' | 'form' | 'success' | 'error'
+type Phase = 'loading' | 'no-child' | 'form' | 'error'
 type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'confirming' | 'done' | 'failed'
 type AiStatus = 'idle' | 'consent_pending' | 'generating' | 'done' | 'failed'
 
@@ -31,6 +39,13 @@ interface FieldErrors {
   general?: string
 }
 
+interface SubmitErrorState {
+  fieldErrors: FieldErrors
+  topMessage: string | null
+}
+
+const SUBMIT_ERROR_STATE_KEY = 'hana.record.submit-error.v1'
+
 function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   const fields: FieldErrors = {}
   for (const err of problem.errors ?? []) {
@@ -40,6 +55,30 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
     else if (err.path.startsWith('body.image_ids')) fields.imageIds = err.message
   }
   return fields
+}
+
+function saveSubmitErrorState(state: SubmitErrorState) {
+  try {
+    window.sessionStorage.setItem(SUBMIT_ERROR_STATE_KEY, JSON.stringify(state))
+  } catch {
+    // sessionStorage が使えない環境では toast のみで回復する
+  }
+}
+
+function consumeSubmitErrorState(): SubmitErrorState | null {
+  try {
+    const raw = window.sessionStorage.getItem(SUBMIT_ERROR_STATE_KEY)
+    window.sessionStorage.removeItem(SUBMIT_ERROR_STATE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<SubmitErrorState>
+    return {
+      fieldErrors:
+        parsed.fieldErrors && typeof parsed.fieldErrors === 'object' ? parsed.fieldErrors : {},
+      topMessage: typeof parsed.topMessage === 'string' ? parsed.topMessage : null,
+    }
+  } catch {
+    return null
+  }
 }
 
 type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic'
@@ -77,8 +116,9 @@ async function reencodeImage(
 
 export default function RecordPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const [submissionPhase, setSubmissionPhase] = useState<'idle' | 'success'>('idle')
   const [aiConsentAtOverride, setAiConsentAtOverride] = useState<string | null>(null)
 
   const [file, setFile] = useState<File | null>(null)
@@ -112,15 +152,13 @@ export default function RecordPage() {
   const authError = currentUserQuery.error ?? childrenQuery.error
   const isUnauthorized = isApiProblemError(authError) && authError.reason === 'unauthorized'
   const phase: Phase =
-    submissionPhase === 'success'
-      ? 'success'
-      : isUnauthorized || currentUserQuery.isPending || childrenQuery.isPending
-        ? 'loading'
-        : currentUserQuery.isError || childrenQuery.isError
-          ? 'error'
-          : selectedChild
-            ? 'form'
-            : 'no-child'
+    isUnauthorized || currentUserQuery.isPending || childrenQuery.isPending
+      ? 'loading'
+      : currentUserQuery.isError || childrenQuery.isError
+        ? 'error'
+        : selectedChild
+          ? 'form'
+          : 'no-child'
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
   const canGenerateAi = !!uploadedImage && aiStatus !== 'generating' && !aiQuotaExceeded
@@ -144,6 +182,16 @@ export default function RecordPage() {
     if (!filePreviewUrl) return
     return () => URL.revokeObjectURL(filePreviewUrl)
   }, [filePreviewUrl])
+
+  useEffect(() => {
+    const saved = consumeSubmitErrorState()
+    if (!saved) return
+    const timeout = window.setTimeout(() => {
+      setFieldErrors(saved.fieldErrors)
+      setTopMessage(saved.topMessage)
+    }, 0)
+    return () => window.clearTimeout(timeout)
+  }, [])
 
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const f = event.target.files?.[0] ?? null
@@ -263,32 +311,81 @@ export default function RecordPage() {
 
     const trimmedTitle = title.trim()
     const wasAiGenerated = aiStatus === 'done'
+    const requestBody: MemoryCreateRequest = {
+      child_id: childId,
+      title: trimmedTitle,
+      body: body.trim() === '' ? null : body,
+      recorded_at: recordedAt,
+      weather: weather.trim() === '' ? null : weather,
+      image_ids: [uploadedImage.id],
+      ai_generated: wasAiGenerated,
+    }
+    const now = new Date().toISOString()
+    const optimisticId =
+      typeof crypto.randomUUID === 'function'
+        ? `optimistic-${crypto.randomUUID()}`
+        : `optimistic-${Date.now()}`
+    const optimisticMemory: Memory = {
+      id: optimisticId,
+      child_id: childId,
+      title: requestBody.title,
+      body: requestBody.body ?? null,
+      recorded_at: requestBody.recorded_at,
+      weather: requestBody.weather ?? null,
+      is_favorite: false,
+      ai_generated: requestBody.ai_generated,
+      image_ids: requestBody.image_ids,
+      cover_thumbnail_url: null,
+      created_at: now,
+      updated_at: now,
+    }
+
+    await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
+    const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
+    router.push('/album')
+
     try {
-      await createMemoryMutation.mutateAsync({
-        child_id: childId,
-        title: trimmedTitle,
-        body: body.trim() === '' ? null : body,
-        recorded_at: recordedAt,
-        weather: weather.trim() === '' ? null : weather,
-        image_ids: [uploadedImage.id],
-        ai_generated: wasAiGenerated,
-      })
-      setSubmissionPhase('success')
-      setTimeout(() => router.push('/album'), 1500)
+      const created = await createMemoryMutation.mutateAsync(requestBody)
+      optimisticReplaceMemoryInLists(queryClient, optimisticId, created)
+      router.refresh()
     } catch (e) {
+      rollback()
+      void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e)) {
         switch (e.reason) {
           case 'validation_error':
-            setFieldErrors(extractFieldErrors(e.problem))
+            {
+              const errors = extractFieldErrors(e.problem)
+              setFieldErrors(errors)
+              saveSubmitErrorState({
+                fieldErrors: errors,
+                topMessage: '入力を たしかめて、もういちど ためしてください。',
+              })
+            }
+            showToast({
+              title: 'ほぞんに しっぱい しました',
+              description: '入力を たしかめて、もういちど ためしてください。',
+            })
+            router.push('/record')
             break
           case 'unauthorized':
             router.push('/sign-in')
             return
           default:
             setTopMessage(`うまく ほぞんできませんでした。 (${e.reason})`)
+            showToast({
+              title: 'ほぞんに しっぱい しました',
+              description: 'もういちど ためしてみてください。',
+            })
+            router.push('/record')
         }
       } else {
         setTopMessage('うまく つうしんできませんでした。もういちど ためしてみてください。')
+        showToast({
+          title: 'ほぞんに しっぱい しました',
+          description: 'もういちど ためしてみてください。',
+        })
+        router.push('/record')
       }
       setSubmitting(false)
     }
@@ -345,21 +442,6 @@ export default function RecordPage() {
               もういちど ひらく
             </Button>
           </CardContent>
-        </Card>
-      </Shell>
-    )
-  }
-
-  if (phase === 'success') {
-    return (
-      <Shell>
-        <Card className="w-full max-w-md">
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-2xl">
-              {childName} ちゃんの きょうが、のこりました
-            </CardTitle>
-            <CardDescription className="mt-2">アルバムへ いどう しています…</CardDescription>
-          </CardHeader>
         </Card>
       </Shell>
     )

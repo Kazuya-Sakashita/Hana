@@ -1,11 +1,13 @@
-import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { AlbumList } from '@/features/memories/client/album-list'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { fetchMemoriesWithCovers } from '@/features/memories/server/queries'
+import { encodeCursor } from '@/features/memories/server/parse'
+import { toMemoryResponse } from '@/features/memories/view-models/memory'
 
 // ISSUE-025: /album を Server Component 化 + Suspense streaming。
 // baseline-2026-06-10 で LCP 要素 = カード本文 <p> (= text-LCP) と判明したため、
@@ -30,97 +32,26 @@ export default async function AlbumPage() {
         </header>
 
         <Suspense fallback={<AlbumListSkeleton />}>
-          <AlbumList userId={user.id} />
+          <AlbumListBoundary userId={user.id} />
         </Suspense>
       </div>
     </main>
   )
 }
 
-async function AlbumList({ userId }: { userId: string }) {
-  const { items } = await fetchMemoriesWithCovers({ userId, limit: 50 })
-
-  if (items.length === 0) {
-    return <EmptyState />
-  }
+async function AlbumListBoundary({ userId }: { userId: string }) {
+  const { items, hasMore } = await fetchMemoriesWithCovers({ userId, limit: 50 })
+  const last = items[items.length - 1]
 
   return (
-    <ul className="flex flex-col gap-3">
-      {items.map((m) => {
-        const recordedAt = m.recordedAt.toISOString().slice(0, 10)
-        return (
-          <li key={m.id}>
-            <Link
-              href={`/memory/${m.id}`}
-              className="ease-organic block transition-transform active:scale-[0.98]"
-            >
-              <Card>
-                <CardContent className="flex gap-4 p-4">
-                  <Thumbnail url={m.coverThumbnailUrl} alt={m.title} />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <div className="meta-label">
-                      {recordedAt}
-                      {m.weather ? ` ・ ${m.weather}` : ''}
-                      {m.isFavorite ? ' ・ ❀' : ''}
-                    </div>
-                    <h2 className="font-serif text-base leading-tight">{m.title}</h2>
-                    {m.body ? (
-                      <p className="text-ink-secondary leading-narrative line-clamp-2 text-sm">
-                        {m.body}
-                      </p>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-function EmptyState() {
-  return (
-    <Card>
-      <CardHeader className="items-center text-center">
-        <CardTitle className="font-serif text-xl">まだ ページが ありません</CardTitle>
-        <CardDescription className="mt-2">きょうの 1 まいから、はじめましょう。</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button asChild size="lg" className="w-full">
-          <Link href="/record" prefetch={false}>
-            のこす
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
-function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
-  // home (/) carousel と同じ視覚言語 (ISSUE-030): aspect-[4/5] + object-cover + rounded-2xl
-  const baseClass = 'aspect-[4/5] w-20 shrink-0 rounded-2xl border border-hairline'
-
-  if (typeof url === 'string') {
-    return (
-      <Image
-        src={url}
-        alt={alt}
-        width={80}
-        height={100}
-        className={`${baseClass} object-cover`}
-        sizes="80px"
-      />
-    )
-  }
-  return (
-    <div
-      className={`${baseClass} bg-warm text-sakura-deep flex items-center justify-center text-3xl`}
-      aria-hidden="true"
-    >
-      ❀
-    </div>
+    <AlbumList
+      initialData={{
+        data: items.map(({ coverThumbnailUrl, ...memory }) =>
+          toMemoryResponse(memory, { coverThumbnailUrl }),
+        ),
+        page: { next_cursor: hasMore && last ? encodeCursor(last.id) : null },
+      }}
+    />
   )
 }
 
