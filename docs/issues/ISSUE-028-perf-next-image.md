@@ -101,12 +101,12 @@ private signed URL を Vercel の optimizer に渡すと、 token 付き URL が
 - [x] LCP 画像 (memory detail の 1 枚目) は `priority` で eagerly loaded
 - [ ] Lighthouse "Properly size images" が悪化していない
 
-### Post-merge QA (2026-07-22)
+### マージ後 QA (2026-07-22)
 
 - 詳細: `docs/perf/issue-028-post-merge-qa-2026-07-22.md`
-- `pnpm pr:gate` passed (format / lint / OpenAPI route-map / typecheck / 271 tests / build)
-- Variant 関連 integration tests passed (`uploads-url`, `memories`, `uploads`: 46 tests)
-- `src/app` / `src/components` に legacy `<img>` は残っていない
+- `pnpm pr:gate` が成功 (format / lint / OpenAPI route-map / typecheck / 271 tests / build)
+- variant 関連 integration tests が成功 (`uploads-url`, `memories`, `uploads`: 46 tests)
+- `src/app` / `src/components` に従来の `<img>` は残っていない
 - `/album` thumbnail / `/memory/[id]` preview の signed URL 経路は code + test で確認済み
 - 未完: 認証済み実データ環境での DevTools Network / Lighthouse / LCP 再計測
 
