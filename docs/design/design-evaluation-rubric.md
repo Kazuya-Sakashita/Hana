@@ -25,7 +25,7 @@ Hana らしい体験になっているかで判断するための評価基準で
 | 判定  | 条件                                                                                 |
 | ----- | ------------------------------------------------------------------------------------ |
 | Go    | blocker なし。主要評価軸がすべて3以上、Privacy Trust と Task Success は4以上         |
-| Hold  | blocker はないが、主要評価軸に2がある。warning の責任者と follow-up が明確           |
+| Hold  | blocker はないが、主要評価軸に2がある、または Privacy Trust / Task Success が3       |
 | No-Go | PII / image URL / storage_key / AI本文の露出、同意不足、責めるcopy、完了不能flowあり |
 
 Privacy Trust / Content Safety / Accessibility / Task Success の blocker は、平均点で相殺しない。
@@ -89,11 +89,12 @@ Hana では HEART を単独の数値で採点しない。rubric の定性評価�
 
 ISSUE-045 の画面棚卸しでは、この表を画面または flow ごとに使う。
 
-| surface | flow / state | HEART | Task | Forgiving | Emotional | Trust | Content | A11y | Brand | Perf | Eng risk | verdict | priority | follow-up |
-| ------- | ------------ | ----- | ---- | --------- | --------- | ----- | ------- | ---- | ----- | ---- | -------- | ------- | -------- | --------- |
-| TBD     | TBD          | TBD   | TBD  | TBD       | TBD       | TBD   | TBD     | TBD  | TBD   | TBD  | TBD      | TBD     | TBD      | TBD       |
+| surface | flow / state | HEART evidence / gap | Task | Forgiving | Emotional | Trust | Content | A11y | Brand | Perf | Eng risk | verdict | priority | follow-up |
+| ------- | ------------ | -------------------- | ---- | --------- | --------- | ----- | ------- | ---- | ----- | ---- | -------- | ------- | -------- | --------- |
+| TBD     | TBD          | TBD                  | TBD  | TBD       | TBD       | TBD   | TBD     | TBD  | TBD   | TBD  | TBD      | TBD     | TBD      | TBD       |
 
-Score は 1-5、verdict は Go / Hold / No-Go。follow-up は半日から2日の Issue 粒度で書く。
+Score は 1-5、verdict は Go / Hold / No-Go。HEART は単独採点せず、観察証跡や不足を
+`HEART evidence / gap` に書く。follow-up は半日から2日の Issue 粒度で書く。
 
 ---
 
@@ -107,7 +108,7 @@ Focus: UX Research and HEART translation.
 Check whether the target screen or flow supports Happiness, Engagement,
 Adoption, Retention, and Task Success without adding guilt or pressure.
 Return scores, blockers, warnings, and evidence gaps.
-Use only fake/anonymized data.
+Use only synthetic or fake data.
 ```
 
 ### Privacy / Trust / Content Safety
@@ -169,18 +170,35 @@ Return scores, blockers, warnings, and implementation split recommendations.
 - Privacy / Trust / Content:
 - Product / A11y / Engineering:
 
+### Validation
+
+- Commands:
+- Results:
+- Manual QA:
+
+### Accessibility / Performance
+
+- Accessibility checks:
+- Performance perception notes:
+
 ### Follow-ups
 
 - P0:
 - P1:
 - P2:
 
+### Rollback
+
+- Revert:
+- Data impact:
+- Recovery steps:
+
 ### Evidence Policy
 
 - Real child/parent names: none
 - Image URL / presigned URL / storage_key: none
 - AI generated memory text or prompt: none
-- Screenshots use fake or anonymized data only
+- Screenshots use synthetic or fake data only
 ```
 
 ---
