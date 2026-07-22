@@ -117,7 +117,7 @@ Go 判定には、少なくとも `Task Success / 30秒記録` と `Privacy Trus
 各 follow-up の実装前に、該当するものを Issue / PR に添付する。
 
 - Synthetic screenshot set: `/sign-in`, `/onboarding`, `/`, `/record`, AI consent, upload failure, AI failure, save failure, `/album` empty/many, `/memory/[memoryId]`, delete dialog, `/settings`
-- Copy ledger: 表示文言、許可する child given-name の使い方、禁止する full name / birthdate / email / location / image URL / `storage_key` / prompt / AI 生成本文
+- Copy ledger: 表示文言、許可する child given-name の使い方、AI prompt / PR evidence / screenshot artifact で禁止する full name / birthdate / email / location / image URL / `storage_key` / prompt / AI 生成本文
 - Flow map: happy path、cancel、retry、delete、sign out、AI skip、permission / consent
 - Accessibility report: contrast、44px tap target、focus order、dialog keyboard、Escape、screen reader label、photo alt policy、zoom
 - Privacy / Trust ledger: AI vendor evidence、data retention、training-use、delete/restore、share/family settings、PR evidence policy
