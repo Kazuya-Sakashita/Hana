@@ -1,7 +1,6 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import {
   memoriesQueryKey,
-  memoryListQueryKey,
   type Memory,
   type MemoryListResponse,
 } from '@/features/memories/client/use-memories'
@@ -32,15 +31,6 @@ export function optimisticAddMemoryToLists(
   options: { limit?: number } = {},
 ) {
   const limit = options.limit ?? 50
-  const ensuredKey = memoryListQueryKey(limit)
-  const createdEnsuredList = !queryClient.getQueryData<MemoryListResponse>(ensuredKey)
-
-  if (createdEnsuredList) {
-    queryClient.setQueryData<MemoryListResponse>(ensuredKey, {
-      data: [],
-      page: { next_cursor: null },
-    })
-  }
 
   queryClient.setQueriesData<MemoryListResponse>({ queryKey: memoriesQueryKey }, (current) =>
     current
@@ -57,13 +47,6 @@ export function optimisticAddMemoryToLists(
         ? { ...current, data: current.data.filter((item) => item.id !== memory.id) }
         : current,
     )
-
-    if (createdEnsuredList) {
-      const ensuredList = queryClient.getQueryData<MemoryListResponse>(ensuredKey)
-      if (ensuredList?.data.length === 0) {
-        queryClient.removeQueries({ queryKey: ensuredKey, exact: true })
-      }
-    }
   }
 }
 

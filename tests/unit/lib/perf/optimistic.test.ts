@@ -79,13 +79,13 @@ describe('optimistic memory list helpers', () => {
     ])
   })
 
-  it('creates a target album list cache when none exists and removes it on rollback', () => {
+  it('does not create a one-item album list cache when the list has not been visited', () => {
     const queryClient = new QueryClient()
     const next = makeMemory({ id: 'optimistic-1' })
 
     const rollback = optimisticAddMemoryToLists(queryClient, next)
 
-    expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)?.data).toEqual([next])
+    expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)).toBeUndefined()
 
     rollback()
 
