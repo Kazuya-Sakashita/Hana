@@ -4,7 +4,8 @@
 
 - GitHub Issue: #43
 - 実装 PR: #44
-- 確認対象 commit: `a14c086` (QA 開始時点の `origin/main`)
+- ISSUE-028 実装 PR #44 merge commit: `cc31547def14132ccbe793bcf32949112d49e8dd`
+- QA 実行時の `origin/main` HEAD: `a14c086` (ISSUE-022 merge 後)
 - QA branch: `codex/issue-043-post-merge-qa`
 - worktree: `/private/tmp/hana-issue43-post-merge-qa`
 
