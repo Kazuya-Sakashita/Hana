@@ -1,6 +1,6 @@
 ---
 id: ISSUE-055
-title: Record bottom-sheet capture redesign
+title: 記録画面の下部シート型 30 秒フロー刷新
 priority: P0
 status: todo
 size: M

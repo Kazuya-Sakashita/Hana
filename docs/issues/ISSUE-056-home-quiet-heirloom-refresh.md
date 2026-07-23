@@ -1,6 +1,6 @@
 ---
 id: ISSUE-056
-title: Home Quiet Heirloom refresh
+title: ホームの Quiet Heirloom 刷新
 priority: P1
 status: todo
 size: M

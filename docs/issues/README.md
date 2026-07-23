@@ -93,14 +93,14 @@ Codex-ready と判断する条件:
 
 ## Planned Design Rebuild Sequence
 
-| order | issue       | title                                | note                                               |
-| ----- | ----------- | ------------------------------------ | -------------------------------------------------- |
-| 1     | `ISSUE-054` | Design token and common UI refresh   | `ISSUE-053` 完了後に着手                           |
-| 2     | `ISSUE-058` | State copy and quiet motion system   | `ISSUE-054` 完了後。画面実装前の copy ledger       |
-| 3     | `ISSUE-055` | Record bottom-sheet capture redesign | `ISSUE-054` / `ISSUE-058` 完了後。MVP 中核 flow    |
-| 4     | `ISSUE-056` | Home Quiet Heirloom refresh          | `ISSUE-054` / `ISSUE-058` 完了後                   |
-| 5     | `ISSUE-057` | Album and memory keepsake refresh    | `ISSUE-054` / `ISSUE-058` 完了後。広がる場合は分割 |
-| 6     | `ISSUE-059` | Design mobile QA and review gate     | `ISSUE-055`〜`ISSUE-058` 完了後の release gate     |
+| order | issue       | title                                  | note                                               |
+| ----- | ----------- | -------------------------------------- | -------------------------------------------------- |
+| 1     | `ISSUE-054` | デザイントークンと共通 UI 刷新         | `ISSUE-053` 完了後に着手                           |
+| 2     | `ISSUE-058` | 状態文言と静かなモーション体系         | `ISSUE-054` 完了後。画面実装前の copy ledger       |
+| 3     | `ISSUE-055` | 記録画面の下部シート型 30 秒フロー刷新 | `ISSUE-054` / `ISSUE-058` 完了後。MVP 中核 flow    |
+| 4     | `ISSUE-056` | ホームの Quiet Heirloom 刷新           | `ISSUE-054` / `ISSUE-058` 完了後                   |
+| 5     | `ISSUE-057` | アルバムと記録詳細の keepsake 刷新     | `ISSUE-054` / `ISSUE-058` 完了後。広がる場合は分割 |
+| 6     | `ISSUE-059` | デザインモバイル QA とレビューゲート   | `ISSUE-055`〜`ISSUE-058` 完了後の release gate     |
 
 ---
 
@@ -124,7 +124,7 @@ Codex-ready と判断する条件:
 
 | issue       | title                       | note                                 |
 | ----------- | --------------------------- | ------------------------------------ |
-| `ISSUE-053` | Quiet Heirloom design canon | 3 名の専門サブエージェント review Go |
+| `ISSUE-053` | Quiet Heirloom デザイン正本 | 3 名の専門サブエージェント review Go |
 
 ---
 

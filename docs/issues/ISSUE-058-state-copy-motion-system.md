@@ -1,6 +1,6 @@
 ---
 id: ISSUE-058
-title: State copy and quiet motion system
+title: 状態文言と静かなモーション体系
 priority: P0
 status: todo
 size: M

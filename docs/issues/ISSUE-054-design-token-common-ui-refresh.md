@@ -1,6 +1,6 @@
 ---
 id: ISSUE-054
-title: Design token and common UI refresh
+title: デザイントークンと共通 UI 刷新
 priority: P0
 status: todo
 size: M
@@ -42,7 +42,7 @@ Quiet Heirloom の方向性を、全画面で再利用できる UI の土台へ�
 | 生成型       | なし                                      |
 | アプリコード | globals.css、common UI、bottom navigation |
 | テスト       | token / accessibility の静的確認          |
-| ドキュメント | Issue 正本、必要なら design canon 更新    |
+| ドキュメント | Issue 正本、必要ならデザイン正本更新      |
 
 ## 受け入れ条件 (Acceptance Criteria)
 
@@ -50,7 +50,7 @@ Quiet Heirloom の方向性を、全画面で再利用できる UI の土台へ�
 - [ ] body text は 7:1 目標、helper / small text は 4.5:1 以上を維持している
 - [ ] primary action の tap target が 44px 以上で維持されている
 - [ ] focus-visible と reduced motion の既存契約を壊していない
-- [ ] card / paper slip / photo mat の使い分けが実装と design canon で矛盾しない
+- [ ] card / paper slip / photo mat の使い分けが実装とデザイン正本で矛盾しない
 - [ ] keyboard focus order と safe-area spacing を悪化させていない
 - [ ] `git diff --check` と relevant tests が通る
 

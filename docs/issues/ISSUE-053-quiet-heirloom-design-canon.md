@@ -1,6 +1,6 @@
 ---
 id: ISSUE-053
-title: Quiet Heirloom design canon
+title: Quiet Heirloom デザイン正本
 priority: P0
 status: review
 size: S
@@ -41,7 +41,7 @@ Hana の大幅デザイン見直しで採用する方向性を、実装前のデ
 | OpenAPI      | なし                                                  |
 | 生成型       | なし                                                  |
 | アプリコード | なし                                                  |
-| ドキュメント | design canon、コンセプト画像、Issue index、後続 Issue |
+| ドキュメント | デザイン正本、コンセプト画像、Issue index、後続 Issue |
 
 ## 受け入れ条件 (Acceptance Criteria)
 

@@ -1,6 +1,6 @@
 ---
 id: ISSUE-059
-title: Design mobile QA and review gate
+title: デザインモバイル QA とレビューゲート
 priority: P0
 status: todo
 size: M

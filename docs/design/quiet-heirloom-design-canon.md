@@ -1,11 +1,11 @@
-# Hana Quiet Heirloom Design Canon
+# Hana Quiet Heirloom デザイン正本
 
 この文書は `ISSUE-053` の成果物として、Hana の大幅デザイン見直しで採用する方向性を固定する。
 実装時は `Hana_PRD_v1.md`、`docs/design/design-evaluation-rubric.md`、
 `docs/design/design-inventory-roadmap.md`、`docs/design/ai-consent-privacy-evidence.md`、
 `docs/design/photo-alt-privacy-policy.md`、`docs/design/delete-restore-trust-contract.md` と合わせて読む。
 
-## Decision
+## 採用方針
 
 Hana の次の UI 方向性は **Quiet Heirloom** とする。
 
@@ -13,36 +13,36 @@ Hana の次の UI 方向性は **Quiet Heirloom** とする。
 写真 1 枚をきっかけに、小さな記憶を静かに残せる私的なアルバムとして設計する。
 AI は主役ではなく、言葉が出ない時だけそっと下書きする黒子として扱う。
 
-## Concept Evidence
+## コンセプト証跡
 
-- Image: `docs/design/concepts/hana-quiet-heirloom-concept-2026-07-23.png`
-- Status: mood evidence only
-- Use: visual direction, tone, density, hierarchy, material feel の参照
-- Do not use: 画像内の日本語文言をそのまま本番 UI copy として採用しない
+- 画像: `docs/design/concepts/hana-quiet-heirloom-concept-2026-07-23.png`
+- 状態: mood evidence only
+- 用途: visual direction, tone, density, hierarchy, material feel の参照
+- 禁止: 画像内の日本語文言をそのまま本番 UI copy として採用しない
 
 生成画像は実装正本ではない。特に日本語 copy、AI 同意文言、privacy claim は
 このリポジトリの copy ledger、ADR、privacy evidence、human review を優先する。
 画像に trust / privacy / AI 送信に関する文言が見える場合、その文言は unsafe draft として扱い、
 active UI や PR evidence に転記しない。
 
-## Source-Of-Truth Precedence
+## 正本の優先順位
 
-`ISSUE-053` 以降の design rebuild では、次の順で衝突を解決する。
+`ISSUE-053` 以降のデザイン刷新では、次の順で衝突を解決する。
 
-| priority | source                                                                                                               | role                                 |
-| -------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| 1        | `docs/design/ai-consent-privacy-evidence.md`, `docs/design/delete-restore-trust-contract.md`, ADR, human review gate | privacy / trust / legal claims       |
-| 2        | `Hana_PRD_v1.md`                                                                                                     | product value and MVP success target |
-| 3        | `docs/design/design-evaluation-rubric.md`                                                                            | Go / Hold / No-Go judgment           |
-| 4        | `docs/design/quiet-heirloom-design-canon.md`                                                                         | visual and interaction direction     |
-| 5        | `docs/design/v0-prompt.md`                                                                                           | older screen reference               |
-| 6        | generated images and `docs/design/v0-output/`                                                                        | non-authoritative mood / example     |
+| 優先 | source                                                                                                               | 役割                                 |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 1    | `docs/design/ai-consent-privacy-evidence.md`, `docs/design/delete-restore-trust-contract.md`, ADR, human review gate | privacy / trust / legal claims       |
+| 2    | `Hana_PRD_v1.md`                                                                                                     | product value and MVP success target |
+| 3    | `docs/design/design-evaluation-rubric.md`                                                                            | Go / Hold / No-Go judgment           |
+| 4    | `docs/design/quiet-heirloom-design-canon.md`                                                                         | visual and interaction direction     |
+| 5    | `docs/design/v0-prompt.md`                                                                                           | older screen reference               |
+| 6    | generated images and `docs/design/v0-output/`                                                                        | non-authoritative mood / example     |
 
 V0 prompt や生成画像が privacy / trust evidence と衝突する場合は、常に privacy / trust evidence を優先する。
 
-## Design Principles
+## デザイン原則
 
-| principle            | 意味                                                | 実装判断                                                     |
+| 原則                 | 意味                                                | 実装判断                                                     |
 | -------------------- | --------------------------------------------------- | ------------------------------------------------------------ |
 | Album not feed       | 公開 SNS ではなく、閉じた私的アルバム               | ranking、like count、streak、feed density を避ける           |
 | Whisper not shout    | 行動を急かさず、戻ってきやすくする                  | 強いバナー、派手な badge、罪悪感 copy を避ける               |
@@ -52,9 +52,9 @@ V0 prompt や生成画像が privacy / trust evidence と衝突する場合は�
 | Forgiving by default | 空白、失敗、復帰、キャンセルで親を責めない          | 未記録日、連続記録、失敗回数を圧として表示しない             |
 | Trust before delight | 写真、AI、削除、共有で安心を先に置く                | 不確かな retention / restore promise は active UI に出さない |
 
-## Visual Direction
+## ビジュアル方針
 
-| element      | rule                                                                |
+| 要素         | ルール                                                              |
 | ------------ | ------------------------------------------------------------------- |
 | Canvas       | warm washi base。画面全体を淡い紙の余白として扱う                   |
 | Surface      | white / porcelain を基調に、浮かせすぎない                          |
@@ -66,13 +66,13 @@ V0 prompt や生成画像が privacy / trust evidence と衝突する場合は�
 | Typography   | UI は読みやすく、物語本文と見出しは serif で静かに読ませる          |
 | Illustration | 装飾目的の baby sticker や generic pastel illustration は避ける     |
 
-## Screen Rules
+## 画面別ルール
 
-## 30-Second Measurement Contract
+## 30秒計測ルール
 
 Hana の 30 秒記録は、実装後に次の条件で測る。
 
-| path                       | start                                         | finish                              | target                                         |
+| パス                       | 計測開始                                      | 計測終了                            | 目標                                           |
 | -------------------------- | --------------------------------------------- | ----------------------------------- | ---------------------------------------------- |
 | core AI path               | 既存同意済みユーザーが写真 1 枚を選択した時点 | 保存完了 feedback または album 遷移 | 30 秒以内。30〜60 秒は warning、60 秒超は Hold |
 | first consent path         | AI 同意 dialog が表示された時点               | 同意または skip 後に保存可能な状態  | 60 秒以内。信頼説明を短縮して隠してはいけない  |
@@ -83,14 +83,14 @@ OS の写真 picker、認証、初回 onboarding、ネットワーク障害そ�
 ただし、UI が待ち時間の不安を増やしていないかは `ISSUE-059` で別途確認する。
 AI が本文を提案する体験は中核価値であり、secondary なのは本文の手動編集、天気、日付の調整である。
 
-### Home
+### ホーム
 
 - 主役は「記録する圧」ではなく「戻ってこられる場所」
 - recent memories は横並び feed ではなく、保管された小さなページとして見せる
 - empty state は初回記録へ自然につなぐ
 - stats は達成圧や比較に見せない。表示する日数は「連続記録」ではなく「一緒に過ごした日数」として扱う
 
-### Record
+### 記録
 
 - 画面上部は写真または選択前の余白、画面下部は現在の action に集中する
 - primary CTA は常に下部 35% に置く
@@ -99,29 +99,29 @@ AI が本文を提案する体験は中核価値であり、secondary なのは�
 - upload / AI / save failure は入力を失わせない
 - keyboard open、safe area、focus order、input occlusion を実装 PR で確認する
 
-### Album
+### アルバム
 
 - 一覧は public gallery ではなく private shelf として見せる
 - thumbnail は写真台紙のように扱い、詰め込みすぎない
 - load more は静かに、かつ多件数でも不安にならない位置に置く
 - favorite は ranking ではなく個人的な印として扱う
 
-### Memory Detail
+### 記録詳細
 
 - 写真と物語本文が主役
 - metadata と action は控えめに置く
 - delete copy は既存 trust contract を維持し、復元を過剰約束しない
 - photo alt は `docs/design/photo-alt-privacy-policy.md` を正とする
 
-### Settings
+### 設定
 
 - trust surface として扱う
 - AI 同意状態、送るもの / 送らないもの、削除、export、家族共有の将来項目は、
   実装済みか future かを曖昧にしない
 
-## Copy Rules
+## 文言ルール
 
-| Do                                       | Do not                                          |
+| 使ってよい方向                           | 禁止する方向                                    |
 | ---------------------------------------- | ----------------------------------------------- |
 | 「ひとことだけでも」「あとでなおせます」 | 「毎日続けましょう」「記録が途切れました」      |
 | 「うまくいかなかったので、もう一度」     | HTTP status や internal reason をそのまま見せる |
@@ -132,29 +132,29 @@ AI が本文を提案する体験は中核価値であり、secondary なのは�
 AI の「送るもの / 送らないもの」は `docs/design/ai-consent-privacy-evidence.md` を正とする。
 生成画像、古い V0 prompt、PR コメントから転記しない。
 
-## Motion Rules
+## モーションルール
 
 - motion は「できたことを静かに知らせる」ために使う
 - AI waiting は派手な魔法演出にしない
 - save success は短く、reduced motion でも同じ意味が伝わる
 - `prefers-reduced-motion` を必ず尊重する
 
-## Implementation Order
+## 実装順序
 
-| order | issue       | target                               | reason                                     |
-| ----- | ----------- | ------------------------------------ | ------------------------------------------ |
-| 1     | `ISSUE-054` | design token and common UI refresh   | 各画面で雰囲気がばらける前に土台を固定する |
-| 2     | `ISSUE-058` | state copy and quiet motion system   | 画面別実装前に copy / motion ledger を置く |
-| 3     | `ISSUE-055` | record bottom-sheet capture redesign | MVP の中核である 30 秒記録を成立させる     |
-| 4     | `ISSUE-056` | home Quiet Heirloom refresh          | 記録入口と復帰体験を整える                 |
-| 5     | `ISSUE-057` | album and memory keepsake refresh    | 見返す体験を private album として磨く      |
-| 6     | `ISSUE-059` | design mobile QA and review gate     | 画面刷新全体を release gate として確認する |
+| 順番 | issue       | 対象                                 | 理由                                       |
+| ---- | ----------- | ------------------------------------ | ------------------------------------------ |
+| 1    | `ISSUE-054` | design token and common UI refresh   | 各画面で雰囲気がばらける前に土台を固定する |
+| 2    | `ISSUE-058` | state copy and quiet motion system   | 画面別実装前に copy / motion ledger を置く |
+| 3    | `ISSUE-055` | record bottom-sheet capture redesign | MVP の中核である 30 秒記録を成立させる     |
+| 4    | `ISSUE-056` | home Quiet Heirloom refresh          | 記録入口と復帰体験を整える                 |
+| 5    | `ISSUE-057` | album and memory keepsake refresh    | 見返す体験を private album として磨く      |
+| 6    | `ISSUE-059` | design mobile QA and review gate     | 画面刷新全体を release gate として確認する |
 
-## Subagent Review Loop
+## サブエージェントレビュー
 
 各実装 PR は最大 3 回まで、次の 3 方向で read-only review を実施する。
 
-| reviewer                         | gate                                                              |
+| レビュアー                       | ゲート                                                            |
 | -------------------------------- | ----------------------------------------------------------------- |
 | Product UX / 30秒記録            | Task Success 4 以上。Happiness / Retention を圧で作っていない     |
 | Privacy / Trust / Content Safety | Privacy Trust 4 以上。PII、画像 URL、storage_key、AI 本文露出なし |
@@ -163,7 +163,7 @@ AI の「送るもの / 送らないもの」は `docs/design/ai-consent-privacy
 blocker が残る場合は merge しない。warning は follow-up Issue に残せるが、
 Privacy Trust、Content Safety、Accessibility、Task Success の No-Go は平均点で相殺しない。
 
-## Evidence Policy
+## 証跡ポリシー
 
 - 実ユーザーの写真、名前、メール、生年月日、画像 URL、storage_key、prompt、AI 生成本文を残さない
 - screenshot は synthetic / local data のみ

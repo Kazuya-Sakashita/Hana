@@ -1,6 +1,6 @@
 ---
 id: ISSUE-057
-title: Album and memory keepsake refresh
+title: アルバムと記録詳細の keepsake 刷新
 priority: P1
 status: todo
 size: M
