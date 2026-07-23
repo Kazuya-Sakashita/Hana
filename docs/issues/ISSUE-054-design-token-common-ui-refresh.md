@@ -2,7 +2,7 @@
 id: ISSUE-054
 title: デザイントークンと共通 UI 刷新
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
