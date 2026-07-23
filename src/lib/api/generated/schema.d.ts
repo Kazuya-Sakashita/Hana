@@ -256,8 +256,9 @@ export interface paths {
         /**
          * 記録削除 (論理削除)
          * @description 記録を論理削除する (`deleted_at` セット)。
+         *     通常の取得・一覧からは表示されなくなる。
          *     紐付く画像は **そのまま残る** (画像の Storage 削除は退会フロー / cleanup ジョブで)。
-         *     30 日以内なら復活可能 (将来 ISSUE で復元 API)。
+         *     復元は、レビュー済みの UI / API / サポートフローが揃うまで提供しない。
          */
         delete: operations["deleteMemory"];
         options?: never;
