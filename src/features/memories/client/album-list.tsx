@@ -5,11 +5,12 @@ import Link from 'next/link'
 import { Heart } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   memoriesQueryKey,
-  useMemoriesQuery,
+  useInfiniteMemoriesQuery,
   useUpdateMemoryMutation,
   type Memory,
   type MemoryListResponse,
@@ -21,19 +22,83 @@ import { useToast } from '@/components/ui/toast'
 const ALBUM_LIMIT = 50
 
 export function AlbumList({ initialData }: { initialData: MemoryListResponse }) {
-  const query = useMemoriesQuery({ limit: ALBUM_LIMIT, initialData })
-  const items = query.data?.data ?? []
+  const query = useInfiniteMemoriesQuery({ limit: ALBUM_LIMIT, initialData })
+  const items = query.data?.pages.flatMap((page) => page.data) ?? []
+  const [loadMoreStatus, setLoadMoreStatus] = useState('')
+  const statusRef = useRef<HTMLParagraphElement>(null)
+
+  async function onLoadMore() {
+    const beforeCount = items.length
+    const result = await query.fetchNextPage()
+    if (result.isError) {
+      setLoadMoreStatus('つづきのページを よみこめませんでした。')
+      return
+    }
+
+    const pages = result.data?.pages ?? query.data?.pages ?? []
+    const nextItems = pages.flatMap((page) => page.data)
+    const addedCount = Math.max(nextItems.length - beforeCount, 0)
+    const lastPage = pages[pages.length - 1]
+    const hasMore = !!lastPage?.page.next_cursor
+    const addedMessage =
+      addedCount > 0 ? `さらに ${addedCount} 件 よみこみました。` : 'すべて表示しました。'
+    setLoadMoreStatus(
+      hasMore
+        ? addedMessage
+        : addedCount > 0
+          ? `${addedMessage}すべて表示しました。`
+          : 'すべて表示しました。',
+    )
+
+    if (!hasMore) {
+      window.requestAnimationFrame(() => {
+        statusRef.current?.focus({ preventScroll: true })
+      })
+    }
+  }
 
   if (items.length === 0) {
     return <EmptyState />
   }
 
   return (
-    <ul className="flex flex-col gap-3">
-      {items.map((memory) => (
-        <AlbumListItem key={memory.id} memory={memory} />
-      ))}
-    </ul>
+    <div className="flex flex-col gap-5">
+      <ul className="flex flex-col gap-3">
+        {items.map((memory) => (
+          <AlbumListItem key={memory.id} memory={memory} />
+        ))}
+      </ul>
+
+      {query.isError ? (
+        <p role="alert" className="text-amber text-center text-sm">
+          つづきのページを よみこめませんでした。もういちど ためしてください。
+        </p>
+      ) : null}
+
+      {loadMoreStatus ? (
+        <p
+          ref={statusRef}
+          role="status"
+          aria-live="polite"
+          tabIndex={-1}
+          className="text-ink-tertiary text-center text-sm focus:outline-none"
+        >
+          {loadMoreStatus}
+        </p>
+      ) : null}
+
+      {query.hasNextPage ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void onLoadMore()}
+          disabled={query.isFetchingNextPage}
+          className="w-full"
+        >
+          {query.isFetchingNextPage ? 'よみこんでいます…' : 'まえのページも みる'}
+        </Button>
+      ) : null}
+    </div>
   )
 }
 

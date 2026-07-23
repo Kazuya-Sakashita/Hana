@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import {
   optimisticAddMemoryToLists,
@@ -7,12 +8,14 @@ import {
   optimisticUpdateMemoryInLists,
 } from '@/lib/perf/optimistic'
 import {
+  infiniteMemoryListQueryKey,
   memoryListQueryKey,
   type Memory,
   type MemoryListResponse,
 } from '@/features/memories/client/use-memories'
 
 const LIST_KEY = memoryListQueryKey(50)
+const INFINITE_LIST_KEY = infiniteMemoryListQueryKey(50)
 
 function makeMemory(overrides: Partial<Memory> = {}): Memory {
   return {
@@ -33,6 +36,10 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 
 function makeList(data: Memory[]): MemoryListResponse {
   return { data, page: { next_cursor: null } }
+}
+
+function makeInfiniteList(pages: MemoryListResponse[]): InfiniteData<MemoryListResponse> {
+  return { pages, pageParams: pages.map((_, index) => (index === 0 ? null : `cursor-${index}`)) }
 }
 
 describe('optimistic memory list helpers', () => {
@@ -90,6 +97,35 @@ describe('optimistic memory list helpers', () => {
     rollback()
 
     expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)).toBeUndefined()
+  })
+
+  it('keeps loaded infinite-page items when adding and rolling back an optimistic memory', () => {
+    const queryClient = new QueryClient()
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      makeMemory({ id: `00000000-0000-4000-8000-0000000001${String(index).padStart(2, '0')}` }),
+    )
+    const secondPage = [makeMemory({ id: '00000000-0000-4000-8000-000000000300' })]
+    const next = makeMemory({ id: 'optimistic-1', title: 'いま のこしたページ' })
+    queryClient.setQueryData(
+      INFINITE_LIST_KEY,
+      makeInfiniteList([makeList(firstPage), makeList(secondPage)]),
+    )
+
+    const rollback = optimisticAddMemoryToLists(queryClient, next)
+
+    const afterAdd = queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)
+    expect(afterAdd?.pages[0]?.data.map((memory) => memory.id)).toEqual([
+      next.id,
+      ...firstPage.map((memory) => memory.id),
+    ])
+    expect(afterAdd?.pages[1]?.data).toEqual(secondPage)
+
+    rollback()
+
+    const afterRollback =
+      queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)
+    expect(afterRollback?.pages[0]?.data).toEqual(firstPage)
+    expect(afterRollback?.pages[1]?.data).toEqual(secondPage)
   })
 
   it('updates favorite state and restores it on rollback', () => {
@@ -187,5 +223,57 @@ describe('optimistic memory list helpers', () => {
       target,
       { ...unrelated, title: '更新済み' },
     ])
+  })
+
+  it('updates memories inside infinite album pages and restores them on rollback', () => {
+    const queryClient = new QueryClient()
+    const firstPageMemory = makeMemory({ id: '00000000-0000-4000-8000-000000000002' })
+    const secondPageMemory = makeMemory({ id: '00000000-0000-4000-8000-000000000003' })
+    queryClient.setQueryData(
+      INFINITE_LIST_KEY,
+      makeInfiniteList([makeList([firstPageMemory]), makeList([secondPageMemory])]),
+    )
+
+    const rollback = optimisticUpdateMemoryInLists(queryClient, secondPageMemory.id, (current) => ({
+      ...current,
+      is_favorite: true,
+    }))
+
+    expect(
+      queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)?.pages[1]
+        ?.data[0]?.is_favorite,
+    ).toBe(true)
+
+    rollback()
+
+    expect(
+      queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)?.pages[1]
+        ?.data[0],
+    ).toEqual(secondPageMemory)
+  })
+
+  it('removes memories inside infinite album pages and rolls them back to the same page', () => {
+    const queryClient = new QueryClient()
+    const firstPageMemory = makeMemory({ id: '00000000-0000-4000-8000-000000000002' })
+    const secondPageMemory = makeMemory({ id: '00000000-0000-4000-8000-000000000003' })
+    queryClient.setQueryData(
+      INFINITE_LIST_KEY,
+      makeInfiniteList([makeList([firstPageMemory]), makeList([secondPageMemory])]),
+    )
+
+    const rollback = optimisticRemoveMemoryFromLists(queryClient, secondPageMemory.id)
+
+    expect(
+      queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)?.pages[0]?.data,
+    ).toEqual([firstPageMemory])
+    expect(
+      queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)?.pages[1]?.data,
+    ).toEqual([])
+
+    rollback()
+
+    expect(
+      queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)?.pages[1]?.data,
+    ).toEqual([secondPageMemory])
   })
 })

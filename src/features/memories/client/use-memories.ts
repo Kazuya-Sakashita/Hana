@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import type { components } from '@/lib/api/generated/schema'
 
@@ -13,6 +13,10 @@ export const memoriesQueryKey = ['memories'] as const
 
 export function memoryListQueryKey(limit: number, cursor?: string | null) {
   return [...memoriesQueryKey, { limit, cursor: cursor ?? null }] as const
+}
+
+export function infiniteMemoryListQueryKey(limit: number) {
+  return [...memoriesQueryKey, 'infinite', { limit }] as const
 }
 
 async function fetchMemories({
@@ -48,6 +52,22 @@ export function useMemoriesQuery({
     queryKey: memoryListQueryKey(limit, cursor),
     queryFn: () => fetchMemories({ limit, cursor }),
     initialData,
+  })
+}
+
+export function useInfiniteMemoriesQuery({
+  limit = 20,
+  initialData,
+}: {
+  limit?: number
+  initialData?: MemoryListResponse
+}) {
+  return useInfiniteQuery({
+    queryKey: infiniteMemoryListQueryKey(limit),
+    queryFn: ({ pageParam }) => fetchMemories({ limit, cursor: pageParam }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.page.next_cursor ?? undefined,
+    initialData: initialData ? { pages: [initialData], pageParams: [null] } : undefined,
   })
 }
 
