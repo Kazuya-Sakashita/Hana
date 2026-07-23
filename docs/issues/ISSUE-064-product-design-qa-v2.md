@@ -2,7 +2,7 @@
 id: ISSUE-064
 title: Product Design QA v2
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2
@@ -36,11 +36,11 @@ Quiet Heirloom の画面品質を、代表 screenshot だけでなく実 DOM / a
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 実 DOM の design / a11y smoke が定義されている
-- [ ] interactive target の対象に `summary`, `[role="button"]`, focusable element が含まれる
-- [ ] heading 階層、tap target、focus order、horizontal overflow を実 DOM で検査する
-- [ ] CI で artifact を上書きしない read-only 検査になっている
-- [ ] Evidence に PII / image URL / `storage_key` / prompt / AI 生成本文がない
+- [x] 実 DOM の design / a11y smoke が定義されている
+- [x] interactive target の対象に `summary`, `[role="button"]`, focusable element が含まれる
+- [x] heading 階層、tap target、focus order、horizontal overflow を実 DOM で検査する
+- [x] CI で artifact を上書きしない read-only 検査になっている
+- [x] Evidence に PII / image URL / `storage_key` / prompt / AI 生成本文がない
 
 ## 参考
 
