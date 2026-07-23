@@ -2,7 +2,7 @@
 id: ISSUE-058
 title: 状態文言と静かなモーション体系
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
@@ -48,18 +48,26 @@ loading / empty / error / success / toast / dialog の状態表現を Hana の�
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 主要 state copy が責めない文体で統一されている
-- [ ] UI に HTTP status や internal reason が直接出ない
-- [ ] AI waiting と save success が quiet motion / reduced-motion に対応している
-- [ ] `docs/design/quiet-copy-motion-ledger.md` に採用文言、禁止表現、safe evidence fields が残っている
-- [ ] ledger に prompt、AI 生成本文、request / response body を貼っていない
-- [ ] Evidence に PII / image URL / storage_key / prompt / AI 生成本文がない
-- [ ] `git diff --check` と relevant tests が通る
+- [x] 主要 state copy が責めない文体で統一されている
+- [x] UI に HTTP status や internal reason が直接出ない
+- [x] AI waiting と save success が quiet motion / reduced-motion に対応している
+- [x] `docs/design/quiet-copy-motion-ledger.md` に採用文言、禁止表現、safe evidence fields が残っている
+- [x] ledger に prompt、AI 生成本文、request / response body を貼っていない
+- [x] Evidence に PII / image URL / storage_key / prompt / AI 生成本文がない
+- [x] `git diff --check` と relevant tests が通る
 
 ## レビュー方針
 
 専門サブエージェント 3 名で UX / Privacy / Visual-A11y-Engineering の read-only review を行い、
 最大 3 回まで修正と再レビューを回す。
+
+### レビュー結果
+
+- Product UX / 30 秒記録: Go
+- Privacy / Trust / Content Safety: Go
+- Visual / A11y / Engineering: Go
+- `git diff --check`: pass
+- `pnpm pr:gate`: pass
 
 ## セキュリティ・プライバシー考慮
 

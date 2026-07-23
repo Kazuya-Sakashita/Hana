@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { deleteMemoryDescription } from '@/lib/ui/quiet-state-copy'
 
 const memoryActionsSource = readFileSync(
   new URL('../../../src/components/memory-actions.tsx', import.meta.url),
@@ -20,8 +21,9 @@ const openApiSource = readFileSync(
 
 describe('delete restore trust contract', () => {
   it('keeps active delete confirmation free of restore promises', () => {
-    expect(memoryActionsSource).toContain('アルバムに')
-    expect(memoryActionsSource).toContain('表示されなくなります')
+    expect(memoryActionsSource).toContain('deleteMemoryDescription(childName)')
+    expect(deleteMemoryDescription('はな')).toContain('アルバムに')
+    expect(deleteMemoryDescription('はな')).toContain('表示されなくなります')
     expect(memoryActionsSource).not.toContain('7にち')
     expect(memoryActionsSource).not.toContain('7日')
     expect(memoryActionsSource).not.toContain('もどせます')

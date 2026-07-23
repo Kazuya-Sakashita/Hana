@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 function GoogleGlyph() {
   return (
@@ -44,7 +45,7 @@ export default function SignInPage() {
       },
     })
     if (e) {
-      setError(e.message)
+      setError(quietStateCopy.signIn.failed)
       setPending(false)
     }
   }
@@ -68,7 +69,7 @@ export default function SignInPage() {
             className="w-full"
           >
             <GoogleGlyph />
-            {pending ? '...' : 'Google で つづける'}
+            {pending ? quietStateCopy.signIn.pending : 'Google で つづける'}
           </Button>
           {error ? (
             <p className="text-amber text-center text-sm" role="alert">

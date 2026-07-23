@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 const albumListSource = readFileSync(
   new URL('../../../src/features/memories/client/album-list.tsx', import.meta.url),
@@ -30,7 +31,8 @@ describe('album pagination', () => {
     expect(albumListSource).toContain('query.hasNextPage')
     expect(albumListSource).toContain('query.fetchNextPage()')
     expect(albumListSource).toContain('query.isFetchingNextPage')
-    expect(albumListSource).toContain('まえのページも みる')
+    expect(albumListSource).toContain('quietStateCopy.album.loadMoreButton')
+    expect(quietStateCopy.album.loadMoreButton).toBe('まえのページも みる')
     expect(albumListSource).toContain('role="status"')
     expect(albumListSource).toContain('aria-live="polite"')
     expect(albumListSource).toContain('statusRef.current?.focus')
