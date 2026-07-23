@@ -9,6 +9,10 @@ const settingsSource = readFileSync(
   new URL('../../../src/app/settings/page.tsx', import.meta.url),
   'utf8',
 )
+const settingsTrustCenterCopySource = readFileSync(
+  new URL('../../../src/lib/ui/settings-trust-center-copy.ts', import.meta.url),
+  'utf8',
+)
 const evidenceSource = readFileSync(
   new URL('../../../docs/design/ai-consent-privacy-evidence.md', import.meta.url),
   'utf8',
@@ -20,7 +24,7 @@ const securityGuide = readFileSync(
 
 describe('AI consent privacy evidence', () => {
   it('keeps active UI free of unsupported training and zero-retention claims', () => {
-    const activeUi = `${recordSource}\n${settingsSource}`
+    const activeUi = `${recordSource}\n${settingsSource}\n${settingsTrustCenterCopySource}`
 
     expect(activeUi).not.toMatch(/zero data retention/i)
     expect(activeUi).not.toMatch(/(^|[^3])0日/)
@@ -33,15 +37,15 @@ describe('AI consent privacy evidence', () => {
   })
 
   it('shows opt-in status and the AI data boundary in settings', () => {
-    expect(settingsSource).toContain('AI は同意後だけ使います')
-    expect(settingsSource).toContain('Anthropic Claude API')
-    expect(settingsSource).toContain('おくるもの')
-    expect(settingsSource).toContain('おくらないもの')
-    expect(settingsSource).toContain('登録した呼び名')
-    expect(settingsSource).toContain('たんじょうび / メール / じゅうしょ')
-    expect(settingsSource).toContain('presigned URL')
-    expect(settingsSource).toContain('画像URL / presigned URL / 保存先のキー')
-    expect(settingsSource).toContain('通常30日以内に削除されます')
+    expect(settingsTrustCenterCopySource).toContain('AI は同意後だけ使います')
+    expect(settingsTrustCenterCopySource).toContain('Anthropic Claude API')
+    expect(settingsTrustCenterCopySource).toContain('おくるもの')
+    expect(settingsTrustCenterCopySource).toContain('おくらないもの')
+    expect(settingsTrustCenterCopySource).toContain('登録した呼び名')
+    expect(settingsTrustCenterCopySource).toContain('たんじょうび / メール / じゅうしょ')
+    expect(settingsTrustCenterCopySource).toContain('presigned URL')
+    expect(settingsTrustCenterCopySource).toContain('画像URL / presigned URL / 保存先のキー')
+    expect(settingsTrustCenterCopySource).toContain('通常30日以内に削除されます')
     expect(recordSource).toContain('通常30日以内に削除されます')
     expect(recordSource).toContain('安全確認など一部例外があります')
   })

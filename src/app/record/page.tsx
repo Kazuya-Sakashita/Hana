@@ -753,7 +753,7 @@ export default function RecordPage() {
 }
 
 const AI_CONSENT_SENT_COPY =
-  'おくるものは、しゃしん、なまえ、月齢、ひにち、てんき、あなたが書いたメモです。'
+  'おくるものは、しゃしん、登録した呼び名、月齢、ひにち、てんき、あなたが書いたメモです。'
 const AI_CONSENT_NOT_SENT_COPY =
   'たんじょうび、メール、じゅうしょ、位置情報、画像URL、presigned URL、保存先のキーは おくりません。'
 const AI_CONSENT_RETENTION_COPY =

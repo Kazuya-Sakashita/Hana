@@ -12,6 +12,7 @@ import { imageUrlCache } from '@/lib/cache/image-url-cache'
 import { useChildrenQuery } from '@/features/children/client/use-children'
 import { useCurrentUserQuery } from '@/features/me/client/use-current-user'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
+import { settingsTrustCenterCopy } from '@/lib/ui/settings-trust-center-copy'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -75,77 +76,94 @@ export default function SettingsPage() {
   return (
     <AppShell>
       <PageHeader
-        eyebrow="Hana"
-        title="せってい"
-        description="写真と AI をどう使うか、いま Hana でできることをここにまとめます。"
+        eyebrow={settingsTrustCenterCopy.page.eyebrow}
+        title={settingsTrustCenterCopy.page.title}
+        description={settingsTrustCenterCopy.page.description}
       />
 
       <section className="flex flex-col gap-5" aria-label="Hana の設定">
         <TrustSection
-          eyebrow="今できること"
-          title={child ? `${child.name} ちゃんの記録を残せます` : '記録をはじめられます'}
-          description="Hana は、写真からページを作り、アルバムにしまうための場所です。"
+          eyebrow={settingsTrustCenterCopy.current.eyebrow}
+          title={
+            child
+              ? settingsTrustCenterCopy.current.childRegisteredTitle(child.name)
+              : settingsTrustCenterCopy.current.emptyTitle
+          }
+          description={settingsTrustCenterCopy.current.description}
         >
           {child ? (
             <>
-              <DataRow label="お子さん" value={child.name} />
-              {ageLabel ? <DataRow label="いまの月齢" value={ageLabel} /> : null}
+              <DataRow label={settingsTrustCenterCopy.current.childLabel} value={child.name} />
+              {ageLabel ? (
+                <DataRow label={settingsTrustCenterCopy.current.ageLabel} value={ageLabel} />
+              ) : null}
             </>
           ) : (
-            <DataRow label="お子さん" value="まだ登録されていません。" />
+            <DataRow
+              label={settingsTrustCenterCopy.current.childLabel}
+              value={settingsTrustCenterCopy.current.missingChild}
+            />
           )}
           {me ? (
             <DataRow
-              label="サインイン"
-              value={`${me.email ?? 'メール未設定'} の Google アカウントで利用しています。`}
+              label={settingsTrustCenterCopy.current.accountLabel}
+              value={settingsTrustCenterCopy.current.accountValue(me.email)}
             />
           ) : null}
         </TrustSection>
 
         {me ? (
           <TrustSection
-            eyebrow="AI と写真"
-            title={me.ai_consent_at ? 'AI の下書きを使えます' : 'AI は同意後だけ使います'}
-            description="AI を使わずに、写真とことばだけでページを残すこともできます。"
+            eyebrow={settingsTrustCenterCopy.ai.eyebrow}
+            title={
+              me.ai_consent_at
+                ? settingsTrustCenterCopy.ai.enabledTitle
+                : settingsTrustCenterCopy.ai.disabledTitle
+            }
+            description={settingsTrustCenterCopy.ai.description}
           >
             <DataRow
-              label="おくるもの"
-              value="しゃしん / 登録した呼び名 / 月齢 / ひにち / てんき / ひとこと"
+              label={settingsTrustCenterCopy.ai.sentLabel}
+              value={settingsTrustCenterCopy.ai.sentValue}
             />
             <DataRow
-              label="おくらないもの"
-              value="たんじょうび / メール / じゅうしょ / 位置情報 / 画像URL / presigned URL / 保存先のキー"
+              label={settingsTrustCenterCopy.ai.notSentLabel}
+              value={settingsTrustCenterCopy.ai.notSentValue}
             />
             <DataRow
-              label="データの扱い"
-              value="Anthropic Claude API の入出力は通常30日以内に削除されますが、安全確認など一部例外があります。"
+              label={settingsTrustCenterCopy.ai.choiceLabel}
+              value={settingsTrustCenterCopy.ai.choiceValue}
+            />
+            <DataRow
+              label={settingsTrustCenterCopy.ai.handlingLabel}
+              value={settingsTrustCenterCopy.ai.handlingValue}
             />
           </TrustSection>
         ) : null}
 
         <TrustSection
-          eyebrow="データと削除"
-          title="約束できる範囲だけを表示します"
-          description="記録を削除すると、アルバムには表示されなくなります。復元機能は今は提供していません。"
+          eyebrow={settingsTrustCenterCopy.data.eyebrow}
+          title={settingsTrustCenterCopy.data.title}
+          description={settingsTrustCenterCopy.data.description}
         >
           <DataRow
-            label="記録の削除"
-            value="削除前に確認画面を出します。完全削除や復元可能期間は、この画面では約束しません。"
+            label={settingsTrustCenterCopy.data.memoryDeleteLabel}
+            value={settingsTrustCenterCopy.data.memoryDeleteValue}
           />
           <DataRow
-            label="証跡"
-            value="サポートやレビュー用の証跡に、実写真・実名・メール・生年月日・画像URL・presigned URL・保存先のキー・prompt・AI生成本文は残しません。"
+            label={settingsTrustCenterCopy.data.evidenceLabel}
+            value={settingsTrustCenterCopy.data.evidenceValue}
           />
         </TrustSection>
 
         <TrustSection
-          eyebrow="準備中"
-          title="まだこの画面では操作できません"
-          description="プロフィール編集、export、退会、家族共有、Hana Plus は、実装 Issue と確認手順を分けてから表示します。"
+          eyebrow={settingsTrustCenterCopy.future.eyebrow}
+          title={settingsTrustCenterCopy.future.title}
+          description={settingsTrustCenterCopy.future.description}
         >
-          <DataRow label="プロフィール編集" value="今は操作できません。" />
-          <DataRow label="export / 退会" value="今は操作できません。" />
-          <DataRow label="家族共有 / Hana Plus" value="今は操作できません。" />
+          {settingsTrustCenterCopy.future.items.map((item) => (
+            <DataRow key={item} label={item} value={settingsTrustCenterCopy.future.unavailable} />
+          ))}
         </TrustSection>
 
         <div className="pt-2">
