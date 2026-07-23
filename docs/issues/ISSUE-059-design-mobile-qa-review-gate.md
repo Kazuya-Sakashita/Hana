@@ -2,7 +2,7 @@
 id: ISSUE-059
 title: デザインモバイル QA とレビューゲート
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
