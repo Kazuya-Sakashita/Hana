@@ -2,7 +2,7 @@
 id: ISSUE-058
 title: 状態文言と静かなモーション体系
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
