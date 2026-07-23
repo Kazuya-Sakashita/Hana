@@ -326,7 +326,7 @@ export default function RecordPage() {
         title: quietStateCopy.record.saveDoneTitle,
         description: quietStateCopy.record.saveDoneDescription,
       })
-      router.push('/album')
+      router.push(`/memory/${created.id}?saved=1`)
       router.refresh()
     } catch (e) {
       rollback()
