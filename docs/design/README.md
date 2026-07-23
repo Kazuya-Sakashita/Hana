@@ -21,6 +21,8 @@ docs/design/
 │                            大幅デザイン見直しで採用する Quiet Heirloom 正本
 ├── quiet-copy-motion-ledger.md
 │                            大幅刷新時の copy / motion 証跡テンプレート
+├── product-design-qa-v2.md
+│                            実 DOM / a11y / visual contract の read-only QA 正本
 ├── concepts/                方向性確認用の mood evidence 画像
 ├── subagent-prompt-templates.md
 │                            Codex サブエージェント依頼テンプレート
