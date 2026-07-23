@@ -6,6 +6,7 @@ status: todo
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
+github_issue: 116
 blocked_by:
   - ISSUE-055
   - ISSUE-056

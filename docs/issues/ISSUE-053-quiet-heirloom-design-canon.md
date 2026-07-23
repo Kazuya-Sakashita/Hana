@@ -6,6 +6,7 @@ status: review
 size: S
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
+github_issue: 110
 requires_human_review:
   - design
   - privacy
