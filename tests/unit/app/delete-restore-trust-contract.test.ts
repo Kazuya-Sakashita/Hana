@@ -35,7 +35,9 @@ describe('delete restore trust contract', () => {
     expect(trustContract).toContain('Do not claim "7 days"')
     expect(securityGuide).toContain('docs/design/delete-restore-trust-contract.md')
     expect(securityGuide).toContain('memory restore is promised without restore UI')
-    expect(openApiSource).toContain('復元は、レビュー済みの UI / API / サポートフローが揃うまで提供しない')
+    expect(openApiSource).toContain(
+      '復元は、レビュー済みの UI / API / サポートフローが揃うまで提供しない',
+    )
     expect(openApiSource).not.toContain('30 日以内なら復活可能')
   })
 })
