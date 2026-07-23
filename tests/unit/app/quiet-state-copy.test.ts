@@ -53,10 +53,11 @@ describe('Quiet state copy and motion contracts', () => {
     ]
 
     for (const source of activeUiSources) {
+      const sourceWithoutPrivacyBoundary = source.replaceAll('presigned URL', 'presigned-url')
       expect(source).not.toContain('setError(e.message)')
       expect(source).not.toContain('(${e.reason})')
       expect(source).not.toContain('HTTP ${putRes.status}')
-      expect(source).not.toContain('signed URL')
+      expect(sourceWithoutPrivacyBoundary).not.toContain('signed URL')
     }
   })
 

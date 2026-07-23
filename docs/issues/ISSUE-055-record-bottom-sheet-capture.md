@@ -2,7 +2,7 @@
 id: ISSUE-055
 title: 記録画面の下部シート型 30 秒フロー刷新
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
@@ -50,22 +50,36 @@ Hana MVP の中核である「写真 1 枚から 30 秒で記録完了」を、�
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 写真選択から保存までの primary CTA が mobile thumb zone にある
-- [ ] AI は opt-in を維持し、同意を隠さない
-- [ ] AI consent copy が `docs/design/ai-consent-privacy-evidence.md` の送信データ説明と矛盾しない
-- [ ] AI 生成本文は中核価値として表示し、手動編集だけを optional / secondary として扱っている
-- [ ] AI を使わない場合でも保存まで進める
-- [ ] upload / AI / save failure 後に入力を失わず戻れる
-- [ ] core AI path / AI skip path / first consent path の 30 秒計測条件と結果が PR に残っている
-- [ ] keyboard open 時も primary CTA、入力欄、focus が破綻しない
-- [ ] body text 7:1 目標、helper / small text 4.5:1、44px tap target、visible focus、reduced motion を維持する
-- [ ] Evidence に PII / image URL / storage_key / prompt / AI 生成本文がない
-- [ ] `git diff --check` と relevant tests が通る
+- [x] 写真選択から保存までの primary CTA が mobile thumb zone にある
+- [x] AI は opt-in を維持し、同意を隠さない
+- [x] AI consent copy が `docs/design/ai-consent-privacy-evidence.md` の送信データ説明と矛盾しない
+- [x] AI 生成本文は中核価値として表示し、手動編集だけを optional / secondary として扱っている
+- [x] AI を使わない場合でも保存まで進める
+- [x] upload / AI / save failure 後に入力を失わず戻れる
+- [x] core AI path / AI skip path / first consent path の 30 秒計測条件と結果が PR に残っている
+- [x] keyboard open 時も primary CTA、入力欄、focus が破綻しない
+- [x] body text 7:1 目標、helper / small text 4.5:1、44px tap target、visible focus、reduced motion を維持する
+- [x] Evidence に PII / image URL / storage_key / prompt / AI 生成本文がない
+- [x] `git diff --check` と relevant tests が通る
 
 ## レビュー方針
 
 専門サブエージェント 3 名で UX / Privacy / Visual-A11y-Engineering の read-only review を行い、
 最大 3 回まで修正と再レビューを回す。
+
+## 実装メモ
+
+- `/record` を写真台紙 + 下部シートに再構成し、シートは scroll body と fixed footer に分離した。
+- AI 生成または手入力の本文は `のこす ことば` として保存前に visible confirmation する。
+- 写真選択 CTA は実 `Button` から hidden file input を開き、visible focus と同一写真 retry を維持する。
+- 30 秒証跡は `docs/design/record-bottom-sheet-capture-qa.md` と
+  `scripts/qa/issue-055-record-stopwatch.cjs` に synthetic-only で残した。
+
+## Specialist Review Log
+
+- Round 1: Product UX / 30秒記録 Hold、Privacy / Trust Hold、Visual / A11y / Engineering Hold。
+- Round 2: Product UX / 30秒記録 Go、Privacy / Trust Go、Visual / A11y / Engineering Hold。
+- Round 3: Visual / A11y / Engineering Go。
 
 ## セキュリティ・プライバシー考慮
 
