@@ -1,0 +1,51 @@
+{
+  "issue": "ISSUE-059",
+  "viewport": "390x844",
+  "evidence": "synthetic-only",
+  "app_surface": "/record",
+  "result": "pass",
+  "rows": [
+    {
+      "name": "core AI path",
+      "start": "既存同意済みユーザーが写真 1 枚を選択した時点",
+      "finish": "保存完了 feedback または album 遷移",
+      "target": "30 秒以内",
+      "elapsed_ms": 2529,
+      "reached": "/album",
+      "result": "pass",
+      "initial_tab_order": ["やめて とじる", "しゃしんを えらぶ", "やめて とじる"]
+    },
+    {
+      "name": "AI skip / manual save path",
+      "start": "写真 1 枚を選択した時点",
+      "finish": "保存完了 feedback または album 遷移",
+      "target": "30 秒以内",
+      "elapsed_ms": 1254,
+      "reached": "/album",
+      "result": "pass",
+      "initial_tab_order": ["やめて とじる", "しゃしんを えらぶ", "やめて とじる"]
+    },
+    {
+      "name": "first consent path",
+      "start": "AI 同意 dialog が表示された時点",
+      "finish": "同意または skip 後に保存可能な状態",
+      "target": "60 秒以内",
+      "elapsed_ms": 1820,
+      "reached": "story preview and save CTA visible",
+      "dialog_initial_focus": "ai-consent-decline",
+      "result": "pass",
+      "initial_tab_order": ["やめて とじる", "しゃしんを えらぶ", "やめて とじる"]
+    },
+    {
+      "name": "AI skip manual screenshot",
+      "start": "写真 1 枚を選択した時点",
+      "finish": "保存可能な状態",
+      "target": "30 秒以内",
+      "elapsed_ms": null,
+      "reached": "title focused and save CTA enabled after manual title",
+      "result": "pass",
+      "artifact": "docs/design/artifacts/issue-059-mobile-gate/record-ai-skip-manual-390x844.png",
+      "initial_tab_order": ["やめて とじる", "しゃしんを えらぶ", "やめて とじる"]
+    }
+  ]
+}

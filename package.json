@@ -22,6 +22,8 @@
     "test:watch": "vitest",
     "pr:gate": "pnpm format:check && pnpm lint && pnpm openapi:route-map && pnpm typecheck && pnpm test && pnpm build:ci",
     "qa:issue028:images": "node scripts/qa/issue-028-image-network-check.mjs",
+    "qa:issue059:design-mobile-gate": "node scripts/qa/issue-059-design-mobile-gate.cjs",
+    "qa:issue059:record-stopwatch": "node scripts/qa/issue-059-record-stopwatch.cjs",
     "openapi:lint": "redocly lint docs/openapi/openapi.yaml && spectral lint --ruleset .spectral.yaml docs/openapi/openapi.yaml",
     "openapi:route-map": "node scripts/check-openapi-route-map.mjs",
     "openapi:bundle": "redocly bundle docs/openapi/openapi.yaml -o docs/openapi/openapi.bundled.yaml",

@@ -1,0 +1,51 @@
+{
+  "issue": "ISSUE-059",
+  "evidence": "synthetic-only",
+  "generated_for": "2026-07-23",
+  "generator": "scripts/qa/issue-059-design-mobile-gate.cjs",
+  "generator_sha256": "bc58f0fe23fa75d6a4a036f997c704c4d9630c2205f296af7f7d34d661d713b1",
+  "scenarios": [
+    "record-core-ai-390x844",
+    "record-ai-skip-ready-390x844",
+    "record-first-consent-430x932",
+    "home-empty-390x844",
+    "album-shelf-390x844",
+    "memory-detail-430x932",
+    "tablet-release-768x1024",
+    "desktop-release-1280x900"
+  ],
+  "artifacts": [
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/record-core-ai-390x844.png",
+      "sha256": "939ffbb328a9c5f95e49af724e291a788d454f0aa7b1489b275b8570962379b3"
+    },
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/record-ai-skip-ready-390x844.png",
+      "sha256": "a2bf7fa8704e7da873810cff10749c1060fc82db03ce3e1e861dc133135baea2"
+    },
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/record-first-consent-430x932.png",
+      "sha256": "5d8ea46e783d70f6bfee352d6de00a9aca308ffce36476212d230cd5305986f3"
+    },
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/home-empty-390x844.png",
+      "sha256": "e9f6e95afe04133f142063d1d748fe129bbc22299d5ced0c083ddfe0f07746bf"
+    },
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/album-shelf-390x844.png",
+      "sha256": "52138099786a811d6fa685b57ad148238c5ba7e503627c01d8c60613241a660d"
+    },
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/memory-detail-430x932.png",
+      "sha256": "0e26a51f3dd19c55ebbd14f3944fdc6e3fc0954226ec08c90b2efa8f718972c6"
+    },
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/tablet-release-768x1024.png",
+      "sha256": "799ba5b8d7f4ba8fc711a704dba8ad657754165dd02e1add8dddfd6b43069c67"
+    },
+    {
+      "path": "docs/design/artifacts/issue-059-mobile-gate/desktop-release-1280x900.png",
+      "sha256": "ada4d9786541dd7eca1e03c1948bd223322b11f263e720cadc7559325a1b12f2"
+    }
+  ]
+}
