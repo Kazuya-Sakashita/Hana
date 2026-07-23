@@ -43,7 +43,7 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toContain('onClose={onDecline}')
     expect(recordSource).toContain('AI を つかわない')
     expect(recordSource).toContain('Anthropic Claude API')
-    expect(recordSource).toContain('しゃしん、なまえ、月齢、ひにち、てんき')
+    expect(recordSource).toContain('しゃしん、登録した呼び名、月齢、ひにち、てんき')
     expect(recordSource).toContain('あなたが書いたメモ')
     expect(recordSource).toContain('位置情報')
     expect(recordSource).toContain('presigned URL')

@@ -2,7 +2,7 @@
 id: ISSUE-061
 title: Settings Trust Center v1
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2
@@ -25,6 +25,7 @@ requires_human_review:
 - 記録削除、復元未提供、退会・export の未実装境界を明確にする
 - 「今できること」と「準備中」を分ける
 - settings の状態別 screenshot / copy / a11y QA 方針を残す
+- trust center copy を drift しにくい共通定義に寄せる
 
 ## やらないこと (Out of Scope)
 
@@ -34,11 +35,12 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] settings が trust surface として成立している
-- [ ] 未実装機能を「近日対応」と約束しない
-- [ ] zero data retention、完全削除、復元可能を active UI で約束しない
-- [ ] AI consent copy と settings copy の data boundary が一致している
-- [ ] Evidence に PII / image URL / `storage_key` / prompt / AI 生成本文がない
+- [x] settings が trust surface として成立している
+- [x] 未実装機能を「近日対応」と約束しない
+- [x] zero data retention、完全削除、復元可能を active UI で約束しない
+- [x] AI consent copy と settings copy の data boundary が一致している
+- [x] settings の状態別 QA 方針が docs/design に残っている
+- [x] Evidence に PII / image URL / `storage_key` / prompt / AI 生成本文がない
 
 ## 参考
 
