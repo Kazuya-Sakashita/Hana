@@ -27,6 +27,8 @@ describe('dialog accessibility foundation', () => {
     expect(dialogSource).toContain("document.body.style.overflow = 'hidden'")
     expect(dialogSource).toContain('previousOverflow')
     expect(dialogSource).toContain('getFocusableElements')
+    expect(dialogSource).toContain('initialFocusId')
+    expect(dialogSource).toContain('getInitialFocusTarget')
   })
 
   it('migrates existing dialogs to the shared foundation', () => {
@@ -49,5 +51,14 @@ describe('dialog accessibility foundation', () => {
       expect(callers).toContain(`id="${id}-title"`)
       expect(callers).toContain(`id="${id}-description"`)
     }
+  })
+
+  it('focuses the safer current dialog action first', () => {
+    expect(recordSource).toContain('initialFocusId="ai-consent-decline"')
+    expect(recordSource).toContain('id="ai-consent-decline"')
+    expect(recordSource).toContain('initialFocusId="cancel-confirm-keep"')
+    expect(recordSource).toContain('id="cancel-confirm-keep"')
+    expect(memoryActionsSource).toContain('initialFocusId="delete-confirm-cancel"')
+    expect(memoryActionsSource).toContain('id="delete-confirm-cancel"')
   })
 })

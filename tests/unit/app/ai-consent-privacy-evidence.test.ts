@@ -23,11 +23,13 @@ describe('AI consent privacy evidence', () => {
     const activeUi = `${recordSource}\n${settingsSource}`
 
     expect(activeUi).not.toMatch(/zero data retention/i)
-    expect(activeUi).not.toContain('0日')
+    expect(activeUi).not.toMatch(/(^|[^3])0日/)
     expect(activeUi).not.toContain('保持期間')
     expect(activeUi).not.toContain('学習にも つかわれません')
     expect(activeUi).not.toContain('学習にも使われません')
     expect(activeUi).not.toContain('学習に つかいません')
+    expect(activeUi).not.toContain('いちじてきに')
+    expect(activeUi).not.toContain('公開前に明記します')
   })
 
   it('shows opt-in status and the AI data boundary in settings', () => {
@@ -37,6 +39,9 @@ describe('AI consent privacy evidence', () => {
     expect(settingsSource).toContain('おくらないもの')
     expect(settingsSource).toContain('たんじょうび / メール / じゅうしょ')
     expect(settingsSource).toContain('画像URL / 保存先のキー')
+    expect(settingsSource).toContain('通常30日以内に削除されます')
+    expect(recordSource).toContain('通常30日以内に削除されます')
+    expect(recordSource).toContain('安全確認など一部例外があります')
   })
 
   it('records current vendor evidence and keeps human privacy review as a release gate', () => {

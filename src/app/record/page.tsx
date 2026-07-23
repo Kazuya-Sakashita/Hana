@@ -668,6 +668,7 @@ function AiConsentDialog({
       titleId="ai-consent-title"
       descriptionId="ai-consent-description"
       pending={pending}
+      initialFocusId="ai-consent-decline"
       onClose={onDecline}
     >
       <Card className="w-full max-w-md">
@@ -676,9 +677,10 @@ function AiConsentDialog({
             あなたの しゃしんを、ことばに します
           </CardTitle>
           <CardDescription id="ai-consent-description" className="leading-narrative mt-2">
-            Hana は、{childName} ちゃんの しゃしんを Anthropic Claude API に いちじてきに
-            おくり、ぶんしょうの ていあんを もらいます。なまえと月齢は おくりますが、
-            たんじょうび、メール、じゅうしょ、画像URLは おくりません。
+            Hana は、{childName} ちゃんの しゃしんを Anthropic Claude API に おくり、ぶんしょうの
+            ていあんを もらいます。なまえと月齢は おくりますが、
+            たんじょうび、メール、じゅうしょ、画像URLは おくりません。API の入出力は
+            通常30日以内に削除されますが、安全確認など一部例外があります。
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -686,6 +688,7 @@ function AiConsentDialog({
             {pending ? 'どういを ほぞんしています…' : 'どういして、つくる'}
           </Button>
           <Button
+            id="ai-consent-decline"
             type="button"
             variant="ghost"
             size="lg"
@@ -717,6 +720,7 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
     <AccessibleDialog
       titleId="cancel-confirm-title"
       descriptionId="cancel-confirm-description"
+      initialFocusId="cancel-confirm-keep"
       onClose={onKeep}
     >
       <Card className="w-full max-w-md">
@@ -729,7 +733,13 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button type="button" size="lg" onClick={onKeep} className="w-full">
+          <Button
+            id="cancel-confirm-keep"
+            type="button"
+            size="lg"
+            onClick={onKeep}
+            className="w-full"
+          >
             もうすこし なおす
           </Button>
           <Button
