@@ -107,7 +107,8 @@ describe('album and memory keepsake refresh', () => {
       "aria-pressed={typeof pressed === 'boolean' ? pressed : undefined}",
     )
     expect(memoryActionsSource).not.toContain('label="なおす"')
-    expect(memoryActionsSource).toContain('ことばの編集は、準備中です。')
+    expect(memoryActionsSource).toContain('しるしと削除だけ操作できます')
+    expect(memoryActionsSource).not.toContain('ことばの編集は、準備中です。')
     expect(memoryActionsSource).toContain('deleteMemoryDescription(childName)')
     expect(memoryActionsSource).not.toContain('もどせます')
     expect(memoryActionsSource).not.toContain('復元')

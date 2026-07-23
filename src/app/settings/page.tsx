@@ -4,19 +4,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AppShell, PageHeader } from '@/components/product/app-shell'
+import { DataRow, StatePanel, TrustSection } from '@/components/product/surfaces'
 import { isApiProblemError } from '@/lib/api/error'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { imageUrlCache } from '@/lib/cache/image-url-cache'
 import { useChildrenQuery } from '@/features/children/client/use-children'
 import { useCurrentUserQuery } from '@/features/me/client/use-current-user'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
-
-// 最小スコープの設定画面 (ISSUE-014):
-//   - 親のメール表示
-//   - 子どもプロフィール (名前 + 月齢)
-//   - サインアウト
-// 完全版 (V0 §5.14) はリリース後の polish ISSUE で。
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -47,31 +42,27 @@ export default function SettingsPage() {
 
   if (isUnauthorized || meQuery.isPending || childrenQuery.isPending) {
     return (
-      <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
-        <p className="text-ink-tertiary text-center text-sm">{quietStateCopy.common.loading}</p>
-      </main>
+      <AppShell>
+        <p role="status" className="text-ink-tertiary text-center text-sm">
+          {quietStateCopy.common.loading}
+        </p>
+      </AppShell>
     )
   }
 
   if (meQuery.isError || childrenQuery.isError) {
     return (
-      <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
-        <Card>
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">
-              {quietStateCopy.common.openFailedTitle}
-            </CardTitle>
-            <CardDescription className="mt-2">
-              {quietStateCopy.common.openFailedDescription}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => location.reload()} className="w-full">
-              {quietStateCopy.common.retryOpen}
-            </Button>
-          </CardContent>
-        </Card>
-      </main>
+      <AppShell>
+        <StatePanel>
+          <h1 className="font-serif text-xl">{quietStateCopy.common.openFailedTitle}</h1>
+          <p className="text-ink-secondary mt-3 text-sm leading-narrative">
+            {quietStateCopy.common.openFailedDescription}
+          </p>
+          <Button onClick={() => location.reload()} className="mt-6 w-full">
+            {quietStateCopy.common.retryOpen}
+          </Button>
+        </StatePanel>
+      </AppShell>
     )
   }
 
@@ -82,100 +73,93 @@ export default function SettingsPage() {
     : null
 
   return (
-    <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
-      <div className="mx-auto w-full max-w-md">
-        <h1 className="font-serif text-2xl">せってい</h1>
+    <AppShell>
+      <PageHeader
+        eyebrow="Hana"
+        title="せってい"
+        description="写真と AI をどう使うか、いま Hana でできることをここにまとめます。"
+      />
 
-        <section className="mt-8 flex flex-col gap-6">
+      <section className="flex flex-col gap-5" aria-label="Hana の設定">
+        <TrustSection
+          eyebrow="今できること"
+          title={child ? `${child.name} ちゃんの記録を残せます` : '記録をはじめられます'}
+          description="Hana は、写真からページを作り、アルバムにしまうための場所です。"
+        >
           {child ? (
-            <Card>
-              <CardHeader>
-                <p className="meta-label">お子さん</p>
-                <CardTitle className="font-serif mt-2 text-xl">{child.name}</CardTitle>
-                {ageLabel ? (
-                  <CardDescription className="text-ink-secondary mt-1 text-sm">
-                    {ageLabel}
-                  </CardDescription>
-                ) : null}
-              </CardHeader>
-            </Card>
-          ) : null}
-
+            <>
+              <DataRow label="お子さん" value={child.name} />
+              {ageLabel ? <DataRow label="いまの月齢" value={ageLabel} /> : null}
+            </>
+          ) : (
+            <DataRow label="お子さん" value="まだ登録されていません。" />
+          )}
           {me ? (
-            <Card>
-              <CardHeader>
-                <p className="meta-label">アカウント</p>
-                <CardTitle className="font-serif mt-2 break-all text-base font-normal">
-                  {me.email ?? '(メール 未設定)'}
-                </CardTitle>
-                <CardDescription className="text-ink-tertiary mt-1 text-xs">
-                  Google アカウントで サインインしています
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <DataRow
+              label="サインイン"
+              value={`${me.email ?? 'メール未設定'} の Google アカウントで利用しています。`}
+            />
           ) : null}
+        </TrustSection>
 
-          {me ? (
-            <Card>
-              <CardHeader>
-                <p className="meta-label">AI と しゃしん</p>
-                <CardTitle className="font-serif mt-2 text-xl">
-                  {me.ai_consent_at ? 'AI に同意しています' : 'AI は同意後だけ使います'}
-                </CardTitle>
-                <CardDescription className="text-ink-secondary mt-2 leading-narrative text-sm">
-                  文章をつくるときだけ、しゃしんと最小限の情報を Anthropic Claude API に
-                  おくります。
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4 text-sm">
-                <DataRow
-                  label="おくるもの"
-                  value="しゃしん / なまえ / 月齢 / ひにち / てんき / ひとこと"
-                />
-                <DataRow
-                  label="おくらないもの"
-                  value="たんじょうび / メール / じゅうしょ / 位置情報 / 画像URL / 保存先のキー"
-                />
-                <DataRow
-                  label="データの扱い"
-                  value="Anthropic API の入出力は通常30日以内に削除されますが、安全確認など一部例外があります"
-                />
-              </CardContent>
-            </Card>
-          ) : null}
+        {me ? (
+          <TrustSection
+            eyebrow="AI と写真"
+            title={me.ai_consent_at ? 'AI の下書きを使えます' : 'AI は同意後だけ使います'}
+            description="AI を使わずに、写真とことばだけでページを残すこともできます。"
+          >
+            <DataRow
+              label="おくるもの"
+              value="しゃしん / 登録した呼び名 / 月齢 / ひにち / てんき / ひとこと"
+            />
+            <DataRow
+              label="おくらないもの"
+              value="たんじょうび / メール / じゅうしょ / 位置情報 / 画像URL / presigned URL / 保存先のキー"
+            />
+            <DataRow
+              label="データの扱い"
+              value="Anthropic Claude API の入出力は通常30日以内に削除されますが、安全確認など一部例外があります。"
+            />
+          </TrustSection>
+        ) : null}
 
-          <Card>
-            <CardHeader>
-              <p className="meta-label">そのほか</p>
-              <CardDescription className="text-ink-secondary mt-2 leading-narrative text-sm">
-                プロフィール編集 / 通知 / 家族と わかちあう / Hana Plus などは ちかぢか たいおう
-                します。
-              </CardDescription>
-            </CardHeader>
-          </Card>
+        <TrustSection
+          eyebrow="データと削除"
+          title="約束できる範囲だけを表示します"
+          description="記録を削除すると、アルバムには表示されなくなります。復元機能は今は提供していません。"
+        >
+          <DataRow
+            label="記録の削除"
+            value="削除前に確認画面を出します。完全削除や復元可能期間は、この画面では約束しません。"
+          />
+          <DataRow
+            label="証跡"
+            value="サポートやレビュー用の証跡に、実写真・実名・メール・生年月日・画像URL・presigned URL・保存先のキー・prompt・AI生成本文は残しません。"
+          />
+        </TrustSection>
 
-          <div className="pt-4">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onSignOut}
-              disabled={signingOut}
-              className="text-ink-secondary w-full"
-            >
-              {signingOut ? 'サインアウト しています…' : 'サインアウト'}
-            </Button>
-          </div>
-        </section>
-      </div>
-    </main>
-  )
-}
+        <TrustSection
+          eyebrow="準備中"
+          title="まだこの画面では操作できません"
+          description="プロフィール編集、export、退会、家族共有、Hana Plus は、実装 Issue と確認手順を分けてから表示します。"
+        >
+          <DataRow label="プロフィール編集" value="今は操作できません。" />
+          <DataRow label="export / 退会" value="今は操作できません。" />
+          <DataRow label="家族共有 / Hana Plus" value="今は操作できません。" />
+        </TrustSection>
 
-function DataRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border-hairline flex flex-col gap-1 border-t pt-3 first:border-t-0 first:pt-0">
-      <span className="text-ink-tertiary text-xs">{label}</span>
-      <span className="text-ink-secondary leading-narrative">{value}</span>
-    </div>
+        <div className="pt-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onSignOut}
+            disabled={signingOut}
+            className="text-ink-secondary w-full"
+          >
+            {signingOut ? 'サインアウト しています…' : 'サインアウト'}
+          </Button>
+        </div>
+      </section>
+    </AppShell>
   )
 }
