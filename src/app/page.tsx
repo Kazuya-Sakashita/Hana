@@ -148,14 +148,17 @@ async function HomeBody({ userId }: { userId: string }) {
                       {typeof url === 'string' ? (
                         <Image
                           src={url}
-                          alt={m.title}
+                          alt=""
                           width={140}
                           height={175}
                           sizes="140px"
                           className="border-hairline aspect-[4/5] w-full rounded-2xl border object-cover"
                         />
                       ) : (
-                        <div className="bg-warm text-sakura-deep border-hairline flex aspect-[4/5] w-full items-center justify-center rounded-2xl border text-3xl">
+                        <div
+                          className="bg-warm text-sakura-deep border-hairline flex aspect-[4/5] w-full items-center justify-center rounded-2xl border text-3xl"
+                          aria-hidden="true"
+                        >
                           ❀
                         </div>
                       )}
