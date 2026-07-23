@@ -2,7 +2,7 @@
 id: ISSUE-062
 title: Onboarding to First Memory Bridge
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2
