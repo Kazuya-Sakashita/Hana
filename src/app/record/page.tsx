@@ -22,6 +22,7 @@ import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { optimisticAddMemoryToLists, optimisticReplaceMemoryInLists } from '@/lib/perf/optimistic'
 import { useToast } from '@/components/ui/toast'
+import { quietStateCopy, recordAiGeneratingCopy } from '@/lib/ui/quiet-state-copy'
 
 type Phase = 'loading' | 'no-child' | 'form' | 'error'
 type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'confirming' | 'done' | 'failed'
@@ -40,13 +41,6 @@ interface FieldErrors {
   general?: string
 }
 
-interface SubmitErrorState {
-  fieldErrors: FieldErrors
-  topMessage: string | null
-}
-
-const SUBMIT_ERROR_STATE_KEY = 'hana.record.submit-error.v1'
-
 function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   const fields: FieldErrors = {}
   for (const err of problem.errors ?? []) {
@@ -56,30 +50,6 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
     else if (err.path.startsWith('body.image_ids')) fields.imageIds = err.message
   }
   return fields
-}
-
-function saveSubmitErrorState(state: SubmitErrorState) {
-  try {
-    window.sessionStorage.setItem(SUBMIT_ERROR_STATE_KEY, JSON.stringify(state))
-  } catch {
-    // sessionStorage が使えない環境では toast のみで回復する
-  }
-}
-
-function consumeSubmitErrorState(): SubmitErrorState | null {
-  try {
-    const raw = window.sessionStorage.getItem(SUBMIT_ERROR_STATE_KEY)
-    window.sessionStorage.removeItem(SUBMIT_ERROR_STATE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<SubmitErrorState>
-    return {
-      fieldErrors:
-        parsed.fieldErrors && typeof parsed.fieldErrors === 'object' ? parsed.fieldErrors : {},
-      topMessage: typeof parsed.topMessage === 'string' ? parsed.topMessage : null,
-    }
-  } catch {
-    return null
-  }
 }
 
 type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic'
@@ -184,16 +154,6 @@ export default function RecordPage() {
     return () => URL.revokeObjectURL(filePreviewUrl)
   }, [filePreviewUrl])
 
-  useEffect(() => {
-    const saved = consumeSubmitErrorState()
-    if (!saved) return
-    const timeout = window.setTimeout(() => {
-      setFieldErrors(saved.fieldErrors)
-      setTopMessage(saved.topMessage)
-    }, 0)
-    return () => window.clearTimeout(timeout)
-  }, [])
-
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const f = event.target.files?.[0] ?? null
     if (!f) return
@@ -212,7 +172,7 @@ export default function RecordPage() {
       const presigned = await client.POST('/uploads/presigned-url', {
         body: { file_name: f.name, content_type: contentType },
       })
-      if (!presigned.data) throw new Error('signed URL を取得できませんでした')
+      if (!presigned.data) throw new Error('upload_prepare_failed')
       const { presigned_url, storage_key } = presigned.data
 
       setUploadStatus('uploading')
@@ -222,21 +182,20 @@ export default function RecordPage() {
         body: blob,
       })
       if (!putRes.ok) {
-        throw new Error(`Storage への アップロードに しっぱいしました (HTTP ${putRes.status})`)
+        throw new Error('upload_failed')
       }
 
       setUploadStatus('confirming')
       const confirmed = await client.POST('/uploads/confirm', {
         body: { storage_key, width, height, file_size: blob.size },
       })
-      if (!confirmed.data) throw new Error('アップロードの かくにんに しっぱいしました')
+      if (!confirmed.data) throw new Error('upload_confirm_failed')
 
       setUploadedImage({ id: confirmed.data.id, previewUrl: filePreviewUrl ?? '' })
       setUploadStatus('done')
     } catch (e: unknown) {
       setUploadStatus('failed')
-      const msg = e instanceof Error ? e.message : 'うまく アップロードできませんでした'
-      setUploadError(msg)
+      setUploadError(quietStateCopy.record.uploadFailed)
     }
   }
 
@@ -271,17 +230,15 @@ export default function RecordPage() {
           case 'ai_quota_exceeded':
             setAiQuotaExceeded(true)
             setAiStatus('failed')
-            setAiError(
-              '今月の AI せいせい かいすうの じょうげんに たっしました。らいげつ また つかえます。',
-            )
+            setAiError(quietStateCopy.record.aiQuotaExceeded)
             return
           default:
             setAiStatus('failed')
-            setAiError(`AI せいせいに しっぱい しました (${e.reason})`)
+            setAiError(quietStateCopy.record.aiFailed)
         }
       } else {
         setAiStatus('failed')
-        setAiError('AI せいせいに しっぱい しました')
+        setAiError(quietStateCopy.record.aiFailed)
       }
     }
   }
@@ -295,7 +252,7 @@ export default function RecordPage() {
       void callAiGenerate()
     } catch {
       setAiStatus('failed')
-      setAiError('どういの ほぞんに しっぱい しました')
+      setAiError(quietStateCopy.record.consentSaveFailed)
     }
   }
 
@@ -341,21 +298,18 @@ export default function RecordPage() {
       updated_at: now,
     }
 
-    const hadMemoryListCache = queryClient
-      .getQueriesData({ queryKey: memoriesQueryKey })
-      .some(([, data]) => data !== undefined)
     await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
     const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
-    if (hadMemoryListCache) {
-      router.push('/album')
-    }
 
     try {
       const created = await createMemoryMutation.mutateAsync(requestBody)
       optimisticReplaceMemoryInLists(queryClient, optimisticId, created)
-      if (!hadMemoryListCache) {
-        router.push('/album')
-      }
+      showToast({
+        tone: 'success',
+        title: quietStateCopy.record.saveDoneTitle,
+        description: quietStateCopy.record.saveDoneDescription,
+      })
+      router.push('/album')
       router.refresh()
     } catch (e) {
       rollback()
@@ -366,35 +320,29 @@ export default function RecordPage() {
             {
               const errors = extractFieldErrors(e.problem)
               setFieldErrors(errors)
-              saveSubmitErrorState({
-                fieldErrors: errors,
-                topMessage: '入力を たしかめて、もういちど ためしてください。',
-              })
+              setTopMessage(quietStateCopy.record.validationFailed)
             }
             showToast({
-              title: 'ほぞんに しっぱい しました',
-              description: '入力を たしかめて、もういちど ためしてください。',
+              title: quietStateCopy.record.saveFailedTitle,
+              description: quietStateCopy.record.validationFailed,
             })
-            router.push('/record')
             break
           case 'unauthorized':
             router.push('/sign-in')
             return
           default:
-            setTopMessage(`うまく ほぞんできませんでした。 (${e.reason})`)
+            setTopMessage(quietStateCopy.record.saveFailedDescription)
             showToast({
-              title: 'ほぞんに しっぱい しました',
-              description: 'もういちど ためしてみてください。',
+              title: quietStateCopy.record.saveFailedTitle,
+              description: quietStateCopy.record.saveFailedDescription,
             })
-            router.push('/record')
         }
       } else {
-        setTopMessage('うまく つうしんできませんでした。もういちど ためしてみてください。')
+        setTopMessage(quietStateCopy.record.saveFailedDescription)
         showToast({
-          title: 'ほぞんに しっぱい しました',
-          description: 'もういちど ためしてみてください。',
+          title: quietStateCopy.record.saveFailedTitle,
+          description: quietStateCopy.record.saveFailedDescription,
         })
-        router.push('/record')
       }
       setSubmitting(false)
     }
@@ -405,7 +353,7 @@ export default function RecordPage() {
       <Shell>
         <Card className="w-full max-w-md">
           <CardContent className="flex items-center justify-center py-16">
-            <span className="text-ink-tertiary text-sm">よみこんでいます…</span>
+            <span className="text-ink-tertiary text-sm">{quietStateCopy.common.loading}</span>
           </CardContent>
         </Card>
       </Shell>
@@ -441,14 +389,16 @@ export default function RecordPage() {
       <Shell>
         <Card className="w-full max-w-md">
           <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">うまく ひらけませんでした</CardTitle>
+            <CardTitle className="font-serif text-xl">
+              {quietStateCopy.common.openFailedTitle}
+            </CardTitle>
             <CardDescription className="mt-2">
-              ネットワークの ちょうしを たしかめて、もういちど ためしてみてください。
+              {quietStateCopy.common.openFailedDescription}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => location.reload()} className="w-full">
-              もういちど ひらく
+              {quietStateCopy.common.retryOpen}
             </Button>
           </CardContent>
         </Card>
@@ -498,19 +448,29 @@ export default function RecordPage() {
                 onChange={onFileSelected}
               />
               {uploadStatus === 'preparing' ? (
-                <p className="text-ink-tertiary text-xs">じゅんびしています…</p>
+                <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
+                  {quietStateCopy.record.uploadPreparing}
+                </p>
               ) : null}
               {uploadStatus === 'uploading' ? (
-                <p className="text-ink-tertiary text-xs">アップロードしています…</p>
+                <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
+                  {quietStateCopy.record.uploadUploading}
+                </p>
               ) : null}
               {uploadStatus === 'confirming' ? (
-                <p className="text-ink-tertiary text-xs">かくにんしています…</p>
+                <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
+                  {quietStateCopy.record.uploadConfirming}
+                </p>
               ) : null}
               {uploadStatus === 'done' ? (
-                <p className="text-leaf text-xs">アップロード できました</p>
+                <p role="status" aria-live="polite" className="text-leaf text-xs">
+                  {quietStateCopy.record.uploadDone}
+                </p>
               ) : null}
               {uploadStatus === 'failed' && uploadError ? (
-                <p className="text-amber text-xs">{uploadError}</p>
+                <p role="alert" className="text-amber text-xs">
+                  {uploadError}
+                </p>
               ) : null}
               {filePreviewUrl && file ? (
                 // NextImage import 名: HTMLImageElement の global `Image` と衝突回避。
@@ -531,9 +491,9 @@ export default function RecordPage() {
             </div>
 
             {uploadedImage ? (
-              <div className="bg-warm rounded-xl p-4">
+              <div className="bg-warm rounded-xl p-4" aria-busy={aiStatus === 'generating'}>
                 <p className="text-ink-secondary font-serif text-sm">
-                  AI に、ことばを かんがえて もらえます。
+                  {quietStateCopy.record.aiReady}
                 </p>
                 <Button
                   type="button"
@@ -544,17 +504,31 @@ export default function RecordPage() {
                   disabled={!canGenerateAi}
                 >
                   {aiStatus === 'generating'
-                    ? '○○ちゃんの ページを、つくっています…'.replace('○○', childName)
+                    ? recordAiGeneratingCopy(childName)
                     : aiStatus === 'done'
                       ? 'もういちど AI に たのむ'
                       : 'AI で つくる'}
                 </Button>
-                {aiStatus === 'done' ? (
-                  <p className="text-leaf mt-2 text-xs">
-                    タイトルと ほんぶんに、ていあんを いれました。じゆうに なおせます。
+                {aiStatus === 'generating' ? (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="text-ink-tertiary motion-safe:animate-pulse mt-2 text-xs"
+                  >
+                    <span className="sr-only">{recordAiGeneratingCopy(childName)}</span>
+                    {quietStateCopy.record.aiWaitingHint}
                   </p>
                 ) : null}
-                {aiError ? <p className="text-amber mt-2 text-xs">{aiError}</p> : null}
+                {aiStatus === 'done' ? (
+                  <p role="status" aria-live="polite" className="text-leaf mt-2 text-xs">
+                    {quietStateCopy.record.aiDone}
+                  </p>
+                ) : null}
+                {aiError ? (
+                  <p role="alert" className="text-amber mt-2 text-xs">
+                    {aiError}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -619,7 +593,7 @@ export default function RecordPage() {
             </div>
 
             <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
-              {submitting ? 'ほぞん しています…' : 'のこす'}
+              {submitting ? quietStateCopy.record.submitting : 'のこす'}
             </Button>
           </form>
         </CardContent>
@@ -685,7 +659,7 @@ function AiConsentDialog({
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <Button type="button" size="lg" onClick={onAccept} disabled={pending} className="w-full">
-            {pending ? 'どういを ほぞんしています…' : 'どういして、つくる'}
+            {pending ? '同意を しまっています…' : 'どういして、つくる'}
           </Button>
           <Button
             id="ai-consent-decline"

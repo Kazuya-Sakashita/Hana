@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { useChildrenQuery, useCreateChildMutation } from '@/features/children/client/use-children'
+import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 type FieldErrors = Partial<Record<'name' | 'birthdate' | 'avatar_url', string>>
 type Phase = 'loading' | 'form' | 'already' | 'success' | 'error'
@@ -94,12 +95,10 @@ export default function OnboardingPage() {
             router.push('/sign-in')
             return
           default:
-            setSubmitMessage(
-              `うまく ほぞんできませんでした。もういちど ためしてみてください。 (${e.reason})`,
-            )
+            setSubmitMessage(quietStateCopy.onboarding.saveFailed)
         }
       } else {
-        setSubmitMessage('うまく つうしんできませんでした。もういちど ためしてみてください。')
+        setSubmitMessage(quietStateCopy.onboarding.networkFailed)
       }
     }
   }
@@ -111,7 +110,7 @@ export default function OnboardingPage() {
       <Shell>
         <Card className="w-full max-w-md">
           <CardContent className="flex items-center justify-center py-16">
-            <span className="text-ink-tertiary text-sm">よみこんでいます…</span>
+            <span className="text-ink-tertiary text-sm">{quietStateCopy.common.loading}</span>
           </CardContent>
         </Card>
       </Shell>
@@ -123,14 +122,16 @@ export default function OnboardingPage() {
       <Shell>
         <Card className="w-full max-w-md">
           <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">うまく ひらけませんでした</CardTitle>
+            <CardTitle className="font-serif text-xl">
+              {quietStateCopy.common.openFailedTitle}
+            </CardTitle>
             <CardDescription className="mt-2">
-              ネットワークの ちょうしを たしかめて、もういちど ためしてみてください。
+              {quietStateCopy.common.openFailedDescription}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => location.reload()} className="w-full">
-              もういちど ひらく
+              {quietStateCopy.common.retryOpen}
             </Button>
           </CardContent>
         </Card>
@@ -239,7 +240,7 @@ export default function OnboardingPage() {
             </div>
 
             <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
-              {pending ? 'ほぞん しています…' : 'つづける'}
+              {pending ? quietStateCopy.onboarding.pending : 'つづける'}
             </Button>
           </form>
         </CardContent>

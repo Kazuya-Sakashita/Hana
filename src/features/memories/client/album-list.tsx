@@ -18,6 +18,7 @@ import {
 import { optimisticUpdateMemoryInLists } from '@/lib/perf/optimistic'
 import { isApiProblemError } from '@/lib/api/error'
 import { useToast } from '@/components/ui/toast'
+import { albumLoadMoreStatus, quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 const ALBUM_LIMIT = 50
 
@@ -31,7 +32,7 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
     const beforeCount = items.length
     const result = await query.fetchNextPage()
     if (result.isError) {
-      setLoadMoreStatus('つづきのページを よみこめませんでした。')
+      setLoadMoreStatus(quietStateCopy.album.loadMoreFailed)
       return
     }
 
@@ -40,15 +41,7 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
     const addedCount = Math.max(nextItems.length - beforeCount, 0)
     const lastPage = pages[pages.length - 1]
     const hasMore = !!lastPage?.page.next_cursor
-    const addedMessage =
-      addedCount > 0 ? `さらに ${addedCount} 件 よみこみました。` : 'すべて表示しました。'
-    setLoadMoreStatus(
-      hasMore
-        ? addedMessage
-        : addedCount > 0
-          ? `${addedMessage}すべて表示しました。`
-          : 'すべて表示しました。',
-    )
+    setLoadMoreStatus(albumLoadMoreStatus(addedCount, hasMore))
 
     if (!hasMore) {
       window.requestAnimationFrame(() => {
@@ -71,7 +64,7 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
 
       {query.isError ? (
         <p role="alert" className="text-amber text-center text-sm">
-          つづきのページを よみこめませんでした。もういちど ためしてください。
+          {quietStateCopy.album.loadMoreFailed}
         </p>
       ) : null}
 
@@ -95,7 +88,9 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
           disabled={query.isFetchingNextPage}
           className="w-full"
         >
-          {query.isFetchingNextPage ? 'よみこんでいます…' : 'まえのページも みる'}
+          {query.isFetchingNextPage
+            ? quietStateCopy.album.loadMorePending
+            : quietStateCopy.album.loadMoreButton}
         </Button>
       ) : null}
     </div>
@@ -176,8 +171,8 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
         return
       }
       showToast({
-        title: 'おきにいりを かえられませんでした',
-        description: 'もういちど ためしてみてください。',
+        title: quietStateCopy.album.favoriteFailedTitle,
+        description: quietStateCopy.album.favoriteFailedDescription,
       })
     }
   }
@@ -204,8 +199,8 @@ function EmptyState() {
   return (
     <Card>
       <CardHeader className="items-center text-center">
-        <CardTitle className="font-serif text-xl">まだ ページが ありません</CardTitle>
-        <CardDescription className="mt-2">きょうの 1 まいから、はじめましょう。</CardDescription>
+        <CardTitle className="font-serif text-xl">{quietStateCopy.album.emptyTitle}</CardTitle>
+        <CardDescription className="mt-2">{quietStateCopy.album.emptyDescription}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button asChild size="lg" className="w-full">

@@ -18,6 +18,7 @@ import {
   optimisticUpdateMemoryInLists,
 } from '@/lib/perf/optimistic'
 import { useToast } from '@/components/ui/toast'
+import { deleteMemoryDescription, quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 // ISSUE-027: memory 詳細ページの interactive 部分のみ Client Component に切り出す。
 // (favorite トグル / 削除確認ダイアログ / 削除完了オーバーレイ)
@@ -66,8 +67,8 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
         return
       }
       showToast({
-        title: 'おきにいりを かえられませんでした',
-        description: 'もういちど ためしてみてください。',
+        title: quietStateCopy.memoryDetail.favoriteFailedTitle,
+        description: quietStateCopy.memoryDetail.favoriteFailedDescription,
       })
     }
   }
@@ -89,8 +90,8 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
         return
       }
       showToast({
-        title: 'けせませんでした',
-        description: 'ページを もどしました。もういちど ためしてください。',
+        title: quietStateCopy.memoryDetail.deleteFailedTitle,
+        description: quietStateCopy.memoryDetail.deleteFailedDescription,
       })
     }
   }
@@ -187,11 +188,10 @@ function DeleteConfirmDialog({
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
           <CardTitle id="delete-confirm-title" className="font-serif text-xl">
-            このページを、けしますか
+            {quietStateCopy.memoryDetail.deleteConfirmTitle}
           </CardTitle>
           <CardDescription id="delete-confirm-description" className="leading-narrative mt-2">
-            {childName ? `${childName} ちゃんの こ` : 'こ'}のページは、アルバムに
-            表示されなくなります。
+            {deleteMemoryDescription(childName)}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -203,7 +203,9 @@ function DeleteConfirmDialog({
             disabled={pending}
             className="text-amber w-full"
           >
-            {pending ? 'けしています…' : 'けす'}
+            {pending
+              ? quietStateCopy.memoryDetail.deletePending
+              : quietStateCopy.memoryDetail.deleteConfirmAction}
           </Button>
           <Button
             id="delete-confirm-cancel"

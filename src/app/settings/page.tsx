@@ -10,6 +10,7 @@ import { computeAge, formatAgeLabel } from '@/lib/age'
 import { imageUrlCache } from '@/lib/cache/image-url-cache'
 import { useChildrenQuery } from '@/features/children/client/use-children'
 import { useCurrentUserQuery } from '@/features/me/client/use-current-user'
+import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 // 最小スコープの設定画面 (ISSUE-014):
 //   - 親のメール表示
@@ -47,7 +48,7 @@ export default function SettingsPage() {
   if (isUnauthorized || meQuery.isPending || childrenQuery.isPending) {
     return (
       <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
-        <p className="text-ink-tertiary text-center text-sm">よみこんでいます…</p>
+        <p className="text-ink-tertiary text-center text-sm">{quietStateCopy.common.loading}</p>
       </main>
     )
   }
@@ -57,14 +58,16 @@ export default function SettingsPage() {
       <main className="bg-canvas min-h-dvh px-6 pb-24 pt-12">
         <Card>
           <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">うまく ひらけませんでした</CardTitle>
+            <CardTitle className="font-serif text-xl">
+              {quietStateCopy.common.openFailedTitle}
+            </CardTitle>
             <CardDescription className="mt-2">
-              ネットワークの ちょうしを たしかめて、もういちど ためしてみてください。
+              {quietStateCopy.common.openFailedDescription}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => location.reload()} className="w-full">
-              もういちど ひらく
+              {quietStateCopy.common.retryOpen}
             </Button>
           </CardContent>
         </Card>
