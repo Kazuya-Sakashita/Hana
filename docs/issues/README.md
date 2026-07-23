@@ -41,13 +41,13 @@
 
 2026-07-23 時点:
 
-| status        | count | notes                                                                                          |
-| ------------- | ----- | ---------------------------------------------------------------------------------------------- |
-| `todo`        | 0     | ready queue は空                                                                               |
-| `in_progress` | 0     | 並行実行枠は空き                                                                               |
-| `review`      | 6     | `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051` の PR review 待ち |
-| `done`        | 46    | archive を参照                                                                                 |
-| `blocked`     | 1     | 認証済み実データ QA                                                                            |
+| status        | count | notes               |
+| ------------- | ----- | ------------------- |
+| `todo`        | 0     | ready queue は空    |
+| `in_progress` | 0     | 並行実行枠は空き    |
+| `review`      | 0     | review queue は空   |
+| `done`        | 53    | archive を参照      |
+| `blocked`     | 1     | 認証済み実データ QA |
 
 ---
 
@@ -111,14 +111,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | reason to review / close                          |
-| ----------- | ------------------------------------------------- |
-| `ISSUE-046` | accessibility token と viewport remediation の PR |
-| `ISSUE-047` | dialog accessibility foundation の PR             |
-| `ISSUE-048` | AI consent privacy evidence alignment の PR       |
-| `ISSUE-049` | delete restore trust contract の PR               |
-| `ISSUE-050` | memory photo alt privacy policy の PR             |
-| `ISSUE-051` | album full-list pagination QA の PR               |
+現在はありません。
 
 ---
 
@@ -129,8 +122,8 @@ Codex-ready と判断する条件:
 - perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-020`, `ISSUE-021`, `ISSUE-022`, `ISSUE-023`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-029`, `ISSUE-031`, `ISSUE-040`
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
-- design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`
-- maintenance completed: `ISSUE-039`, `ISSUE-042`
+- design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`
+- maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`
 
 ---
 

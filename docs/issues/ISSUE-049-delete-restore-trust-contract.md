@@ -2,7 +2,7 @@
 id: ISSUE-049
 title: Delete restore trust contract
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: DESIGN
@@ -26,7 +26,7 @@ DB は logical delete だが、ユーザーが自分で復元できる UI / API 
 - active delete dialog から 7日復元 promise を外す
 - 現在の delete / restore trust contract を docs に残す
 - restore promise の再混入を静的テストで防ぐ
-- Issue index を `ISSUE-049 review` に同期する
+- Issue index を最新状態へ同期する
 
 ## やらないこと (Out of Scope)
 

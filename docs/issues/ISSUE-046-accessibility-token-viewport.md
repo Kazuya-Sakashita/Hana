@@ -2,7 +2,7 @@
 id: ISSUE-046
 title: Accessibility token and viewport remediation
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: DESIGN
@@ -23,7 +23,7 @@ dialog 基盤や写真 alt 方針より先に切り出して対応する。
 - viewport metadata から zoom lock を外す
 - `--ink-tertiary` / `--success-leaf` / `--warning-amber` を warm surface 上で読める濃度にする
 - token contrast と viewport zoom lock の自動テストを追加する
-- Issue index を `ISSUE-045 done` / `ISSUE-046 in_progress` に同期する
+- Issue index を最新状態へ同期する
 
 ## やらないこと (Out of Scope)
 

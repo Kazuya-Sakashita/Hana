@@ -2,7 +2,7 @@
 id: ISSUE-051
 title: Album full-list pagination QA
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: DESIGN
@@ -26,7 +26,7 @@ API は `page.next_cursor` を返しているが、UI に load more がないた
 - 初回 SSR payload は維持し、追加ページを append する
 - infinite cache でも favorite / delete の optimistic helper が壊れないようにする
 - many-memory QA contract を docs に残す
-- Issue index を `ISSUE-051 review` に同期する
+- Issue index を最新状態へ同期する
 
 ## やらないこと (Out of Scope)
 
