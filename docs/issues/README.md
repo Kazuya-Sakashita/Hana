@@ -97,14 +97,14 @@ Codex-ready と判断する条件:
 
 ## Planned Design Rebuild Sequence
 
-| order | issue       | title                                  | note   |
-| ----- | ----------- | -------------------------------------- | ------ |
-| 1     | `ISSUE-054` | デザイントークンと共通 UI 刷新         | done   |
-| 2     | `ISSUE-058` | 状態文言と静かなモーション体系         | done   |
-| 3     | `ISSUE-055` | 記録画面の下部シート型 30 秒フロー刷新 | done   |
-| 4     | `ISSUE-056` | ホームの Quiet Heirloom 刷新           | done   |
-| 5     | `ISSUE-057` | アルバムと記録詳細の keepsake 刷新     | done   |
-| 6     | `ISSUE-059` | デザインモバイル QA とレビューゲート   | review |
+| order | issue       | title                                  | note |
+| ----- | ----------- | -------------------------------------- | ---- |
+| 1     | `ISSUE-054` | デザイントークンと共通 UI 刷新         | done |
+| 2     | `ISSUE-058` | 状態文言と静かなモーション体系         | done |
+| 3     | `ISSUE-055` | 記録画面の下部シート型 30 秒フロー刷新 | done |
+| 4     | `ISSUE-056` | ホームの Quiet Heirloom 刷新           | done |
+| 5     | `ISSUE-057` | アルバムと記録詳細の keepsake 刷新     | done |
+| 6     | `ISSUE-059` | デザインモバイル QA とレビューゲート   | done |
 
 ---
 
@@ -126,7 +126,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-- `ISSUE-059` — デザインモバイル QA とレビューゲート
+現在はありません。
 
 ---
 
@@ -139,8 +139,7 @@ Codex-ready と判断する条件:
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
 - design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
 - maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`
-- design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`
-- design rebuild review: `ISSUE-059`
+- design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 
 ---
 
