@@ -34,7 +34,9 @@ export const quietStateCopy = {
     saveFailedTitle: 'ページを しまえませんでした',
     saveFailedDescription: '入力はそのままです。もういちど ためしてください。',
     saveDoneTitle: 'ページを しまいました',
-    saveDoneDescription: 'アルバムに ならべました。',
+    saveDoneDescription: 'できたページを ひらきます。',
+    savedLandingEyebrow: '保存できました',
+    savedLandingDescription: 'できたページを ひらきました。アルバムから また見返せます。',
     submitting: 'ページを しまっています…',
   },
   album: {
@@ -68,6 +70,11 @@ export function recordAiGeneratingCopy(childName: string): string {
 export function deleteMemoryDescription(childName: string): string {
   const subject = childName.trim() ? `${childName.trim()} ちゃんの このページ` : 'このページ'
   return `${subject}は、アルバムに 表示されなくなります。`
+}
+
+export function recordSavedLandingTitle(childName: string): string {
+  const subject = childName.trim() ? `${childName.trim()} ちゃんのページ` : 'ページ'
+  return `${subject}を しまいました`
 }
 
 export function albumLoadMoreStatus(addedCount: number, hasMore: boolean): string {

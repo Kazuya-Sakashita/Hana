@@ -5,6 +5,7 @@ import {
   deleteMemoryDescription,
   quietStateCopy,
   recordAiGeneratingCopy,
+  recordSavedLandingTitle,
 } from '@/lib/ui/quiet-state-copy'
 
 const recordSource = readFileSync(
@@ -67,6 +68,8 @@ describe('Quiet state copy and motion contracts', () => {
     )
     expect(quietStateCopy.record.aiFailed).toContain('AI を使わずに')
     expect(quietStateCopy.record.saveDoneTitle).toBe('ページを しまいました')
+    expect(quietStateCopy.record.saveDoneDescription).toBe('できたページを ひらきます。')
+    expect(recordSavedLandingTitle('はな')).toBe('はな ちゃんのページを しまいました')
     expect(recordSource).toContain('motion-safe:animate-pulse')
     expect(recordSource).toContain("tone: 'success'")
     expect(recordSource).toContain('role="status"')

@@ -2,12 +2,13 @@ import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { ChevronLeft } from 'lucide-react'
+import { CheckCircle2, ChevronLeft } from 'lucide-react'
 import { MemoryActions } from '@/components/memory-actions'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
 import { fetchMemoryWithPreviews } from '@/features/memories/server/queries'
+import { quietStateCopy, recordSavedLandingTitle } from '@/lib/ui/quiet-state-copy'
 
 // ISSUE-057: Memory detail keepsake refresh.
 // Keep auth and ownership boundaries intact while making photo and story primary.
@@ -16,25 +17,31 @@ export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ memoryId: string }>
+  searchParams: Promise<{ saved?: string | string[] }>
 }
 
-export default async function MemoryDetailPage({ params }: PageProps) {
+export default async function MemoryDetailPage({ params, searchParams }: PageProps) {
   const user = await getCurrentUser()
   if (!user) redirect('/sign-in')
 
-  const { memoryId } = await params
+  const [{ memoryId }, query] = await Promise.all([params, searchParams])
+  const showSavedMoment = query.saved === '1'
 
   return (
     <main className="bg-canvas min-h-dvh px-4 pb-28 pt-4">
       <div className="relative mx-auto w-full max-w-md">
-        <Link
-          href="/album"
-          prefetch={true}
-          aria-label="アルバムへ もどる"
-          className="bg-canvas/90 text-ink tap-target absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm"
-        >
-          <ChevronLeft className="size-5" aria-hidden="true" />
-        </Link>
+        {showSavedMoment ? (
+          <SavedMemoryNotice />
+        ) : (
+          <Link
+            href="/album"
+            prefetch={true}
+            aria-label="アルバムへ もどる"
+            className="bg-canvas/90 text-ink tap-target absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm"
+          >
+            <ChevronLeft className="size-5" aria-hidden="true" />
+          </Link>
+        )}
 
         <Suspense fallback={<MemoryDetailSkeleton />}>
           <MemoryDetailContent memoryId={memoryId} userId={user.id} />
@@ -138,6 +145,36 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
         />
       </article>
     </>
+  )
+}
+
+function SavedMemoryNotice() {
+  return (
+    <section
+      aria-labelledby="memory-saved-moment-title"
+      className="paper-surface mb-4 rounded-2xl px-4 py-4"
+    >
+      <Link
+        href="/album"
+        prefetch={true}
+        className="tap-target text-ink-secondary -ml-2 mb-3 inline-flex items-center gap-1 rounded-full px-2 py-1 font-serif text-sm"
+      >
+        <ChevronLeft className="size-4" aria-hidden="true" />
+        アルバムへ
+      </Link>
+      <div role="status" aria-live="polite" className="flex items-start gap-3 text-left">
+        <CheckCircle2 className="text-leaf mt-0.5 size-5 shrink-0" aria-hidden="true" />
+        <div>
+          <p className="meta-label">{quietStateCopy.record.savedLandingEyebrow}</p>
+          <h2 id="memory-saved-moment-title" className="text-ink mt-1 font-serif text-lg">
+            {recordSavedLandingTitle('')}
+          </h2>
+          <p className="text-ink-secondary leading-narrative mt-2 text-sm">
+            {quietStateCopy.record.savedLandingDescription}
+          </p>
+        </div>
+      </div>
+    </section>
   )
 }
 
