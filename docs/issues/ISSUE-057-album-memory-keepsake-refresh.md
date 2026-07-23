@@ -2,7 +2,7 @@
 id: ISSUE-057
 title: アルバムと記録詳細の keepsake 刷新
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD

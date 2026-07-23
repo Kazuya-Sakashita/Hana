@@ -41,13 +41,13 @@
 
 2026-07-23 時点:
 
-| status        | count | notes                        |
-| ------------- | ----- | ---------------------------- |
-| `todo`        | 1     | design QA release gate       |
-| `in_progress` | 0     | 並行実行枠は空き             |
-| `review`      | 1     | ISSUE-057 review / PR 準備中 |
-| `done`        | 57    | archive を参照               |
-| `blocked`     | 1     | 認証済み実データ QA          |
+| status        | count | notes                  |
+| ------------- | ----- | ---------------------- |
+| `todo`        | 1     | design QA release gate |
+| `in_progress` | 0     | 並行実行枠は空き       |
+| `review`      | 0     | review queue は空      |
+| `done`        | 58    | archive を参照         |
+| `blocked`     | 1     | 認証済み実データ QA    |
 
 ---
 
@@ -103,7 +103,7 @@ Codex-ready と判断する条件:
 | 2     | `ISSUE-058` | 状態文言と静かなモーション体系         | done                                           |
 | 3     | `ISSUE-055` | 記録画面の下部シート型 30 秒フロー刷新 | done                                           |
 | 4     | `ISSUE-056` | ホームの Quiet Heirloom 刷新           | done                                           |
-| 5     | `ISSUE-057` | アルバムと記録詳細の keepsake 刷新     | review                                         |
+| 5     | `ISSUE-057` | アルバムと記録詳細の keepsake 刷新     | done                                           |
 | 6     | `ISSUE-059` | デザインモバイル QA とレビューゲート   | `ISSUE-055`〜`ISSUE-058` 完了後の release gate |
 
 ---
@@ -126,9 +126,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                              | note                                   |
-| ----------- | ---------------------------------- | -------------------------------------- |
-| `ISSUE-057` | アルバムと記録詳細の keepsake 刷新 | subagent review round 2 GO / PR 準備中 |
+現在はありません。
 
 ---
 
@@ -141,8 +139,7 @@ Codex-ready と判断する条件:
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
 - design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
 - maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`
-- design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`
-- design rebuild review: `ISSUE-057`
+- design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`
 - design rebuild todo: `ISSUE-059`
 
 ---
