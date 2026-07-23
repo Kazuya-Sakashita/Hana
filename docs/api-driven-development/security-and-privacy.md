@@ -123,14 +123,15 @@ ProblemDetails may expose `detail` to users, but server logs should branch on st
 
 ## MVP Accepted Risks
 
-| risk                                           | why accepted for MVP                                        | mitigation                                                  |
-| ---------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------- |
-| RLS not enabled                                | keeps Prisma / Route Handler implementation simple          | ownership tests, code review, future RLS ADR                |
-| EXIF removal depends on client path            | server hook adds storage download / transform / upload cost | Canvas re-encode, AI/image human review                     |
-| upload signed URL TTL is Supabase default      | SDK does not expose TTL control                             | private bucket, storage_key validation, confirm ownership   |
-| orphan uploaded files                          | upload and confirm are intentionally separate               | future cleanup job, no public URL                           |
-| 5 minute browser cache for signed URL          | needed for mobile performance                               | `private`, TTL below signed URL lifetime, clear on sign-out |
-| AI vendor sends child photo outside Hana infra | core product value depends on AI vision                     | explicit opt-in, privacy policy, vendor retention review    |
+| risk                                           | why accepted for MVP                                        | mitigation                                                                            |
+| ---------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| RLS not enabled                                | keeps Prisma / Route Handler implementation simple          | ownership tests, code review, future RLS ADR                                          |
+| EXIF removal depends on client path            | server hook adds storage download / transform / upload cost | Canvas re-encode, AI/image human review                                               |
+| upload signed URL TTL is Supabase default      | SDK does not expose TTL control                             | private bucket, storage_key validation, confirm ownership                             |
+| orphan uploaded files                          | upload and confirm are intentionally separate               | future cleanup job, no public URL                                                     |
+| 5 minute browser cache for signed URL          | needed for mobile performance                               | `private`, TTL below signed URL lifetime, clear on sign-out                           |
+| AI vendor sends child photo outside Hana infra | core product value depends on AI vision                     | explicit opt-in, privacy policy, vendor retention review                              |
+| memory restore UI not implemented              | MVP can still support deletion without promising restore    | active UI avoids restore promises; see `docs/design/delete-restore-trust-contract.md` |
 
 ## Pre-Release Blockers
 
@@ -144,6 +145,7 @@ The waiver path applies only to planned release risks. Hard-rule incidents, espe
 | App Store privacy label not drafted                                             | human release review           |
 | any private Route Handler lacks required ownership tests or documented coverage | engineering review             |
 | deletion flow does not remove Storage objects or accepted waiver is absent      | security / release review      |
+| memory restore is promised without restore UI / API / support contract          | release / privacy review       |
 | production logs can include body, storage_key, presigned URL, AI text, or email | security review                |
 | real child data appears in repo, tests, docs, screenshots, or PR body           | immediate cleanup before merge |
 

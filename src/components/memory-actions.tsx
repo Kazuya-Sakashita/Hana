@@ -190,8 +190,8 @@ function DeleteConfirmDialog({
             このページを、けしますか
           </CardTitle>
           <CardDescription id="delete-confirm-description" className="leading-narrative mt-2">
-            {childName ? `${childName} ちゃんの こ` : 'こ'}のページは、けしてから 7にちは
-            もどせます。
+            {childName ? `${childName} ちゃんの こ` : 'こ'}のページは、アルバムに
+            表示されなくなります。
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
