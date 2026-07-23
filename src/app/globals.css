@@ -4,28 +4,32 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================================
-   Hana Design Tokens — Warm Washi Paper Inspired
-   docs/design/v0-prompt.md §1 (Visual System) を CSS で実体化したもの
+   Hana Design Tokens — Quiet Heirloom foundation
+   docs/design/quiet-heirloom-design-canon.md を CSS で実体化したもの
    ============================================================================ */
 
 :root {
   /* --- Hana raw tokens --- */
   --bg-canvas: #fbf7f2; /* ivory washi base */
-  --bg-elevated: #ffffff; /* card surface */
+  --bg-elevated: #ffffff; /* porcelain surface */
   --bg-warm: #f5ede3; /* subtle warm wash */
+  --bg-paper-slip: #fffdf9; /* folded keepsake surface */
+  --bg-photo-mat: #f8f1e8; /* photo mat wash */
 
   --ink-primary: #2a2522; /* near-black, warm-shifted */
   --ink-secondary: #6b5f57; /* muted brown-grey */
   --ink-tertiary: #74675c; /* timestamps, helpers — AA on warm surfaces */
 
-  --accent-sakura: #e8b4b8; /* the ONE accent */
-  --accent-deep: #8c5a5e; /* hover/pressed */
+  --accent-sakura: #c57a83; /* pressed sakura accent */
+  --accent-deep: #8c5a5e; /* hover/pressed with white text */
+  --accent-pressed: #6e4249; /* active pressed state */
   --hairline: #ede4d8; /* dividers */
   --success-leaf: #5f6c57; /* soft sage — AA on warm surfaces */
+  --success-leaf-deep: #4d5a47; /* sage pressed / primary nav action */
   --warning-amber: #8b5e32; /* warm amber, never red — AA on warm surfaces */
 
-  --shadow-soft: 0 1px 2px rgba(58, 38, 30, 0.04), 0 4px 16px rgba(58, 38, 30, 0.04);
-  --shadow-lift: 0 2px 4px rgba(58, 38, 30, 0.05), 0 12px 32px rgba(58, 38, 30, 0.06);
+  --shadow-soft: 0 1px 2px rgba(58, 38, 30, 0.035), 0 8px 28px rgba(58, 38, 30, 0.045);
+  --shadow-lift: 0 2px 4px rgba(58, 38, 30, 0.05), 0 16px 40px rgba(58, 38, 30, 0.075);
 
   --ease-organic: cubic-bezier(0.22, 0.61, 0.36, 1);
 
@@ -58,12 +62,17 @@
   --bg-canvas: #1c1816;
   --bg-elevated: #252220;
   --bg-warm: #1f1b18;
+  --bg-paper-slip: #252220;
+  --bg-photo-mat: #2d2825;
 
   --ink-primary: #f3ebe0;
   --ink-secondary: #a89c92;
-  --ink-tertiary: #6b5f57;
+  --ink-tertiary: #c8b9ad;
 
+  --primary-foreground: #2a2522;
   --hairline: #3a322c;
+  --success-leaf: #a7b29b;
+  --warning-amber: #d5a66f;
 }
 
 @theme inline {
@@ -75,13 +84,17 @@
   --color-canvas: var(--bg-canvas);
   --color-elevated: var(--bg-elevated);
   --color-warm: var(--bg-warm);
+  --color-paper-slip: var(--bg-paper-slip);
+  --color-photo-mat: var(--bg-photo-mat);
   --color-ink: var(--ink-primary);
   --color-ink-secondary: var(--ink-secondary);
   --color-ink-tertiary: var(--ink-tertiary);
   --color-sakura: var(--accent-sakura);
   --color-sakura-deep: var(--accent-deep);
+  --color-sakura-pressed: var(--accent-pressed);
   --color-hairline: var(--hairline);
   --color-leaf: var(--success-leaf);
+  --color-leaf-deep: var(--success-leaf-deep);
   --color-amber: var(--warning-amber);
 
   /* shadcn tokens */
@@ -126,7 +139,7 @@
   /* 物語本文・heading は serif (Noto Serif JP) を使う */
   .font-serif {
     font-family: var(--font-serif);
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
 }
 
@@ -140,7 +153,7 @@
   .ease-organic {
     transition-timing-function: var(--ease-organic);
   }
-  /* 物語本文用の行送り (V0 prompt §1) */
+  /* 物語本文用の行送り */
   .leading-narrative {
     line-height: 1.85;
   }
@@ -152,12 +165,25 @@
     font-variant-numeric: tabular-nums;
     font-weight: 300;
   }
-  /* meta label utility (V0 prompt §1: 12px / uppercase / tracking +0.08em / ink-tertiary) */
+  .paper-surface {
+    background: var(--bg-paper-slip);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-soft);
+  }
+  .photo-mat {
+    background: var(--bg-photo-mat);
+    border: 1px solid var(--hairline);
+  }
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* meta label utility */
   .meta-label {
     font-size: 12px;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     color: var(--ink-tertiary);
   }
   .pb-safe {
@@ -171,7 +197,7 @@
   outline-offset: 4px;
 }
 
-/* prefers-reduced-motion を尊重 (V0 prompt §4 Accessibility) */
+/* prefers-reduced-motion を尊重 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

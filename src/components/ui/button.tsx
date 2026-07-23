@@ -4,24 +4,25 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] ease-organic",
+  "ease-organic tap-target inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap text-sm font-medium outline-none transition-all active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        // V0 prompt §1: primary は pill (rounded-full)、sakura accent
+        // Quiet Heirloom: primary は pressed sakura の pill。
         default:
-          'rounded-full bg-primary text-primary-foreground shadow-soft hover:bg-sakura-deep hover:text-white',
-        secondary: 'rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        outline: 'rounded-xl border border-hairline bg-elevated text-ink hover:bg-warm',
+          'rounded-full bg-primary text-primary-foreground shadow-soft hover:bg-sakura-deep hover:text-white active:bg-sakura-pressed active:text-white',
+        secondary: 'rounded-xl bg-warm text-secondary-foreground hover:bg-photo-mat',
+        outline:
+          'rounded-xl border border-hairline bg-paper-slip text-ink shadow-soft hover:bg-warm',
         ghost: 'rounded-xl text-ink-secondary hover:bg-warm hover:text-ink',
         destructive: 'rounded-xl text-amber hover:bg-warm',
         link: 'text-ink-secondary underline-offset-4 hover:underline hover:text-ink',
       },
       size: {
         default: 'h-11 px-6 py-2',
-        sm: 'h-9 px-4 text-xs',
+        sm: 'h-11 px-4 text-xs',
         lg: 'h-12 px-8 text-base',
-        icon: 'size-10 rounded-full',
+        icon: 'size-11 rounded-full',
       },
     },
     defaultVariants: {
