@@ -2,7 +2,7 @@
 id: ISSUE-063
 title: Record Saved Moment and Memory Landing
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2
