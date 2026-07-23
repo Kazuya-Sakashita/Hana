@@ -45,8 +45,8 @@
 | ------------- | ----- | --------------------- |
 | `todo`        | 1     | product experience v2 |
 | `in_progress` | 0     | 並行実行枠は空き      |
-| `review`      | 1     | review queue を参照   |
-| `done`        | 63    | archive を参照        |
+| `review`      | 0     | review queue は空     |
+| `done`        | 64    | archive を参照        |
 | `blocked`     | 1     | 認証済み実データ QA   |
 
 ---
@@ -110,13 +110,13 @@ Codex-ready と判断する条件:
 
 ## Planned Product Experience V2 Sequence
 
-| order | issue       | title                                  | note   |
-| ----- | ----------- | -------------------------------------- | ------ |
-| 1     | `ISSUE-060` | 約束整合と共通シェル基盤               | done   |
-| 2     | `ISSUE-061` | Settings Trust Center v1               | done   |
-| 3     | `ISSUE-062` | Onboarding to First Memory Bridge      | done   |
-| 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | review |
-| 5     | `ISSUE-064` | Product Design QA v2                   | todo   |
+| order | issue       | title                                  | note |
+| ----- | ----------- | -------------------------------------- | ---- |
+| 1     | `ISSUE-060` | 約束整合と共通シェル基盤               | done |
+| 2     | `ISSUE-061` | Settings Trust Center v1               | done |
+| 3     | `ISSUE-062` | Onboarding to First Memory Bridge      | done |
+| 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | done |
+| 5     | `ISSUE-064` | Product Design QA v2                   | todo |
 
 ---
 
@@ -138,9 +138,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                                  | note                        |
-| ----------- | -------------------------------------- | --------------------------- |
-| `ISSUE-063` | Record Saved Moment and Memory Landing | PR review / CI / merge 待ち |
+現在はありません。
 
 ---
 
@@ -154,7 +152,7 @@ Codex-ready と判断する条件:
 - design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
 - maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
-- product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`
+- product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`
 
 ---
 
