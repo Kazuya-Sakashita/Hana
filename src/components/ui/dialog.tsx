@@ -18,6 +18,7 @@ interface AccessibleDialogProps {
   onClose: () => void
   children: ReactNode
   pending?: boolean
+  initialFocusId?: string
   className?: string
 }
 
@@ -27,6 +28,7 @@ export function AccessibleDialog({
   onClose,
   children,
   pending = false,
+  initialFocusId,
   className,
 }: AccessibleDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -41,8 +43,8 @@ export function AccessibleDialog({
     document.body.style.overflow = 'hidden'
 
     const frame = window.requestAnimationFrame(() => {
-      const firstFocusable = getFocusableElements(dialog)[0]
-      ;(firstFocusable ?? dialog).focus({ preventScroll: true })
+      const target = getInitialFocusTarget(dialog, initialFocusId)
+      target.focus({ preventScroll: true })
     })
 
     return () => {
@@ -52,7 +54,7 @@ export function AccessibleDialog({
         previouslyFocused.focus({ preventScroll: true })
       }
     }
-  }, [])
+  }, [initialFocusId])
 
   function onDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
@@ -107,8 +109,19 @@ export function AccessibleDialog({
   )
 }
 
+function getInitialFocusTarget(root: HTMLElement, initialFocusId: string | undefined): HTMLElement {
+  if (initialFocusId) {
+    const candidate = root.querySelector<HTMLElement>(`#${CSS.escape(initialFocusId)}`)
+    if (candidate && isFocusable(candidate)) return candidate
+  }
+
+  return getFocusableElements(root)[0] ?? root
+}
+
 function getFocusableElements(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (element) => element.tabIndex >= 0 && element.getAttribute('aria-hidden') !== 'true',
-  )
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isFocusable)
+}
+
+function isFocusable(element: HTMLElement): boolean {
+  return element.tabIndex >= 0 && element.getAttribute('aria-hidden') !== 'true'
 }

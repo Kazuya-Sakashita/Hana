@@ -181,6 +181,7 @@ function DeleteConfirmDialog({
       titleId="delete-confirm-title"
       descriptionId="delete-confirm-description"
       pending={pending}
+      initialFocusId="delete-confirm-cancel"
       onClose={onCancel}
     >
       <Card className="w-full max-w-md">
@@ -205,6 +206,7 @@ function DeleteConfirmDialog({
             {pending ? 'けしています…' : 'けす'}
           </Button>
           <Button
+            id="delete-confirm-cancel"
             type="button"
             variant="ghost"
             size="lg"
