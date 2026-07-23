@@ -4,7 +4,7 @@ import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccessibleDialog } from '@/components/ui/dialog'
@@ -111,6 +111,8 @@ export default function RecordPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [topMessage, setTopMessage] = useState<string | null>(null)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const currentUserQuery = useCurrentUserQuery()
   const childrenQuery = useChildrenQuery()
   const setAiConsentMutation = useSetAiConsentMutation()
@@ -133,7 +135,10 @@ export default function RecordPage() {
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
   const canGenerateAi = !!uploadedImage && aiStatus !== 'generating' && !aiQuotaExceeded
-  const hasUnsavedChanges = !!uploadedImage || title.trim().length > 0 || body.trim().length > 0
+  const hasSelectedPhoto = !!filePreviewUrl && !!file
+  const storyPreview = body.trim()
+  const hasUnsavedChanges =
+    hasSelectedPhoto || !!uploadedImage || title.trim().length > 0 || storyPreview.length > 0
 
   function onCancelClick() {
     if (hasUnsavedChanges) {
@@ -199,6 +204,14 @@ export default function RecordPage() {
     }
   }
 
+  function resetPhotoInput(event: React.MouseEvent<HTMLInputElement>) {
+    event.currentTarget.value = ''
+  }
+
+  function openPhotoPicker() {
+    fileInputRef.current?.click()
+  }
+
   async function callAiGenerate() {
     if (!uploadedImage || !childId) return
     setAiStatus('generating')
@@ -258,6 +271,10 @@ export default function RecordPage() {
 
   function declineAiConsent() {
     setAiStatus('idle')
+  }
+
+  function focusManualTitle() {
+    titleInputRef.current?.focus()
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -407,108 +424,161 @@ export default function RecordPage() {
   }
 
   return (
-    <Shell>
+    <RecordShell>
       <button
         type="button"
         onClick={onCancelClick}
         aria-label="やめて とじる"
-        className="bg-elevated text-ink-secondary ring-elevated ease-organic absolute left-4 top-4 flex items-center gap-1 rounded-full px-3 py-2 font-serif text-sm ring-1 transition-transform active:scale-[0.97]"
+        className="bg-elevated text-ink-secondary ring-elevated ease-organic tap-target absolute left-4 top-4 z-20 flex items-center gap-1 rounded-full px-4 py-2 font-serif text-sm ring-1 transition-transform active:scale-[0.97]"
       >
         <span aria-hidden="true">‹</span>
         やめる
       </button>
-      <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
-          <CardTitle className="font-serif text-2xl">
-            きょうの {childName} ちゃんを のこす
-          </CardTitle>
-          <CardDescription className="mt-2">
-            しゃしんを 1まい えらんで、ことばを そえます。
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <section className="flex min-h-[42dvh] flex-1 flex-col px-5 pb-5 pt-20">
+        <p className="meta-label">30びょう 記録</p>
+        <h1 className="text-ink mt-2 font-serif text-2xl leading-tight">
+          きょうの {childName} ちゃんを のこす
+        </h1>
+        <p className="text-ink-secondary leading-narrative mt-2 text-sm">
+          しゃしんを 1まい えらんで、ことばを そえます。
+        </p>
+
+        <div className="photo-mat mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-[1.75rem]">
+          {filePreviewUrl && file ? (
+            <NextImage
+              src={filePreviewUrl}
+              alt="えらんだ しゃしん"
+              width={720}
+              height={900}
+              unoptimized
+              className="h-full max-h-[46dvh] w-full object-cover"
+            />
+          ) : (
+            <div className="px-8 text-center">
+              <p className="text-ink-secondary font-serif text-lg">まずは 1まい</p>
+              <p className="text-ink-tertiary leading-narrative mt-2 text-sm">
+                うまく撮れた写真でなくても、残したい瞬間なら大丈夫です。
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <form
+        onSubmit={onSubmit}
+        data-testid="record-bottom-sheet"
+        className="bg-elevated border-hairline shadow-lift sticky bottom-0 z-30 flex max-h-[68dvh] flex-col overflow-hidden rounded-t-[2rem] border-t px-5 pt-5"
+      >
+        <div className="mx-auto h-1 w-10 rounded-full bg-hairline" aria-hidden="true" />
+
+        <div
+          data-testid="record-bottom-sheet-body"
+          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 pt-4"
+        >
           {topMessage ? (
             <div
               role="alert"
-              className="text-ink-secondary leading-narrative mb-6 rounded-xl bg-warm px-4 py-3 text-sm"
+              className="text-ink-secondary leading-narrative rounded-xl bg-warm px-4 py-3 text-sm"
             >
               {topMessage}
             </div>
           ) : null}
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="memory-photo" className="font-serif">
-                しゃしん
-              </Label>
-              <Input
-                id="memory-photo"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/heic"
-                onChange={onFileSelected}
-              />
-              {uploadStatus === 'preparing' ? (
-                <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
-                  {quietStateCopy.record.uploadPreparing}
-                </p>
-              ) : null}
-              {uploadStatus === 'uploading' ? (
-                <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
-                  {quietStateCopy.record.uploadUploading}
-                </p>
-              ) : null}
-              {uploadStatus === 'confirming' ? (
-                <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
-                  {quietStateCopy.record.uploadConfirming}
-                </p>
-              ) : null}
-              {uploadStatus === 'done' ? (
-                <p role="status" aria-live="polite" className="text-leaf text-xs">
-                  {quietStateCopy.record.uploadDone}
-                </p>
-              ) : null}
-              {uploadStatus === 'failed' && uploadError ? (
-                <p role="alert" className="text-amber text-xs">
-                  {uploadError}
-                </p>
-              ) : null}
-              {filePreviewUrl && file ? (
-                // NextImage import 名: HTMLImageElement の global `Image` と衝突回避。
-                // unoptimized 必須: blob: URL は Vercel image proxy が扱えない。
-                //   サイズは仮値、 CSS の max-h-48 で表示制御。
-                <NextImage
-                  src={filePreviewUrl}
-                  alt="えらんだ しゃしん"
-                  width={400}
-                  height={400}
-                  unoptimized
-                  className="border-hairline mt-2 max-h-48 w-full rounded-xl border object-cover"
-                />
-              ) : null}
-              {fieldErrors.imageIds ? (
-                <p className="text-amber text-xs">{fieldErrors.imageIds}</p>
-              ) : null}
-            </div>
+          <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+            <StepPill active={!uploadedImage} done={!!uploadedImage} label="写真" />
+            <StepPill
+              active={!!uploadedImage && aiStatus !== 'done'}
+              done={aiStatus === 'done'}
+              label="下書き"
+            />
+            <StepPill active={canSubmit} done={false} label="保存" />
+          </div>
 
-            {uploadedImage ? (
-              <div className="bg-warm rounded-xl p-4" aria-busy={aiStatus === 'generating'}>
+          <Input
+            ref={fileInputRef}
+            id="memory-photo"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic"
+            onClick={resetPhotoInput}
+            onChange={onFileSelected}
+            className="sr-only"
+            tabIndex={-1}
+            aria-label="しゃしんを えらぶ"
+            aria-describedby="memory-photo-status"
+          />
+
+          {uploadedImage ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={openPhotoPicker}
+            >
+              しゃしんを えらびなおす
+            </Button>
+          ) : null}
+
+          <div id="memory-photo-status" className="min-h-4">
+            {uploadStatus === 'preparing' ? (
+              <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
+                {quietStateCopy.record.uploadPreparing}
+              </p>
+            ) : null}
+            {uploadStatus === 'uploading' ? (
+              <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
+                {quietStateCopy.record.uploadUploading}
+              </p>
+            ) : null}
+            {uploadStatus === 'confirming' ? (
+              <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
+                {quietStateCopy.record.uploadConfirming}
+              </p>
+            ) : null}
+            {uploadStatus === 'done' ? (
+              <p role="status" aria-live="polite" className="text-leaf text-xs">
+                {quietStateCopy.record.uploadDone}
+              </p>
+            ) : null}
+            {uploadStatus === 'failed' && uploadError ? (
+              <p role="alert" className="text-amber text-xs">
+                {uploadError}
+              </p>
+            ) : null}
+            {fieldErrors.imageIds ? (
+              <p role="alert" className="text-amber text-xs">
+                {fieldErrors.imageIds}
+              </p>
+            ) : null}
+          </div>
+
+          {uploadedImage ? (
+            <>
+              <div className="paper-surface rounded-2xl p-4" aria-busy={aiStatus === 'generating'}>
                 <p className="text-ink-secondary font-serif text-sm">
                   {quietStateCopy.record.aiReady}
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="mt-3 w-full"
-                  onClick={callAiGenerate}
-                  disabled={!canGenerateAi}
-                >
-                  {aiStatus === 'generating'
-                    ? recordAiGeneratingCopy(childName)
-                    : aiStatus === 'done'
-                      ? 'もういちど AI に たのむ'
-                      : 'AI で つくる'}
-                </Button>
+                <div className="mt-3 grid gap-2">
+                  <Button
+                    type="button"
+                    variant={aiStatus === 'done' ? 'outline' : 'default'}
+                    size="lg"
+                    className="w-full"
+                    onClick={callAiGenerate}
+                    disabled={!canGenerateAi}
+                  >
+                    {aiStatus === 'generating'
+                      ? recordAiGeneratingCopy(childName)
+                      : aiStatus === 'done'
+                        ? 'もういちど AI に たのむ'
+                        : 'AI で 下書きする'}
+                  </Button>
+                  {aiStatus !== 'done' ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={focusManualTitle}>
+                      AI を使わずに 書く
+                    </Button>
+                  ) : null}
+                </div>
                 {aiStatus === 'generating' ? (
                   <p
                     role="status"
@@ -530,74 +600,137 @@ export default function RecordPage() {
                   </p>
                 ) : null}
               </div>
-            ) : null}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="memory-title" className="font-serif">
-                タイトル
-              </Label>
-              <Input
-                id="memory-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="はじめての すなあそび"
-                maxLength={100}
-              />
-              {fieldErrors.title ? <p className="text-amber text-xs">{fieldErrors.title}</p> : null}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="memory-body" className="font-serif">
-                ほんぶん (任意)
-              </Label>
-              <textarea
-                id="memory-body"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                maxLength={1000}
-                rows={4}
-                placeholder="あの しゅんかんの こと、ひとこと だけでも。"
-                className="border-hairline bg-elevated text-ink placeholder:text-ink-tertiary placeholder:font-serif leading-narrative focus-visible:border-sakura focus-visible:ring-ring/30 w-full rounded-xl border px-4 py-2 text-base transition-all focus-visible:outline-none focus-visible:ring-2"
-              />
-              {fieldErrors.body ? <p className="text-amber text-xs">{fieldErrors.body}</p> : null}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="memory-date" className="font-serif">
-                  ひにち
+                <Label htmlFor="memory-title" className="font-serif">
+                  タイトル
                 </Label>
                 <Input
-                  id="memory-date"
-                  type="date"
-                  value={recordedAt}
-                  onChange={(e) => setRecordedAt(e.target.value)}
-                  max={todayIso}
+                  ref={titleInputRef}
+                  id="memory-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="はじめての すなあそび"
+                  maxLength={100}
                 />
-                {fieldErrors.recordedAt ? (
-                  <p className="text-amber text-xs">{fieldErrors.recordedAt}</p>
+                {fieldErrors.title ? (
+                  <p role="alert" className="text-amber text-xs">
+                    {fieldErrors.title}
+                  </p>
                 ) : null}
               </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="memory-weather" className="font-serif">
-                  てんき (任意)
-                </Label>
-                <Input
-                  id="memory-weather"
-                  value={weather}
-                  onChange={(e) => setWeather(e.target.value)}
-                  placeholder="はれ"
-                  maxLength={20}
-                />
-              </div>
-            </div>
 
-            <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
-              {submitting ? quietStateCopy.record.submitting : 'のこす'}
+              {storyPreview ? (
+                <section
+                  aria-labelledby="memory-story-preview-title"
+                  data-testid="record-story-preview"
+                  className="paper-surface rounded-2xl p-4"
+                >
+                  <p
+                    id="memory-story-preview-title"
+                    className="text-ink-secondary font-serif text-sm"
+                  >
+                    のこす ことば
+                  </p>
+                  <p className="text-ink leading-narrative mt-2 whitespace-pre-wrap font-serif text-base">
+                    {storyPreview}
+                  </p>
+                </section>
+              ) : (
+                <p className="text-ink-tertiary leading-narrative text-center text-sm">
+                  AI の下書き、または ひとことを添えて残せます。
+                </p>
+              )}
+
+              <details className="group rounded-2xl bg-warm px-4 py-3">
+                <summary className="tap-target text-ink-secondary flex cursor-pointer list-none items-center justify-between font-serif text-sm [&::-webkit-details-marker]:hidden">
+                  ことば・日付を なおす
+                  <span className="text-ink-tertiary text-xs group-open:hidden">ひらく</span>
+                  <span className="text-ink-tertiary hidden text-xs group-open:inline">とじる</span>
+                </summary>
+                <div className="mt-4 flex flex-col gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="memory-body" className="font-serif">
+                      ほんぶん (任意)
+                    </Label>
+                    <textarea
+                      id="memory-body"
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      maxLength={1000}
+                      rows={4}
+                      placeholder="あの しゅんかんの こと、ひとこと だけでも。"
+                      className="border-hairline bg-elevated text-ink placeholder:text-ink-tertiary placeholder:font-serif leading-narrative focus-visible:border-sakura focus-visible:ring-ring/30 w-full rounded-xl border px-4 py-2 text-base transition-all focus-visible:outline-none focus-visible:ring-2"
+                    />
+                    {fieldErrors.body ? (
+                      <p role="alert" className="text-amber text-xs">
+                        {fieldErrors.body}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="memory-date" className="font-serif">
+                        ひにち
+                      </Label>
+                      <Input
+                        id="memory-date"
+                        type="date"
+                        value={recordedAt}
+                        onChange={(e) => setRecordedAt(e.target.value)}
+                        max={todayIso}
+                      />
+                      {fieldErrors.recordedAt ? (
+                        <p role="alert" className="text-amber text-xs">
+                          {fieldErrors.recordedAt}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="memory-weather" className="font-serif">
+                        てんき (任意)
+                      </Label>
+                      <Input
+                        id="memory-weather"
+                        value={weather}
+                        onChange={(e) => setWeather(e.target.value)}
+                        placeholder="はれ"
+                        maxLength={20}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </>
+          ) : null}
+        </div>
+
+        <div
+          data-testid="record-bottom-sheet-footer"
+          className="bg-elevated border-hairline -mx-5 border-t px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3"
+        >
+          {!hasSelectedPhoto ? (
+            <Button type="button" size="lg" className="w-full" onClick={openPhotoPicker}>
+              しゃしんを えらぶ
             </Button>
-          </form>
-        </CardContent>
-      </Card>
+          ) : !uploadedImage ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full"
+              onClick={openPhotoPicker}
+            >
+              しゃしんを えらびなおす
+            </Button>
+          ) : (
+            <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
+              {submitting ? quietStateCopy.record.submitting : 'このまま 残す'}
+            </Button>
+          )}
+        </div>
+      </form>
 
       {aiStatus === 'consent_pending' ? (
         <AiConsentDialog
@@ -615,9 +748,16 @@ export default function RecordPage() {
           onClose={() => router.push('/')}
         />
       ) : null}
-    </Shell>
+    </RecordShell>
   )
 }
+
+const AI_CONSENT_SENT_COPY =
+  'おくるものは、しゃしん、なまえ、月齢、ひにち、てんき、あなたが書いたメモです。'
+const AI_CONSENT_NOT_SENT_COPY =
+  'たんじょうび、メール、じゅうしょ、位置情報、画像URL、presigned URL、保存先のキーは おくりません。'
+const AI_CONSENT_RETENTION_COPY =
+  'API の入出力は 通常30日以内に削除されますが、安全確認など一部例外があります。'
 
 function AiConsentDialog({
   childName,
@@ -652,9 +792,9 @@ function AiConsentDialog({
           </CardTitle>
           <CardDescription id="ai-consent-description" className="leading-narrative mt-2">
             Hana は、{childName} ちゃんの しゃしんを Anthropic Claude API に おくり、ぶんしょうの
-            ていあんを もらいます。なまえと月齢は おくりますが、
-            たんじょうび、メール、じゅうしょ、画像URLは おくりません。API の入出力は
-            通常30日以内に削除されますが、安全確認など一部例外があります。
+            ていあんを もらいます。{AI_CONSENT_SENT_COPY}
+            {AI_CONSENT_NOT_SENT_COPY}
+            {AI_CONSENT_RETENTION_COPY}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -686,6 +826,30 @@ function Shell({ children }: { children: React.ReactNode }) {
     <main className="bg-canvas relative flex min-h-dvh items-center justify-center px-6 py-12">
       {children}
     </main>
+  )
+}
+
+function RecordShell({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="bg-canvas relative min-h-dvh overflow-x-hidden">
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">{children}</div>
+    </main>
+  )
+}
+
+function StepPill({ active, done, label }: { active: boolean; done: boolean; label: string }) {
+  return (
+    <div
+      className={
+        done
+          ? 'border-leaf/30 bg-warm text-leaf rounded-full border px-2 py-1'
+          : active
+            ? 'border-sakura/40 bg-paper-slip text-sakura-deep rounded-full border px-2 py-1'
+            : 'border-hairline bg-warm text-ink-tertiary rounded-full border px-2 py-1'
+      }
+    >
+      {label}
+    </div>
   )
 }
 
