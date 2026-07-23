@@ -41,13 +41,13 @@
 
 2026-07-23 時点:
 
-| status        | count | notes                                      |
-| ------------- | ----- | ------------------------------------------ |
-| `todo`        | 0     | ready queue は空                           |
-| `in_progress` | 0     | 並行実行枠は空き                           |
-| `review`      | 2     | `ISSUE-046`, `ISSUE-047` の PR review 待ち |
-| `done`        | 46    | archive を参照                             |
-| `blocked`     | 1     | 認証済み実データ QA                        |
+| status        | count | notes                                                   |
+| ------------- | ----- | ------------------------------------------------------- |
+| `todo`        | 0     | ready queue は空                                        |
+| `in_progress` | 0     | 並行実行枠は空き                                        |
+| `review`      | 3     | `ISSUE-046`, `ISSUE-047`, `ISSUE-048` の PR review 待ち |
+| `done`        | 46    | archive を参照                                          |
+| `blocked`     | 1     | 認証済み実データ QA                                     |
 
 ---
 
@@ -115,6 +115,7 @@ Codex-ready と判断する条件:
 | ----------- | ------------------------------------------------- |
 | `ISSUE-046` | accessibility token と viewport remediation の PR |
 | `ISSUE-047` | dialog accessibility foundation の PR             |
+| `ISSUE-048` | AI consent privacy evidence alignment の PR       |
 
 ---
 

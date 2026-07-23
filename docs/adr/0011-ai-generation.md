@@ -110,6 +110,9 @@ CLAUDE.md §7 のログ禁止リストに準拠。
 - クライアントは 403 を受けたら同意ダイアログを表示
 - 同意時に `POST /me/ai-consent` で `ai_consent_at = now()` セット
 - idempotent: 既に同意済みなら時刻を更新しない
+- 同意 UI は ISSUE-048 以降、zero data retention や契約確認前の training non-use を断定しない。
+  vendor retention / training-use の公開文言は `docs/design/ai-consent-privacy-evidence.md` と
+  human privacy / legal review を通す。
 
 ### 9. HEIC 画像のハンドリング
 
@@ -164,6 +167,7 @@ iPhone デフォルト解像度 (4032×3024) を Canvas で quality 92% 再エ�
 ## 関連
 
 - ISSUE-010: AI 文章生成 (本Issue で起こす)
+- ISSUE-048: AI consent privacy evidence alignment
 - ADR-0009: Storage (presigned URL / EXIF クライアント責務)
 - `Hana_PRD_v1.md` §9 (AI 機能仕様) / §16 (マネタイズ)
 - `CLAUDE.md` §7 (PII / ログ禁止リスト)

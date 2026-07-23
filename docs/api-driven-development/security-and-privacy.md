@@ -22,15 +22,16 @@ Hana は子どもの写真、育児記録、AI 送信を扱う。
 
 Known superseded / clarified items:
 
-| old statement                         | current source     | current rule                                                                                            |
-| ------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
-| PRD の email+password / 自前 auth API | ADR-0006           | Supabase Auth + SNS-only。email+password は MVP で持たない                                              |
-| 公開 API は `/v1/auth/*` のみ         | OpenAPI / ADR-0006 | Supabase auth routes are outside Hana v1 API。Hana v1 の明示例外は `/v1/health` と `/v1/metrics/vitals` |
-| AI に子どもの名前を送らない           | ADR-0011           | opt-in 後、given name と月齢は送信可。birthdate / surname / email / address / raw location は送信禁止   |
-| 写真は外部 AI へ送らない              | ADR-0011           | opt-in 後に Anthropic Claude へ画像を送る。training 利用・保持条件は人間確認 gate                       |
-| `Cache-Control: private, no-store`    | ADR-0012           | signed URL response は `private, max-age=300`                                                           |
-| EXIF はサーバ側で削除                 | ADR-0009           | MVP はクライアント Canvas 再エンコードで削除。サーバ側削除は Phase 2                                    |
-| 退会フロー ISSUE 番号                 | ADR-0009           | ADR 内の `ISSUE-016` は古い参照。現在の ISSUE-016 は perf baseline                                      |
+| old statement                         | current source     | current rule                                                                                                                  |
+| ------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| PRD の email+password / 自前 auth API | ADR-0006           | Supabase Auth + SNS-only。email+password は MVP で持たない                                                                    |
+| 公開 API は `/v1/auth/*` のみ         | OpenAPI / ADR-0006 | Supabase auth routes are outside Hana v1 API。Hana v1 の明示例外は `/v1/health` と `/v1/metrics/vitals`                       |
+| AI に子どもの名前を送らない           | ADR-0011           | opt-in 後、given name と月齢は送信可。birthdate / surname / email / address / raw location は送信禁止                         |
+| 写真は外部 AI へ送らない              | ADR-0011           | opt-in 後に Anthropic Claude へ画像を送る。training 利用・保持条件は人間確認 gate                                             |
+| AI 学習不使用 / ZDR を UI で断定      | ISSUE-048          | active UI は ZDR や契約確認前の training non-use を断定しない。公式証跡は `docs/design/ai-consent-privacy-evidence.md` に記録 |
+| `Cache-Control: private, no-store`    | ADR-0012           | signed URL response は `private, max-age=300`                                                                                 |
+| EXIF はサーバ側で削除                 | ADR-0009           | MVP はクライアント Canvas 再エンコードで削除。サーバ側削除は Phase 2                                                          |
+| 退会フロー ISSUE 番号                 | ADR-0009           | ADR 内の `ISSUE-016` は古い参照。現在の ISSUE-016 は perf baseline                                                            |
 
 ## Data Classification
 
@@ -81,7 +82,8 @@ Current public / anonymous exceptions:
 - 送信禁止: parent email、parent name、surname / full name、birthdate、生年月日、住所、raw location、storage_key、presigned URL。
 - generation log は user_id / child_id / model / prompt version / token / duration / success / error reason / created_at まで。prompt 本文と生成本文は保存しない。
 - prompt 本文と生成本文は AI log に保存しない。
-- vendor retention / zero data retention / training non-use は release 前の人間確認 gate とする。
+- vendor retention / zero data retention / training non-use の公開文言は `docs/design/ai-consent-privacy-evidence.md` を入力に、
+  release 前の人間 privacy / legal review gate とする。
 
 ## Logs And Monitoring
 
@@ -138,7 +140,7 @@ The waiver path applies only to planned release risks. Hard-rule incidents, espe
 | blocker                                                                         | required decision              |
 | ------------------------------------------------------------------------------- | ------------------------------ |
 | privacy policy / terms for AI image sending not reviewed                        | human privacy review           |
-| Anthropic data retention / training-use conditions not recorded                 | human privacy review           |
+| Anthropic data retention / training-use copy not privacy-reviewed               | human privacy / legal review   |
 | App Store privacy label not drafted                                             | human release review           |
 | any private Route Handler lacks required ownership tests or documented coverage | engineering review             |
 | deletion flow does not remove Storage objects or accepted waiver is absent      | security / release review      |
