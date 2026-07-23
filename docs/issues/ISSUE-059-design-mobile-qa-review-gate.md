@@ -2,7 +2,7 @@
 id: ISSUE-059
 title: デザインモバイル QA とレビューゲート
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
@@ -51,14 +51,14 @@ Quiet Heirloom の画面刷新が、見た目だけでなく Hana MVP の成功�
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] Task Success / 30 秒記録が 4 以上
-- [ ] Privacy Trust が 4 以上
-- [ ] Accessibility / Mobile が 3 以上
-- [ ] core AI path / AI skip path / first consent path の start / finish / target が `quiet-heirloom-design-canon.md` と一致している
-- [ ] No-Go blocker がない
-- [ ] synthetic screenshot evidence に PII / image URL / storage_key / AI 生成本文がない
-- [ ] 専門サブエージェント 3 名のレビューを最大 3 回まで実施し、blocker が解消されている
-- [ ] `git diff --check` と release-relevant checks が通る
+- [x] Task Success / 30 秒記録が 4 以上
+- [x] Privacy Trust が 4 以上
+- [x] Accessibility / Mobile が 3 以上
+- [x] core AI path / AI skip path / first consent path の start / finish / target が `quiet-heirloom-design-canon.md` と一致している
+- [x] No-Go blocker がない
+- [x] synthetic screenshot evidence に PII / image URL / storage_key / AI 生成本文がない
+- [x] 専門サブエージェント 3 名のレビューを最大 3 回まで実施し、blocker が解消されている
+- [x] `git diff --check` と release-relevant checks が通る
 
 ## レビュー方針
 
