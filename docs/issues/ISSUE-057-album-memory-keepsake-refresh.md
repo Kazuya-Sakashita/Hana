@@ -2,7 +2,7 @@
 id: ISSUE-057
 title: アルバムと記録詳細の keepsake 刷新
 priority: P1
-status: todo
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
@@ -48,14 +48,29 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] album が SNS feed / ranking / public gallery に見えない
-- [ ] memory detail で写真と物語が主役になっている
-- [ ] favorite / delete / edit placeholder が信頼を壊さない位置にある
-- [ ] load more と favorite optimistic update が壊れていない
-- [ ] photo alt と delete copy の既存 trust contract を維持している
-- [ ] body text 7:1 目標、helper / small text 4.5:1、44px tap target、visible focus を維持する
-- [ ] 実装差分が広がりすぎる場合は、album と detail を別 PR に分割している
-- [ ] `git diff --check` と relevant tests が通る
+- [x] album が SNS feed / ranking / public gallery に見えない
+- [x] memory detail で写真と物語が主役になっている
+- [x] favorite / delete / edit placeholder が信頼を壊さない位置にある
+- [x] load more と favorite optimistic update が壊れていない
+- [x] photo alt と delete copy の既存 trust contract を維持している
+- [x] body text 7:1 目標、helper / small text 4.5:1、44px tap target、visible focus を維持する
+- [x] 実装差分が広がりすぎる場合は、album と detail を別 PR に分割している
+- [x] `git diff --check` と relevant tests が通る
+
+## 実装メモ
+
+- `/album` は `paper-surface` / `photo-mat` の保存棚として再構成し、本文 excerpt は 1 行に抑える。
+- memory detail は先頭写真を hero、追加写真を本文後の小さな strip にし、写真と本文のバランスを維持する。
+- detail actions は `しるし / けす` に絞り、edit placeholder は小さな準備中 note にする。
+- favorite は ranking / like ではなく `しるし` として扱い、optimistic update / rollback を維持する。
+- QA 契約とテストで、signed URL / storage_key 実値 / prompt / AI 生成本文の証跡混入を防ぐ。
+
+## 検証結果
+
+- `pnpm test -- tests/unit/app/album-memory-keepsake.test.ts tests/unit/app/album-pagination.test.ts tests/unit/app/photo-alt-privacy-policy.test.ts tests/unit/app/delete-restore-trust-contract.test.ts tests/unit/app/accessibility-baseline.test.ts` pass
+- `pnpm pr:gate` pass
+- `git diff --check` pass
+- 専門サブエージェント 3 名 review: round 1 HOLD、round 2 GO
 
 ## レビュー方針
 

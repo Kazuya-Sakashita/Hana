@@ -2,12 +2,11 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart } from 'lucide-react'
+import { BookOpen, Camera, Heart } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   memoriesQueryKey,
   useInfiniteMemoriesQuery,
@@ -55,8 +54,8 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <ul className="flex flex-col gap-3">
+    <div className="flex flex-col gap-6">
+      <ul className="flex flex-col gap-4">
         {items.map((memory) => (
           <AlbumListItem key={memory.id} memory={memory} />
         ))}
@@ -103,8 +102,8 @@ function AlbumListItem({ memory }: { memory: Memory }) {
 
   return (
     <li>
-      <Card>
-        <CardContent className="flex items-center gap-3 p-4">
+      <div className="paper-surface rounded-[20px] p-3">
+        <div className="flex items-start gap-3">
           {isOptimistic ? (
             <div className="flex min-w-0 flex-1 gap-4 opacity-80">
               <Thumbnail url={memory.cover_thumbnail_url ?? null} />
@@ -113,7 +112,7 @@ function AlbumListItem({ memory }: { memory: Memory }) {
           ) : (
             <Link
               href={`/memory/${memory.id}`}
-              className="ease-organic flex min-w-0 flex-1 gap-4 transition-transform active:scale-[0.98]"
+              className="ease-organic flex min-w-0 flex-1 gap-4 rounded-[16px] transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
             >
               <Thumbnail url={memory.cover_thumbnail_url ?? null} />
               <MemoryText memory={memory} recordedAt={recordedAt} />
@@ -121,22 +120,22 @@ function AlbumListItem({ memory }: { memory: Memory }) {
           )}
 
           <AlbumFavoriteButton memory={memory} disabled={isOptimistic} />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </li>
   )
 }
 
 function MemoryText({ memory, recordedAt }: { memory: Memory; recordedAt: string }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+    <div className="flex min-w-0 flex-1 flex-col gap-1.5 break-words [overflow-wrap:anywhere]">
       <div className="meta-label">
         {recordedAt}
         {memory.weather ? ` ・ ${memory.weather}` : ''}
       </div>
-      <h2 className="font-serif text-base leading-tight">{memory.title}</h2>
+      <h2 className="line-clamp-2 font-serif text-base leading-tight">{memory.title}</h2>
       {memory.body ? (
-        <p className="text-ink-secondary leading-narrative line-clamp-2 text-sm">{memory.body}</p>
+        <p className="text-ink-secondary line-clamp-1 text-sm leading-6">{memory.body}</p>
       ) : null}
     </div>
   )
@@ -183,8 +182,8 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
       onClick={toggleFavorite}
       disabled={disabled || updateMemoryMutation.isPending}
       aria-pressed={memory.is_favorite}
-      aria-label={memory.is_favorite ? 'おきにいりを はずす' : 'おきにいりに する'}
-      className="text-ink-tertiary hover:text-sakura disabled:text-ink-tertiary flex size-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50"
+      aria-label={memory.is_favorite ? 'しるしを はずす' : 'しるしを つける'}
+      className="text-ink-tertiary hover:text-sakura disabled:text-ink-tertiary tap-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50"
     >
       <Heart
         className="size-5"
@@ -197,43 +196,53 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
 
 function EmptyState() {
   return (
-    <Card>
-      <CardHeader className="items-center text-center">
-        <CardTitle className="font-serif text-xl">{quietStateCopy.album.emptyTitle}</CardTitle>
-        <CardDescription className="mt-2">{quietStateCopy.album.emptyDescription}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button asChild size="lg" className="w-full">
-          <Link href="/record" prefetch={false}>
-            のこす
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
+    <section className="photo-mat rounded-[var(--radius)] px-5 py-8 text-center">
+      <div
+        className="bg-paper-slip border-hairline mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border"
+        aria-hidden="true"
+      >
+        <BookOpen className="text-sakura-deep size-6" />
+      </div>
+      <p className="meta-label mt-5">はじめのページ</p>
+      <h2 className="mt-3 font-serif text-xl leading-snug">
+        最初のページを、
+        <br />
+        ここにしまえます
+      </h2>
+      <p className="text-ink-secondary mx-auto mt-3 max-w-[18rem] text-sm leading-7">
+        {quietStateCopy.album.emptyDescription}
+      </p>
+      <Button asChild size="lg" className="mt-6 w-full">
+        <Link href="/record" prefetch={false}>
+          <Camera className="size-4" aria-hidden="true" />
+          写真から のこす
+        </Link>
+      </Button>
+    </section>
   )
 }
 
 function Thumbnail({ url }: { url: string | null }) {
-  const baseClass = 'aspect-[4/5] w-20 shrink-0 rounded-2xl border border-hairline'
-
   if (typeof url === 'string') {
     return (
-      <Image
-        src={url}
-        alt=""
-        width={80}
-        height={100}
-        className={`${baseClass} object-cover`}
-        sizes="80px"
-      />
+      <div className="photo-mat aspect-[4/5] w-24 shrink-0 rounded-[16px] p-1">
+        <Image
+          src={url}
+          alt=""
+          width={96}
+          height={120}
+          className="aspect-[4/5] w-full rounded-[12px] object-cover"
+          sizes="96px"
+        />
+      </div>
     )
   }
   return (
     <div
-      className={`${baseClass} bg-warm text-sakura-deep flex items-center justify-center text-3xl`}
+      className="photo-mat text-sakura-deep flex aspect-[4/5] w-24 shrink-0 items-center justify-center rounded-[16px]"
       aria-hidden="true"
     >
-      ❀
+      <BookOpen className="size-7" />
     </div>
   )
 }
