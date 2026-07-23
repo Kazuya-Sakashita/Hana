@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   memoriesQueryKey,
-  useMemoriesQuery,
+  useInfiniteMemoriesQuery,
   useUpdateMemoryMutation,
   type Memory,
   type MemoryListResponse,
@@ -21,19 +21,39 @@ import { useToast } from '@/components/ui/toast'
 const ALBUM_LIMIT = 50
 
 export function AlbumList({ initialData }: { initialData: MemoryListResponse }) {
-  const query = useMemoriesQuery({ limit: ALBUM_LIMIT, initialData })
-  const items = query.data?.data ?? []
+  const query = useInfiniteMemoriesQuery({ limit: ALBUM_LIMIT, initialData })
+  const items = query.data?.pages.flatMap((page) => page.data) ?? []
 
   if (items.length === 0) {
     return <EmptyState />
   }
 
   return (
-    <ul className="flex flex-col gap-3">
-      {items.map((memory) => (
-        <AlbumListItem key={memory.id} memory={memory} />
-      ))}
-    </ul>
+    <div className="flex flex-col gap-5">
+      <ul className="flex flex-col gap-3">
+        {items.map((memory) => (
+          <AlbumListItem key={memory.id} memory={memory} />
+        ))}
+      </ul>
+
+      {query.isError ? (
+        <p role="alert" className="text-amber text-center text-sm">
+          つづきのページを よみこめませんでした。もういちど ためしてください。
+        </p>
+      ) : null}
+
+      {query.hasNextPage ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void query.fetchNextPage()}
+          disabled={query.isFetchingNextPage}
+          className="w-full"
+        >
+          {query.isFetchingNextPage ? 'よみこんでいます…' : 'まえのページも みる'}
+        </Button>
+      ) : null}
+    </div>
   )
 }
 
