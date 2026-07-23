@@ -16,13 +16,13 @@
 
   --ink-primary: #2a2522; /* near-black, warm-shifted */
   --ink-secondary: #6b5f57; /* muted brown-grey */
-  --ink-tertiary: #a89c92; /* timestamps, helpers */
+  --ink-tertiary: #74675c; /* timestamps, helpers — AA on warm surfaces */
 
   --accent-sakura: #e8b4b8; /* the ONE accent */
   --accent-deep: #8c5a5e; /* hover/pressed */
   --hairline: #ede4d8; /* dividers */
-  --success-leaf: #7a8b6f; /* soft sage */
-  --warning-amber: #c89766; /* warm amber, never red */
+  --success-leaf: #5f6c57; /* soft sage — AA on warm surfaces */
+  --warning-amber: #8b5e32; /* warm amber, never red — AA on warm surfaces */
 
   --shadow-soft: 0 1px 2px rgba(58, 38, 30, 0.04), 0 4px 16px rgba(58, 38, 30, 0.04);
   --shadow-lift: 0 2px 4px rgba(58, 38, 30, 0.05), 0 12px 32px rgba(58, 38, 30, 0.06);

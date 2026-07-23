@@ -45,8 +45,8 @@
 | ------------- | ----- | ----------------------------- |
 | `todo`        | 0     | ready queue は空              |
 | `in_progress` | 0     | 並行実行枠は空き              |
-| `review`      | 1     | `ISSUE-045` の PR review 待ち |
-| `done`        | 45    | archive を参照                |
+| `review`      | 1     | `ISSUE-046` の PR review 待ち |
+| `done`        | 46    | archive を参照                |
 | `blocked`     | 1     | 認証済み実データ QA           |
 
 ---
@@ -111,9 +111,9 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | reason to review / close                    |
-| ----------- | ------------------------------------------- |
-| `ISSUE-045` | 現行デザイン棚卸しと再構築ロードマップの PR |
+| issue       | reason to review / close                          |
+| ----------- | ------------------------------------------------- |
+| `ISSUE-046` | accessibility token と viewport remediation の PR |
 
 ---
 
@@ -124,7 +124,7 @@ Codex-ready と判断する条件:
 - perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-020`, `ISSUE-021`, `ISSUE-022`, `ISSUE-023`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-029`, `ISSUE-031`, `ISSUE-040`
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
-- design process completed: `ISSUE-043`, `ISSUE-044`
+- design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`
 - maintenance completed: `ISSUE-039`, `ISSUE-042`
 
 ---

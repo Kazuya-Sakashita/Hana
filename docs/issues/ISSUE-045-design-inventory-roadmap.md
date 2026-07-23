@@ -2,7 +2,7 @@
 id: ISSUE-045
 title: Hana アプリ現行デザインを棚卸しして再構築ロードマップを作る
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN
@@ -108,6 +108,11 @@ requires_human_review:
 
 - `git diff --check`
 - `pnpm pr:gate`
+
+## 完了メモ
+
+- PR #96 で merge 済み
+- ISSUE-046 以降の P0 follow-up の入力として `docs/design/design-inventory-roadmap.md` を残した
 
 ## セキュリティ・プライバシー考慮
 
