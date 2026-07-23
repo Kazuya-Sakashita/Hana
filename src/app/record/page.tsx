@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AccessibleDialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useChildrenQuery } from '@/features/children/client/use-children'
@@ -628,6 +629,7 @@ export default function RecordPage() {
         <AiConsentDialog
           childName={childName}
           aiConsentAt={aiConsentAt}
+          pending={setAiConsentMutation.isPending}
           onAccept={acceptAiConsent}
           onDecline={declineAiConsent}
         />
@@ -646,11 +648,13 @@ export default function RecordPage() {
 function AiConsentDialog({
   childName,
   aiConsentAt,
+  pending,
   onAccept,
   onDecline,
 }: {
   childName: string
   aiConsentAt: string | null
+  pending: boolean
   onAccept: () => void
   onDecline: () => void
 }) {
@@ -660,25 +664,37 @@ function AiConsentDialog({
   // 同意ダイアログは「外側クリックで閉じる」を意図的に **無効**。
   // 明示的に「どういして、つくる」または「AI を つかわない」を押させる (consent UX の鉄則)。
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center"
+    <AccessibleDialog
+      titleId="ai-consent-title"
+      descriptionId="ai-consent-description"
+      pending={pending}
+      initialFocusId="ai-consent-decline"
+      onClose={onDecline}
     >
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
-          <CardTitle className="font-serif text-xl">あなたの しゃしんを、ことばに します</CardTitle>
-          <CardDescription className="leading-narrative mt-2">
+          <CardTitle id="ai-consent-title" className="font-serif text-xl">
+            あなたの しゃしんを、ことばに します
+          </CardTitle>
+          <CardDescription id="ai-consent-description" className="leading-narrative mt-2">
             Hana は、{childName} ちゃんの しゃしんを そとの AI に いちじてきに おくり、 ぶんしょうの
             ていあんを もらいます。 なまえと月齢は おくりますが、たんじょうびと じゅうしょは
             おくりません。 学習にも つかわれません。
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button type="button" size="lg" onClick={onAccept} className="w-full">
-            どういして、つくる
+          <Button type="button" size="lg" onClick={onAccept} disabled={pending} className="w-full">
+            {pending ? 'どういを ほぞんしています…' : 'どういして、つくる'}
           </Button>
-          <Button type="button" variant="ghost" size="lg" onClick={onDecline} className="w-full">
+          <Button
+            id="ai-consent-decline"
+            type="button"
+            variant="ghost"
+            size="lg"
+            onClick={onDecline}
+            disabled={pending}
+            className="w-full"
+          >
             AI を つかわない
           </Button>
           <p className="text-ink-tertiary text-center text-xs">
@@ -686,7 +702,7 @@ function AiConsentDialog({
           </p>
         </CardContent>
       </Card>
-    </div>
+    </AccessibleDialog>
   )
 }
 
@@ -700,23 +716,29 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose: () => void }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="cancel-confirm-title"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center"
+    <AccessibleDialog
+      titleId="cancel-confirm-title"
+      descriptionId="cancel-confirm-description"
+      initialFocusId="cancel-confirm-keep"
+      onClose={onKeep}
     >
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
           <CardTitle id="cancel-confirm-title" className="font-serif text-xl">
             ほぞんせずに とじますか？
           </CardTitle>
-          <CardDescription className="leading-narrative mt-2">
+          <CardDescription id="cancel-confirm-description" className="leading-narrative mt-2">
             なおした ぶんは うしなわれます。
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button type="button" size="lg" onClick={onKeep} className="w-full">
+          <Button
+            id="cancel-confirm-keep"
+            type="button"
+            size="lg"
+            onClick={onKeep}
+            className="w-full"
+          >
             もうすこし なおす
           </Button>
           <Button
@@ -730,6 +752,6 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
           </Button>
         </CardContent>
       </Card>
-    </div>
+    </AccessibleDialog>
   )
 }
