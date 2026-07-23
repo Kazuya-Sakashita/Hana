@@ -2,7 +2,7 @@
 id: ISSUE-056
 title: ホームの Quiet Heirloom 刷新
 priority: P1
-status: todo
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
@@ -47,13 +47,28 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 記録 CTA が明確で、かつ未記録日への圧になっていない
-- [ ] recent memories が SNS feed / ranking / streak に見えない
-- [ ] empty state が初回記録へ自然につながる
-- [ ] stats は「連続記録」ではなく「一緒に過ごした日数」などの非圧力表現で扱う
-- [ ] body text 7:1 目標、helper / small text 4.5:1、44px tap target、visible focus を維持する
-- [ ] synthetic screenshot QA が残っている
-- [ ] `git diff --check` と relevant tests が通る
+- [x] 記録 CTA が明確で、かつ未記録日への圧になっていない
+- [x] recent memories が SNS feed / ranking / streak に見えない
+- [x] empty state が初回記録へ自然につながる
+- [x] stats は「連続記録」ではなく「一緒に過ごした日数」などの非圧力表現で扱う
+- [x] body text 7:1 目標、helper / small text 4.5:1、44px tap target、visible focus を維持する
+- [x] synthetic screenshot QA が残っている
+- [x] `git diff --check` と relevant tests が通る
+
+## 実装メモ
+
+- `/` hero は「写真1まいから、AIの下書きまで30秒」を低負担価値として伝え、未記録日や streak を出さない。
+- 0 memories では album 導線を隠し、初回ページ作成へ自然につなぐ。
+- recent memories は `paper-surface` / `photo-mat` の album slip として扱い、feed / ranking / like 表現を置かない。
+- stats は「しまったページ」「いまの月齢」「一緒に過ごした日数」に整理する。
+- synthetic screenshot QA は `docs/design/artifacts/issue-056-home/` に PNG 証跡を残す。
+
+## 検証結果
+
+- `node scripts/qa/issue-056-home-synthetic-screenshots.cjs` pass
+- `pnpm test -- tests/unit/app/home-quiet-heirloom.test.ts tests/unit/app/photo-alt-privacy-policy.test.ts tests/unit/app/accessibility-baseline.test.ts tests/unit/app/quiet-heirloom-common-ui.test.ts` pass
+- `pnpm pr:gate` pass
+- 専門サブエージェント 3 名 review: round 1 HOLD、round 2 GO
 
 ## レビュー方針
 
