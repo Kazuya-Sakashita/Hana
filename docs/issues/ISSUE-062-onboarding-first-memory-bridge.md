@@ -2,7 +2,7 @@
 id: ISSUE-062
 title: Onboarding to First Memory Bridge
 priority: P1
-status: todo
+status: review
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2
@@ -26,6 +26,7 @@ requires_human_review:
 - birthdate などの sensitive data を screenshot evidence に残さない運用を明記する
 - loading / success / error の live region と focus を確認する
 - 登録成功 state で支援技術利用者にも状態変化が伝わるよう、focus 移動または常設 live region を検討する
+- onboarding の状態別 QA 方針を `docs/design` に残す
 
 ## やらないこと (Out of Scope)
 
@@ -35,11 +36,12 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 登録完了から最初の記録へ迷わず進める
-- [ ] 失敗時に入力を失わず、親を責めない copy を維持する
-- [ ] 主要 CTA が mobile で押しやすい位置にある
-- [ ] 登録成功後の状態変化が screen reader / keyboard 利用者にも伝わる
-- [ ] Evidence に PII / image URL / `storage_key` / prompt / AI 生成本文がない
+- [x] 登録完了から最初の記録へ迷わず進める
+- [x] 失敗時に入力を失わず、親を責めない copy を維持する
+- [x] 主要 CTA が mobile で押しやすい位置にある
+- [x] 登録成功後の状態変化が screen reader / keyboard 利用者にも伝わる
+- [x] onboarding の状態別 QA 方針が docs/design に残っている
+- [x] Evidence に PII / image URL / `storage_key` / prompt / AI 生成本文がない
 
 ## 参考
 

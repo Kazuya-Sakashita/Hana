@@ -43,9 +43,9 @@
 
 | status        | count | notes                 |
 | ------------- | ----- | --------------------- |
-| `todo`        | 3     | product experience v2 |
+| `todo`        | 2     | product experience v2 |
 | `in_progress` | 0     | 並行実行枠は空き      |
-| `review`      | 0     | review queue は空     |
+| `review`      | 1     | review queue を参照   |
 | `done`        | 62    | archive を参照        |
 | `blocked`     | 1     | 認証済み実データ QA   |
 
@@ -91,7 +91,6 @@ Codex-ready と判断する条件:
 
 | issue       | title                                  | note         |
 | ----------- | -------------------------------------- | ------------ |
-| `ISSUE-062` | Onboarding to First Memory Bridge      | 次に着手可能 |
 | `ISSUE-063` | Record Saved Moment and Memory Landing | 次に着手可能 |
 | `ISSUE-064` | Product Design QA v2                   | 次に着手可能 |
 
@@ -112,13 +111,13 @@ Codex-ready と判断する条件:
 
 ## Planned Product Experience V2 Sequence
 
-| order | issue       | title                                  | note |
-| ----- | ----------- | -------------------------------------- | ---- |
-| 1     | `ISSUE-060` | 約束整合と共通シェル基盤               | done |
-| 2     | `ISSUE-061` | Settings Trust Center v1               | done |
-| 3     | `ISSUE-062` | Onboarding to First Memory Bridge      | todo |
-| 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | todo |
-| 5     | `ISSUE-064` | Product Design QA v2                   | todo |
+| order | issue       | title                                  | note   |
+| ----- | ----------- | -------------------------------------- | ------ |
+| 1     | `ISSUE-060` | 約束整合と共通シェル基盤               | done   |
+| 2     | `ISSUE-061` | Settings Trust Center v1               | done   |
+| 3     | `ISSUE-062` | Onboarding to First Memory Bridge      | review |
+| 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | todo   |
+| 5     | `ISSUE-064` | Product Design QA v2                   | todo   |
 
 ---
 
@@ -140,7 +139,9 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-現在はありません。
+| issue       | title                             | note                        |
+| ----------- | --------------------------------- | --------------------------- |
+| `ISSUE-062` | Onboarding to First Memory Bridge | PR review / CI / merge 待ち |
 
 ---
 
