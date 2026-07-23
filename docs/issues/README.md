@@ -45,8 +45,8 @@
 | ------------- | ----- | ----------------------------- |
 | `todo`        | 6     | planned design rebuild issues |
 | `in_progress` | 0     | 並行実行枠は空き              |
-| `review`      | 1     | `ISSUE-053`                   |
-| `done`        | 53    | archive を参照                |
+| `review`      | 0     | review queue は空             |
+| `done`        | 54    | archive を参照                |
 | `blocked`     | 1     | 認証済み実データ QA           |
 
 ---
@@ -89,7 +89,9 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-現在はありません。`ISSUE-053` の review / merge 後に `ISSUE-054` が次の候補になる。
+| issue       | title                          | note                         |
+| ----------- | ------------------------------ | ---------------------------- |
+| `ISSUE-054` | デザイントークンと共通 UI 刷新 | `ISSUE-053` 完了後に着手可能 |
 
 ## Planned Design Rebuild Sequence
 
@@ -122,9 +124,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                       | note                                 |
-| ----------- | --------------------------- | ------------------------------------ |
-| `ISSUE-053` | Quiet Heirloom デザイン正本 | 3 名の専門サブエージェント review Go |
+現在はありません。
 
 ---
 
@@ -135,7 +135,7 @@ Codex-ready と判断する条件:
 - perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-020`, `ISSUE-021`, `ISSUE-022`, `ISSUE-023`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-029`, `ISSUE-031`, `ISSUE-040`
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
-- design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`
+- design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
 - maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`
 - design rebuild todo: `ISSUE-054`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-058`, `ISSUE-059`
 
