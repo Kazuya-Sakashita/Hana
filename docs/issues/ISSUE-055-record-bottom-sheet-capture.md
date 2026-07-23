@@ -2,7 +2,7 @@
 id: ISSUE-055
 title: 記録画面の下部シート型 30 秒フロー刷新
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
