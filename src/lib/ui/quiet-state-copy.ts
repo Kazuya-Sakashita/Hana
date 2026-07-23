@@ -11,6 +11,7 @@ export const quietStateCopy = {
   },
   onboarding: {
     pending: 'ページを 用意しています…',
+    validationFailed: 'まだ 直せるところがあります。入力はそのままなので、たしかめてください。',
     saveFailed:
       'うまく ほぞんできませんでした。入力はそのままなので、もういちど ためしてください。',
     networkFailed:
