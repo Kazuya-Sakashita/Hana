@@ -135,7 +135,7 @@ export default function SettingsPage() {
                 />
                 <DataRow
                   label="データの扱い"
-                  value="Anthropic の商用API条件と Hana のプライバシー方針に沿って、公開前に明記します"
+                  value="Anthropic API の入出力は通常30日以内に削除されますが、安全確認など一部例外があります"
                 />
               </CardContent>
             </Card>
