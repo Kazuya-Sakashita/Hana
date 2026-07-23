@@ -2,7 +2,7 @@
 id: ISSUE-061
 title: Settings Trust Center v1
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2
