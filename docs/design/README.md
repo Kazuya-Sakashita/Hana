@@ -17,6 +17,11 @@ docs/design/
 │                            現行デザイン棚卸しと再構築ロードマップ（ISSUE-045）
 ├── design-review-playbook.md
 │                            Design Review の入口条件・完了条件・証跡運用
+├── quiet-heirloom-design-canon.md
+│                            大幅デザイン見直しで採用する Quiet Heirloom 正本
+├── quiet-copy-motion-ledger.md
+│                            大幅刷新時の copy / motion 証跡テンプレート
+├── concepts/                方向性確認用の mood evidence 画像
 ├── subagent-prompt-templates.md
 │                            Codex サブエージェント依頼テンプレート
 ├── v0-prompt.md             V0 AI に投げたプロンプト集（章 1〜9）— git 管理
@@ -171,10 +176,15 @@ rm -rf docs/design/v0-output
 
 ## デザインの「正本」はどれか
 
-| 役割                  | ファイル               | git 管理           |
-| --------------------- | ---------------------- | ------------------ |
-| **設計憲章 (正本)**   | `v0-prompt.md` 章 1〜4 | ✅                 |
-| **画面別仕様 (正本)** | `v0-prompt.md` 章 5    | ✅                 |
-| **設計の一実現例**    | `v0-output/`           | ❌（ローカルのみ） |
+| 役割                | ファイル                         | git 管理           |
+| ------------------- | -------------------------------- | ------------------ |
+| **既存設計憲章**    | `v0-prompt.md` 章 1〜4           | ✅                 |
+| **刷新方針 (正本)** | `quiet-heirloom-design-canon.md` | ✅                 |
+| **既存画面別仕様**  | `v0-prompt.md` 章 5              | ✅                 |
+| **設計の一実現例**  | `v0-output/`                     | ❌（ローカルのみ） |
 
 V0 出力と本体実装が食い違ったときは、**プロンプト側を正** とする。
+今回の大幅刷新に関する判断では、`quiet-heirloom-design-canon.md` を優先して参照する。
+ただし、AI 同意、送信データ、retention、削除・復元、写真 alt など trust / privacy に関する判断は、
+`ai-consent-privacy-evidence.md`、`delete-restore-trust-contract.md`、`photo-alt-privacy-policy.md`、
+ADR、人間 review gate を最優先する。
