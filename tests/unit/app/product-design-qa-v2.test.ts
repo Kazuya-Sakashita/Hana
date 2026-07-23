@@ -152,8 +152,8 @@ describe('ISSUE-064 Product Design QA v2', () => {
     expect(qaReadme).toContain('product-design-qa-v2.md')
   })
 
-  it('moves ISSUE-064 to review only after the QA v2 acceptance criteria are covered', () => {
-    expect(issueSource).toContain('status: review')
+  it('keeps ISSUE-064 at review or done only after the QA v2 acceptance criteria are covered', () => {
+    expect(issueSource).toMatch(/status: (review|done)/)
     expect(issueSource).toContain('- [x] 実 DOM の design / a11y smoke が定義されている')
     expect(issueSource).toContain(
       '- [x] interactive target の対象に `summary`, `[role="button"]`, focusable element が含まれる',

@@ -2,7 +2,7 @@
 id: ISSUE-064
 title: Product Design QA v2
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2
