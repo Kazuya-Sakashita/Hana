@@ -2,7 +2,7 @@
 id: ISSUE-047
 title: Dialog accessibility foundation
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: DESIGN
@@ -26,7 +26,7 @@ focus trap、Escape、background scroll lock、accessible naming が共通基盤
 - 既存の AI consent / cancel confirm / delete confirm dialog を shared foundation に載せる
 - `role="dialog"` / `aria-modal="true"` / `aria-labelledby` / `aria-describedby` を安定させる
 - Escape と Tab の keyboard contract、body scroll lock を自動テストで検証する
-- Issue index を `ISSUE-047 review` に同期する
+- Issue index を最新状態へ同期する
 
 ## やらないこと (Out of Scope)
 

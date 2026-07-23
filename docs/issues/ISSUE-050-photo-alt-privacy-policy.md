@@ -2,7 +2,7 @@
 id: ISSUE-050
 title: Memory photo alt privacy policy
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: DESIGN
@@ -27,7 +27,7 @@ requires_human_review:
 - home / album の linked thumbnails は visible title と重複するため decorative alt にする
 - memory detail hero photo は generic alt にする
 - current active UI を静的テストで守る
-- Issue index を `ISSUE-050 review` に同期する
+- Issue index を最新状態へ同期する
 
 ## やらないこと (Out of Scope)
 

@@ -2,7 +2,7 @@
 id: ISSUE-048
 title: AI consent privacy evidence alignment
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: DESIGN
