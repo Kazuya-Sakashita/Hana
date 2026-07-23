@@ -19,6 +19,7 @@ describe('photo alt privacy policy', () => {
   it('keeps linked thumbnails decorative when visible titles already label the item', () => {
     expect(homeSource).toContain('alt=""')
     expect(homeSource).not.toContain('alt={m.title}')
+    expect(homeSource).toContain('aria-hidden="true"')
     expect(albumListSource).toContain('alt=""')
     expect(albumListSource).not.toContain('alt={memory.title}')
     expect(albumListSource).not.toContain('alt: string')
