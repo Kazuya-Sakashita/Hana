@@ -2,7 +2,7 @@
 id: ISSUE-053
 title: Quiet Heirloom デザイン正本
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
