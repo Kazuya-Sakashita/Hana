@@ -668,6 +668,7 @@ function AiConsentDialog({
       titleId="ai-consent-title"
       descriptionId="ai-consent-description"
       pending={pending}
+      initialFocusId="ai-consent-decline"
       onClose={onDecline}
     >
       <Card className="w-full max-w-md">
@@ -686,6 +687,7 @@ function AiConsentDialog({
             {pending ? 'どういを ほぞんしています…' : 'どういして、つくる'}
           </Button>
           <Button
+            id="ai-consent-decline"
             type="button"
             variant="ghost"
             size="lg"
@@ -717,6 +719,7 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
     <AccessibleDialog
       titleId="cancel-confirm-title"
       descriptionId="cancel-confirm-description"
+      initialFocusId="cancel-confirm-keep"
       onClose={onKeep}
     >
       <Card className="w-full max-w-md">
@@ -729,7 +732,13 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button type="button" size="lg" onClick={onKeep} className="w-full">
+          <Button
+            id="cancel-confirm-keep"
+            type="button"
+            size="lg"
+            onClick={onKeep}
+            className="w-full"
+          >
             もうすこし なおす
           </Button>
           <Button
