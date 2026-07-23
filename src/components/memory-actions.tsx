@@ -2,7 +2,7 @@
 
 import { useState, type ReactElement } from 'react'
 import { useRouter } from 'next/navigation'
-import { Heart, Pencil, Trash2 } from 'lucide-react'
+import { Heart, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,8 +20,7 @@ import {
 import { useToast } from '@/components/ui/toast'
 import { deleteMemoryDescription, quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
-// ISSUE-027: memory 詳細ページの interactive 部分のみ Client Component に切り出す。
-// (favorite トグル / 削除確認ダイアログ / 削除完了オーバーレイ)
+// ISSUE-057: Detail actions are a quiet operation band below the story.
 
 interface Props {
   memoryId: string
@@ -98,30 +97,27 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
 
   return (
     <>
-      <div className="mt-12 flex items-center justify-around">
-        <ActionGlyph
-          label="おきにいり"
-          filled={isFavorite}
-          disabled={updateMemoryMutation.isPending}
-          onClick={toggleFavorite}
-          icon={<Heart className="size-5" fill={isFavorite ? 'currentColor' : 'none'} />}
-        />
-        <ActionGlyph
-          label="ことばを なおす"
-          icon={<Pencil className="size-5" />}
-          disabled
-          onClick={() => undefined}
-        />
-        <ActionGlyph
-          label="けす"
-          icon={<Trash2 className="size-5" />}
-          onClick={() => setDeleteDialog({ open: true, pending: false })}
-        />
-      </div>
+      <section aria-label="ページのしるしと操作" className="border-hairline mt-10 border-t pt-6">
+        <div className="grid grid-cols-2 gap-2">
+          <ActionGlyph
+            label="しるし"
+            filled={isFavorite}
+            pressed={isFavorite}
+            disabled={updateMemoryMutation.isPending}
+            onClick={toggleFavorite}
+            icon={<Heart className="size-5" fill={isFavorite ? 'currentColor' : 'none'} />}
+          />
+          <ActionGlyph
+            label="けす"
+            icon={<Trash2 className="size-5" />}
+            onClick={() => setDeleteDialog({ open: true, pending: false })}
+          />
+        </div>
 
-      <p className="text-ink-tertiary mt-2 text-center text-xs">
-        「ことばを なおす」は ちかぢか たいおう します。
-      </p>
+        <p id="memory-edit-note" className="text-ink-tertiary mt-3 text-center text-xs">
+          ことばの編集は、準備中です。
+        </p>
+      </section>
 
       {deleteDialog.open ? (
         <DeleteConfirmDialog
@@ -139,12 +135,14 @@ function ActionGlyph({
   label,
   icon,
   filled,
+  pressed,
   disabled,
   onClick,
 }: {
   label: string
   icon: ReactElement<{ className?: string }>
   filled?: boolean
+  pressed?: boolean
   disabled?: boolean
   onClick: () => void
 }) {
@@ -152,11 +150,12 @@ function ActionGlyph({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={typeof pressed === 'boolean' ? pressed : undefined}
       disabled={disabled}
-      className="text-ink-secondary disabled:text-ink-tertiary flex flex-col items-center gap-1.5 px-3 py-2 disabled:cursor-not-allowed"
+      className="text-ink-secondary hover:bg-warm disabled:text-ink-tertiary tap-target ease-organic flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:hover:bg-transparent"
     >
       <span
-        className={`flex size-7 items-center justify-center ${filled ? 'text-sakura' : ''}`}
+        className={`flex size-8 items-center justify-center ${filled ? 'text-sakura' : ''}`}
         aria-hidden="true"
       >
         {icon}
