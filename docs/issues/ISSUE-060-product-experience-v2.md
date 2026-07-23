@@ -2,7 +2,7 @@
 id: ISSUE-060
 title: プロダクト体験 V2: 約束整合と共通シェル基盤
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-24
 parent: PRODUCT-EXPERIENCE-V2

@@ -89,12 +89,12 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-| issue       | title                                  | note                     |
-| ----------- | -------------------------------------- | ------------------------ |
-| `ISSUE-061` | Settings Trust Center v1               | `ISSUE-060` 完了後に着手 |
-| `ISSUE-062` | Onboarding to First Memory Bridge      | `ISSUE-060` 完了後に着手 |
-| `ISSUE-063` | Record Saved Moment and Memory Landing | `ISSUE-060` 完了後に着手 |
-| `ISSUE-064` | Product Design QA v2                   | `ISSUE-060` 完了後に着手 |
+| issue       | title                                  | note         |
+| ----------- | -------------------------------------- | ------------ |
+| `ISSUE-061` | Settings Trust Center v1               | 次に着手可能 |
+| `ISSUE-062` | Onboarding to First Memory Bridge      | 次に着手可能 |
+| `ISSUE-063` | Record Saved Moment and Memory Landing | 次に着手可能 |
+| `ISSUE-064` | Product Design QA v2                   | 次に着手可能 |
 
 ## In Progress
 
@@ -113,13 +113,13 @@ Codex-ready と判断する条件:
 
 ## Planned Product Experience V2 Sequence
 
-| order | issue       | title                                  | note   |
-| ----- | ----------- | -------------------------------------- | ------ |
-| 1     | `ISSUE-060` | 約束整合と共通シェル基盤               | review |
-| 2     | `ISSUE-061` | Settings Trust Center v1               | todo   |
-| 3     | `ISSUE-062` | Onboarding to First Memory Bridge      | todo   |
-| 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | todo   |
-| 5     | `ISSUE-064` | Product Design QA v2                   | todo   |
+| order | issue       | title                                  | note |
+| ----- | ----------- | -------------------------------------- | ---- |
+| 1     | `ISSUE-060` | 約束整合と共通シェル基盤               | done |
+| 2     | `ISSUE-061` | Settings Trust Center v1               | todo |
+| 3     | `ISSUE-062` | Onboarding to First Memory Bridge      | todo |
+| 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | todo |
+| 5     | `ISSUE-064` | Product Design QA v2                   | todo |
 
 ---
 
@@ -141,9 +141,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                                       | note      |
-| ----------- | ------------------------------------------- | --------- |
-| `ISSUE-060` | プロダクト体験 V2: 約束整合と共通シェル基盤 | PR 準備中 |
+現在はありません。
 
 ---
 
@@ -157,6 +155,7 @@ Codex-ready と判断する条件:
 - design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
 - maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
+- product experience completed: `ISSUE-060`
 
 ---
 
