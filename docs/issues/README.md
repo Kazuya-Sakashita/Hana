@@ -89,7 +89,12 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-現在はありません。
+| issue       | title                                  | note                     |
+| ----------- | -------------------------------------- | ------------------------ |
+| `ISSUE-061` | Settings Trust Center v1               | `ISSUE-060` 完了後に着手 |
+| `ISSUE-062` | Onboarding to First Memory Bridge      | `ISSUE-060` 完了後に着手 |
+| `ISSUE-063` | Record Saved Moment and Memory Landing | `ISSUE-060` 完了後に着手 |
+| `ISSUE-064` | Product Design QA v2                   | `ISSUE-060` 完了後に着手 |
 
 ## In Progress
 
@@ -105,6 +110,16 @@ Codex-ready と判断する条件:
 | 4     | `ISSUE-056` | ホームの Quiet Heirloom 刷新           | done |
 | 5     | `ISSUE-057` | アルバムと記録詳細の keepsake 刷新     | done |
 | 6     | `ISSUE-059` | デザインモバイル QA とレビューゲート   | done |
+
+## Planned Product Experience V2 Sequence
+
+| order | issue       | title                                  | note   |
+| ----- | ----------- | -------------------------------------- | ------ |
+| 1     | `ISSUE-060` | 約束整合と共通シェル基盤               | review |
+| 2     | `ISSUE-061` | Settings Trust Center v1               | todo   |
+| 3     | `ISSUE-062` | Onboarding to First Memory Bridge      | todo   |
+| 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | todo   |
+| 5     | `ISSUE-064` | Product Design QA v2                   | todo   |
 
 ---
 
@@ -126,7 +141,9 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-現在はありません。
+| issue       | title                                       | note      |
+| ----------- | ------------------------------------------- | --------- |
+| `ISSUE-060` | プロダクト体験 V2: 約束整合と共通シェル基盤 | PR 準備中 |
 
 ---
 

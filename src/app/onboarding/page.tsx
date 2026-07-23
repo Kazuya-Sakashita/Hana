@@ -4,9 +4,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { FocusedShell } from '@/components/product/app-shell'
+import { StatePanel } from '@/components/product/surfaces'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { useChildrenQuery, useCreateChildMutation } from '@/features/children/client/use-children'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
@@ -17,7 +18,6 @@ type PhaseOverride = 'idle' | 'already' | 'success'
 
 interface RegisteredChild {
   name: string
-  birthdate: string
 }
 
 function extractFieldErrors(problem: ProblemDetails): FieldErrors {
@@ -46,9 +46,7 @@ export default function OnboardingPage() {
   const pending = createChildMutation.isPending
   const canSubmit = name.trim().length > 0 && birthdate.length > 0 && !pending
   const fetchedChild = childrenQuery.data?.data[0] ?? null
-  const displayedChild =
-    existingChild ??
-    (fetchedChild ? { name: fetchedChild.name, birthdate: fetchedChild.birthdate } : null)
+  const displayedChild = existingChild ?? (fetchedChild ? { name: fetchedChild.name } : null)
   const isUnauthorized =
     isApiProblemError(childrenQuery.error) && childrenQuery.error.reason === 'unauthorized'
   const phase: Phase =
@@ -76,10 +74,8 @@ export default function OnboardingPage() {
     const trimmedName = name.trim()
     try {
       await createChildMutation.mutateAsync({ name: trimmedName, birthdate, avatar_url: null })
-      // 短い成功画面 → ホームへ
-      setExistingChild({ name: trimmedName, birthdate })
+      setExistingChild({ name: trimmedName })
       setPhaseOverride('success')
-      setTimeout(() => router.push('/'), 1500)
     } catch (e) {
       if (isApiProblemError(e)) {
         switch (e.reason) {
@@ -88,7 +84,7 @@ export default function OnboardingPage() {
             break
           case 'child_limit_reached':
             // 別タブで登録した等の race。最新状態で再描画
-            setExistingChild({ name: trimmedName, birthdate })
+            setExistingChild({ name: trimmedName })
             setPhaseOverride('already')
             return
           case 'unauthorized':
@@ -103,156 +99,161 @@ export default function OnboardingPage() {
     }
   }
 
-  // === 表示分岐 ===
-
   if (phase === 'loading') {
     return (
-      <Shell>
-        <Card className="w-full max-w-md">
-          <CardContent className="flex items-center justify-center py-16">
-            <span className="text-ink-tertiary text-sm">{quietStateCopy.common.loading}</span>
-          </CardContent>
-        </Card>
-      </Shell>
+      <FocusedShell>
+        <StatePanel>
+          <span role="status" className="text-ink-tertiary text-sm">
+            {quietStateCopy.common.loading}
+          </span>
+        </StatePanel>
+      </FocusedShell>
     )
   }
 
   if (phase === 'error') {
     return (
-      <Shell>
-        <Card className="w-full max-w-md">
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">
-              {quietStateCopy.common.openFailedTitle}
-            </CardTitle>
-            <CardDescription className="mt-2">
-              {quietStateCopy.common.openFailedDescription}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => location.reload()} className="w-full">
-              {quietStateCopy.common.retryOpen}
-            </Button>
-          </CardContent>
-        </Card>
-      </Shell>
+      <FocusedShell>
+        <StatePanel>
+          <h1 className="font-serif text-xl">{quietStateCopy.common.openFailedTitle}</h1>
+          <p className="text-ink-secondary mt-3 text-sm leading-narrative">
+            {quietStateCopy.common.openFailedDescription}
+          </p>
+          <Button onClick={() => location.reload()} className="mt-6 w-full">
+            {quietStateCopy.common.retryOpen}
+          </Button>
+        </StatePanel>
+      </FocusedShell>
     )
   }
 
   if (phase === 'already' && displayedChild) {
     return (
-      <Shell>
-        <Card className="w-full max-w-md">
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-2xl">
-              {displayedChild.name} ちゃんの ページは すでに あります
-            </CardTitle>
-            <CardDescription className="mt-2">
-              うまれたひ: {displayedChild.birthdate}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+      <FocusedShell>
+        <StatePanel>
+          <p className="meta-label">登録済み</p>
+          <h1 className="mt-2 font-serif text-2xl leading-snug">
+            {displayedChild.name} ちゃんのページは
+            <br />
+            すでにあります
+          </h1>
+          <p className="text-ink-secondary mt-3 text-sm leading-narrative">
+            ここから、写真を 1 まい選んで記録を残せます。
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
             <Button asChild size="lg" className="w-full">
+              <Link href="/record" prefetch={false}>
+                写真からページをつくる
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="lg" className="w-full">
               <Link href="/">ホームへ</Link>
             </Button>
-            <p className="text-ink-tertiary text-center text-xs">
-              プロフィールは あとから せってい で かえられます。
-            </p>
-          </CardContent>
-        </Card>
-      </Shell>
+          </div>
+        </StatePanel>
+      </FocusedShell>
     )
   }
 
   if (phase === 'success' && displayedChild) {
     return (
-      <Shell>
-        <Card className="w-full max-w-md">
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-2xl">
-              {displayedChild.name} ちゃん、はじめまして
-            </CardTitle>
-            <CardDescription className="mt-2">これが、ふたりの 1ページ目です。</CardDescription>
-          </CardHeader>
-        </Card>
-      </Shell>
+      <FocusedShell>
+        <StatePanel aria-live="polite">
+          <p className="meta-label">はじめまして</p>
+          <h1 className="mt-2 font-serif text-2xl leading-snug">
+            {displayedChild.name} ちゃんの
+            <br />
+            最初のページをつくれます
+          </h1>
+          <p className="text-ink-secondary mt-3 text-sm leading-narrative">
+            ありのままの写真 1 まいから、静かに残しましょう。
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            <Button asChild size="lg" className="w-full">
+              <Link href="/record" prefetch={false}>
+                はじめてのページをつくる
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="lg" className="w-full">
+              <Link href="/">ホームへ</Link>
+            </Button>
+          </div>
+        </StatePanel>
+      </FocusedShell>
     )
   }
 
-  // phase === 'form'
   return (
-    <Shell>
-      <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
-          <CardTitle className="font-serif text-2xl">お子さんのこと、おしえてください</CardTitle>
-          <CardDescription className="mt-2">あとから いつでも かえられます。</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {submitMessage ? (
-            <div
-              role="alert"
-              className="text-ink-secondary mb-6 rounded-xl bg-warm px-4 py-3 text-sm leading-narrative"
-            >
-              {submitMessage}
-            </div>
-          ) : null}
+    <FocusedShell>
+      <StatePanel className="text-left">
+        <div className="text-center">
+          <p className="meta-label">Hana をはじめる</p>
+          <h1 className="mt-2 font-serif text-2xl leading-snug">
+            お子さんのこと、
+            <br />
+            おしえてください
+          </h1>
+          <p className="text-ink-secondary mt-3 text-sm leading-narrative">
+            記録のページで呼ぶ名前と、月齢の表示に使います。
+          </p>
+        </div>
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="child-name" className="font-serif">
-                なまえ
-              </Label>
-              <Input
-                id="child-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="はると"
-                maxLength={50}
-                autoComplete="off"
-                aria-invalid={fieldErrors.name ? true : undefined}
-                aria-describedby={fieldErrors.name ? 'child-name-error' : undefined}
-              />
-              {fieldErrors.name ? (
-                <p id="child-name-error" className="text-amber text-xs">
-                  {fieldErrors.name}
-                </p>
-              ) : null}
-            </div>
+        {submitMessage ? (
+          <div
+            role="alert"
+            className="text-ink-secondary mt-6 rounded-xl bg-warm px-4 py-3 text-sm leading-narrative"
+          >
+            {submitMessage}
+          </div>
+        ) : null}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="child-birthdate" className="font-serif">
-                うまれたひ
-              </Label>
-              <Input
-                id="child-birthdate"
-                type="date"
-                value={birthdate}
-                onChange={(e) => setBirthdate(e.target.value)}
-                max={todayIso}
-                aria-invalid={fieldErrors.birthdate ? true : undefined}
-                aria-describedby={fieldErrors.birthdate ? 'child-birthdate-error' : undefined}
-              />
-              {fieldErrors.birthdate ? (
-                <p id="child-birthdate-error" className="text-amber text-xs">
-                  {fieldErrors.birthdate}
-                </p>
-              ) : null}
-            </div>
+        <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="child-name" className="font-serif">
+              なまえ
+            </Label>
+            <Input
+              id="child-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="はな"
+              maxLength={50}
+              autoComplete="off"
+              aria-invalid={fieldErrors.name ? true : undefined}
+              aria-describedby={fieldErrors.name ? 'child-name-error' : undefined}
+            />
+            {fieldErrors.name ? (
+              <p id="child-name-error" className="text-amber text-xs">
+                {fieldErrors.name}
+              </p>
+            ) : null}
+          </div>
 
-            <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
-              {pending ? quietStateCopy.onboarding.pending : 'つづける'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </Shell>
-  )
-}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="child-birthdate" className="font-serif">
+              うまれたひ
+            </Label>
+            <Input
+              id="child-birthdate"
+              type="date"
+              value={birthdate}
+              onChange={(e) => setBirthdate(e.target.value)}
+              max={todayIso}
+              aria-invalid={fieldErrors.birthdate ? true : undefined}
+              aria-describedby={fieldErrors.birthdate ? 'child-birthdate-error' : undefined}
+            />
+            {fieldErrors.birthdate ? (
+              <p id="child-birthdate-error" className="text-amber text-xs">
+                {fieldErrors.birthdate}
+              </p>
+            ) : null}
+          </div>
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-6 py-12">
-      {children}
-    </main>
+          <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
+            {pending ? quietStateCopy.onboarding.pending : 'つづける'}
+          </Button>
+        </form>
+      </StatePanel>
+    </FocusedShell>
   )
 }

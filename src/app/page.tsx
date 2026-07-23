@@ -103,7 +103,7 @@ async function HomeBody({ userId }: { userId: string }) {
             </h1>
             <p className="text-ink-secondary mt-3 text-sm leading-7">
               写真1まいから、AIの下書きまで<span className="whitespace-nowrap">30秒</span>
-              。あとで、ことばをなおせます。
+              。保存前に、ことばを整えられます。
             </p>
           </div>
           <div

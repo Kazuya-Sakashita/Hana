@@ -115,7 +115,7 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
         </div>
 
         <p id="memory-edit-note" className="text-ink-tertiary mt-3 text-center text-xs">
-          ことばの編集は、準備中です。
+          この画面では、しるしと削除だけ操作できます。
         </p>
       </section>
 
