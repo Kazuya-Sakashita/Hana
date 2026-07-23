@@ -2,7 +2,7 @@
 id: ISSUE-054
 title: デザイントークンと共通 UI 刷新
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-07-23
 parent: DESIGN-REBUILD
@@ -12,6 +12,7 @@ blocked_by:
 requires_human_review:
   - design
   - accessibility
+  - privacy
 ---
 
 ## 目的 (Why)
@@ -46,18 +47,26 @@ Quiet Heirloom の方向性を、全画面で再利用できる UI の土台へ�
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] Quiet Heirloom の token が active UI に反映されている
-- [ ] body text は 7:1 目標、helper / small text は 4.5:1 以上を維持している
-- [ ] primary action の tap target が 44px 以上で維持されている
-- [ ] focus-visible と reduced motion の既存契約を壊していない
-- [ ] card / paper slip / photo mat の使い分けが実装とデザイン正本で矛盾しない
-- [ ] keyboard focus order と safe-area spacing を悪化させていない
-- [ ] `git diff --check` と relevant tests が通る
+- [x] Quiet Heirloom の token が active UI に反映されている
+- [x] body text は 7:1 目標、helper / small text は 4.5:1 以上を維持している
+- [x] primary action の tap target が 44px 以上で維持されている
+- [x] focus-visible と reduced motion の既存契約を壊していない
+- [x] card / paper slip / photo mat の使い分けが実装とデザイン正本で矛盾しない
+- [x] keyboard focus order と safe-area spacing を悪化させていない
+- [x] `git diff --check` と relevant tests が通る
 
 ## レビュー方針
 
 専門サブエージェント 3 名で UX / Privacy / Visual-A11y-Engineering の read-only review を行い、
 最大 3 回まで修正と再レビューを回す。
+
+### レビュー結果
+
+- Product UX / 30 秒記録: Go
+- Privacy / Trust / Content Safety: Go
+- Visual / A11y / Engineering: Go
+- `git diff --cached --check`: pass
+- `pnpm pr:gate`: pass
 
 ## セキュリティ・プライバシー考慮
 
