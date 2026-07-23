@@ -36,19 +36,13 @@ function snapshotMemoryItems(queryClient: QueryClient, memoryId: string): Memory
   return snapshots
 }
 
-export function optimisticAddMemoryToLists(
-  queryClient: QueryClient,
-  memory: Memory,
-  options: { limit?: number } = {},
-) {
-  const limit = options.limit ?? 50
-
+export function optimisticAddMemoryToLists(queryClient: QueryClient, memory: Memory) {
   queryClient.setQueriesData<MemoryListCache>({ queryKey: memoriesQueryKey }, (current) =>
     updateMemoryListCache(current, (page, pageIndex) =>
       pageIndex === 0
         ? {
             ...page,
-            data: [memory, ...page.data.filter((item) => item.id !== memory.id)].slice(0, limit),
+            data: [memory, ...page.data.filter((item) => item.id !== memory.id)],
           }
         : page,
     ),

@@ -31,6 +31,9 @@ describe('album pagination', () => {
     expect(albumListSource).toContain('query.fetchNextPage()')
     expect(albumListSource).toContain('query.isFetchingNextPage')
     expect(albumListSource).toContain('まえのページも みる')
+    expect(albumListSource).toContain('role="status"')
+    expect(albumListSource).toContain('aria-live="polite"')
+    expect(albumListSource).toContain('statusRef.current?.focus')
   })
 
   it('records the many-memory QA contract without real user data', () => {

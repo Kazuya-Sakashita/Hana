@@ -99,6 +99,35 @@ describe('optimistic memory list helpers', () => {
     expect(queryClient.getQueryData<MemoryListResponse>(LIST_KEY)).toBeUndefined()
   })
 
+  it('keeps loaded infinite-page items when adding and rolling back an optimistic memory', () => {
+    const queryClient = new QueryClient()
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      makeMemory({ id: `00000000-0000-4000-8000-0000000001${String(index).padStart(2, '0')}` }),
+    )
+    const secondPage = [makeMemory({ id: '00000000-0000-4000-8000-000000000300' })]
+    const next = makeMemory({ id: 'optimistic-1', title: 'いま のこしたページ' })
+    queryClient.setQueryData(
+      INFINITE_LIST_KEY,
+      makeInfiniteList([makeList(firstPage), makeList(secondPage)]),
+    )
+
+    const rollback = optimisticAddMemoryToLists(queryClient, next)
+
+    const afterAdd = queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)
+    expect(afterAdd?.pages[0]?.data.map((memory) => memory.id)).toEqual([
+      next.id,
+      ...firstPage.map((memory) => memory.id),
+    ])
+    expect(afterAdd?.pages[1]?.data).toEqual(secondPage)
+
+    rollback()
+
+    const afterRollback =
+      queryClient.getQueryData<InfiniteData<MemoryListResponse>>(INFINITE_LIST_KEY)
+    expect(afterRollback?.pages[0]?.data).toEqual(firstPage)
+    expect(afterRollback?.pages[1]?.data).toEqual(secondPage)
+  })
+
   it('updates favorite state and restores it on rollback', () => {
     const queryClient = new QueryClient()
     const memory = makeMemory()
