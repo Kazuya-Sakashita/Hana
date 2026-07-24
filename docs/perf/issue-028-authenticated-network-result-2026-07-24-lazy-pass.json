@@ -1,0 +1,48 @@
+{
+  "target": {
+    "baseOrigin": "http://localhost:3000",
+    "cdpOrigin": "http://127.0.0.1:9222"
+  },
+  "memoryChecked": true,
+  "privacy": "Raw URLs are redacted. signed URLs, storage keys, tokens, titles, body text, and child names are not printed.",
+  "counts": {
+    "redactedImageRequests": 24,
+    "albumImageElements": 23
+  },
+  "lazyLoad": {
+    "farOffscreenCount": 9,
+    "initialFarOffscreenRequests": 0,
+    "scrollFarOffscreenRequests": 9,
+    "minDistanceFromViewportPx": 1575,
+    "maxDistanceFromViewportPx": 2871,
+    "nativePrefetchThresholdPx": 1250,
+    "safetyMarginPx": 250,
+    "farOffscreenMinDistancePx": 1500,
+    "effectiveConnectionType": "4g",
+    "scrollBeforeY": 0,
+    "scrollAfterY": 3111,
+    "requestTimingCutoff": "requestWillBeSent.wallTime"
+  },
+  "checks": [
+    {
+      "name": "album_authenticated",
+      "status": "pass",
+      "evidence": "/album rendered"
+    },
+    {
+      "name": "album_thumbnail_variant",
+      "status": "pass",
+      "evidence": "23 signed thumbnail WebP image request(s) observed; unsigned thumbnail=0"
+    },
+    {
+      "name": "album_lazy_after_scroll",
+      "status": "pass",
+      "evidence": "farOffscreen=9, initial=0, after scroll=9, minDistanceFromViewportPx=1575, nativePrefetchThresholdPx=1250, safetyMarginPx=250"
+    },
+    {
+      "name": "memory_preview_variant",
+      "status": "pass",
+      "evidence": "1 signed preview WebP image request(s) observed; unsigned preview=0"
+    }
+  ]
+}

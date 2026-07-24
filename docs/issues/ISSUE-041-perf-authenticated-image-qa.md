@@ -2,13 +2,12 @@
 id: ISSUE-041
 title: 認証済み実データで ISSUE-028 画像 QA を完了する
 priority: P1
-status: blocked
+status: review
 size: S
 created_at: 2026-07-23
 parent: PERF
 github_issue: 87
-external_blockers:
-  - qa_image_data
+external_blockers: []
 requires_human_review:
   - privacy
   - image
@@ -56,7 +55,7 @@ ISSUE-028 / GitHub Issue #43 で `next/image` 移行と静的確認は完了し�
 - [x] 出力で `album_authenticated` が `pass`
 - [x] 出力で `album_thumbnail_variant` が `pass`
 - [x] 出力で `memory_preview_variant` が `pass`
-- [ ] 出力で `album_lazy_after_scroll` が `pass`
+- [x] 出力で `album_lazy_after_scroll` が `pass`
 - [x] QA データ不足で `album_lazy_after_scroll` が `skipped` の場合、ISSUE-041 / GitHub #87 を open のまま維持するか、人間承認済み waiver を README と GitHub Issue に記録する
 - [x] Lighthouse mobile の "Properly size images" と LCP / CLS を記録する
 - [x] 2026-05-27 baseline と比較した LCP 結果を記録する
@@ -65,17 +64,19 @@ ISSUE-028 / GitHub Issue #43 で `next/image` 移行と静的確認は完了し�
 
 - signed URL / query token / storage_key は出力しない
 - 子ども/親の氏名、画像 URL、AI 生成本文、メールアドレスは記録しない
-- QA 結果は件数、variant 種別、pass / fail / skipped、Lighthouse 指標だけに限定する
+- QA 結果は件数、variant 種別、pass / fail / skipped、Lighthouse 指標、非機密の lazy-load 判定メタデータだけに限定する
 - 認証済みセッションの作成は人間操作または明示された QA 用ログイン手段で行う
 
-## 現在の blocker
+## blocker 解消
 
 2026-07-24 に人間操作で認証済み Chrome + CDP セッションが用意され、Network QA のうち
 `album_authenticated` / `album_thumbnail_variant` / `memory_preview_variant` は pass した。
 
-残 blocker は次の 1 点である。
+その後、signed URL / token / storage_key / 子ども名を出力しない synthetic QA 画像付き memory を追加し、
+`album_lazy_after_scroll` も pass した。
 
-- `album_lazy_after_scroll` は、認証済みデータが画像 1 件のみで viewport 外候補を作れず `skipped`
+- 保存済み lazy-load pass 証跡: `docs/perf/issue-028-authenticated-network-result-2026-07-24-lazy-pass.json`
+- `album_lazy_after_scroll`: farOffscreen=9 / initial=0 / after scroll=9 / minDistanceFromViewportPx=1575 / nativePrefetchThresholdPx=1250 / safetyMarginPx=250
 
 Lighthouse raw report には signed URL / token が含まれる可能性があるため、2026-07-24 に
 sanitized summary helper `pnpm qa:issue028:lighthouse-summary` を追加した。Lighthouse 実測時は
@@ -84,15 +85,17 @@ raw report を commit せず、summary JSON だけを `docs/perf/` に保存す�
 ## 2026-07-24 進捗
 
 - 保存済み Network QA: `docs/perf/issue-028-authenticated-network-result-2026-07-24.json`
+- 保存済み Network QA lazy pass: `docs/perf/issue-028-authenticated-network-result-2026-07-24-lazy-pass.json`
 - 保存済み CDP Web Vitals 参考実測: `docs/perf/issue-028-authenticated-cdp-vitals-2026-07-24.json`
 - 保存済み Lighthouse sanitized summary: `docs/perf/issue-028-authenticated-lighthouse-summary-2026-07-24.json`
 - Lighthouse sanitized summary helper: `scripts/qa/issue-028-lighthouse-summary.mjs`
 - `/album`: signed thumbnail WebP request を確認
 - `/memory/{id}`: signed preview WebP request を確認
+- `/album`: far-offscreen 画像が初期 request に含まれず scroll 後に request されることを確認
 - CDP Web Vitals 参考実測: `/album` LCP 1.332s / CLS 0、`/memory/{id}` LCP 1.912s / CLS 0.0003
 - Lighthouse mobile sanitized summary: performance score 0.91、LCP 2.532s、CLS 0.0003、
   `image-delivery-insight` pass、2026-05-27 baseline 比 LCP -88.9%
-- ただし、lazy load pass は未完のため、GitHub Issue #87 は open のまま維持する
+- 受け入れ条件は満たしたため、GitHub Issue #87 は PR review / CI 後に close 可能
 
 ## 参考
 
