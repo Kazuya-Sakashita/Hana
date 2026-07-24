@@ -152,7 +152,7 @@ function ActionGlyph({
       onClick={onClick}
       aria-pressed={typeof pressed === 'boolean' ? pressed : undefined}
       disabled={disabled}
-      className="text-ink-secondary hover:bg-warm disabled:text-ink-tertiary tap-target ease-organic flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:hover:bg-transparent"
+      className="text-ink-secondary hover:bg-warm disabled:text-ink-tertiary tap-target ease-organic flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-photo-mat)] px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:hover:bg-transparent"
     >
       <span
         className={`flex size-8 items-center justify-center ${filled ? 'text-sakura' : ''}`}

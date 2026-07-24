@@ -87,6 +87,7 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issue066Source).toContain('OpenAPI / DB / 認証 / Storage の変更が不要')
 
     expect(issue067Source).toContain('github_issue: 153')
+    expect(issue067Source).toContain('status: done')
     expect(issue067Source).toContain('blocked_by:')
     expect(issue067Source).toContain('ISSUE-066')
     expect(issue068Source).toContain('github_issue: 154')
@@ -97,13 +98,14 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issue070Source).toContain('ISSUE-067')
   })
 
-  it('updates the issue index with the refinement sequence and non-ready dependency state', () => {
+  it('updates the issue index with the refinement sequence and ready follow-up state', () => {
     expect(issueIndexSource).toContain('Planned Quiet Heirloom Refinement Sequence')
     expect(issueIndexSource).toContain('| 1     | `ISSUE-066` | Quiet Heirloom refinement 設計契約')
-    expect(issueIndexSource).toContain('`ISSUE-067`: トークンと共通 UI の質感調整')
     expect(issueIndexSource).toContain('| 2     | `ISSUE-067` | トークンと共通 UI の質感調整')
+    expect(issueIndexSource).toContain('done')
+    expect(issueIndexSource).toContain('`ISSUE-068`: ホーム first view を写真主役へ調整')
     expect(issueIndexSource).toContain('todo, ready')
-    expect(issueIndexSource).toContain('todo, blocked by `ISSUE-067`')
+    expect(issueIndexSource).not.toContain('todo, blocked by `ISSUE-067`')
     expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
   })
 })

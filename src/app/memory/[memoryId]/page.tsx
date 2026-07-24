@@ -71,7 +71,7 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
 
   return (
     <>
-      <section className="photo-mat space-y-3 overflow-hidden rounded-[28px] p-2">
+      <section className="photo-mat space-y-3 overflow-hidden rounded-[var(--radius-sheet)] p-2">
         {heroImage?.previewUrl ? (
           <Image
             src={heroImage.previewUrl}
@@ -80,11 +80,11 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
             height={1280}
             sizes="(max-width: 480px) 100vw, 480px"
             priority
-            className="aspect-[4/5] w-full rounded-[22px] object-cover"
+            className="aspect-[4/5] w-full rounded-[var(--radius-paper-slip)] object-cover"
           />
         ) : (
           <div
-            className="bg-warm aspect-[4/5] w-full animate-pulse rounded-[22px]"
+            className="bg-warm aspect-[4/5] w-full animate-pulse rounded-[var(--radius-paper-slip)]"
             aria-hidden="true"
           />
         )}
@@ -110,19 +110,19 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
               {additionalImages.map((img) => (
                 <li key={img.id} className="w-24 shrink-0">
                   {img.previewUrl ? (
-                    <div className="photo-mat rounded-[16px] p-1">
+                    <div className="photo-mat rounded-[var(--radius-photo-mat)] p-1">
                       <Image
                         src={img.previewUrl}
                         alt="記録のしゃしん"
                         width={96}
                         height={120}
                         sizes="96px"
-                        className="aspect-[4/5] w-full rounded-[12px] object-cover"
+                        className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
                       />
                     </div>
                   ) : (
                     <div
-                      className="photo-mat aspect-[4/5] w-full rounded-[16px]"
+                      className="photo-mat aspect-[4/5] w-full rounded-[var(--radius-photo-mat)]"
                       aria-hidden="true"
                     />
                   )}
@@ -133,7 +133,7 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
         ) : null}
 
         {child && ageLabel ? (
-          <p className="photo-mat text-ink-secondary mx-auto mt-8 max-w-xs rounded-2xl px-4 py-4 text-center font-serif text-sm">
+          <p className="photo-mat text-ink-secondary mx-auto mt-8 max-w-xs rounded-[var(--radius-photo-mat)] px-4 py-4 text-center font-serif text-sm">
             {child.name} ちゃんの、{ageLabel} のころ
           </p>
         ) : null}
@@ -152,7 +152,7 @@ function SavedMemoryNotice() {
   return (
     <section
       aria-labelledby="memory-saved-moment-title"
-      className="paper-surface mb-4 rounded-2xl px-4 py-4"
+      className="paper-surface mb-4 rounded-[var(--radius-paper-slip)] px-4 py-4"
     >
       <Link
         href="/album"
@@ -182,7 +182,7 @@ function MemoryDetailSkeleton() {
   return (
     <>
       <div
-        className="photo-mat aspect-[4/5] w-full animate-pulse rounded-[28px]"
+        className="photo-mat aspect-[4/5] w-full animate-pulse rounded-[var(--radius-sheet)]"
         aria-hidden="true"
       />
       <article className="px-2 pt-8">

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 export function KeepsakeSurface({ className, ...props }: React.ComponentProps<'section'>) {
   return (
     <section
-      className={cn('paper-surface rounded-[var(--radius)] px-5 py-5', className)}
+      className={cn('paper-surface rounded-[var(--radius-paper-slip)] px-5 py-5', className)}
       {...props}
     />
   )
@@ -13,7 +13,10 @@ export function KeepsakeSurface({ className, ...props }: React.ComponentProps<'s
 export function StatePanel({ className, ...props }: React.ComponentProps<'section'>) {
   return (
     <section
-      className={cn('paper-surface rounded-[var(--radius)] px-6 py-8 text-center', className)}
+      className={cn(
+        'paper-surface rounded-[var(--radius-paper-slip)] px-6 py-8 text-center',
+        className,
+      )}
       {...props}
     />
   )

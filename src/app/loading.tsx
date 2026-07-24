@@ -22,7 +22,7 @@ export default function Loading() {
           <ul className="-mx-6 flex gap-3 overflow-hidden px-6 pb-2">
             {[0, 1, 2].map((i) => (
               <li key={i} className="w-[140px] shrink-0">
-                <div className="bg-warm aspect-[4/5] w-full animate-pulse rounded-2xl" />
+                <div className="bg-warm aspect-[4/5] w-full animate-pulse rounded-[var(--radius-photo-mat)]" />
                 <div className="bg-warm mt-2 h-4 w-5/6 animate-pulse rounded" />
               </li>
             ))}

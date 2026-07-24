@@ -443,7 +443,7 @@ export default function RecordPage() {
           しゃしんを 1まい えらんで、ことばを そえます。
         </p>
 
-        <div className="photo-mat mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-[1.75rem]">
+        <div className="photo-mat mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-[var(--radius-sheet)]">
           {filePreviewUrl && file ? (
             <NextImage
               src={filePreviewUrl}
@@ -467,7 +467,7 @@ export default function RecordPage() {
       <form
         onSubmit={onSubmit}
         data-testid="record-bottom-sheet"
-        className="bg-elevated border-hairline shadow-lift sticky bottom-0 z-30 flex max-h-[68dvh] flex-col overflow-hidden rounded-t-[2rem] border-t px-5 pt-5"
+        className="bg-elevated border-hairline shadow-lift sticky bottom-0 z-30 flex max-h-[68dvh] flex-col overflow-hidden rounded-t-[var(--radius-sheet)] border-t px-5 pt-5"
       >
         <div className="mx-auto h-1 w-10 rounded-full bg-hairline" aria-hidden="true" />
 
@@ -554,7 +554,10 @@ export default function RecordPage() {
 
           {uploadedImage ? (
             <>
-              <div className="paper-surface rounded-2xl p-4" aria-busy={aiStatus === 'generating'}>
+              <div
+                className="paper-surface rounded-[var(--radius-paper-slip)] p-4"
+                aria-busy={aiStatus === 'generating'}
+              >
                 <p className="text-ink-secondary font-serif text-sm">
                   {quietStateCopy.record.aiReady}
                 </p>
@@ -624,7 +627,7 @@ export default function RecordPage() {
                 <section
                   aria-labelledby="memory-story-preview-title"
                   data-testid="record-story-preview"
-                  className="paper-surface rounded-2xl p-4"
+                  className="paper-surface rounded-[var(--radius-paper-slip)] p-4"
                 >
                   <p
                     id="memory-story-preview-title"
@@ -642,7 +645,7 @@ export default function RecordPage() {
                 </p>
               )}
 
-              <details className="group rounded-2xl bg-warm px-4 py-3">
+              <details className="group rounded-[var(--radius-paper-slip)] bg-warm px-4 py-3">
                 <summary className="tap-target text-ink-secondary flex cursor-pointer list-none items-center justify-between font-serif text-sm [&::-webkit-details-marker]:hidden">
                   ことば・日付を なおす
                   <span className="text-ink-tertiary text-xs group-open:hidden">ひらく</span>

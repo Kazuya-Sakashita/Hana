@@ -68,9 +68,9 @@ function AlbumListSkeleton() {
     <ul className="flex flex-col gap-4" aria-hidden="true">
       {[0, 1, 2, 3, 4].map((i) => (
         <li key={i}>
-          <div className="paper-surface rounded-[20px] p-3">
+          <div className="paper-surface rounded-[var(--radius-paper-slip)] p-3">
             <div className="flex gap-4">
-              <div className="photo-mat aspect-[4/5] w-24 shrink-0 animate-pulse rounded-[16px]" />
+              <div className="photo-mat aspect-[4/5] w-24 shrink-0 animate-pulse rounded-[var(--radius-photo-mat)]" />
               <div className="flex min-w-0 flex-1 flex-col gap-2 py-1">
                 <div className="bg-warm h-3 w-28 animate-pulse rounded" />
                 <div className="bg-warm h-5 w-44 animate-pulse rounded" />

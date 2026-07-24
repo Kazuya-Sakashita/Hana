@@ -48,7 +48,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="bg-elevated/96 border-hairline pb-safe fixed inset-x-0 bottom-0 z-40 border-t shadow-[0_-8px_28px_rgba(58,38,30,0.045)] backdrop-blur-sm"
+      className="bg-elevated/96 border-hairline pb-safe fixed inset-x-0 bottom-0 z-40 border-t shadow-[0_-4px_18px_rgba(58,38,30,0.032)] backdrop-blur-sm"
       aria-label="メイン ナビゲーション"
     >
       <div className="relative mx-auto flex h-16 max-w-md items-stretch">
@@ -61,7 +61,7 @@ export function BottomNav() {
           href="/record"
           prefetch={false}
           aria-label="あたらしく のこす"
-          className="bg-primary text-primary-foreground hover:bg-sakura-deep hover:text-white active:bg-sakura-pressed active:text-white shadow-lift ease-organic tap-target absolute left-1/2 top-0 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full transition-all active:scale-95"
+          className="bg-primary text-primary-foreground hover:bg-leaf-deep hover:text-white active:bg-leaf-deep active:text-white shadow-soft ease-organic tap-target absolute left-1/2 top-0 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full transition-all active:scale-95"
         >
           <Plus aria-hidden="true" className="size-6" strokeWidth={1.8} />
         </Link>
@@ -80,7 +80,7 @@ function TabLink({ tab, pathname }: { tab: TabDef; pathname: string | null }) {
       aria-current={active ? 'page' : undefined}
       className={`tap-target flex flex-1 flex-col items-center justify-center gap-1 py-2 transition-colors ${
         active
-          ? 'text-sakura-deep dark:text-leaf font-medium'
+          ? 'text-leaf-deep dark:text-leaf font-medium'
           : 'text-ink-tertiary hover:text-ink-secondary'
       }`}
     >
