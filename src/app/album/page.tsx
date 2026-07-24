@@ -1,7 +1,8 @@
 import { Suspense } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { Camera } from 'lucide-react'
+import { BookOpen, Camera, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AlbumList } from '@/features/memories/client/album-list'
 import { getCurrentUser } from '@/server/auth/current-user'
@@ -50,16 +51,66 @@ export default async function AlbumPage() {
 async function AlbumListBoundary({ userId }: { userId: string }) {
   const { items, hasMore } = await fetchMemoriesWithCovers({ userId, limit: 50 })
   const last = items[items.length - 1]
+  const featured = items[0] ?? null
 
   return (
-    <AlbumList
-      initialData={{
-        data: items.map(({ coverThumbnailUrl, ...memory }) =>
-          toMemoryResponse(memory, { coverThumbnailUrl }),
-        ),
-        page: { next_cursor: hasMore && last ? encodeCursor(last.id) : null },
-      }}
-    />
+    <div className="flex flex-col gap-8">
+      {featured ? <FeaturedAlbumPage item={featured} /> : null}
+      <AlbumList
+        initialData={{
+          data: items.map(({ coverThumbnailUrl, ...memory }) =>
+            toMemoryResponse(memory, { coverThumbnailUrl }),
+          ),
+          page: { next_cursor: hasMore && last ? encodeCursor(last.id) : null },
+        }}
+      />
+    </div>
+  )
+}
+
+function FeaturedAlbumPage({
+  item,
+}: {
+  item: Awaited<ReturnType<typeof fetchMemoriesWithCovers>>['items'][number]
+}) {
+  return (
+    <section aria-labelledby="album-featured-page" data-testid="album-featured-page">
+      <Link
+        href={`/memory/${item.id}`}
+        className="photo-mat ease-organic block rounded-[var(--radius-sheet)] p-2 transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+      >
+        {typeof item.coverThumbnailUrl === 'string' ? (
+          <Image
+            src={item.coverThumbnailUrl}
+            alt=""
+            width={360}
+            height={450}
+            sizes="(max-width: 480px) 88vw, 360px"
+            priority
+            className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
+          />
+        ) : (
+          <div
+            className="bg-paper-slip flex aspect-[4/5] w-full items-center justify-center rounded-[var(--radius-photo-inner)]"
+            aria-hidden="true"
+          >
+            <BookOpen className="text-sakura-deep size-10" />
+          </div>
+        )}
+        <div className="mt-4 flex items-center justify-between gap-3 px-1 pb-1">
+          <div className="min-w-0">
+            <p className="meta-label">最近しまったページ</p>
+            <h2
+              id="album-featured-page"
+              className="text-ink mt-1 line-clamp-2 break-words font-serif text-xl leading-7 [overflow-wrap:anywhere]"
+            >
+              {item.title}
+            </h2>
+          </div>
+          <ChevronRight className="text-ink-tertiary size-5 shrink-0" aria-hidden="true" />
+        </div>
+      </Link>
+    </section>
   )
 }
 

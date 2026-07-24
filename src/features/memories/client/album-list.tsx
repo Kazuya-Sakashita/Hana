@@ -54,7 +54,13 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <section aria-labelledby="album-private-shelf" className="flex flex-col gap-6">
+      <div>
+        <p className="meta-label">棚のページ</p>
+        <h2 id="album-private-shelf" className="mt-1 font-serif text-lg">
+          しまってあるページ
+        </h2>
+      </div>
       <ul className="flex flex-col gap-4">
         {items.map((memory) => (
           <AlbumListItem key={memory.id} memory={memory} />
@@ -92,7 +98,7 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
             : quietStateCopy.album.loadMoreButton}
         </Button>
       ) : null}
-    </div>
+    </section>
   )
 }
 
@@ -133,7 +139,7 @@ function MemoryText({ memory, recordedAt }: { memory: Memory; recordedAt: string
         {recordedAt}
         {memory.weather ? ` ・ ${memory.weather}` : ''}
       </div>
-      <h2 className="line-clamp-2 font-serif text-base leading-tight">{memory.title}</h2>
+      <h3 className="line-clamp-2 font-serif text-base leading-tight">{memory.title}</h3>
       {memory.body ? (
         <p className="text-ink-secondary line-clamp-1 text-sm leading-6">{memory.body}</p>
       ) : null}
