@@ -59,8 +59,8 @@ ISSUE-028 / GitHub Issue #43 で `next/image` 移行と静的確認は完了し�
 - [x] 出力で `memory_preview_variant` が `pass`
 - [ ] 出力で `album_lazy_after_scroll` が `pass`
 - [x] QA データ不足で `album_lazy_after_scroll` が `skipped` の場合、ISSUE-041 / GitHub #87 を open のまま維持するか、人間承認済み waiver を README と GitHub Issue に記録する
-- [ ] Lighthouse mobile の "Properly size images" と LCP / CLS を記録する
-- [ ] 2026-05-27 baseline と比較した LCP 結果を記録する
+- [x] Lighthouse mobile の "Properly size images" と LCP / CLS を記録する
+- [x] 2026-05-27 baseline と比較した LCP 結果を記録する
 
 ## セキュリティ・プライバシー考慮
 
@@ -74,11 +74,9 @@ ISSUE-028 / GitHub Issue #43 で `next/image` 移行と静的確認は完了し�
 2026-07-24 に人間操作で認証済み Chrome + CDP セッションが用意され、Network QA のうち
 `album_authenticated` / `album_thumbnail_variant` / `memory_preview_variant` は pass した。
 
-残 blocker は次の 2 点である。
+残 blocker は次の 1 点である。
 
 - `album_lazy_after_scroll` は、認証済みデータが画像 1 件のみで viewport 外候補を作れず `skipped`
-- Lighthouse mobile は未実行。CDP Web Vitals の参考実測は取得済みだが、2026-05-27 baseline
-  と同じ Lighthouse simulated throttling ではないため、完了扱いにはしない
 
 Lighthouse raw report には signed URL / token が含まれる可能性があるため、2026-07-24 に
 sanitized summary helper `pnpm qa:issue028:lighthouse-summary` を追加した。Lighthouse 実測時は
@@ -88,11 +86,14 @@ raw report を commit せず、summary JSON だけを `docs/perf/` に保存す�
 
 - 保存済み Network QA: `docs/perf/issue-028-authenticated-network-result-2026-07-24.json`
 - 保存済み CDP Web Vitals 参考実測: `docs/perf/issue-028-authenticated-cdp-vitals-2026-07-24.json`
+- 保存済み Lighthouse sanitized summary: `docs/perf/issue-028-authenticated-lighthouse-summary-2026-07-24.json`
 - Lighthouse sanitized summary helper: `scripts/qa/issue-028-lighthouse-summary.mjs`
 - `/album`: signed thumbnail WebP request を確認
 - `/memory/{id}`: signed preview WebP request を確認
 - CDP Web Vitals 参考実測: `/album` LCP 1.332s / CLS 0、`/memory/{id}` LCP 1.912s / CLS 0.0003
-- ただし、Lighthouse mobile audit と lazy load pass は未完のため、GitHub Issue #87 は open のまま維持する
+- Lighthouse mobile sanitized summary: performance score 0.91、LCP 2.532s、CLS 0.0003、
+  `image-delivery-insight` pass、2026-05-27 baseline 比 LCP -88.9%
+- ただし、lazy load pass は未完のため、GitHub Issue #87 は open のまま維持する
 
 ## 参考
 

@@ -91,6 +91,8 @@ pnpm qa:issue028:lighthouse-summary -- --input /path/to/local-lighthouse.json \
 summary は memory ID / signed URL / token / storage_key / 画像 URL を出力しない。
 2026-05-27 baseline との比較は、Lighthouse report が mobile / simulated throttling の場合だけ
 summary に含める。
+Lighthouse 13 では旧 `uses-responsive-images` が出ない場合があるため、summary helper は
+`image-delivery-insight` を画像サイズ/配信監査として扱う。
 
 ## まだ手動で必要な項目
 

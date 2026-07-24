@@ -115,7 +115,7 @@ export function summarizeLighthouse(lhr) {
     cls: readNumericValue(audits[METRIC_AUDITS.cumulativeLayoutShift]),
     speedIndexMs: readNumericValue(audits[METRIC_AUDITS.speedIndex]),
   }
-  const properlySizeImages = summarizeAudit(audits['uses-responsive-images'])
+  const properlySizeImages = summarizeImageSizingAudit(audits)
   const pagePath = redactPath(url?.pathname ?? '')
   const formFactor = lhr.configSettings?.formFactor ?? null
   const throttlingMethod = lhr.configSettings?.throttlingMethod ?? null
@@ -175,11 +175,16 @@ function readNumericValue(audit) {
   return typeof audit?.numericValue === 'number' ? Number(audit.numericValue.toFixed(4)) : null
 }
 
+function summarizeImageSizingAudit(audits) {
+  const audit = audits['uses-responsive-images'] ?? audits['image-delivery-insight']
+  return summarizeAudit(audit)
+}
+
 function summarizeAudit(audit) {
   if (!audit) {
     return {
       id: 'uses-responsive-images',
-      title: 'Properly size images',
+      title: 'Properly size images / Improve image delivery',
       status: 'missing',
       score: null,
       numericValue: null,

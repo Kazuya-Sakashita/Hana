@@ -1,0 +1,43 @@
+{
+  "measurement": "Lighthouse sanitized summary",
+  "isLighthouse": true,
+  "rawReportStored": false,
+  "privacy": "Raw URLs, signed tokens, storage keys, titles, body text, child names, and memory IDs are not printed.",
+  "target": {
+    "origin": "http://localhost:3000",
+    "path": "/memory/<redacted-memory-id>"
+  },
+  "lighthouse": {
+    "lighthouseVersion": "13.4.1",
+    "fetchTime": "2026-07-24T03:27:23.204Z",
+    "formFactor": "mobile",
+    "throttlingMethod": "simulate",
+    "baselineComparable": true
+  },
+  "metrics": {
+    "performanceScore": 0.91,
+    "fcpMs": 752.398,
+    "lcpMs": 2532.361,
+    "tbtMs": 287,
+    "cls": 0.0003,
+    "speedIndexMs": 1905.8788
+  },
+  "audits": {
+    "properlySizeImages": {
+      "id": "image-delivery-insight",
+      "title": "Improve image delivery",
+      "status": "pass",
+      "score": 1,
+      "numericValue": null,
+      "displayValue": null,
+      "wastedBytes": null,
+      "itemCount": 0
+    }
+  },
+  "baselineComparison": {
+    "baselineFile": "docs/perf/baseline-2026-05-27.md",
+    "baselineMemoryDetailLcpMs": 22900,
+    "deltaMs": -20368,
+    "deltaPercent": -88.9
+  }
+}
