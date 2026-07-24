@@ -1,0 +1,30 @@
+type: object
+description: |
+  公開前 LP の待機リスト登録 payload。
+  メールアドレスは待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、
+  正式リリースのお知らせにだけ使う。
+required: [email, consent]
+properties:
+  email:
+    type: string
+    format: email
+    minLength: 3
+    maxLength: 320
+    description: 待機リスト連絡先。レスポンスや構造化ログには返さない。
+    example: 'parent@example.com'
+  consent:
+    type: boolean
+    const: true
+    description: 待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせのための利用に同意したこと。
+    example: true
+  source:
+    type: [string, 'null']
+    enum: [current-lp, null]
+    description: 登録元の画面を示す既知の識別子。未指定時は current-lp を使う。
+    example: 'current-lp'
+  privacy_policy_version:
+    type: [string, 'null']
+    enum: [prelaunch-2026-07-25, null]
+    description: 登録時に表示したプライバシーポリシー版。未指定時はサーバ側の既定値を使う。
+    example: 'prelaunch-2026-07-25'
+additionalProperties: false

@@ -20,7 +20,7 @@
 | 項目        | 反映内容                                                                                                 |
 | ----------- | -------------------------------------------------------------------------------------------------------- |
 | LP 化       | Hero、Before / After、30秒 flow、product preview、trust、final CTA を持つ静的 HTML を作成                |
-| CV 導線     | CTA をページ内説明リンクから、リリース通知 / Store 準備導線へ変更                                        |
+| CV 導線     | 公開前検証の Primary CTA を `待機リストに登録する` に変更し、`POST /v1/waitlist` の契約へ接続            |
 | 記録価値    | Before / After に synthetic な短文例を追加し、「写真だけ」から「あとで戻れるページ」への差分を補強       |
 | AI 同意     | `同意していれば下書きを待つ` とし、AI を使わず保存できることを flow と trust に明示                      |
 | Trust copy  | 保持期間、学習利用、削除保証などの未確認 claim は断定しない構成に調整                                    |
@@ -85,3 +85,35 @@
 2. `LP-P0-03` を人間レビュー gate にする。Trust は visual score で相殺しない。
 3. `LP-P1-01` で hero を再構成し、もう一度 Visual / Conversion / Trust の3観点で再レビューする。
 4. 公開に近づける段階で `LP-P1-03` の実ブラウザ QA を必ず通す。
+
+## ISSUE-072 CV 導線更新
+
+公開前検証フェーズの Primary CTA は `待機リストに登録する` とする。
+取得目的は、待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせに限定する。
+正式リリース後は Store ダウンロード CTA へ切り替える。
+
+### 接続仕様
+
+| 項目       | 方針                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| API        | `POST /v1/waitlist`                                                                             |
+| 入力       | `email`, `consent`, `source`, `privacy_policy_version`。`source` と policy version は既知値のみ |
+| 保存先     | 認証・アクセス制御された DB (`waitlist_signups`)。Supabase を想定する                           |
+| 重複処理   | 正規化メールの HMAC-SHA256 (`email_hash`) で upsert                                             |
+| レスポンス | `202 { "status": "accepted" }`。メール、内部 ID、メールハッシュは返さない                       |
+| ログ       | `operation`, `status`, `source`, `privacyPolicyVersion`, `level`, `ts` のみ                     |
+| 乱用対策   | 同一 client key の短時間連続送信を 429 にする。公開直前の追加対策は `ISSUE-075` で確認          |
+
+公開有効化前に、`WAITLIST_EMAIL_HASH_PEPPER` の staging / production 設定、`waitlist_signups`
+migration の適用確認、配信停止・削除依頼・メール配信基盤の扱いを含む privacy/legal review を `ISSUE-075`
+で完了させる。
+
+### QA 手順
+
+1. Hero の Primary CTA が `#waitlist-form` へ移動することを確認する。
+2. メールアドレス未入力、形式不正、同意未チェックで送信できないことを確認する。
+3. 正常送信時に `/v1/waitlist` へ JSON payload が送られ、202 が返ることを確認する。
+4. API レスポンスと構造化ログにメール、内部 ID、メールハッシュ、未知フィールドが含まれないことを確認する。
+5. 未知フィールド、未許可 `source`、未許可 `privacy_policy_version` が 422 で拒否されることを確認する。
+6. LP にプライバシーポリシー導線と利用目的が表示されていることを確認する。
+7. Trust copy が、AI 同意、学習利用、保持期間、削除保証について未確認の断定をしていないことを確認する。

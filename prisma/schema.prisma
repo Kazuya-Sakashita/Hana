@@ -73,20 +73,20 @@ model Child {
 //   - storage_key は推測不可能な uploads/{userIdHash}/{yyyymm}/{uuid}.{ext} 形式
 //   - 物理ファイルの削除は退会フロー (ISSUE-016) で扱う
 model Image {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String    @map("user_id") @db.Uuid
-  memoryId     String?   @map("memory_id") @db.Uuid
-  storageKey   String    @unique @map("storage_key")
-  contentType  String    @map("content_type")
-  width        Int
-  height       Int
-  fileSize     Int       @map("file_size")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  memoryId    String?   @map("memory_id") @db.Uuid
+  storageKey  String    @unique @map("storage_key")
+  contentType String    @map("content_type")
+  width       Int
+  height      Int
+  fileSize    Int       @map("file_size")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
 
-  user   Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  memory Memory?  @relation(fields: [memoryId], references: [id], onDelete: SetNull)
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memory Memory? @relation(fields: [memoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([memoryId])
@@ -98,18 +98,18 @@ model Image {
 // 画像との関係は images.memory_id (nullable) で表現する 1:N。
 // 論理削除フラグ deleted_at で「やり直し」をサポート。
 model Memory {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String    @map("user_id") @db.Uuid
-  childId      String    @map("child_id") @db.Uuid
-  title        String    @db.VarChar(100)
-  body         String?   @db.Text
-  recordedAt   DateTime  @map("recorded_at") @db.Date
-  weather      String?   @db.VarChar(20)
-  isFavorite   Boolean   @default(false) @map("is_favorite")
-  aiGenerated  Boolean   @default(false) @map("ai_generated")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  childId     String    @map("child_id") @db.Uuid
+  title       String    @db.VarChar(100)
+  body        String?   @db.Text
+  recordedAt  DateTime  @map("recorded_at") @db.Date
+  weather     String?   @db.VarChar(20)
+  isFavorite  Boolean   @default(false) @map("is_favorite")
+  aiGenerated Boolean   @default(false) @map("ai_generated")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
 
   user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
   child  Child   @relation(fields: [childId], references: [id], onDelete: Cascade)
@@ -145,4 +145,23 @@ model AiGeneration {
 
   @@index([userId, createdAt])
   @@map("ai_generations")
+}
+
+// 公開前 LP の待機リスト登録。
+// メールアドレスは待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、
+// 正式リリースのお知らせにだけ使う。
+// email_hash は重複判定用の HMAC-SHA256。production では WAITLIST_EMAIL_HASH_PEPPER が必須。
+// レスポンスや構造化ログには email / email_hash / id を出さない。
+model WaitlistSignup {
+  id                   String   @id @default(uuid()) @db.Uuid
+  email                String   @db.VarChar(320)
+  emailHash            String   @unique @map("email_hash") @db.Char(64)
+  source               String?  @db.VarChar(80)
+  privacyPolicyVersion String   @default("prelaunch-2026-07-25") @map("privacy_policy_version") @db.VarChar(40)
+  consentAt            DateTime @default(now()) @map("consent_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([createdAt])
+  @@map("waitlist_signups")
 }

@@ -2,15 +2,13 @@
 id: ISSUE-072
 title: LP の実行可能な CV 導線を決めて接続
 priority: P0
-status: blocked
+status: review
 size: M
 created_at: 2026-07-25
 parent: LP-PUBLIC-READINESS
 github_issue: 163
-blocked_by:
-  - ISSUE-071
-external_blockers:
-  - 待機リスト、リリース通知、Store URL のどれで検証するかのプロダクト判断
+blocked_by: []
+external_blockers: []
 requires_human_review:
   - product
   - privacy
@@ -21,39 +19,76 @@ requires_human_review:
 LP が「読んで終わり」にならないよう、Hero と final CTA から実行可能な CV 導線へ進める状態にする。
 
 PRD では LP の目的が価値訴求とダウンロード誘導であり、現在の静的 prototype の Store 準備表示だけでは CV 検証に使えない。
+公開前検証フェーズでは、人間判断により Primary CTA を `待機リスト登録` とし、正式リリース後に Store ダウンロードへ切り替える。
 
 ## スコープ (What)
 
-- 待機リスト、リリース通知フォーム、App Store / Google Play URL のどれを公開前検証の primary CTA にするか決める
+- 待機リスト登録を公開前検証の primary CTA として接続する
 - Hero、final CTA、nav、Store 表示の文言を統一する
 - CTA が自己リンクや準備表示だけで終わらない状態にする
-- 取得する情報がある場合は、privacy / consent / logging の扱いを明記する
+- メールアドレスの取得目的、保存先、privacy / consent / logging の扱いを明記する
+- `/v1/waitlist` の OpenAPI 契約、保存先、Route Handler、テストを追加する
 
 ## やらないこと (Out of Scope)
 
 - 決済導線
 - 本番 Store 公開作業
 - 実ユーザーのメールや個人情報を証跡に残すこと
+- Privacy Policy 本文の法務確定
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] LP の primary CTA が実行可能な導線に接続されている
-- [ ] secondary CTA が `記録例を見る` など価値理解に接続している
-- [ ] CTA のリンク先、入力項目、保存先、ログ方針が説明されている
-- [ ] 個人情報を取得する場合、プライバシー説明と同意の扱いが human review 済み
-- [ ] CV 導線の QA 手順が `docs/design/current-lp-evaluation.md` または関連 QA doc に追記されている
+- [x] LP の primary CTA が実行可能な導線に接続されている
+- [x] secondary CTA が `記録例を見る` など価値理解に接続している
+- [x] CTA のリンク先、入力項目、保存先、ログ方針が説明されている
+- [x] 個人情報を取得する場合、プライバシー説明と同意の扱いが human review 済み
+- [x] CV 導線の QA 手順が `docs/design/current-lp-evaluation.md` または関連 QA doc に追記されている
 
 ## Blocked by
 
-- `ISSUE-071`
-- 待機リスト、通知、Store URL のどれを使うかの人間判断
+- なし
+
+## 実装メモ
+
+- Primary CTA: `待機リストに登録する`
+- Secondary CTA: `記録例を見る`
+- API: `POST /v1/waitlist`
+- 入力項目: `email`, `consent`, `source`, `privacy_policy_version`
+- 保存先: 認証・アクセス制御された DB (`waitlist_signups` table)。Supabase Postgres を想定する。
+- 重複方針: 正規化メールアドレスの HMAC-SHA256 (`email_hash`) で重複登録を upsert する。production では `WAITLIST_EMAIL_HASH_PEPPER` 必須。
+- メタデータ方針: `source` と `privacy_policy_version` は既知値のみ受け付け、未知フィールドは 422 で拒否する。
+- レスポンス方針: `202 { "status": "accepted" }` のみ。メール、内部 ID、メールハッシュは返さない。
+- ログ方針: `operation`, `status`, `source`, `privacyPolicyVersion`, `level`, `ts` の allowlist のみ。メール、メールハッシュ、内部 ID、未知フィールドは出さない。
+- 乱用対策: 短時間の同一 client key 連続送信は 429 にする。公開直前の本格的なBot対策は `ISSUE-075` の QA gate で確認する。
+- 利用目的: 待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせに限定する。
+- Trust copy: 安全側のドラフトとして、AI/保存/削除/学習利用に関する未確定 claim は断定しない。
+
+## 公開有効化前の運用ゲート
+
+- staging / production に `WAITLIST_EMAIL_HASH_PEPPER` を設定する。
+- `waitlist_signups` migration を disposable DB または staging で適用確認する。
+- `/privacy` は安全側ドラフト。問い合わせ先、配信停止、削除依頼、メール配信基盤の扱いは `ISSUE-075` で human privacy / legal review を通す。
+- 公開 traffic に載せる前に、provider / edge 側の rate limit または Bot 対策を `ISSUE-075` で確認する。
 
 ## セキュリティ・プライバシー考慮
 
-- メール等を扱う場合、Issue 着手前に privacy review を通す
+- メールアドレスは待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせに限定して扱う
+- LP にプライバシーポリシー導線を設置し、取得目的と管理方法を明記する
 - 証跡にメール、画像 URL、`storage_key`、prompt、AI 生成本文を含めない
+- 構造化ログと API レスポンスにメール、メールハッシュ、内部 ID を含めない
+
+## 検証
+
+- `pnpm openapi:lint`
+- `pnpm openapi:gen`
+- `pnpm db:generate`
+- `pnpm exec vitest run tests/unit/features/waitlist/parse.test.ts tests/integration/v1/waitlist.test.ts tests/unit/app/lp-static-prototype-review.test.ts`
+- `pnpm typecheck`
+- `pnpm pr:gate`
 
 ## 参考
 
 - `Hana_PRD_v1.md`
 - `docs/design/current-lp-evaluation.md`
+- `docs/openapi/openapi.yaml`
+- `src/app/v1/waitlist/route.ts`

@@ -8,6 +8,7 @@ const lpAssetUrl = new URL(
   import.meta.url,
 )
 const evaluationUrl = new URL('../../../docs/design/current-lp-evaluation.md', import.meta.url)
+const privacyPageUrl = new URL('../../../src/app/privacy/page.tsx', import.meta.url)
 const issueUrl = new URL(
   '../../../docs/issues/ISSUE-071-lp-static-prototype-review.md',
   import.meta.url,
@@ -15,6 +16,7 @@ const issueUrl = new URL(
 
 const lpHtml = readFileSync(lpHtmlUrl, 'utf8')
 const evaluation = readFileSync(evaluationUrl, 'utf8')
+const privacyPageSource = readFileSync(privacyPageUrl, 'utf8')
 const issueSource = readFileSync(issueUrl, 'utf8')
 
 describe('ISSUE-071 LP static prototype review', () => {
@@ -28,9 +30,17 @@ describe('ISSUE-071 LP static prototype review', () => {
     expect(lpHtml).toContain('prefers-reduced-motion')
   })
 
-  it('connects the LP copy to conversion, value proof, AI consent, and store readiness', () => {
-    expect(lpHtml).toContain('リリース通知を受け取る')
+  it('connects the LP copy to waitlist conversion, value proof, AI consent, and store readiness', () => {
+    expect(lpHtml).toContain('待機リストに登録する')
     expect(lpHtml).toContain('記録例を見る')
+    expect(lpHtml).toContain('id="waitlist-form"')
+    expect(lpHtml).toContain('action="/v1/waitlist"')
+    expect(lpHtml).toContain('method="post"')
+    expect(lpHtml).toContain('data-endpoint="/v1/waitlist"')
+    expect(lpHtml).toContain('任意のインタビューやフィードバック協力のお願い')
+    expect(lpHtml).toContain('プライバシーポリシー')
+    expect(lpHtml).toContain('アクセス制御された環境で管理します')
+    expect(lpHtml).toContain('<noscript>')
     expect(lpHtml).toContain('App Store 準備中')
     expect(lpHtml).toContain('Google Play 準備中')
     expect(lpHtml).toContain('同意していれば下書きを待つ')
@@ -44,6 +54,7 @@ describe('ISSUE-071 LP static prototype review', () => {
     expect(lpHtml).not.toMatch(/storage_key\s*[:=]|presigned_url\s*[:=]|prompt\s*[:=]/i)
     expect(lpHtml).not.toMatch(/学習に使いません|使われません|zero data retention|0-day|復元可能/i)
     expect(lpHtml).not.toMatch(/やわらかい光|今日も元気|ちいさな手|公園に行きました/)
+    expect(lpHtml).not.toContain('LPの表示ログやAPIレスポンス')
   })
 
   it('records the expert framework review and follow-up issue split', () => {
@@ -57,10 +68,19 @@ describe('ISSUE-071 LP static prototype review', () => {
     expect(evaluation).toContain('LP-P0-02')
     expect(evaluation).toContain('LP-P0-03')
 
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('github_issue: 162')
     expect(issueSource).toContain('- [x] 静的 LP prototype が作成されている')
     expect(issueSource).toContain('- [x] 専門サブエージェント 5 名の read-only review 結果')
     expect(issueSource).toContain('- [x] LP artifact に実写真、画像 URL、`storage_key`')
+  })
+
+  it('keeps the prelaunch privacy route available and conservative', () => {
+    expect(privacyPageSource).toContain('export default function PrivacyPage')
+    expect(privacyPageSource).toContain('待機リストフォームでは、メールアドレスを取得します')
+    expect(privacyPageSource).toContain('任意のインタビューやフィードバック協力のお願い')
+    expect(privacyPageSource).toContain('認証とアクセス制御が可能な管理環境')
+    expect(privacyPageSource).toContain('prelaunch-2026-07-25')
+    expect(privacyPageSource).not.toMatch(/zero data retention|0-day|学習に使いません|復元可能/i)
   })
 })

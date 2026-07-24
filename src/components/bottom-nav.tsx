@@ -6,7 +6,7 @@ import { BookOpen, Home, Plus, Settings, type LucideIcon } from 'lucide-react'
 
 // Quiet Heirloom: Persistent bottom tab bar with 3 destinations + 中央記録ボタン
 // 表示しないページ (集中フロー / 認証画面)
-const HIDDEN_PATHS = ['/sign-in', '/auth/callback', '/onboarding', '/record']
+const HIDDEN_PATHS = ['/sign-in', '/auth/callback', '/onboarding', '/record', '/privacy']
 
 function shouldHide(pathname: string | null): boolean {
   if (!pathname) return false
