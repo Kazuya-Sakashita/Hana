@@ -55,9 +55,9 @@ pnpm qa:issue028:images
 | `album_lazy_after_scroll` | 初期 viewport 外の signed storage 画像が初期 request に含まれず、 scroll 後に request される |
 | `memory_preview_variant`  | `/memory/{id}` で signed preview WebP variant request がある                                 |
 
-`album_lazy_after_scroll` は、画像枚数が少なく viewport 外候補が作れない場合 `skipped` になる。#43 を close するには、実データを増やして `pass` にするか、実データ条件の制約を別途記録する。
+`album_lazy_after_scroll` は、画像枚数が少なく viewport 外候補が作れない場合 `skipped` になる。#87 / ISSUE-041 を close するには、実データを増やして `pass` にするか、実データ条件の制約を別途記録する。
 
-## #43 へ残す証跡
+## #87 / ISSUE-041 へ残す証跡
 
 スクリプトの JSON 出力をそのまま保存できる。 signed URL は出ない。
 
@@ -66,9 +66,35 @@ HANA_QA_MEMORY_PATH=/memory/<memory-id> pnpm qa:issue028:images \
   > docs/perf/issue-028-authenticated-network-result-YYYY-MM-DD.json
 ```
 
+## Lighthouse mobile の安全な記録
+
+Lighthouse の raw report には、監査対象ページや画像 request の URL が含まれる場合がある。
+raw report を `docs/` や PR に保存しない。次の wrapper で、Performance 指標と
+"Properly size images" の結果だけを sanitized JSON として保存する。
+
+```bash
+HANA_QA_BASE_URL=http://localhost:3000 \
+HANA_QA_PAGE_PATH=/memory/<memory-id> \
+HANA_QA_CDP_PORT=9222 \
+pnpm qa:issue028:lighthouse-summary \
+  > docs/perf/issue-028-authenticated-lighthouse-summary-YYYY-MM-DD.json
+```
+
+すでに手元に raw Lighthouse JSON がある場合も、raw file は commit せず、次のように summary
+だけを生成して保存する。
+
+```bash
+pnpm qa:issue028:lighthouse-summary -- --input /path/to/local-lighthouse.json \
+  > docs/perf/issue-028-authenticated-lighthouse-summary-YYYY-MM-DD.json
+```
+
+summary は memory ID / signed URL / token / storage_key / 画像 URL を出力しない。
+2026-05-27 baseline との比較は、Lighthouse report が mobile / simulated throttling の場合だけ
+summary に含める。
+
 ## まだ手動で必要な項目
 
 - Lighthouse mobile の "Properly size images" 非悪化確認
-- `/memory/{id}` の LCP を `docs/perf/baseline-2026-05-27.md` と比較して再計測
+- `/memory/{id}` の Lighthouse LCP を `docs/perf/baseline-2026-05-27.md` と比較して再計測
 
-この 2 点が残る場合、 GitHub Issue #43 は open のままにする。
+この 2 点が残る場合、 GitHub Issue #87 / ISSUE-041 は open のままにする。
