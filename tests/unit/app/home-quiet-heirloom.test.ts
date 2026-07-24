@@ -54,7 +54,8 @@ describe('home Quiet Heirloom refresh', () => {
     expect(homeSource).toContain('保存前に、ことばを整えられます。')
     expect(homeSource).toContain('whitespace-nowrap')
     expect(homeSource).toContain('30秒')
-    expect(homeSource).toContain('{memories.length > 0 ? (')
+    expect(homeSource).toContain('const featuredMemory = memories[0] ?? null')
+    expect(homeSource).toContain('FeaturedPhotoMat')
     expect(homeSource).toContain('また、ここに')
     expect(homeSource).toContain('しまいましょう')
     expect(homeSource).toContain('ひとことだけでも、静かに残せます。')
@@ -64,6 +65,11 @@ describe('home Quiet Heirloom refresh', () => {
   })
 
   it('renders recent memories as private album slips instead of a feed', () => {
+    expect(homeSource).toContain('data-testid="home-first-view-photo-mat"')
+    expect(homeSource).toContain('写真をしまう場所')
+    expect(homeSource).toContain('aspect-[4/3]')
+    expect(homeSource).toContain('priority')
+    expect(homeSource).toContain('shelfMemories')
     expect(homeSource).toContain('アルバム')
     expect(homeSource).toContain('しまってある ページ')
     expect(homeSource).toContain('paper-surface')
@@ -74,10 +80,12 @@ describe('home Quiet Heirloom refresh', () => {
   })
 
   it('keeps empty and stats states forgiving and non-competitive', () => {
-    expect(homeSource).toContain('最初のページを、')
+    expect(homeSource).toContain('最初の1まいを、')
     expect(homeSource).toContain('ここにしまえます')
     expect(homeSource).toContain('はじめてのページをつくる')
+    expect(homeSource).toContain('小さな余白')
     expect(homeSource).toContain('一緒に過ごした日数')
+    expect(homeSource).toContain('HomeGentleStats')
     expect(homeSource).toContain('daysBetween(child.birthdate, new Date())')
     expect(homeSource).toContain('prisma.memory.count')
     expect(homeSource).toContain('select: { name: true, birthdate: true }')
