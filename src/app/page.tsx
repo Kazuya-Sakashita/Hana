@@ -91,7 +91,7 @@ async function HomeBody({ userId }: { userId: string }) {
     <div className="space-y-10">
       <section
         aria-labelledby="home-primary-action"
-        className="paper-surface overflow-hidden rounded-[var(--radius)] px-5 py-5"
+        className="paper-surface overflow-hidden rounded-[var(--radius-paper-slip)] px-5 py-5"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -107,7 +107,7 @@ async function HomeBody({ userId }: { userId: string }) {
             </p>
           </div>
           <div
-            className="photo-mat flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl"
+            className="photo-mat flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--radius-photo-mat)]"
             aria-hidden="true"
           >
             <BookOpen className="text-sakura-deep size-6" />
@@ -135,7 +135,7 @@ async function HomeBody({ userId }: { userId: string }) {
       </section>
 
       {memories.length === 0 ? (
-        <section className="photo-mat rounded-[var(--radius)] px-5 py-8 text-center">
+        <section className="photo-mat rounded-[var(--radius-photo-mat)] px-5 py-8 text-center">
           <p className="meta-label">はじめのページ</p>
           <h2 className="mt-3 font-serif text-xl leading-snug">
             最初のページを、
@@ -176,22 +176,22 @@ async function HomeBody({ userId }: { userId: string }) {
                   <li key={m.id} className="w-[148px] shrink-0 snap-start">
                     <Link
                       href={`/memory/${m.id}`}
-                      className="paper-surface ease-organic block rounded-[18px] p-2 transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+                      className="paper-surface ease-organic block rounded-[var(--radius-paper-slip)] p-2 transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
                     >
                       {typeof url === 'string' ? (
-                        <div className="photo-mat rounded-[14px] p-1">
+                        <div className="photo-mat rounded-[var(--radius-photo-mat)] p-1">
                           <Image
                             src={url}
                             alt=""
                             width={140}
                             height={175}
                             sizes="140px"
-                            className="aspect-[4/5] w-full rounded-[10px] object-cover"
+                            className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
                           />
                         </div>
                       ) : (
                         <div
-                          className="photo-mat flex aspect-[4/5] w-full items-center justify-center rounded-[14px]"
+                          className="photo-mat flex aspect-[4/5] w-full items-center justify-center rounded-[var(--radius-photo-mat)]"
                           aria-hidden="true"
                         >
                           <BookOpen className="text-sakura-deep size-7" />
@@ -208,7 +208,7 @@ async function HomeBody({ userId }: { userId: string }) {
                 <Link
                   href="/album"
                   prefetch={true}
-                  className="photo-mat ease-organic flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-[18px] px-4 text-center font-serif text-sm transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+                  className="photo-mat ease-organic flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-paper-slip)] px-4 text-center font-serif text-sm transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
                 >
                   まえのページも
                   <span className="text-sakura-deep inline-flex items-center gap-1">
@@ -240,7 +240,7 @@ function HomeBodySkeleton() {
   return (
     <div className="space-y-10">
       <div
-        className="bg-warm h-56 w-full animate-pulse rounded-[var(--radius)]"
+        className="bg-warm h-56 w-full animate-pulse rounded-[var(--radius-paper-slip)]"
         aria-hidden="true"
       />
       <section>
@@ -248,7 +248,7 @@ function HomeBodySkeleton() {
         <ul className="-mx-6 flex gap-3 px-6 py-2">
           {[0, 1, 2].map((i) => (
             <li key={i} className="w-[148px] shrink-0" aria-hidden="true">
-              <div className="bg-warm aspect-[4/5] w-full animate-pulse rounded-[18px]" />
+              <div className="bg-warm aspect-[4/5] w-full animate-pulse rounded-[var(--radius-paper-slip)]" />
             </li>
           ))}
         </ul>
@@ -259,7 +259,7 @@ function HomeBodySkeleton() {
 
 function Stat({ number, label, unit }: { number: string; label: string; unit?: string }) {
   return (
-    <div className="paper-surface flex min-h-28 flex-col items-center justify-center rounded-2xl px-2 py-4 text-center">
+    <div className="paper-surface flex min-h-28 flex-col items-center justify-center rounded-[var(--radius-paper-slip)] px-2 py-4 text-center">
       <dt className="text-ink-tertiary max-w-full break-words text-[11px] leading-5 [overflow-wrap:anywhere]">
         {label}
       </dt>

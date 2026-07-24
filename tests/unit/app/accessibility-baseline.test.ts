@@ -91,11 +91,11 @@ describe('Hana accessibility baseline', () => {
 
   it('keeps primary and focus indicator token states readable', () => {
     const checks: Array<[string, string, string, number]> = [
-      ['primary button text', 'ink-primary', 'accent-sakura', 4.5],
-      ['dark primary button text', 'primary-foreground', 'accent-sakura', 4.5],
-      ['active nav text', 'accent-deep', 'bg-elevated', 4.5],
+      ['primary button text', 'bg-paper-slip', 'success-leaf', 4.5],
+      ['dark primary button text', 'primary-foreground', 'success-leaf', 4.5],
+      ['active nav text', 'success-leaf-deep', 'bg-elevated', 4.5],
       ['dark active nav text', 'success-leaf', 'bg-elevated', 4.5],
-      ['pressed primary text', 'bg-elevated', 'accent-pressed', 4.5],
+      ['pressed primary text', 'bg-elevated', 'success-leaf-deep', 4.5],
       ['focus ring on canvas', 'accent-sakura', 'bg-canvas', 3],
       ['focus ring on elevated', 'accent-sakura', 'bg-elevated', 3],
     ]
@@ -107,7 +107,9 @@ describe('Hana accessibility baseline', () => {
           ? token(foreground, darkTokenBlock)
           : token(foreground)
       const backgroundToken =
-        label === 'dark active nav text' ? token(background, darkTokenBlock) : token(background)
+        label === 'dark primary button text' || label === 'dark active nav text'
+          ? token(background, darkTokenBlock)
+          : token(background)
       const ratio = contrastRatio(foregroundToken, backgroundToken)
       if (ratio < minimum) {
         failures.push(`${label}: ${ratio.toFixed(2)}`)

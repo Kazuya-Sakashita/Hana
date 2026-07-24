@@ -81,7 +81,7 @@ function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss: () =>
       className="pointer-events-none fixed inset-x-0 bottom-24 z-[80] flex justify-center px-4"
     >
       <div
-        className={`shadow-lift pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 ${toneClass}`}
+        className={`shadow-lift pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-[var(--radius-sheet)] border px-4 py-3 ${toneClass}`}
       >
         <div className="min-w-0 flex-1">
           <p className="font-serif text-sm leading-relaxed">{message.title}</p>

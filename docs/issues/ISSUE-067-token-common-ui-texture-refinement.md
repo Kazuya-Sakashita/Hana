@@ -2,7 +2,7 @@
 id: ISSUE-067
 title: トークンと共通UIの質感調整
 priority: P1
-status: todo
+status: done
 size: M
 created_at: 2026-07-24
 parent: QUIET-HEIRLOOM-REFINEMENT
@@ -36,12 +36,28 @@ Quiet Heirloom refinement の設計契約に沿って、共通デザイントー
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] primary action / save / done は sage 系を基調にし、sakura は focus / favorite / ornament など小さなアクセントに限定されている
-- [ ] radius taxonomy が実装に反映され、主要 surface の任意 `rounded-[...]` が必要最小限になっている
-- [ ] 通常 card / paper surface は hairline と浅い影を基本にし、強い浮遊影は sheet / toast などに限定されている
-- [ ] body / helper / status text の contrast が既存基準を下回らない
-- [ ] 44px tap target、visible focus、reduced motion が維持されている
-- [ ] Evidence に実写真、画像 URL、`storage_key`、prompt、AI 生成本文を残さない
+- [x] primary action / save / done は sage 系を基調にし、sakura は focus / favorite / ornament など小さなアクセントに限定されている
+- [x] radius taxonomy が実装に反映され、主要 surface の任意 `rounded-[...]` が必要最小限になっている
+- [x] 通常 card / paper surface は hairline と浅い影を基本にし、強い浮遊影は sheet / toast などに限定されている
+- [x] body / helper / status text の contrast が既存基準を下回らない
+- [x] 44px tap target、visible focus、reduced motion が維持されている
+- [x] Evidence に実写真、画像 URL、`storage_key`、prompt、AI 生成本文を残さない
+
+## レビュー
+
+専門サブエージェント 3 名で read-only review を実施した。
+
+| reviewer                    | verdict | notes                                                                        |
+| --------------------------- | ------- | ---------------------------------------------------------------------------- |
+| Design System               | GO      | QA generator の primary 不整合を修正後、sage primary / radius taxonomy は GO |
+| Accessibility / Frontend QA | GO      | contrast、tap target、focus、manifest sync、`pnpm pr:gate` は GO             |
+| Product / Privacy Scope     | GO      | 1 Issue 1 PR scope、evidence policy、privacy claim 追加なし                  |
+
+## 検証
+
+- `pnpm exec vitest run tests/unit/app/quiet-heirloom-common-ui.test.ts tests/unit/app/accessibility-baseline.test.ts tests/unit/app/design-mobile-qa-gate.test.ts`
+- `pnpm qa:issue064:design-dom-smoke -- --mode=contract`
+- `pnpm pr:gate`
 
 ## セキュリティ・プライバシー考慮
 

@@ -3,7 +3,7 @@
   "evidence": "synthetic-only",
   "generated_for": "2026-07-23",
   "generator": "scripts/qa/issue-059-design-mobile-gate.cjs",
-  "generator_sha256": "bc58f0fe23fa75d6a4a036f997c704c4d9630c2205f296af7f7d34d661d713b1",
+  "generator_sha256": "c30afff4e624b48ace7214e8275ec48faa2e010465c301c09d67beef3dfe9933",
   "scenarios": [
     "record-core-ai-390x844",
     "record-ai-skip-ready-390x844",

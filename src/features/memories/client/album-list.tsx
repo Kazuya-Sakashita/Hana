@@ -102,7 +102,7 @@ function AlbumListItem({ memory }: { memory: Memory }) {
 
   return (
     <li>
-      <div className="paper-surface rounded-[20px] p-3">
+      <div className="paper-surface rounded-[var(--radius-paper-slip)] p-3">
         <div className="flex items-start gap-3">
           {isOptimistic ? (
             <div className="flex min-w-0 flex-1 gap-4 opacity-80">
@@ -112,7 +112,7 @@ function AlbumListItem({ memory }: { memory: Memory }) {
           ) : (
             <Link
               href={`/memory/${memory.id}`}
-              className="ease-organic flex min-w-0 flex-1 gap-4 rounded-[16px] transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+              className="ease-organic flex min-w-0 flex-1 gap-4 rounded-[var(--radius-photo-mat)] transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
             >
               <Thumbnail url={memory.cover_thumbnail_url ?? null} />
               <MemoryText memory={memory} recordedAt={recordedAt} />
@@ -196,9 +196,9 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
 
 function EmptyState() {
   return (
-    <section className="photo-mat rounded-[var(--radius)] px-5 py-8 text-center">
+    <section className="photo-mat rounded-[var(--radius-photo-mat)] px-5 py-8 text-center">
       <div
-        className="bg-paper-slip border-hairline mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border"
+        className="bg-paper-slip border-hairline mx-auto flex h-14 w-14 items-center justify-center rounded-[var(--radius-photo-mat)] border"
         aria-hidden="true"
       >
         <BookOpen className="text-sakura-deep size-6" />
@@ -225,13 +225,13 @@ function EmptyState() {
 function Thumbnail({ url }: { url: string | null }) {
   if (typeof url === 'string') {
     return (
-      <div className="photo-mat aspect-[4/5] w-24 shrink-0 rounded-[16px] p-1">
+      <div className="photo-mat aspect-[4/5] w-24 shrink-0 rounded-[var(--radius-photo-mat)] p-1">
         <Image
           src={url}
           alt=""
           width={96}
           height={120}
-          className="aspect-[4/5] w-full rounded-[12px] object-cover"
+          className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
           sizes="96px"
         />
       </div>
@@ -239,7 +239,7 @@ function Thumbnail({ url }: { url: string | null }) {
   }
   return (
     <div
-      className="photo-mat text-sakura-deep flex aspect-[4/5] w-24 shrink-0 items-center justify-center rounded-[16px]"
+      className="photo-mat text-sakura-deep flex aspect-[4/5] w-24 shrink-0 items-center justify-center rounded-[var(--radius-photo-mat)]"
       aria-hidden="true"
     >
       <BookOpen className="size-7" />

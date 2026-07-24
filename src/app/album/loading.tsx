@@ -14,7 +14,7 @@ export default function Loading() {
             <li key={i}>
               <Card>
                 <CardContent className="flex gap-4 p-4">
-                  <div className="bg-warm aspect-[4/5] w-20 shrink-0 animate-pulse rounded-2xl" />
+                  <div className="bg-warm aspect-[4/5] w-20 shrink-0 animate-pulse rounded-[var(--radius-photo-mat)]" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <div className="bg-warm h-3 w-32 animate-pulse rounded" />
                     <div className="bg-warm h-4 w-48 animate-pulse rounded" />

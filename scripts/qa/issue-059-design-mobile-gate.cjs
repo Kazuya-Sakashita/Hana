@@ -123,6 +123,8 @@ function renderShell(title, body) {
             --sakura-soft: #f1c9cd;
             --sakura-deep: #8c5a5e;
             --sage: #d9e0d0;
+            --leaf: #5f6c57;
+            --leaf-deep: #4d5a47;
             --umber: #a9795c;
             --hairline: #eadfD2;
           }
@@ -223,8 +225,8 @@ function renderShell(title, body) {
             font-weight: 700;
           }
           .primary {
-            background: var(--sakura);
-            color: var(--ink);
+            background: var(--leaf);
+            color: var(--bg-paper);
           }
           .secondary {
             background: var(--bg-paper);
@@ -587,7 +589,8 @@ function assertContrastSamples() {
   const samples = [
     ['ink on canvas', '#2a2522', '#fbf7f2', 7],
     ['secondary on canvas', '#6b5f57', '#fbf7f2', 4.5],
-    ['primary button', '#2a2522', '#c57a83', 4.5],
+    ['primary button', '#fffdf9', '#5f6c57', 4.5],
+    ['pressed primary button', '#ffffff', '#4d5a47', 4.5],
     ['deep sakura on paper', '#8c5a5e', '#fffdf9', 4.5],
   ]
 

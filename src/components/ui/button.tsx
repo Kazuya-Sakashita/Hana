@@ -8,9 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Quiet Heirloom: primary は pressed sakura の pill。
+        // Quiet Heirloom: primary は記録・保存・完了を担う sage の pill。
         default:
-          'rounded-full bg-primary text-primary-foreground shadow-soft hover:bg-sakura-deep hover:text-white active:bg-sakura-pressed active:text-white',
+          'rounded-full bg-primary text-primary-foreground shadow-soft hover:bg-leaf-deep hover:text-white active:bg-leaf-deep active:text-white',
         secondary: 'rounded-xl bg-warm text-secondary-foreground hover:bg-photo-mat',
         outline:
           'rounded-xl border border-hairline bg-paper-slip text-ink shadow-soft hover:bg-warm',
