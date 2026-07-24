@@ -80,10 +80,15 @@ ISSUE-028 / GitHub Issue #43 で `next/image` 移行と静的確認は完了し�
 - Lighthouse mobile は未実行。CDP Web Vitals の参考実測は取得済みだが、2026-05-27 baseline
   と同じ Lighthouse simulated throttling ではないため、完了扱いにはしない
 
+Lighthouse raw report には signed URL / token が含まれる可能性があるため、2026-07-24 に
+sanitized summary helper `pnpm qa:issue028:lighthouse-summary` を追加した。Lighthouse 実測時は
+raw report を commit せず、summary JSON だけを `docs/perf/` に保存する。
+
 ## 2026-07-24 進捗
 
 - 保存済み Network QA: `docs/perf/issue-028-authenticated-network-result-2026-07-24.json`
 - 保存済み CDP Web Vitals 参考実測: `docs/perf/issue-028-authenticated-cdp-vitals-2026-07-24.json`
+- Lighthouse sanitized summary helper: `scripts/qa/issue-028-lighthouse-summary.mjs`
 - `/album`: signed thumbnail WebP request を確認
 - `/memory/{id}`: signed preview WebP request を確認
 - CDP Web Vitals 参考実測: `/album` LCP 1.332s / CLS 0、`/memory/{id}` LCP 1.912s / CLS 0.0003
