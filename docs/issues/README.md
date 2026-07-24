@@ -41,13 +41,13 @@
 
 2026-07-24 時点:
 
-| status        | count | notes             |
-| ------------- | ----- | ----------------- |
-| `todo`        | 0     | ready queue は空  |
-| `in_progress` | 0     | 並行実行枠は空き  |
-| `review`      | 0     | review queue は空 |
-| `done`        | 67    | archive を参照    |
-| `blocked`     | 0     | なし              |
+| status        | count | notes                     |
+| ------------- | ----- | ------------------------- |
+| `todo`        | 4     | refinement 後続は依存待ち |
+| `in_progress` | 0     | 並行実行枠は空き          |
+| `review`      | 1     | `ISSUE-066`               |
+| `done`        | 67    | archive を参照            |
+| `blocked`     | 0     | なし                      |
 
 ---
 
@@ -116,6 +116,16 @@ Codex-ready と判断する条件:
 | 4     | `ISSUE-063` | Record Saved Moment and Memory Landing | done |
 | 5     | `ISSUE-064` | Product Design QA v2                   | done |
 
+## Planned Quiet Heirloom Refinement Sequence
+
+| order | issue       | title                                         | note                         |
+| ----- | ----------- | --------------------------------------------- | ---------------------------- |
+| 1     | `ISSUE-066` | Quiet Heirloom refinement 設計契約            | review                       |
+| 2     | `ISSUE-067` | トークンと共通 UI の質感調整                  | todo, blocked by `ISSUE-066` |
+| 3     | `ISSUE-068` | ホーム first view を写真主役へ調整            | todo, blocked by `ISSUE-067` |
+| 4     | `ISSUE-069` | 記録画面を 1 判断ずつの下部シート体験へ調整   | todo, blocked by `ISSUE-067` |
+| 5     | `ISSUE-070` | アルバムと記録詳細を private shelf 体験へ調整 | todo, blocked by `ISSUE-067` |
+
 ---
 
 ## GitHub Intake Queue
@@ -134,7 +144,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-現在はありません。
+- `ISSUE-066`: Quiet Heirloom refinement 設計契約
 
 ---
 
