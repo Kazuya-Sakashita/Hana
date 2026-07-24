@@ -106,9 +106,12 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issueIndexSource).toContain(
       '| 4     | `ISSUE-069` | 記録画面を 1 判断ずつの下部シート体験へ調整',
     )
+    expect(issueIndexSource).toContain(
+      '| 5     | `ISSUE-070` | アルバムと記録詳細を private shelf 体験へ調整 | done',
+    )
     expect(issueIndexSource).toContain('done')
-    expect(issueIndexSource).toContain('`ISSUE-070`: アルバムと記録詳細を private shelf 体験へ調整')
-    expect(issueIndexSource).toContain('todo, ready')
+    expect(issueIndexSource).toContain('## Codex Ready Queue\n\n現在はありません。')
+    expect(issueIndexSource).not.toContain('todo, ready')
     expect(issueIndexSource).not.toContain('todo, blocked by `ISSUE-067`')
     expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
   })

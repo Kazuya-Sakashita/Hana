@@ -150,10 +150,7 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
 
 function SavedMemoryNotice() {
   return (
-    <section
-      aria-labelledby="memory-saved-moment-title"
-      className="paper-surface mb-4 rounded-[var(--radius-paper-slip)] px-4 py-4"
-    >
+    <section aria-labelledby="memory-saved-moment-title" className="mb-4 px-1 pt-1">
       <Link
         href="/album"
         prefetch={true}
@@ -162,7 +159,11 @@ function SavedMemoryNotice() {
         <ChevronLeft className="size-4" aria-hidden="true" />
         アルバムへ
       </Link>
-      <div role="status" aria-live="polite" className="flex items-start gap-3 text-left">
+      <div
+        role="status"
+        aria-live="polite"
+        className="border-hairline text-ink-secondary flex items-start gap-3 border-l px-3 py-2 text-left"
+      >
         <CheckCircle2 className="text-leaf mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div>
           <p className="meta-label">{quietStateCopy.record.savedLandingEyebrow}</p>
