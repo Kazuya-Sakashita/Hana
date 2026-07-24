@@ -8,7 +8,7 @@ import { HomeGreeting } from '@/components/home-greeting'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
-import { fetchMemoriesWithCovers } from '@/features/memories/server/queries'
+import { fetchMemoriesWithCovers, type MemoryListItem } from '@/features/memories/server/queries'
 
 // ISSUE-056: Quiet Heirloom home.
 // Auth shell and streamed body stay separate so the first paint remains light.
@@ -84,155 +84,227 @@ async function HomeBody({ userId }: { userId: string }) {
   if (!child) redirect('/onboarding')
 
   const memories = memoriesResult.items
+  const featuredMemory = memories[0] ?? null
+  const shelfMemories = memories.slice(1)
   const ageLabel = formatAgeLabel(computeAge(child.birthdate, new Date()))
   const togetherDays = daysBetween(child.birthdate, new Date())
 
   return (
     <div className="space-y-10">
-      <section
-        aria-labelledby="home-primary-action"
-        className="paper-surface overflow-hidden rounded-[var(--radius-paper-slip)] px-5 py-5"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="meta-label">ただいま</p>
+      <section aria-labelledby="home-primary-action" className="space-y-5">
+        <FeaturedPhotoMat memory={featuredMemory} />
+
+        <div className="space-y-4">
+          <div>
+            <p className="meta-label">{featuredMemory ? 'おかえりなさい' : 'はじめのページ'}</p>
             <h1 id="home-primary-action" className="mt-3 font-serif text-2xl leading-snug">
-              また、ここに
-              <br />
-              しまいましょう
+              {featuredMemory ? (
+                <>
+                  また、ここに
+                  <br />
+                  しまいましょう
+                </>
+              ) : (
+                <>
+                  最初の1まいを、
+                  <br />
+                  ここにしまえます
+                </>
+              )}
             </h1>
             <p className="text-ink-secondary mt-3 text-sm leading-7">
               写真1まいから、AIの下書きまで<span className="whitespace-nowrap">30秒</span>
               。保存前に、ことばを整えられます。
             </p>
           </div>
-          <div
-            className="photo-mat flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--radius-photo-mat)]"
-            aria-hidden="true"
-          >
-            <BookOpen className="text-sakura-deep size-6" />
-          </div>
-        </div>
-        <div className="mt-6 flex flex-col gap-3">
-          <Button asChild size="lg" className="w-full">
-            <Link href="/record" prefetch={false}>
-              <Camera className="size-4" aria-hidden="true" />
-              写真からページをつくる
-            </Link>
-          </Button>
-          {memories.length > 0 ? (
-            <Button asChild variant="outline" size="lg" className="w-full">
-              <Link href="/album" prefetch={true}>
-                <BookOpen className="size-4" aria-hidden="true" />
-                アルバムをひらく
+          <div className="flex flex-col gap-3">
+            <Button asChild size="lg" className="w-full">
+              <Link href="/record" prefetch={false}>
+                <Camera className="size-4" aria-hidden="true" />
+                {featuredMemory ? '写真からページをつくる' : 'はじめてのページをつくる'}
               </Link>
             </Button>
-          ) : null}
+            {featuredMemory ? (
+              <Button asChild variant="outline" size="lg" className="w-full">
+                <Link href="/album" prefetch={true}>
+                  <BookOpen className="size-4" aria-hidden="true" />
+                  アルバムをひらく
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-ink-tertiary text-center text-xs leading-6">
+            ひとことだけでも、静かに残せます。
+          </p>
         </div>
-        <p className="text-ink-tertiary mt-4 text-center text-xs leading-6">
-          ひとことだけでも、静かに残せます。
-        </p>
       </section>
 
       {memories.length === 0 ? (
-        <section className="photo-mat rounded-[var(--radius-photo-mat)] px-5 py-8 text-center">
-          <p className="meta-label">はじめのページ</p>
-          <h2 className="mt-3 font-serif text-xl leading-snug">
-            最初のページを、
-            <br />
-            ここにしまえます
-          </h2>
-          <p className="text-ink-secondary mx-auto mt-3 max-w-[18rem] text-sm leading-7">
-            {child.name} ちゃんとの 1まいめを、ありのままの写真から。
+        <section className="paper-surface rounded-[var(--radius-paper-slip)] px-5 py-5">
+          <p className="meta-label">小さな余白</p>
+          <p className="text-ink-secondary mt-3 text-sm leading-7">
+            <span className="break-words [overflow-wrap:anywhere]">{child.name}</span>{' '}
+            ちゃんとの1まいめを、ありのままの写真から。
           </p>
-          <Button asChild size="lg" className="mt-6 w-full">
-            <Link href="/record" prefetch={false}>
-              <Camera className="size-4" aria-hidden="true" />
-              はじめてのページをつくる
-            </Link>
-          </Button>
         </section>
       ) : (
         <>
-          <section aria-labelledby="home-keepsake-pages">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="meta-label">アルバム</p>
-                <h2 id="home-keepsake-pages" className="mt-1 font-serif text-lg">
-                  しまってある ページ
-                </h2>
-              </div>
-              <Button asChild variant="ghost" size="sm" className="px-3">
-                <Link href="/album" prefetch={true}>
-                  アルバムへ
-                  <ChevronRight className="size-4" aria-hidden="true" />
-                </Link>
-              </Button>
-            </div>
-            <ul className="-mx-6 flex snap-x scroll-px-6 gap-3 overflow-x-auto px-6 py-2">
-              {memories.map((m) => {
-                const url = m.coverThumbnailUrl
-                return (
-                  <li key={m.id} className="w-[148px] shrink-0 snap-start">
-                    <Link
-                      href={`/memory/${m.id}`}
-                      className="paper-surface ease-organic block rounded-[var(--radius-paper-slip)] p-2 transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
-                    >
-                      {typeof url === 'string' ? (
-                        <div className="photo-mat rounded-[var(--radius-photo-mat)] p-1">
-                          <Image
-                            src={url}
-                            alt=""
-                            width={140}
-                            height={175}
-                            sizes="140px"
-                            className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div
-                          className="photo-mat flex aspect-[4/5] w-full items-center justify-center rounded-[var(--radius-photo-mat)]"
-                          aria-hidden="true"
-                        >
-                          <BookOpen className="text-sakura-deep size-7" />
-                        </div>
-                      )}
-                      <p className="text-ink mt-3 line-clamp-2 min-h-10 font-serif text-sm leading-5">
-                        {m.title}
-                      </p>
-                    </Link>
-                  </li>
-                )
-              })}
-              <li className="w-[148px] shrink-0 snap-start">
-                <Link
-                  href="/album"
-                  prefetch={true}
-                  className="photo-mat ease-organic flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-paper-slip)] px-4 text-center font-serif text-sm transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
-                >
-                  まえのページも
-                  <span className="text-sakura-deep inline-flex items-center gap-1">
-                    ひらく
+          {shelfMemories.length > 0 ? (
+            <section aria-labelledby="home-keepsake-pages">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="meta-label">アルバム</p>
+                  <h2 id="home-keepsake-pages" className="mt-1 font-serif text-lg">
+                    しまってある ページ
+                  </h2>
+                </div>
+                <Button asChild variant="ghost" size="sm" className="px-3">
+                  <Link href="/album" prefetch={true}>
+                    アルバムへ
                     <ChevronRight className="size-4" aria-hidden="true" />
-                  </span>
-                </Link>
-              </li>
-            </ul>
-          </section>
+                  </Link>
+                </Button>
+              </div>
+              <ul className="-mx-6 flex snap-x scroll-px-6 gap-3 overflow-x-auto px-6 py-2">
+                {shelfMemories.map((m) => {
+                  const url = m.coverThumbnailUrl
+                  return (
+                    <li key={m.id} className="w-[148px] shrink-0 snap-start">
+                      <Link
+                        href={`/memory/${m.id}`}
+                        className="paper-surface ease-organic block rounded-[var(--radius-paper-slip)] p-2 transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+                      >
+                        {typeof url === 'string' ? (
+                          <div className="photo-mat rounded-[var(--radius-photo-mat)] p-1">
+                            <Image
+                              src={url}
+                              alt=""
+                              width={140}
+                              height={175}
+                              sizes="140px"
+                              className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="photo-mat flex aspect-[4/5] w-full items-center justify-center rounded-[var(--radius-photo-mat)]"
+                            aria-hidden="true"
+                          >
+                            <BookOpen className="text-sakura-deep size-7" />
+                          </div>
+                        )}
+                        <p className="text-ink mt-3 line-clamp-2 min-h-10 break-words font-serif text-sm leading-5 [overflow-wrap:anywhere]">
+                          {m.title}
+                        </p>
+                      </Link>
+                    </li>
+                  )
+                })}
+                <li className="w-[148px] shrink-0 snap-start">
+                  <Link
+                    href="/album"
+                    prefetch={true}
+                    className="photo-mat ease-organic flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-paper-slip)] px-4 text-center font-serif text-sm transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+                  >
+                    まえのページも
+                    <span className="text-sakura-deep inline-flex items-center gap-1">
+                      ひらく
+                      <ChevronRight className="size-4" aria-hidden="true" />
+                    </span>
+                  </Link>
+                </li>
+              </ul>
+            </section>
+          ) : null}
 
-          <section aria-labelledby="home-gentle-stats">
-            <h2 id="home-gentle-stats" className="meta-label mb-3">
-              この場所の あゆみ
-            </h2>
-            <dl className="grid grid-cols-3 gap-2">
-              <Stat number={String(memoryCount)} label="しまったページ" />
-              <Stat number={ageLabel.replace('生後 ', '')} label="いまの月齢" />
-              <Stat number={String(togetherDays)} label="一緒に過ごした日数" unit="日" />
-            </dl>
-          </section>
+          <HomeGentleStats
+            memoryCount={memoryCount}
+            ageLabel={ageLabel}
+            togetherDays={togetherDays}
+          />
         </>
       )}
     </div>
+  )
+}
+
+function FeaturedPhotoMat({ memory }: { memory: MemoryListItem | null }) {
+  const coverUrl = memory?.coverThumbnailUrl
+
+  if (!memory) {
+    return (
+      <div
+        data-testid="home-first-view-photo-mat"
+        className="photo-mat rounded-[var(--radius-sheet)] p-2"
+      >
+        <div className="bg-paper-slip/70 flex aspect-[4/3] w-full items-center justify-center rounded-[var(--radius-photo-inner)] px-8 text-center">
+          <div className="space-y-3">
+            <BookOpen className="text-sakura-deep mx-auto size-8" aria-hidden="true" />
+            <p className="text-ink font-serif text-lg leading-7">写真をしまう場所</p>
+            <p className="text-ink-tertiary text-xs leading-6">ここに1まいずつ、しまえます</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      href={`/memory/${memory.id}`}
+      data-testid="home-first-view-photo-mat"
+      className="photo-mat ease-organic block rounded-[var(--radius-sheet)] p-2 transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+    >
+      {typeof coverUrl === 'string' ? (
+        <Image
+          src={coverUrl}
+          alt=""
+          width={360}
+          height={270}
+          sizes="(max-width: 480px) 88vw, 360px"
+          priority
+          className="aspect-[4/3] w-full rounded-[var(--radius-photo-inner)] object-cover"
+        />
+      ) : (
+        <div
+          className="bg-paper-slip/70 flex aspect-[4/3] w-full items-center justify-center rounded-[var(--radius-photo-inner)]"
+          aria-hidden="true"
+        >
+          <BookOpen className="text-sakura-deep size-9" />
+        </div>
+      )}
+      <div className="mt-3 flex items-center justify-between gap-3 px-1 pb-1">
+        <div className="min-w-0">
+          <p className="meta-label">最近のページ</p>
+          <p className="text-ink mt-1 line-clamp-2 break-words font-serif text-base leading-6 [overflow-wrap:anywhere]">
+            {memory.title}
+          </p>
+        </div>
+        <ChevronRight className="text-ink-tertiary size-5 shrink-0" aria-hidden="true" />
+      </div>
+    </Link>
+  )
+}
+
+function HomeGentleStats({
+  memoryCount,
+  ageLabel,
+  togetherDays,
+}: {
+  memoryCount: number
+  ageLabel: string
+  togetherDays: number
+}) {
+  return (
+    <section aria-labelledby="home-gentle-stats">
+      <h2 id="home-gentle-stats" className="meta-label mb-3">
+        この場所の あゆみ
+      </h2>
+      <dl className="grid grid-cols-3 gap-2">
+        <Stat number={String(memoryCount)} label="しまったページ" />
+        <Stat number={ageLabel.replace('生後 ', '')} label="いまの月齢" />
+        <Stat number={String(togetherDays)} label="一緒に過ごした日数" unit="日" />
+      </dl>
+    </section>
   )
 }
 
@@ -240,9 +312,14 @@ function HomeBodySkeleton() {
   return (
     <div className="space-y-10">
       <div
-        className="bg-warm h-56 w-full animate-pulse rounded-[var(--radius-paper-slip)]"
+        className="photo-mat aspect-[4/3] w-full animate-pulse rounded-[var(--radius-sheet)]"
         aria-hidden="true"
       />
+      <div className="space-y-3" aria-hidden="true">
+        <div className="bg-warm h-5 w-24 animate-pulse rounded" />
+        <div className="bg-warm h-8 w-44 animate-pulse rounded" />
+        <div className="bg-warm h-12 w-full animate-pulse rounded-full" />
+      </div>
       <section>
         <div className="bg-warm mb-3 h-8 w-36 animate-pulse rounded" aria-hidden="true" />
         <ul className="-mx-6 flex gap-3 px-6 py-2">

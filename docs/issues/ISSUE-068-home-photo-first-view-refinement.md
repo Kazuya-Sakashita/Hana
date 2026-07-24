@@ -2,7 +2,7 @@
 id: ISSUE-068
 title: ホーム first view を写真主役へ調整
 priority: P1
-status: todo
+status: done
 size: M
 created_at: 2026-07-24
 parent: QUIET-HEIRLOOM-REFINEMENT
@@ -37,12 +37,32 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] `/` の first view で写真または photo mat が主役になり、説明カードだけが先に立たない
-- [ ] 記録 CTA は維持され、30 秒記録導線が下部または親指圏から失われない
-- [ ] stats や補助説明は first view の主役にならず、必要な場合は下部に整理されている
-- [ ] empty / loading / long child name / 既存記録ありの状態で、横あふれや重なりがない
-- [ ] pressure copy、streak、未記録日数による責める表現がない
-- [ ] Evidence に実写真、画像 URL、`storage_key`、prompt、AI 生成本文を残さない
+- [x] `/` の first view で写真または photo mat が主役になり、説明カードだけが先に立たない
+- [x] 記録 CTA は維持され、30 秒記録導線が下部または親指圏から失われない
+- [x] stats や補助説明は first view の主役にならず、必要な場合は下部に整理されている
+- [x] empty / loading / long child name / 既存記録ありの状態で、横あふれや重なりがない
+- [x] pressure copy、streak、未記録日数による責める表現がない
+- [x] Evidence に実写真、画像 URL、`storage_key`、prompt、AI 生成本文を残さない
+
+## レビュー
+
+専門サブエージェント 3 名で read-only review を実施した。
+
+| reviewer                    | verdict | notes                                                                               |
+| --------------------------- | ------- | ----------------------------------------------------------------------------------- |
+| Product UX / 30 秒記録      | GO      | first view の写真台紙主役化と `/record` CTA 維持は GO。pressure copy 追加なし       |
+| Privacy / Trust / Content   | GO      | 実写真、画像 URL、`storage_key`、prompt、AI 生成本文、unsafe trust claim の混入なし |
+| Visual / A11y / Engineering | HOLD→GO | placeholder copy と長文 title wrap、状態別 layout fixture を修正後 GO               |
+
+## 検証
+
+- `pnpm exec vitest run tests/unit/app/home-photo-first-view-refinement.test.ts tests/unit/app/home-photo-first-view-layout-fixtures.test.ts tests/unit/app/home-quiet-heirloom.test.ts tests/unit/app/product-experience-v2-contract.test.ts tests/unit/app/design-mobile-qa-gate.test.ts tests/unit/app/quiet-heirloom-common-ui.test.ts`
+- `pnpm exec tsc --noEmit`
+- `pnpm exec eslint src/app/page.tsx tests/unit/app/home-photo-first-view-refinement.test.ts tests/unit/app/home-photo-first-view-layout-fixtures.test.ts tests/unit/app/home-quiet-heirloom.test.ts`
+- `git diff --check`
+- `pnpm qa:issue064:design-dom-smoke -- --mode=contract`
+- `pnpm build:ci`
+- `pnpm pr:gate`
 
 ## セキュリティ・プライバシー考慮
 

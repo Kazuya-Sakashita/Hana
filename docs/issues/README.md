@@ -43,10 +43,10 @@
 
 | status        | count | notes                 |
 | ------------- | ----- | --------------------- |
-| `todo`        | 3     | refinement 後続 ready |
+| `todo`        | 2     | refinement 後続 ready |
 | `in_progress` | 0     | 並行実行枠は空き      |
 | `review`      | 0     | なし                  |
-| `done`        | 69    | archive を参照        |
+| `done`        | 70    | archive を参照        |
 | `blocked`     | 0     | なし                  |
 
 ---
@@ -89,7 +89,6 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-- `ISSUE-068`: ホーム first view を写真主役へ調整
 - `ISSUE-069`: 記録画面を 1 判断ずつの下部シート体験へ調整
 - `ISSUE-070`: アルバムと記録詳細を private shelf 体験へ調整
 
@@ -124,7 +123,7 @@ Codex-ready と判断する条件:
 | ----- | ----------- | --------------------------------------------- | ----------- |
 | 1     | `ISSUE-066` | Quiet Heirloom refinement 設計契約            | done        |
 | 2     | `ISSUE-067` | トークンと共通 UI の質感調整                  | done        |
-| 3     | `ISSUE-068` | ホーム first view を写真主役へ調整            | todo, ready |
+| 3     | `ISSUE-068` | ホーム first view を写真主役へ調整            | done        |
 | 4     | `ISSUE-069` | 記録画面を 1 判断ずつの下部シート体験へ調整   | todo, ready |
 | 5     | `ISSUE-070` | アルバムと記録詳細を private shelf 体験へ調整 | todo, ready |
 
@@ -161,7 +160,7 @@ Codex-ready と判断する条件:
 - maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`, `ISSUE-065`
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
-- refinement completed: `ISSUE-066`, `ISSUE-067`
+- refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`
 
 ---
 
