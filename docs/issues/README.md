@@ -41,13 +41,13 @@
 
 2026-07-24 時点:
 
-| status        | count | notes               |
-| ------------- | ----- | ------------------- |
-| `todo`        | 0     | ready queue は空    |
-| `in_progress` | 0     | 並行実行枠は空き    |
-| `review`      | 0     | review queue は空   |
-| `done`        | 65    | archive を参照      |
-| `blocked`     | 1     | 認証済み実データ QA |
+| status        | count | notes             |
+| ------------- | ----- | ----------------- |
+| `todo`        | 0     | ready queue は空  |
+| `in_progress` | 0     | 並行実行枠は空き  |
+| `review`      | 0     | review queue は空 |
+| `done`        | 67    | archive を参照    |
+| `blocked`     | 0     | なし              |
 
 ---
 
@@ -128,9 +128,7 @@ Codex-ready と判断する条件:
 
 ## Blocked Or Needs Human Decision
 
-| issue       | blocker                                                                                                 |
-| ----------- | ------------------------------------------------------------------------------------------------------- |
-| `ISSUE-041` | 認証済みブラウザセッション、または QA 用ログイン手段と、viewport 外 lazy 判定に足りる画像付き QA データ |
+現在はありません。
 
 ---
 
@@ -144,11 +142,11 @@ Codex-ready と判断する条件:
 
 - foundation: `ISSUE-001`, `ISSUE-002`, `ISSUE-003`, `ISSUE-004`, `ISSUE-005`, `ISSUE-006`, `ISSUE-006b`, `ISSUE-006c`, `ISSUE-007`, `ISSUE-008`, `ISSUE-009`, `ISSUE-010`
 - product UI: `ISSUE-012`, `ISSUE-013`, `ISSUE-014`, `ISSUE-014a`, `ISSUE-015`, `ISSUE-030`
-- perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-020`, `ISSUE-021`, `ISSUE-022`, `ISSUE-023`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-029`, `ISSUE-031`, `ISSUE-040`
+- perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-020`, `ISSUE-021`, `ISSUE-022`, `ISSUE-023`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-029`, `ISSUE-031`, `ISSUE-040`, `ISSUE-041`
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
 - design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
-- maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`
+- maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`, `ISSUE-065`
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 
