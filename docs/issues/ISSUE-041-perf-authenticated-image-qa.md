@@ -2,7 +2,7 @@
 id: ISSUE-041
 title: 認証済み実データで ISSUE-028 画像 QA を完了する
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-23
 parent: PERF
