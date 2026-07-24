@@ -39,15 +39,15 @@
 
 ## Status Snapshot
 
-2026-07-24 時点:
+2026-07-25 時点:
 
 | status        | count | notes            |
 | ------------- | ----- | ---------------- |
-| `todo`        | 0     | なし             |
+| `todo`        | 2     | LP 後続改善      |
 | `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 0     | なし             |
+| `review`      | 1     | LP prototype     |
 | `done`        | 72    | archive を参照   |
-| `blocked`     | 0     | なし             |
+| `blocked`     | 2     | 人間判断待ち     |
 
 ---
 
@@ -126,6 +126,16 @@ Codex-ready と判断する条件:
 | 4     | `ISSUE-069` | 記録画面を 1 判断ずつの下部シート体験へ調整   | done |
 | 5     | `ISSUE-070` | アルバムと記録詳細を private shelf 体験へ調整 | done |
 
+## Planned LP Public Readiness Sequence
+
+| order | issue       | GitHub | title                                             | note                                           |
+| ----- | ----------- | ------ | ------------------------------------------------- | ---------------------------------------------- |
+| 1     | `ISSUE-071` | `#162` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | review                                         |
+| 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | blocked: 待機リスト / Store 導線の人間判断待ち |
+| 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | todo                                           |
+| 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | todo                                           |
+| 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | blocked: privacy / legal review 待ち           |
+
 ---
 
 ## GitHub Intake Queue
@@ -138,13 +148,18 @@ Codex-ready と判断する条件:
 
 ## Blocked Or Needs Human Decision
 
-現在はありません。
+| issue       | title                                   | blocker                                    |
+| ----------- | --------------------------------------- | ------------------------------------------ |
+| `ISSUE-072` | LP の実行可能な CV 導線を決めて接続     | 待機リスト、通知、Store URL のどれを使うか |
+| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review        |
 
 ---
 
 ## Review Queue
 
-現在はありません。
+| issue       | title                                             | note                         |
+| ----------- | ------------------------------------------------- | ---------------------------- |
+| `ISSUE-071` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | 静的 artifact 実装・評価済み |
 
 ---
 
