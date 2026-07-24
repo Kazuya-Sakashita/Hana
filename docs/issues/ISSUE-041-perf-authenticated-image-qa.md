@@ -52,13 +52,13 @@ ISSUE-028 / GitHub Issue #43 で `next/image` 移行と静的確認は完了し�
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 認証済み Chrome が CDP port 付きで起動し、`/album` を表示できる
-- [ ] `pnpm qa:issue028:images` の JSON 出力を `docs/perf/` に保存する
-- [ ] 出力で `album_authenticated` が `pass`
-- [ ] 出力で `album_thumbnail_variant` が `pass`
-- [ ] 出力で `memory_preview_variant` が `pass`
+- [x] 認証済み Chrome が CDP port 付きで起動し、`/album` を表示できる
+- [x] `pnpm qa:issue028:images` の JSON 出力を `docs/perf/` に保存する
+- [x] 出力で `album_authenticated` が `pass`
+- [x] 出力で `album_thumbnail_variant` が `pass`
+- [x] 出力で `memory_preview_variant` が `pass`
 - [ ] 出力で `album_lazy_after_scroll` が `pass`
-- [ ] QA データ不足で `album_lazy_after_scroll` が `skipped` の場合、ISSUE-041 / GitHub #87 を open のまま維持するか、人間承認済み waiver を README と GitHub Issue に記録する
+- [x] QA データ不足で `album_lazy_after_scroll` が `skipped` の場合、ISSUE-041 / GitHub #87 を open のまま維持するか、人間承認済み waiver を README と GitHub Issue に記録する
 - [ ] Lighthouse mobile の "Properly size images" と LCP / CLS を記録する
 - [ ] 2026-05-27 baseline と比較した LCP 結果を記録する
 
@@ -71,10 +71,23 @@ ISSUE-028 / GitHub Issue #43 で `next/image` 移行と静的確認は完了し�
 
 ## 現在の blocker
 
-2026-07-23 時点で DB 接続自体は確認できたが、Codex だけでは認証済みブラウザセッションを
-安全に作れない。Google OAuth の操作、または QA 用ログイン手段が必要である。
+2026-07-24 に人間操作で認証済み Chrome + CDP セッションが用意され、Network QA のうち
+`album_authenticated` / `album_thumbnail_variant` / `memory_preview_variant` は pass した。
 
-また、lazy load 判定には viewport 外に出るだけの画像付き memory 件数が必要である。
+残 blocker は次の 2 点である。
+
+- `album_lazy_after_scroll` は、認証済みデータが画像 1 件のみで viewport 外候補を作れず `skipped`
+- Lighthouse mobile は未実行。CDP Web Vitals の参考実測は取得済みだが、2026-05-27 baseline
+  と同じ Lighthouse simulated throttling ではないため、完了扱いにはしない
+
+## 2026-07-24 進捗
+
+- 保存済み Network QA: `docs/perf/issue-028-authenticated-network-result-2026-07-24.json`
+- 保存済み CDP Web Vitals 参考実測: `docs/perf/issue-028-authenticated-cdp-vitals-2026-07-24.json`
+- `/album`: signed thumbnail WebP request を確認
+- `/memory/{id}`: signed preview WebP request を確認
+- CDP Web Vitals 参考実測: `/album` LCP 1.332s / CLS 0、`/memory/{id}` LCP 1.912s / CLS 0.0003
+- ただし、Lighthouse mobile audit と lazy load pass は未完のため、GitHub Issue #87 は open のまま維持する
 
 ## 参考
 

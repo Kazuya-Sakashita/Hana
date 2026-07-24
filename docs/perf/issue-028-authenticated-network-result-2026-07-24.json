@@ -1,0 +1,34 @@
+{
+  "target": {
+    "baseOrigin": "http://localhost:3000",
+    "cdpOrigin": "http://127.0.0.1:9222"
+  },
+  "memoryChecked": true,
+  "privacy": "Raw URLs are redacted. signed URLs, storage keys, tokens, titles, body text, and child names are not printed.",
+  "counts": {
+    "redactedImageRequests": 2,
+    "albumImageElements": 1
+  },
+  "checks": [
+    {
+      "name": "album_authenticated",
+      "status": "pass",
+      "evidence": "/album rendered"
+    },
+    {
+      "name": "album_thumbnail_variant",
+      "status": "pass",
+      "evidence": "1 signed thumbnail WebP image request(s) observed; unsigned thumbnail=0"
+    },
+    {
+      "name": "album_lazy_after_scroll",
+      "status": "skipped",
+      "evidence": "not enough offscreen image candidates: dom=1, offscreen=0"
+    },
+    {
+      "name": "memory_preview_variant",
+      "status": "pass",
+      "evidence": "1 signed preview WebP image request(s) observed; unsigned preview=0"
+    }
+  ]
+}

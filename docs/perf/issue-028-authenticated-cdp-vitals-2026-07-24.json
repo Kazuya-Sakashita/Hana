@@ -1,0 +1,89 @@
+{
+  "measurement": "Chrome CDP Web Vitals sample",
+  "measuredAt": "2026-07-24",
+  "isLighthouse": false,
+  "privacy": "Raw URLs, signed tokens, storage keys, titles, body text, child names, and memory IDs are not printed.",
+  "environment": {
+    "baseOrigin": "http://localhost:3000",
+    "mobileViewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 3
+    },
+    "cacheDisabled": true,
+    "browserCacheCleared": true
+  },
+  "baselineReference": {
+    "file": "docs/perf/baseline-2026-05-27.md",
+    "memoryDetailLcpMs": 22900,
+    "note": "Baseline was Chrome DevTools Lighthouse mobile with simulated throttling, so this CDP sample is directional rather than apples-to-apples."
+  },
+  "pages": [
+    {
+      "path": "/album",
+      "webVitals": {
+        "lcpMs": 1332,
+        "cls": 0,
+        "lcpElementTag": "IMG",
+        "lcpElementIsImage": true,
+        "lcpElementSize": 9245
+      },
+      "imageCount": 1,
+      "images": [
+        {
+          "displayWidth": 86,
+          "displayHeight": 108,
+          "naturalWidth": 320,
+          "naturalHeight": 214,
+          "loading": "lazy",
+          "complete": true,
+          "classification": {
+            "variant": "thumbnail",
+            "extension": "webp",
+            "isSupabaseStorage": true,
+            "isSigned": true
+          },
+          "naturalToDisplayWidthRatio": 3.72
+        }
+      ]
+    },
+    {
+      "path": "/memory/<redacted-memory-id>",
+      "webVitals": {
+        "lcpMs": 1912,
+        "cls": 0.0003,
+        "lcpElementTag": "IMG",
+        "lcpElementIsImage": true,
+        "lcpElementSize": 144500
+      },
+      "baselineComparison": {
+        "baselineLcpMs": 22900,
+        "deltaMs": -20988,
+        "deltaPercent": -91.7,
+        "comparisonCaveat": "Different measurement method from the 2026-05-27 Lighthouse baseline."
+      },
+      "imageCount": 1,
+      "images": [
+        {
+          "displayWidth": 340,
+          "displayHeight": 425,
+          "naturalWidth": 640,
+          "naturalHeight": 427,
+          "loading": "auto",
+          "complete": true,
+          "classification": {
+            "variant": "preview",
+            "extension": "webp",
+            "isSupabaseStorage": true,
+            "isSigned": true
+          },
+          "naturalToDisplayWidthRatio": 1.88
+        }
+      ]
+    }
+  ],
+  "remainingAcceptanceGaps": [
+    "Lighthouse mobile audit was not executed in this run.",
+    "album_lazy_after_scroll remains skipped because the authenticated data set has only one album image and no offscreen storage image candidate."
+  ]
+}
