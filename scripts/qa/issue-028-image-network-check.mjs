@@ -7,6 +7,14 @@ const DEFAULT_CDP_URL = 'http://127.0.0.1:9222'
 const DEFAULT_TIMEOUT_MS = 30000
 const DEFAULT_INITIAL_WAIT_MS = 2500
 const DEFAULT_SCROLL_WAIT_MS = 1800
+const LAZY_NATIVE_PREFETCH_THRESHOLDS_PX = {
+  '4g': 1250,
+  '3g': 2500,
+  '2g': 2500,
+  'slow-2g': 2500,
+  unknown: 2500,
+}
+const LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX = 250
 
 const CHECK_STATUS = new Set(['pass', 'fail', 'skipped'])
 
@@ -16,7 +24,9 @@ export function parseArgs(args) {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     const next = args[i + 1]
-    if (arg === '--base-url' && next) {
+    if (arg === '--') {
+      continue
+    } else if (arg === '--base-url' && next) {
       out.baseUrl = next
       i++
     } else if (arg === '--cdp-url' && next) {
@@ -163,6 +173,13 @@ export function summarizeChecks({
     : memorySignedPreviewCount > 0 && memoryUnsignedPreviewCount === 0
       ? 'pass'
       : 'fail'
+  const nativePrefetchThresholdPx =
+    albumLazyEvidence.nativePrefetchThresholdPx ?? readNativePrefetchThresholdPx('unknown')
+  const farOffscreenSafetyMarginPx =
+    albumLazyEvidence.farOffscreenSafetyMarginPx ?? LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX
+  const minDistanceFromViewportPx = formatNullableNumber(
+    albumLazyEvidence.minDistanceFromViewportPx,
+  )
 
   return [
     makeCheck(
@@ -179,8 +196,8 @@ export function summarizeChecks({
       'album_lazy_after_scroll',
       lazyStatus,
       lazyStatus === 'skipped'
-        ? `not enough offscreen image candidates: dom=${albumImageElementCount}, offscreen=${albumLazyEvidence.offscreenStorageImageCount}`
-        : `offscreen initial=${albumLazyEvidence.offscreenInitialRequestedCount}, after scroll=${albumLazyEvidence.offscreenScrollRequestedCount}`,
+        ? `not enough far-offscreen image candidates: dom=${albumImageElementCount}, farOffscreen=${albumLazyEvidence.offscreenStorageImageCount}, minDistanceFromViewportPx=${minDistanceFromViewportPx}, nativePrefetchThresholdPx=${nativePrefetchThresholdPx}, safetyMarginPx=${farOffscreenSafetyMarginPx}`
+        : `farOffscreen=${albumLazyEvidence.offscreenStorageImageCount}, initial=${albumLazyEvidence.offscreenInitialRequestedCount}, after scroll=${albumLazyEvidence.offscreenScrollRequestedCount}, minDistanceFromViewportPx=${minDistanceFromViewportPx}, nativePrefetchThresholdPx=${nativePrefetchThresholdPx}, safetyMarginPx=${farOffscreenSafetyMarginPx}`,
     ),
     makeCheck(
       'memory_preview_variant',
@@ -190,6 +207,17 @@ export function summarizeChecks({
         : 'HANA_QA_MEMORY_PATH was not provided',
     ),
   ]
+}
+
+function formatNullableNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : 'n/a'
+}
+
+function readNativePrefetchThresholdPx(effectiveConnectionType) {
+  return (
+    LAZY_NATIVE_PREFETCH_THRESHOLDS_PX[effectiveConnectionType] ??
+    LAZY_NATIVE_PREFETCH_THRESHOLDS_PX.unknown
+  )
 }
 
 export function classifyLazyStatus(evidence) {
@@ -221,6 +249,9 @@ export async function runImageNetworkQa(config) {
   const rawRequests = new Map()
   let currentPage = 'album'
   let currentPhase = 'album-initial'
+  let albumScrollStartedAtWallTimeSec = null
+  let albumScrollBeforeY = null
+  let albumScrollAfterY = null
 
   try {
     session = await connectCdp(target.webSocketDebuggerUrl, config.timeoutMs)
@@ -231,6 +262,7 @@ export async function runImageNetworkQa(config) {
         url: params.request.url,
         page: currentPage,
         phase: currentPhase,
+        requestedAtWallTimeSec: params.wallTime ?? null,
       })
     })
 
@@ -242,6 +274,7 @@ export async function runImageNetworkQa(config) {
           url: params.response.url,
           page: currentPage,
           phase: currentPhase,
+          requestedAtWallTimeSec: null,
         })
       }
       const next = rawRequests.get(params.requestId)
@@ -266,15 +299,22 @@ export async function runImageNetworkQa(config) {
       session,
       'document.querySelectorAll("img").length',
     )
+    const albumEffectiveConnectionType = await evaluateString(
+      session,
+      'navigator.connection?.effectiveType || "unknown"',
+    )
     const albumInitialDomSnapshot = await collectImageDomSnapshot(session)
 
     if (albumPath === '/album') {
+      albumScrollBeforeY = await evaluateNumber(session, 'window.scrollY')
+      albumScrollStartedAtWallTimeSec = Date.now() / 1000
       currentPhase = 'album-scroll'
       await session.send('Runtime.evaluate', {
         expression: 'window.scrollTo(0, document.body.scrollHeight)',
         awaitPromise: false,
       })
       await delay(config.scrollWaitMs)
+      albumScrollAfterY = await evaluateNumber(session, 'window.scrollY')
     }
 
     let memoryChecked = false
@@ -291,6 +331,12 @@ export async function runImageNetworkQa(config) {
     const albumLazyEvidence = analyzeAlbumLazyEvidence(
       albumInitialDomSnapshot,
       [...rawRequests.values()].filter((request) => request.page === 'album'),
+      {
+        effectiveConnectionType: albumEffectiveConnectionType,
+        scrollBeforeY: albumScrollBeforeY,
+        scrollAfterY: albumScrollAfterY,
+        scrollStartedAtWallTimeSec: albumScrollStartedAtWallTimeSec,
+      },
     )
     const checks = summarizeChecks({
       albumPath,
@@ -311,6 +357,20 @@ export async function runImageNetworkQa(config) {
       counts: {
         redactedImageRequests: requests.length,
         albumImageElements: albumImageElementCount,
+      },
+      lazyLoad: {
+        farOffscreenCount: albumLazyEvidence.offscreenStorageImageCount,
+        initialFarOffscreenRequests: albumLazyEvidence.offscreenInitialRequestedCount,
+        scrollFarOffscreenRequests: albumLazyEvidence.offscreenScrollRequestedCount,
+        minDistanceFromViewportPx: albumLazyEvidence.minDistanceFromViewportPx,
+        maxDistanceFromViewportPx: albumLazyEvidence.maxDistanceFromViewportPx,
+        nativePrefetchThresholdPx: albumLazyEvidence.nativePrefetchThresholdPx,
+        safetyMarginPx: albumLazyEvidence.farOffscreenSafetyMarginPx,
+        farOffscreenMinDistancePx: albumLazyEvidence.farOffscreenMinDistancePx,
+        effectiveConnectionType: albumLazyEvidence.effectiveConnectionType,
+        scrollBeforeY: albumLazyEvidence.scrollBeforeY,
+        scrollAfterY: albumLazyEvidence.scrollAfterY,
+        requestTimingCutoff: albumLazyEvidence.requestTimingCutoff,
       },
       checks,
     }
@@ -484,33 +544,64 @@ async function collectImageDomSnapshot(session) {
   return Array.isArray(result.result?.value) ? result.result.value : []
 }
 
-export function analyzeAlbumLazyEvidence(domSnapshot, rawAlbumRequests) {
+export function analyzeAlbumLazyEvidence(domSnapshot, rawAlbumRequests, options = {}) {
+  const effectiveConnectionType = options.effectiveConnectionType || 'unknown'
+  const nativePrefetchThresholdPx = readNativePrefetchThresholdPx(effectiveConnectionType)
+  const farOffscreenMinDistancePx = nativePrefetchThresholdPx + LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX
+  const hasWallTimeCutoff =
+    typeof options.scrollStartedAtWallTimeSec === 'number' &&
+    Number.isFinite(options.scrollStartedAtWallTimeSec)
+  const isInitialRequest = (request) =>
+    hasWallTimeCutoff && typeof request.requestedAtWallTimeSec === 'number'
+      ? request.requestedAtWallTimeSec < options.scrollStartedAtWallTimeSec
+      : request.phase === 'album-initial'
+  const isScrollRequest = (request) =>
+    hasWallTimeCutoff && typeof request.requestedAtWallTimeSec === 'number'
+      ? request.requestedAtWallTimeSec >= options.scrollStartedAtWallTimeSec
+      : request.phase === 'album-scroll'
   const initialUrls = new Set(
-    rawAlbumRequests
-      .filter((request) => request.phase === 'album-initial')
-      .map((request) => request.url),
+    rawAlbumRequests.filter((request) => isInitialRequest(request)).map((request) => request.url),
   )
   const scrollUrls = new Set(
-    rawAlbumRequests
-      .filter((request) => request.phase === 'album-scroll')
-      .map((request) => request.url),
+    rawAlbumRequests.filter((request) => isScrollRequest(request)).map((request) => request.url),
   )
 
-  const offscreenStorageImages = domSnapshot.filter((item) => {
-    const classification = classifyImageUrl(item.src)
-    return (
-      classification.isSupabaseStorage && classification.isSigned && item.top >= item.viewportHeight
-    )
-  })
+  const offscreenStorageImages = domSnapshot
+    .map((item) => ({
+      ...item,
+      distanceFromViewportPx: Math.round(item.top - item.viewportHeight),
+    }))
+    .filter((item) => {
+      const classification = classifyImageUrl(item.src)
+      return (
+        classification.isSupabaseStorage &&
+        classification.isSigned &&
+        item.distanceFromViewportPx > farOffscreenMinDistancePx
+      )
+    })
+  const distances = offscreenStorageImages.map((item) => item.distanceFromViewportPx)
 
   return {
     offscreenStorageImageCount: offscreenStorageImages.length,
+    effectiveConnectionType,
+    nativePrefetchThresholdPx,
+    farOffscreenSafetyMarginPx: LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX,
+    farOffscreenMinDistancePx,
+    minDistanceFromViewportPx: distances.length > 0 ? Math.min(...distances) : null,
+    maxDistanceFromViewportPx: distances.length > 0 ? Math.max(...distances) : null,
+    scrollBeforeY: roundNullable(options.scrollBeforeY),
+    scrollAfterY: roundNullable(options.scrollAfterY),
+    requestTimingCutoff: hasWallTimeCutoff ? 'requestWillBeSent.wallTime' : 'phase',
     offscreenInitialRequestedCount: offscreenStorageImages.filter((item) =>
       initialUrls.has(item.src),
     ).length,
     offscreenScrollRequestedCount: offscreenStorageImages.filter((item) => scrollUrls.has(item.src))
       .length,
   }
+}
+
+function roundNullable(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : null
 }
 
 function delay(ms) {
@@ -520,13 +611,13 @@ function delay(ms) {
 export function runSelfTest() {
   const cases = [
     {
-      url: 'https://demo.supabase.co/storage/v1/object/sign/images/uploads/u/202607/photo_thumb.webp?token=abc',
+      url: syntheticSignedStorageImageUrl('photo_thumb.webp'),
       variant: 'thumbnail',
       isSigned: true,
       isSupabaseStorage: true,
     },
     {
-      url: 'https://demo.supabase.co/storage/v1/object/sign/images/uploads/u/202607/photo_preview.webp?token=abc',
+      url: syntheticSignedStorageImageUrl('photo_preview.webp'),
       variant: 'preview',
       isSigned: true,
       isSupabaseStorage: true,
@@ -555,6 +646,8 @@ export function runSelfTest() {
     albumImageElementCount: 10,
     albumLazyEvidence: {
       offscreenStorageImageCount: 8,
+      nativePrefetchThresholdPx: readNativePrefetchThresholdPx('4g'),
+      farOffscreenSafetyMarginPx: LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX,
       offscreenInitialRequestedCount: 0,
       offscreenScrollRequestedCount: 1,
     },
@@ -587,6 +680,8 @@ export function runSelfTest() {
     albumImageElementCount: 10,
     albumLazyEvidence: {
       offscreenStorageImageCount: 1,
+      nativePrefetchThresholdPx: readNativePrefetchThresholdPx('4g'),
+      farOffscreenSafetyMarginPx: LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX,
       offscreenInitialRequestedCount: 0,
       offscreenScrollRequestedCount: 1,
     },
@@ -614,6 +709,8 @@ export function runSelfTest() {
 
   const lazyFailStatus = classifyLazyStatus({
     offscreenStorageImageCount: 1,
+    nativePrefetchThresholdPx: readNativePrefetchThresholdPx('4g'),
+    farOffscreenSafetyMarginPx: LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX,
     offscreenInitialRequestedCount: 1,
     offscreenScrollRequestedCount: 1,
   })
@@ -621,6 +718,66 @@ export function runSelfTest() {
     throw new Error('self-test failed: initial offscreen request must fail lazy check')
   }
 
+  const viewportHeight = 900
+  const farOffscreenMinDistancePx =
+    readNativePrefetchThresholdPx('4g') + LAZY_FAR_OFFSCREEN_SAFETY_MARGIN_PX
+  const nearOffscreenUrl = syntheticSignedStorageImageUrl('near_thumb.webp')
+  const farOffscreenUrl = syntheticSignedStorageImageUrl('far_thumb.webp')
+  const lazyEvidence = analyzeAlbumLazyEvidence(
+    [
+      {
+        src: nearOffscreenUrl,
+        top: viewportHeight + farOffscreenMinDistancePx,
+        viewportHeight,
+      },
+      {
+        src: farOffscreenUrl,
+        top: viewportHeight + farOffscreenMinDistancePx + 1,
+        viewportHeight,
+      },
+    ],
+    [
+      {
+        phase: 'album-initial',
+        url: nearOffscreenUrl,
+      },
+      {
+        phase: 'album-scroll',
+        url: farOffscreenUrl,
+      },
+    ],
+    { effectiveConnectionType: '4g' },
+  )
+  if (
+    lazyEvidence.offscreenStorageImageCount !== 1 ||
+    lazyEvidence.offscreenInitialRequestedCount !== 0 ||
+    lazyEvidence.offscreenScrollRequestedCount !== 1
+  ) {
+    throw new Error('self-test failed: native lazy-load prefetch margin was not respected')
+  }
+
+  const farInitialEvidence = analyzeAlbumLazyEvidence(
+    [
+      {
+        src: farOffscreenUrl,
+        top: viewportHeight + farOffscreenMinDistancePx + 1,
+        viewportHeight,
+      },
+    ],
+    [
+      {
+        phase: 'album-initial',
+        url: farOffscreenUrl,
+      },
+    ],
+    { effectiveConnectionType: '4g' },
+  )
+  if (classifyLazyStatus(farInitialEvidence) !== 'fail') {
+    throw new Error('self-test failed: far-offscreen initial request must fail lazy check')
+  }
+
+  const leakTokenSentinel = ['secret', 'token'].join('-')
+  const leakFileSentinel = ['private', 'thumb.webp'].join('_')
   const sanitized = JSON.stringify(
     sanitizeRequest({
       page: 'album',
@@ -628,12 +785,24 @@ export function runSelfTest() {
       status: 200,
       mimeType: 'image/webp',
       encodedDataLength: 10,
-      url: 'https://demo.supabase.co/storage/v1/object/sign/images/uploads/user-hash/202607/private_thumb.webp?token=secret-token',
+      url: syntheticSignedStorageImageUrl(leakFileSentinel, leakTokenSentinel),
     }),
   )
-  if (sanitized.includes('secret-token') || sanitized.includes('private_thumb.webp')) {
+  if (sanitized.includes(leakTokenSentinel) || sanitized.includes(leakFileSentinel)) {
     throw new Error('self-test failed: sanitized request leaked URL detail')
   }
+}
+
+function syntheticSignedStorageImageUrl(fileName, token = 'synthetic-token') {
+  const url = new URL(
+    [
+      'https://synthetic.supabase.co',
+      '/storage/v1/object/sign/images/uploads/synthetic/202607/',
+      fileName,
+    ].join(''),
+  )
+  url.searchParams.set('token', token)
+  return url.href
 }
 
 function printHelp() {

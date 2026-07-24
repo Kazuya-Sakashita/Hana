@@ -19,6 +19,16 @@ describe('issue-028-image-network-check', () => {
     expect(result.stderr).toBe('')
   })
 
+  it('accepts a package-manager argument delimiter before flags', () => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--', '--self-test'], {
+      encoding: 'utf8',
+    })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('self-test OK')
+    expect(result.stderr).toBe('')
+  })
+
   it('prints help without requiring a CDP target', () => {
     const result = spawnSync(process.execPath, [SCRIPT, '--help'], {
       encoding: 'utf8',

@@ -4,7 +4,7 @@
 
 ISSUE-028 / GitHub Issue #43 の未完項目のうち、 DevTools Network で確認する画像 variant / lazy load を、ログイン済み Chrome から再現可能にする。
 
-この手順とスクリプトは signed URL / storage_key / token / AI 生成本文 / 子ども名を出力しない。結果には件数、 variant 種別、 pass / fail / skipped だけを残す。
+この手順とスクリプトは signed URL / storage_key / token / AI 生成本文 / 子ども名を出力しない。結果には件数、 variant 種別、 pass / fail / skipped と、非機密の lazy-load 判定メタデータだけを残す。
 
 ## 前提
 
@@ -48,14 +48,14 @@ pnpm qa:issue028:images
 
 ## 判定
 
-| check                     | pass 条件                                                                                    |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| `album_authenticated`     | `/album` へ redirect されず表示できる                                                        |
-| `album_thumbnail_variant` | `/album` で signed thumbnail WebP variant request がある                                     |
-| `album_lazy_after_scroll` | 初期 viewport 外の signed storage 画像が初期 request に含まれず、 scroll 後に request される |
-| `memory_preview_variant`  | `/memory/{id}` で signed preview WebP variant request がある                                 |
+| check                     | pass 条件                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `album_authenticated`     | `/album` へ redirect されず表示できる                                                                           |
+| `album_thumbnail_variant` | `/album` で signed thumbnail WebP variant request がある                                                        |
+| `album_lazy_after_scroll` | native lazy-load の先読み範囲を超えた signed storage 画像が初期 request に含まれず、 scroll 後に request される |
+| `memory_preview_variant`  | `/memory/{id}` で signed preview WebP variant request がある                                                    |
 
-`album_lazy_after_scroll` は、画像枚数が少なく viewport 外候補が作れない場合 `skipped` になる。#87 / ISSUE-041 を close するには、実データを増やして `pass` にするか、実データ条件の制約を別途記録する。
+`album_lazy_after_scroll` は、Chrome の native lazy-load が近い viewport 外画像を先読みすることを避けるため、`navigator.connection.effectiveType` から採用した native prefetch threshold に 250px の safety margin を足した距離より遠い画像だけを far-offscreen 候補にする。画像枚数が少なく far-offscreen 候補が作れない場合は `skipped` になる。#87 / ISSUE-041 を close するには、QA データを増やして `pass` にするか、データ条件の制約を別途記録する。
 
 ## #87 / ISSUE-041 へ残す証跡
 
@@ -94,9 +94,11 @@ summary に含める。
 Lighthouse 13 では旧 `uses-responsive-images` が出ない場合があるため、summary helper は
 `image-delivery-insight` を画像サイズ/配信監査として扱う。
 
-## Lighthouse mobile 記録後に残る項目
+## 2026-07-24 完了証跡
 
-- `/album` の viewport 外画像が初期 request に含まれず、scroll 後に request されることを確認する
+- `/album` の far-offscreen 画像が初期 request に含まれず、scroll 後に request されることを確認する
 
-画像付き memory が 1 件のみで `album_lazy_after_scroll` が `skipped` の場合、GitHub Issue #87 /
-ISSUE-041 は open のままにする。
+画像付き memory が少なく `album_lazy_after_scroll` が `skipped` の場合、GitHub Issue #87 /
+ISSUE-041 は open のままにする。2026-07-24 の追加 QA では synthetic QA 画像付き memory で
+`album_lazy_after_scroll` が `pass` した。保存済み証跡は
+`docs/perf/issue-028-authenticated-network-result-2026-07-24-lazy-pass.json`。
