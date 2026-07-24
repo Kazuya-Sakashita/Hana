@@ -1,0 +1,12 @@
+type: object
+description: |
+  待機リスト登録の受け付け結果。
+  メールアドレス、内部 ID、メールハッシュは返さない。
+required: [status]
+properties:
+  status:
+    type: string
+    enum: [accepted]
+    description: 登録を受け付けたことを示す固定値。
+    example: accepted
+additionalProperties: false

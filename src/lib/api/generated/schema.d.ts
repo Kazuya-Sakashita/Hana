@@ -290,6 +290,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 公開前待機リストへ登録する
+         * @description 公開前検証フェーズの LP から、待機リスト登録・β版案内・任意のインタビューや
+         *     フィードバック協力のお願い・正式リリースのお知らせに使うメールアドレスを受け取る公開エンドポイント。
+         *
+         *     取得目的は上記に限定し、メールアドレスはレスポンスや構造化ログには含めない。
+         *     source と privacy_policy_version は既知値だけ受け付ける。
+         *     同じメールアドレスの再登録は重複作成せず、同じ 202 を返す。
+         */
+        post: operations["createWaitlistSignup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ai/generate": {
         parameters: {
             query?: never;
@@ -399,12 +424,12 @@ export interface components {
              * Format: email
              * @description 認証プロバイダ (Google) から取得した email。
              *     クライアント表示には用いず、サポート用途のみ。
-             * @example parent@example.com
+             * @example null
              */
             email: string | null;
             /**
              * @description 画面表示用のニックネーム (本名を入れる UI 誘導はしない)
-             * @example はるとパパ
+             * @example null
              */
             display_name: string | null;
             /**
@@ -786,6 +811,48 @@ export interface components {
             route: string;
         };
         /**
+         * @description 公開前 LP の待機リスト登録 payload。
+         *     メールアドレスは待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、
+         *     正式リリースのお知らせにだけ使う。
+         */
+        WaitlistSignupCreateRequest: {
+            /**
+             * Format: email
+             * @description 待機リスト連絡先。レスポンスや構造化ログには返さない。
+             */
+            email: string;
+            /**
+             * @description 待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせのための利用に同意したこと。
+             * @example true
+             * @constant
+             */
+            consent: true;
+            /**
+             * @description 登録元の画面を示す既知の識別子。未指定時は current-lp を使う。
+             * @example current-lp
+             * @enum {string|null}
+             */
+            source?: "current-lp" | null;
+            /**
+             * @description 登録時に表示したプライバシーポリシー版。未指定時はサーバ側の既定値を使う。
+             * @example prelaunch-2026-07-25
+             * @enum {string|null}
+             */
+            privacy_policy_version?: "prelaunch-2026-07-25" | null;
+        };
+        /**
+         * @description 待機リスト登録の受け付け結果。
+         *     メールアドレス、内部 ID、メールハッシュは返さない。
+         */
+        WaitlistSignupResponse: {
+            /**
+             * @description 登録を受け付けたことを示す固定値。
+             * @example accepted
+             * @enum {string}
+             */
+            status: "accepted";
+        };
+        /**
          * @description 記録の作成リクエスト。`image_ids` は事前に `POST /uploads/confirm` で作成済みの
          *     画像 ID を指定する。各画像は **現在のユーザーが所有** かつ **未紐付け**である必要がある。
          */
@@ -1081,7 +1148,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "8f7e6d5c-4b3a-4291-8765-0123456789ab",
-                     *       "email": "parent@example.com",
+                     *       "email": null,
                      *       "display_name": null,
                      *       "ai_consent_at": null,
                      *       "created_at": "2026-05-14T09:30:00Z"
@@ -1515,6 +1582,38 @@ export interface operations {
                 content?: never;
             };
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    createWaitlistSignup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistSignupCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description 待機リスト登録を受け付けた */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": "accepted"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["WaitlistSignupResponse"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     generateAiText: {

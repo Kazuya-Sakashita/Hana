@@ -24,7 +24,7 @@ function daysBetween(from: Date, to: Date): number {
 
 export default async function HomePage() {
   const user = await getCurrentUser()
-  if (!user) redirect('/sign-in')
+  if (!user) redirect('/lp')
 
   return (
     <main className="bg-canvas min-h-dvh px-6 pb-28 pt-8">

@@ -41,7 +41,7 @@ describe('ISSUE-079 BottomNav and action icon alignment', () => {
   it('keeps BottomNav target size, safe area, hidden paths, and non-overlapping layout', () => {
     expect(bottomNavSource).toContain('pb-safe')
     expect(bottomNavSource).toContain(
-      "const HIDDEN_PATHS = ['/sign-in', '/auth/callback', '/onboarding', '/record']",
+      "const HIDDEN_PATHS = ['/sign-in', '/auth/callback', '/onboarding', '/record', '/privacy', '/lp']",
     )
     expect(bottomNavSource).toContain('prefetch={false}')
     expect(bottomNavSource).toContain('prefetch={true}')
