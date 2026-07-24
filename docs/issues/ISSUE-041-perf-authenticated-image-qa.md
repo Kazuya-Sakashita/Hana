@@ -8,7 +8,6 @@ created_at: 2026-07-23
 parent: PERF
 github_issue: 87
 external_blockers:
-  - authenticated_browser_session
   - qa_image_data
 requires_human_review:
   - privacy
