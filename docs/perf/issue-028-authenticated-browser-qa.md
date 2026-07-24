@@ -55,9 +55,9 @@ pnpm qa:issue028:images
 | `album_lazy_after_scroll` | 初期 viewport 外の signed storage 画像が初期 request に含まれず、 scroll 後に request される |
 | `memory_preview_variant`  | `/memory/{id}` で signed preview WebP variant request がある                                 |
 
-`album_lazy_after_scroll` は、画像枚数が少なく viewport 外候補が作れない場合 `skipped` になる。#43 を close するには、実データを増やして `pass` にするか、実データ条件の制約を別途記録する。
+`album_lazy_after_scroll` は、画像枚数が少なく viewport 外候補が作れない場合 `skipped` になる。#87 / ISSUE-041 を close するには、実データを増やして `pass` にするか、実データ条件の制約を別途記録する。
 
-## #43 へ残す証跡
+## #87 / ISSUE-041 へ残す証跡
 
 スクリプトの JSON 出力をそのまま保存できる。 signed URL は出ない。
 
