@@ -129,6 +129,55 @@ describe('issue-028-lighthouse-summary', () => {
     }
   })
 
+  it('supports the Lighthouse 13 image delivery insight audit', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'hana-lighthouse-summary-'))
+    const input = path.join(dir, 'lighthouse.json')
+
+    try {
+      writeFileSync(
+        input,
+        JSON.stringify({
+          finalDisplayedUrl: 'http://localhost:3000/memory/self-test-memory-id',
+          configSettings: {
+            formFactor: 'mobile',
+            throttlingMethod: 'simulate',
+          },
+          categories: {
+            performance: { score: 0.91 },
+          },
+          audits: {
+            'largest-contentful-paint': { numericValue: 2532.361 },
+            'image-delivery-insight': {
+              id: 'image-delivery-insight',
+              title: 'Improve image delivery',
+              score: 1,
+              details: {
+                type: 'table',
+                items: [],
+              },
+            },
+          },
+        }),
+      )
+
+      const result = spawnSync(process.execPath, [SCRIPT, '--input', input], {
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+      const summary = JSON.parse(result.stdout)
+      expect(summary.audits.properlySizeImages).toMatchObject({
+        id: 'image-delivery-insight',
+        title: 'Improve image delivery',
+        status: 'pass',
+        score: 1,
+        itemCount: 0,
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('does not echo malformed raw report snippets', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'hana-lighthouse-summary-'))
     const input = path.join(dir, 'lighthouse.json')

@@ -91,10 +91,12 @@ pnpm qa:issue028:lighthouse-summary -- --input /path/to/local-lighthouse.json \
 summary は memory ID / signed URL / token / storage_key / 画像 URL を出力しない。
 2026-05-27 baseline との比較は、Lighthouse report が mobile / simulated throttling の場合だけ
 summary に含める。
+Lighthouse 13 では旧 `uses-responsive-images` が出ない場合があるため、summary helper は
+`image-delivery-insight` を画像サイズ/配信監査として扱う。
 
-## まだ手動で必要な項目
+## Lighthouse mobile 記録後に残る項目
 
-- Lighthouse mobile の "Properly size images" 非悪化確認
-- `/memory/{id}` の Lighthouse LCP を `docs/perf/baseline-2026-05-27.md` と比較して再計測
+- `/album` の viewport 外画像が初期 request に含まれず、scroll 後に request されることを確認する
 
-この 2 点が残る場合、 GitHub Issue #87 / ISSUE-041 は open のままにする。
+画像付き memory が 1 件のみで `album_lazy_after_scroll` が `skipped` の場合、GitHub Issue #87 /
+ISSUE-041 は open のままにする。
