@@ -117,9 +117,16 @@ export function summarizeLighthouse(lhr) {
   }
   const properlySizeImages = summarizeAudit(audits['uses-responsive-images'])
   const pagePath = redactPath(url?.pathname ?? '')
+  const formFactor = lhr.configSettings?.formFactor ?? null
+  const throttlingMethod = lhr.configSettings?.throttlingMethod ?? null
+  const isBaselineComparable =
+    pagePath === '/memory/<redacted-memory-id>' &&
+    metrics.lcpMs !== null &&
+    formFactor === 'mobile' &&
+    throttlingMethod === 'simulate'
 
   return {
-    measurement: 'Lighthouse mobile sanitized summary',
+    measurement: 'Lighthouse sanitized summary',
     isLighthouse: true,
     rawReportStored: false,
     privacy:
@@ -131,26 +138,24 @@ export function summarizeLighthouse(lhr) {
     lighthouse: {
       lighthouseVersion: typeof lhr.lighthouseVersion === 'string' ? lhr.lighthouseVersion : null,
       fetchTime: typeof lhr.fetchTime === 'string' ? lhr.fetchTime : null,
-      formFactor: lhr.configSettings?.formFactor ?? null,
-      throttlingMethod: lhr.configSettings?.throttlingMethod ?? null,
+      formFactor,
+      throttlingMethod,
+      baselineComparable: isBaselineComparable,
     },
     metrics,
     audits: {
       properlySizeImages,
     },
-    baselineComparison:
-      pagePath === '/memory/<redacted-memory-id>' && metrics.lcpMs !== null
-        ? {
-            baselineFile: 'docs/perf/baseline-2026-05-27.md',
-            baselineMemoryDetailLcpMs: BASELINE_MEMORY_LCP_MS,
-            deltaMs: Math.round(metrics.lcpMs - BASELINE_MEMORY_LCP_MS),
-            deltaPercent: Number(
-              (((metrics.lcpMs - BASELINE_MEMORY_LCP_MS) / BASELINE_MEMORY_LCP_MS) * 100).toFixed(
-                1,
-              ),
-            ),
-          }
-        : null,
+    baselineComparison: isBaselineComparable
+      ? {
+          baselineFile: 'docs/perf/baseline-2026-05-27.md',
+          baselineMemoryDetailLcpMs: BASELINE_MEMORY_LCP_MS,
+          deltaMs: Math.round(metrics.lcpMs - BASELINE_MEMORY_LCP_MS),
+          deltaPercent: Number(
+            (((metrics.lcpMs - BASELINE_MEMORY_LCP_MS) / BASELINE_MEMORY_LCP_MS) * 100).toFixed(1),
+          ),
+        }
+      : null,
   }
 }
 
@@ -254,6 +259,14 @@ export function runLighthouse(config) {
   }
 }
 
+export function readLighthouseInput(filePath) {
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'))
+  } catch {
+    throw new Error('Lighthouse input was not valid JSON')
+  }
+}
+
 export function runSelfTest() {
   const sample = {
     lighthouseVersion: '13.0.0',
@@ -324,7 +337,7 @@ Options:
 `)
 }
 
-if (pathToFileURL(process.argv[1]).href === import.meta.url) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   try {
     const parsed = parseArgs(process.argv.slice(2))
     if (parsed.help) {
@@ -338,9 +351,7 @@ if (pathToFileURL(process.argv[1]).href === import.meta.url) {
     }
 
     const config = readConfig(process.argv.slice(2))
-    const lhr = config.input
-      ? JSON.parse(readFileSync(config.input, 'utf8'))
-      : runLighthouse(config)
+    const lhr = config.input ? readLighthouseInput(config.input) : runLighthouse(config)
     console.log(JSON.stringify(summarizeLighthouse(lhr), null, 2))
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))

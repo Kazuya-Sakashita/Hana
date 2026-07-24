@@ -89,10 +89,12 @@ pnpm qa:issue028:lighthouse-summary -- --input /path/to/local-lighthouse.json \
 ```
 
 summary は memory ID / signed URL / token / storage_key / 画像 URL を出力しない。
+2026-05-27 baseline との比較は、Lighthouse report が mobile / simulated throttling の場合だけ
+summary に含める。
 
 ## まだ手動で必要な項目
 
 - Lighthouse mobile の "Properly size images" 非悪化確認
 - `/memory/{id}` の Lighthouse LCP を `docs/perf/baseline-2026-05-27.md` と比較して再計測
 
-この 2 点が残る場合、 GitHub Issue #43 は open のままにする。
+この 2 点が残る場合、 GitHub Issue #87 / ISSUE-041 は open のままにする。
