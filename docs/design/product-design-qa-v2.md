@@ -39,6 +39,45 @@ CI は artifact を上書きしない。screenshot / accessibility snapshot は�
 | large-phone   | `430x932`  | 大きめ mobile と saved state           |
 | tablet        | `768x1024` | tablet 1-column / density              |
 
+## ISSUE-066 Refinement QA Addendum
+
+`ISSUE-066` 以降の Quiet Heirloom refinement では、従来の DOM / a11y smoke に加えて、
+コンセプト画像との差分で見つかった「写真台紙、余白、私的アルバム感、下部記録導線」を確認する。
+この addendum は見た目の好みを採点するものではない。Hana の `30秒記録`、
+`責めない設計`、`AI は黒子`、`Album not feed` を、実画面で崩さないための契約である。
+
+### Visual Refinement Checks
+
+| check               | pass condition                                                                                             | hold condition                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| photo mat primacy   | Home / Album / Memory Detail の主要領域で、写真または photo mat が説明カードより先に記憶の場所として見える | icon-only card や説明文だけが first view の主役になっている                |
+| sage primary action | 記録、保存、完了、bottom navigation の主要 action が sage / leaf 系で落ち着いて見える                      | sakura の大きな面が primary CTA として画面を染める                         |
+| sakura restraint    | sakura は focus、favorite、pressed flower ornament、小さな brand accent に留まる                           | 本文、小さい helper text、大面積背景、強い CTA に使われる                  |
+| radius taxonomy     | photo-inner 10-12px、photo-mat 14-16px、paper-slip 16-20px、sheet 20-24px の範囲に概ね収まる               | 任意の大きな角丸が増え、紙片ではなくぷっくりしたカード UI に見える         |
+| shallow separation  | 通常 surface は hairline と余白で分離し、強い影は sheet / toast / dialog に限定される                      | 通常 card や navigation が強い floating UI に見える                        |
+| one-decision record | `/record` は写真選択、下書き、保存確認が一度に迫らず、下部 CTA が親指圏に残る                              | AI、title、date、weather、save が同密度に見え、30 秒記録の判断負荷が上がる |
+| private shelf album | `/album` は多件数一覧を保ちつつ、1 枚を眺める featured page / large keepsake preview の余白がある          | 縦リストだけで、業務的な一覧または feed に見える                           |
+| trust density       | Settings / AI consent は概要と詳細が分かれ、送るもの / 送らないもの / 保持説明を隠さない                   | 余白を優先して同意や data boundary が曖昧になる                            |
+
+### Evidence Safety Additions
+
+- refinement QA の screenshot / manifest / PR body には、実写真、production data、画像 URL、signed URL、
+  `storage_key`、prompt、AI 生成本文を残さない
+- child name が必要な場合は `はな` / `あお` などの synthetic name だけを使う
+- 生成画像内の日本語文言、AI 同意文言、privacy claim は unsafe draft として扱い、active UI に転記しない
+- pressed flower / paper fiber などの ornament は `aria-hidden` で、本文、写真、同意説明を覆わない
+- OpenAPI / DB / 認証 / Storage 変更を伴わない refinement PR では、その旨を PR body に明記する
+
+### Issue Mapping
+
+| issue       | QA focus                                                       | required before                         |
+| ----------- | -------------------------------------------------------------- | --------------------------------------- |
+| `ISSUE-066` | contract definition、QA addendum、issue dependency             | `ISSUE-067`                             |
+| `ISSUE-067` | sage/sakura semantics、radius taxonomy、shadow scope、contrast | `ISSUE-068` / `ISSUE-069` / `ISSUE-070` |
+| `ISSUE-068` | home first view、photo mat primacy、pressure copy              | release of home refinement              |
+| `ISSUE-069` | record bottom sheet、one-decision density、AI consent boundary | release of record refinement            |
+| `ISSUE-070` | album private shelf、memory detail action density、多件数QA    | release of album/detail refinement      |
+
 ## CI Contract
 
 実行コマンド:

@@ -54,17 +54,74 @@ V0 prompt や生成画像が privacy / trust evidence と衝突する場合は�
 
 ## ビジュアル方針
 
-| 要素         | ルール                                                              |
-| ------------ | ------------------------------------------------------------------- |
-| Canvas       | warm washi base。画面全体を淡い紙の余白として扱う                   |
-| Surface      | white / porcelain を基調に、浮かせすぎない                          |
-| Accent       | sakura は CTA や small highlight に限定し、画面全体を染めない       |
-| Secondary    | sage / warm umber は状態や quiet affordance に使う                  |
-| Hairline     | dividers と photo mat に使う。濃い罫線で囲い込まない                |
-| Shadow       | soft / shallow。glassmorphism や SaaS 風の強い elevation は使わない |
-| Radius       | 既存 Hana token を尊重しつつ、紙片と写真台紙で意味を分ける          |
-| Typography   | UI は読みやすく、物語本文と見出しは serif で静かに読ませる          |
-| Illustration | 装飾目的の baby sticker や generic pastel illustration は避ける     |
+| 要素         | ルール                                                                  |
+| ------------ | ----------------------------------------------------------------------- |
+| Canvas       | warm washi base。画面全体を淡い紙の余白として扱う                       |
+| Surface      | white / porcelain を基調に、浮かせすぎない                              |
+| Accent       | sakura は装飾、しるし、小さな感情アクセントに限定し、画面全体を染めない |
+| Primary      | sage は記録、保存、完了、主要導線に使う                                 |
+| Secondary    | warm umber は補助状態や quiet affordance に使う                         |
+| Hairline     | dividers と photo mat に使う。濃い罫線で囲い込まない                    |
+| Shadow       | soft / shallow。glassmorphism や SaaS 風の強い elevation は使わない     |
+| Radius       | 既存 Hana token を尊重しつつ、紙片と写真台紙で意味を分ける              |
+| Typography   | UI は読みやすく、物語本文と見出しは serif で静かに読ませる              |
+| Illustration | 装飾目的の baby sticker や generic pastel illustration は避ける         |
+
+## ISSUE-066 Refinement Contract
+
+`ISSUE-066` 以降は、コンセプト画像を「コピー対象」ではなく「質感の基準」として扱う。
+現状の Hana は Quiet Heirloom の方向には合っているが、まだ「写真と素材が主役」より
+「よく整ったカード UI」に見える箇所がある。以降の修正では、機能を増やすよりも、
+紙、写真台紙、細線、余白、sage の記録導線へ主役を渡す。
+
+### Color Semantics
+
+| token family       | 意味                               | 主な用途                                                             | 禁止                                      |
+| ------------------ | ---------------------------------- | -------------------------------------------------------------------- | ----------------------------------------- |
+| sage / leaf        | 記録・保存・完了                   | primary CTA、save done、bottom navigation の active / central action | 長文 helper text の低 contrast 表示       |
+| sakura             | 装飾・しるし・小さな感情アクセント | favorite、focus ring、pressed flower ornament、小さな brand accent   | 大きな面の CTA、画面全体の tint、本文色   |
+| warm umber / amber | 注意・補助状態                     | warning、destructive-but-calm copy、quiet affordance                 | emergency red の代用として強く煽る表現    |
+| ink                | 読むための主役                     | title、body、metadata、trust copy                                    | contrast を下げて雰囲気だけを優先すること |
+
+### Material And Radius Taxonomy
+
+| surface       | radius 目安 | 境界 / 影                               | 用途                                     |
+| ------------- | ----------- | --------------------------------------- | ---------------------------------------- |
+| photo-inner   | 10-12px     | image 自体。影なし                      | 写真の内側角丸                           |
+| photo-mat     | 14-16px     | hairline + 余白                         | 写真台紙、placeholder、thumbnail         |
+| paper-slip    | 16-20px     | hairline + shadow-soft または影なし     | 保管された小さな紙片、説明の最小 surface |
+| sheet         | 20-24px     | top hairline + 必要最小限の shadow-lift | 記録 bottom sheet、toast、dialog         |
+| pill / circle | full        | control としてのみ                      | CTA、icon button、tab action             |
+
+arbitrary `rounded-[...]` は、この表に合う場合だけ使う。大きい角丸を足して
+「かわいい」方向に寄せるのではなく、写真と本文の邪魔をしない薄い紙感を優先する。
+
+### Shadow And Hairline
+
+- 通常 card / paper-slip は hairline と余白で分ける
+- `shadow-lift` は bottom sheet、toast、dialog など一時的に前面へ出る要素に限定する
+- navigation は強い浮遊感より、薄い hairline と safe area の安定感を優先する
+- glassmorphism、濃い drop shadow、SaaS dashboard 風 elevation は使わない
+
+### Ornament Rules
+
+pressed flower / paper fiber のような装飾は、次の条件をすべて満たす場合だけ許可する。
+
+- `aria-hidden` で、操作対象や情報伝達の主役にしない
+- 小さく、低 opacity で、本文や写真を覆わない
+- baby sticker、generic pastel illustration、実写真風の人物素材にしない
+- privacy / trust / AI 同意の説明を装飾で曖昧にしない
+- PR evidence に実写真、画像 URL、`storage_key`、prompt、AI 生成本文を残さない
+
+### Screen-Level Refinement Direction
+
+| screen        | 現状のズレ                                                                   | refinement                                                                |
+| ------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Home          | 説明カードが先に立ち、写真や素材の気配が弱い                                 | first view で写真または photo mat を主役にし、CTA と stats は静かに支える |
+| Record        | 構造は近いが、AI / title / date / weather が同じ密度で並ぶとフォーム感が出る | 写真未選択、下書き、保存確認を 1 判断ずつ見せ、詳細編集は低密度に残す     |
+| Album         | 縦リストは実用的だが、private shelf の余白が弱い                             | featured page / large keepsake preview を置き、多件数一覧は下に残す       |
+| Memory Detail | 写真と本文は強い。操作帯と保存直後 notice が少し card 的                     | action を控えめにし、保存直後は安心して読み返せる状態を優先する           |
+| Settings      | trust surface として密度が高い                                               | 正確さを保ちつつ、概要と詳細を分け、未実装の約束を増やさない              |
 
 ## 画面別ルール
 
@@ -149,6 +206,24 @@ AI の「送るもの / 送らないもの」は `docs/design/ai-consent-privacy
 | 4    | `ISSUE-056` | home Quiet Heirloom refresh          | 記録入口と復帰体験を整える                 |
 | 5    | `ISSUE-057` | album and memory keepsake refresh    | 見返す体験を private album として磨く      |
 | 6    | `ISSUE-059` | design mobile QA and review gate     | 画面刷新全体を release gate として確認する |
+
+## Refinement Implementation Sequence
+
+`ISSUE-066` 以降は、上記 rebuild が終わった後の精度上げとして進める。
+OpenAPI / DB / 認証 / Storage 変更は含めない。1 Issue 1 PR を守り、
+後続 Issue は `ISSUE-066` の設計契約と evidence policy に従う。
+
+| 順番 | issue       | 対象                                           | 依存        |
+| ---- | ----------- | ---------------------------------------------- | ----------- |
+| 1    | `ISSUE-066` | refinement 設計契約と QA 観点の固定            | なし        |
+| 2    | `ISSUE-067` | token / common UI の sage・radius・shadow 調整 | `ISSUE-066` |
+| 3    | `ISSUE-068` | home first view を写真 / photo mat 主役へ調整  | `ISSUE-067` |
+| 4    | `ISSUE-069` | record を 1 判断ずつの bottom sheet へ調整     | `ISSUE-067` |
+| 5    | `ISSUE-070` | album / memory detail を private shelf へ調整  | `ISSUE-067` |
+
+`ISSUE-068` から `ISSUE-070` は並行可能に見えるが、色・角丸・影の意味が
+`ISSUE-067` で固まってから着手する。視覚差分のレビューでは、好みではなく
+「写真が主役か」「30 秒記録が弱くなっていないか」「trust claim を増やしていないか」で判断する。
 
 ## サブエージェントレビュー
 
