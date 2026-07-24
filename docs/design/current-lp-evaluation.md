@@ -17,15 +17,15 @@
 
 ## 今回反映した改善
 
-| 項目        | 反映内容                                                                                                 |
-| ----------- | -------------------------------------------------------------------------------------------------------- |
-| LP 化       | Hero、Before / After、30秒 flow、product preview、trust、final CTA を持つ静的 HTML を作成                |
-| CV 導線     | 公開前検証の Primary CTA を `待機リストに登録する` に変更し、`POST /v1/waitlist` の契約へ接続            |
-| 記録価値    | Before / After に synthetic な短文例を追加し、「写真だけ」から「あとで戻れるページ」への差分を補強       |
-| AI 同意     | `同意していれば下書きを待つ` とし、AI を使わず保存できることを flow と trust に明示                      |
-| Trust copy  | 保持期間、学習利用、削除保証などの未確認 claim は断定しない構成に調整                                    |
-| A11y        | H1 1つ、decorative image の空 alt、gallery alt、focus-visible、reduced motion、viewport、44px 対応を確認 |
-| Performance | 1.9MB PNG 参照を LP 用 WebP 約58KBへ差し替え                                                             |
+| 項目        | 反映内容                                                                                                                |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| LP 化       | Hero、Before / After、30秒 flow、product preview、trust、final CTA を持つ静的 HTML を作成                               |
+| CV 導線     | 公開前検証の Primary CTA を `待機リストに登録する` に変更し、`POST /v1/waitlist` の契約へ接続                           |
+| 記録価値    | Before / After に safe synthetic asset と人間作成の短文例を追加し、「写真だけ」から「あとで戻れるページ」への差分を補強 |
+| AI 同意     | `同意していれば下書きを待つ` とし、AI を使わず保存できることを flow と trust に明示                                     |
+| Trust copy  | 保持期間、学習利用、削除保証などの未確認 claim は断定しない構成に調整                                                   |
+| A11y        | H1 1つ、decorative image の空 alt、gallery alt、focus-visible、reduced motion、viewport、44px 対応を確認                |
+| Performance | 1.9MB PNG 参照を LP 用 WebP 約58KBへ差し替え                                                                            |
 
 ## 専門家サブエージェント評価
 
@@ -60,6 +60,28 @@
 | LP-P0-01 | 実行可能な CV 導線を設計する           | 静的 prototype の Store 準備表示だけでは、LP 目的の DL / 事前登録検証にならない                | App Store / Google Play URL、待機リスト、または通知フォームのいずれかを決め、CTA が自己リンクで終わらない |
 | LP-P0-02 | Before / After を本物の価値証拠にする  | PRD は「写真のみ → 写真＋文章」で差別化を見せる前提。現状は synthetic 表現で感情価値がまだ弱い | 実データではない安全な日常写真風 asset と、人間レビュー済みの短い synthetic 例を用意する                  |
 | LP-P0-03 | Public trust copy の人間レビューを通す | AI、保持、学習、削除 claim は信頼を左右する。未確認の断定は No-Go                              | `ai-consent-privacy-evidence.md` と privacy/legal review に照らし、公開してよい文言だけにする             |
+
+### ISSUE-073 Before / After 更新
+
+`LP-P0-02` の改善として、同一の safe synthetic still-life asset を Before / After の両方に配置した。
+Before は「画像と撮影日だけ」、After は「写真 + タイトル + 短いことば」に変わる構成にし、
+3 秒で Hana の中核価値が伝わることを狙う。
+
+- 追加 asset: `docs/design/artifacts/current-lp/hana-before-after-safe-still-life.svg`
+- sample copy: 人間作成の synthetic 例。実名、メール、生年月日、位置情報、画像 URL、`storage_key`、prompt、AI 生成本文は含めない
+- LP 表示上も `合成サンプル` / `実データなし` を添え、PR evidence と公開検討のどちらでも実データと誤認しないようにした
+- 判定: Product UX / Brand / Privacy の read-only review で P0 blocker がなければ `LP-P0-02` は review 完了扱いにする
+
+### ISSUE-073 再レビュー結果
+
+初回 read-only review では、メール形式 placeholder、Issue evidence 不整合、synthetic disclosure のアクセシビリティが P0 として指摘された。
+修正後の再レビューでは、Product UX、Brand / Visual、Privacy / Trust の3観点すべてで P0 blocker なしの Go となった。
+
+| Reviewer        | Framework                             | Verdict | 残課題                                                    |
+| --------------- | ------------------------------------- | ------- | --------------------------------------------------------- |
+| Product UX      | HEART + JTBD                          | Go      | SVG は安全だが、公開LPではより写真らしい質感 asset を検討 |
+| Brand / Visual  | Quiet Heirloom + AI slop blacklist    | Go      | 後続で比較パネルの紙片感をさらに強める                    |
+| Privacy / Trust | Trust before delight + content safety | Go      | 公開前 trust / legal review は `ISSUE-075` gate に残す    |
 
 ### P1
 
