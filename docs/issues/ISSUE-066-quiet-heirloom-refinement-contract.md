@@ -2,7 +2,7 @@
 id: ISSUE-066
 title: Quiet Heirloom refinement 設計契約
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-24
 parent: QUIET-HEIRLOOM-REFINEMENT

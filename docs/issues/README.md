@@ -41,13 +41,13 @@
 
 2026-07-24 時点:
 
-| status        | count | notes                     |
-| ------------- | ----- | ------------------------- |
-| `todo`        | 4     | refinement 後続は依存待ち |
-| `in_progress` | 0     | 並行実行枠は空き          |
-| `review`      | 1     | `ISSUE-066`               |
-| `done`        | 67    | archive を参照            |
-| `blocked`     | 0     | なし                      |
+| status        | count | notes                |
+| ------------- | ----- | -------------------- |
+| `todo`        | 4     | `ISSUE-067` が ready |
+| `in_progress` | 0     | 並行実行枠は空き     |
+| `review`      | 0     | review queue は空    |
+| `done`        | 68    | archive を参照       |
+| `blocked`     | 0     | なし                 |
 
 ---
 
@@ -89,7 +89,7 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-現在はありません。
+- `ISSUE-067`: トークンと共通 UI の質感調整
 
 ## In Progress
 
@@ -120,8 +120,8 @@ Codex-ready と判断する条件:
 
 | order | issue       | title                                         | note                         |
 | ----- | ----------- | --------------------------------------------- | ---------------------------- |
-| 1     | `ISSUE-066` | Quiet Heirloom refinement 設計契約            | review                       |
-| 2     | `ISSUE-067` | トークンと共通 UI の質感調整                  | todo, blocked by `ISSUE-066` |
+| 1     | `ISSUE-066` | Quiet Heirloom refinement 設計契約            | done                         |
+| 2     | `ISSUE-067` | トークンと共通 UI の質感調整                  | todo, ready                  |
 | 3     | `ISSUE-068` | ホーム first view を写真主役へ調整            | todo, blocked by `ISSUE-067` |
 | 4     | `ISSUE-069` | 記録画面を 1 判断ずつの下部シート体験へ調整   | todo, blocked by `ISSUE-067` |
 | 5     | `ISSUE-070` | アルバムと記録詳細を private shelf 体験へ調整 | todo, blocked by `ISSUE-067` |
@@ -144,7 +144,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-- `ISSUE-066`: Quiet Heirloom refinement 設計契約
+現在はありません。
 
 ---
 
@@ -159,6 +159,7 @@ Codex-ready と判断する条件:
 - maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`, `ISSUE-065`
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
+- refinement completed: `ISSUE-066`
 
 ---
 

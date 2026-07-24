@@ -82,7 +82,7 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
 
   it('records the local issue plan and dependency chain for ISSUE-066 through ISSUE-070', () => {
     expect(issue066Source).toContain('github_issue: 152')
-    expect(issue066Source).toContain('status: review')
+    expect(issue066Source).toContain('status: done')
     expect(issue066Source).toContain('- [x] Quiet Heirloom の refinement 方針')
     expect(issue066Source).toContain('OpenAPI / DB / 認証 / Storage の変更が不要')
 
@@ -100,11 +100,10 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
   it('updates the issue index with the refinement sequence and non-ready dependency state', () => {
     expect(issueIndexSource).toContain('Planned Quiet Heirloom Refinement Sequence')
     expect(issueIndexSource).toContain('| 1     | `ISSUE-066` | Quiet Heirloom refinement 設計契約')
+    expect(issueIndexSource).toContain('`ISSUE-067`: トークンと共通 UI の質感調整')
     expect(issueIndexSource).toContain('| 2     | `ISSUE-067` | トークンと共通 UI の質感調整')
-    expect(issueIndexSource).toContain('todo, blocked by `ISSUE-066`')
+    expect(issueIndexSource).toContain('todo, ready')
     expect(issueIndexSource).toContain('todo, blocked by `ISSUE-067`')
-    expect(issueIndexSource).toContain(
-      '## Review Queue\n\n- `ISSUE-066`: Quiet Heirloom refinement 設計契約',
-    )
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
   })
 })
