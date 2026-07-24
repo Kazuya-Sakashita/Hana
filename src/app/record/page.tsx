@@ -4,6 +4,7 @@ import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
+import { Camera } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -139,6 +140,12 @@ export default function RecordPage() {
   const storyPreview = body.trim()
   const hasUnsavedChanges =
     hasSelectedPhoto || !!uploadedImage || title.trim().length > 0 || storyPreview.length > 0
+  const decisionCue = getRecordDecisionCue({
+    uploaded: !!uploadedImage,
+    aiStatus,
+    canSubmit,
+    hasStory: storyPreview.length > 0,
+  })
 
   function onCancelClick() {
     if (hasUnsavedChanges) {
@@ -443,7 +450,7 @@ export default function RecordPage() {
           しゃしんを 1まい えらんで、ことばを そえます。
         </p>
 
-        <div className="photo-mat mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-[var(--radius-sheet)]">
+        <div className="photo-mat mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-[var(--radius-photo-mat)]">
           {filePreviewUrl && file ? (
             <NextImage
               src={filePreviewUrl}
@@ -454,9 +461,13 @@ export default function RecordPage() {
               className="h-full max-h-[46dvh] w-full object-cover"
             />
           ) : (
-            <div className="px-8 text-center">
-              <p className="text-ink-secondary font-serif text-lg">まずは 1まい</p>
-              <p className="text-ink-tertiary leading-narrative mt-2 text-sm">
+            <div
+              data-testid="record-photo-placeholder"
+              className="border-hairline/80 bg-paper-slip/55 mx-4 flex min-h-44 w-full flex-col items-center justify-center rounded-[var(--radius-photo-mat)] border border-dashed px-8 text-center"
+            >
+              <Camera className="text-sakura-deep size-8" aria-hidden="true" />
+              <p className="text-ink-secondary mt-4 font-serif text-lg">まずは 1まい</p>
+              <p className="text-ink-tertiary leading-narrative mt-2 max-w-64 text-sm">
                 うまく撮れた写真でなくても、残したい瞬間なら大丈夫です。
               </p>
             </div>
@@ -492,6 +503,14 @@ export default function RecordPage() {
               label="下書き"
             />
             <StepPill active={canSubmit} done={false} label="保存" />
+          </div>
+
+          <div
+            data-testid="record-decision-cue"
+            className="border-hairline bg-paper-slip rounded-[var(--radius-paper-slip)] border px-4 py-3"
+          >
+            <p className="meta-label">{decisionCue.eyebrow}</p>
+            <p className="text-ink-secondary leading-narrative mt-2 text-sm">{decisionCue.body}</p>
           </div>
 
           <Input
@@ -555,6 +574,7 @@ export default function RecordPage() {
           {uploadedImage ? (
             <>
               <div
+                data-testid="record-ai-decision"
                 className="paper-surface rounded-[var(--radius-paper-slip)] p-4"
                 aria-busy={aiStatus === 'generating'}
               >
@@ -635,7 +655,7 @@ export default function RecordPage() {
                   >
                     のこす ことば
                   </p>
-                  <p className="text-ink leading-narrative mt-2 whitespace-pre-wrap font-serif text-base">
+                  <p className="text-ink leading-narrative mt-2 whitespace-pre-wrap break-words font-serif text-base [overflow-wrap:anywhere]">
                     {storyPreview}
                   </p>
                 </section>
@@ -645,7 +665,10 @@ export default function RecordPage() {
                 </p>
               )}
 
-              <details className="group rounded-[var(--radius-paper-slip)] bg-warm px-4 py-3">
+              <details
+                data-testid="record-secondary-edits"
+                className="group rounded-[var(--radius-paper-slip)] bg-warm px-4 py-3"
+              >
                 <summary className="tap-target text-ink-secondary flex cursor-pointer list-none items-center justify-between font-serif text-sm [&::-webkit-details-marker]:hidden">
                   ことば・日付を なおす
                   <span className="text-ink-tertiary text-xs group-open:hidden">ひらく</span>
@@ -753,6 +776,49 @@ export default function RecordPage() {
       ) : null}
     </RecordShell>
   )
+}
+
+function getRecordDecisionCue({
+  uploaded,
+  aiStatus,
+  canSubmit,
+  hasStory,
+}: {
+  uploaded: boolean
+  aiStatus: AiStatus
+  canSubmit: boolean
+  hasStory: boolean
+}) {
+  if (!uploaded) {
+    return {
+      eyebrow: 'いまの判断',
+      body: 'まずは写真を1まい選びます。選ぶだけでは、まだAIには送りません。',
+    }
+  }
+  if (aiStatus === 'consent_pending') {
+    return {
+      eyebrow: 'いまの判断',
+      body: 'AIを使うか、使わずに残すかを選べます。送るものの説明は閉じずに確認できます。',
+    }
+  }
+  if (aiStatus === 'generating') {
+    return {
+      eyebrow: 'いまの判断',
+      body: '下書きを待っています。入力はこのまま残り、うまくいかない時もやり直せます。',
+    }
+  }
+  if (canSubmit) {
+    return {
+      eyebrow: 'いまの判断',
+      body: hasStory
+        ? 'ことばを確認したら、このまま保存できます。'
+        : 'タイトルがあれば、AIを使わずにこのまま保存できます。',
+    }
+  }
+  return {
+    eyebrow: 'いまの判断',
+    body: 'AIの下書きか、ひとことのタイトルを足すかを選びます。',
+  }
 }
 
 const AI_CONSENT_SENT_COPY =
