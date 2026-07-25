@@ -9,6 +9,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { X } from 'lucide-react'
+import { QuietIconButton } from '@/components/product/icons'
 
 type ToastTone = 'success' | 'warning'
 
@@ -89,14 +91,13 @@ function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss: () =>
             <p className="text-ink-secondary mt-1 text-xs leading-relaxed">{message.description}</p>
           ) : null}
         </div>
-        <button
-          type="button"
+        <QuietIconButton
+          icon={X}
+          tone="muted"
+          label="toast を とじる"
           onClick={onDismiss}
-          className="text-ink-tertiary hover:text-ink rounded-full px-2 py-1 text-xs"
-          aria-label="toast を とじる"
-        >
-          とじる
-        </button>
+          className="-mr-2 -mt-2 shadow-none"
+        />
       </div>
     </div>
   )

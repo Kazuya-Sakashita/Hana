@@ -100,7 +100,7 @@ export function AccessibleDialog({
       data-pending={pending ? 'true' : 'false'}
       onKeyDown={onDialogKeyDown}
       className={cn(
-        'fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center',
+        'fixed inset-0 z-50 flex items-end justify-center bg-[rgba(58,38,30,0.26)] px-4 py-6 sm:items-center',
         className,
       )}
     >
