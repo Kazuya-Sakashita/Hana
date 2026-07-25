@@ -550,8 +550,71 @@
         line-height: 1.9;
       }
 
+      .proof-card {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .proof-card > p {
+        margin: 0;
+      }
+
+      .proof-asset {
+        margin: 0;
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-photo-mat);
+        background: var(--bg-photo-mat);
+        padding: 8px;
+      }
+
+      .proof-asset img {
+        width: 100%;
+        border-radius: var(--radius-photo-inner);
+        background: var(--bg-paper-slip);
+      }
+
+      .proof-asset figcaption {
+        margin-top: 8px;
+        color: var(--ink-tertiary);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .proof-list {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .proof-list li,
+      .proof-step {
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-paper-slip);
+        background: rgba(245, 237, 227, 0.46);
+        padding: 14px 16px;
+      }
+
+      .proof-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        border: 1px solid rgba(95, 108, 87, 0.22);
+        border-radius: 999px;
+        background: var(--bg-paper-slip);
+        color: var(--success-leaf-deep);
+        padding: 0 12px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
       .after-story {
-        margin-top: 18px;
+        display: grid;
+        gap: 12px;
+        margin-top: 0;
         border-top: 1px solid var(--hairline);
         padding-top: 18px;
       }
@@ -564,11 +627,24 @@
       }
 
       .story-sample {
-        margin: 14px 0 0;
+        margin: 0;
         color: var(--ink-secondary);
         font-family: var(--serif);
         font-size: 16px;
         line-height: 1.9;
+      }
+
+      .proof-step p {
+        margin: 10px 0 0;
+        color: var(--ink-secondary);
+        line-height: 1.8;
+      }
+
+      .synthetic-proof-note {
+        margin: 0;
+        color: var(--ink-tertiary);
+        font-size: 12px;
+        line-height: 1.8;
       }
 
       .arrow {
@@ -972,30 +1048,52 @@
           </div>
 
           <div class="transformation" aria-label="写真だけと Hana で残した場合の比較">
-            <article class="comparison-panel">
+            <article class="comparison-panel proof-card">
+              <span class="proof-pill">Before</span>
               <h3>写真だけ</h3>
-              <p>撮った日は残る。でも、そのとき何を思っていたかは少しずつ薄れていく。</p>
-              <div class="photo-mat" aria-hidden="true">
-                <div class="synthetic-photo"></div>
-              </div>
+              <p>撮った日は残る。でも、何をしていたか、なぜ残したかったかは少しずつ薄れていく。</p>
+              <figure class="proof-asset">
+                <img
+                  src="hana-before-after-safe-still-life.svg"
+                  width="720"
+                  height="520"
+                  alt="布と小さな靴下と木のおもちゃを置いた合成の日常静物ビジュアル"
+                  loading="lazy"
+                />
+                <figcaption>
+                  synthetic daily still-life visual。実ユーザー写真ではありません。
+                </figcaption>
+              </figure>
+              <ul class="proof-list" aria-label="写真だけで残る情報">
+                <li>
+                  <span class="proof-pill">写真のみ</span>
+                  <p>見た目は残るが、親の視点やその日の背景は写真の外にある。</p>
+                </li>
+              </ul>
             </article>
 
             <div class="arrow" aria-hidden="true">→</div>
 
-            <article class="comparison-panel">
+            <article class="comparison-panel proof-card">
+              <span class="proof-pill">After</span>
               <h3>Hana で残すと</h3>
-              <p>写真に、日付と短いタイトルと、親の目線に近いことばを添えられる。</p>
+              <p>写真に、短いタイトルと本文を添えて、あとで開ける小さなページにする。</p>
               <div class="after-story">
-                <p class="meta-label">2026.07.25 ・ 30秒で保存</p>
-                <strong>あとで読み返せる、1ページに。</strong>
-                <p class="story-sample">
-                  朝の支度の前、ふと置いた手が小さくて、何でもない一日をまた思い出せる気がした。
-                </p>
-                <div class="screen-lines" aria-hidden="true">
-                  <span class="line"></span>
-                  <span class="line short"></span>
-                  <span class="line tiny"></span>
+                <div class="proof-step">
+                  <span class="proof-pill">写真 + title</span>
+                  <strong>机の上の小さなくつした</strong>
+                  <p>あとで一覧でも、その日の場面をすぐ思い出せる。</p>
                 </div>
+                <div class="proof-step">
+                  <span class="proof-pill">写真 + 短い本文</span>
+                  <p class="story-sample">
+                    洗濯ものをたたむ前、木のくるまをそっと横に置いた。何でもない朝の支度が、
+                    あとで開ける小さなページになった。
+                  </p>
+                </div>
+                <p class="synthetic-proof-note">
+                  人間レビュー済みの synthetic 例。AI 生成本文や実ユーザー情報ではありません。
+                </p>
               </div>
             </article>
           </div>

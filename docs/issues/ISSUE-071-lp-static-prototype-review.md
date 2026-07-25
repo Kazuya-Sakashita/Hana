@@ -2,7 +2,7 @@
 id: ISSUE-071
 title: LP 静的プロトタイプと専門家評価を公開前課題へ整理
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: LP-PUBLIC-READINESS
