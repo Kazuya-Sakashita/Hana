@@ -92,10 +92,12 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
     )
 
     expect(html).toContain('album-private-shelf')
+    expect(html).toContain('album-shelf-heading')
+    expect(html).toContain('album-shelf-item')
     expect(html).toContain('/memory/memory-featured')
     expect(html).toContain('aria-pressed="true"')
     expect(html).toContain('aria-label="しるしを はずす"')
-    expect(html).toContain('tap-target flex h-11 w-11')
+    expect(html).toContain('tap-target inline-flex size-11')
     expect(html).toContain('<h3')
     expect(html).toContain('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
   })

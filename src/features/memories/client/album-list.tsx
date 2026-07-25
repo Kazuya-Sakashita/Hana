@@ -6,7 +6,7 @@ import { BookOpen, Camera, Heart } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
-import { QuietIcon } from '@/components/product/icons'
+import { QuietIcon, QuietIconButton } from '@/components/product/icons'
 import { Button } from '@/components/ui/button'
 import {
   memoriesQueryKey,
@@ -56,13 +56,24 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
 
   return (
     <section aria-labelledby="album-private-shelf" className="flex flex-col gap-6">
-      <div>
-        <p className="meta-label">棚のページ</p>
-        <h2 id="album-private-shelf" className="mt-1 font-serif text-lg">
-          しまってあるページ
-        </h2>
+      <div className="flex items-start justify-between gap-4" data-testid="album-shelf-heading">
+        <div className="min-w-0">
+          <p className="meta-label">棚のページ</p>
+          <h2 id="album-private-shelf" className="mt-1 font-serif text-lg">
+            しまってあるページ
+          </h2>
+          <p className="text-ink-secondary mt-2 text-sm leading-narrative">
+            新しいページも、前のページも、一冊ずつ静かに並びます。
+          </p>
+        </div>
+        <span
+          className="border-hairline bg-warm inline-flex size-11 shrink-0 items-center justify-center rounded-full border"
+          aria-hidden="true"
+        >
+          <QuietIcon icon={BookOpen} tone="muted" />
+        </span>
       </div>
-      <ul className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-3" data-testid="album-shelf-list">
         {items.map((memory) => (
           <AlbumListItem key={memory.id} memory={memory} />
         ))}
@@ -108,7 +119,7 @@ function AlbumListItem({ memory }: { memory: Memory }) {
   const recordedAt = memory.recorded_at.replaceAll('-', '.')
 
   return (
-    <li>
+    <li data-testid="album-shelf-item">
       <div className="paper-surface rounded-[var(--radius-paper-slip)] p-3">
         <div className="flex items-start gap-3">
           {isOptimistic ? (
@@ -184,16 +195,16 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
   }
 
   return (
-    <button
-      type="button"
+    <QuietIconButton
       onClick={toggleFavorite}
       disabled={disabled || updateMemoryMutation.isPending}
       aria-pressed={memory.is_favorite}
-      aria-label={memory.is_favorite ? 'しるしを はずす' : 'しるしを つける'}
-      className="tap-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-hairline bg-paper-slip transition-colors hover:bg-warm disabled:opacity-50"
-    >
-      <QuietIcon icon={Heart} tone="favorite" active={memory.is_favorite} />
-    </button>
+      icon={Heart}
+      label={memory.is_favorite ? 'しるしを はずす' : 'しるしを つける'}
+      tone="favorite"
+      active={memory.is_favorite}
+      className="mt-1"
+    />
   )
 }
 
