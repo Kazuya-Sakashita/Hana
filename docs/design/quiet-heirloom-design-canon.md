@@ -2,6 +2,7 @@
 
 この文書は `ISSUE-053` の成果物として、Hana の大幅デザイン見直しで採用する方向性を固定する。
 実装時は `Hana_PRD_v1.md`、`docs/design/design-evaluation-rubric.md`、
+`docs/design/lp-app-visual-grammar.md`、
 `docs/design/design-inventory-roadmap.md`、`docs/design/ai-consent-privacy-evidence.md`、
 `docs/design/photo-alt-privacy-policy.md`、`docs/design/delete-restore-trust-contract.md` と合わせて読む。
 
@@ -29,14 +30,15 @@ active UI や PR evidence に転記しない。
 
 `ISSUE-053` 以降のデザイン刷新では、次の順で衝突を解決する。
 
-| 優先 | source                                                                                                               | 役割                                 |
-| ---- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| 1    | `docs/design/ai-consent-privacy-evidence.md`, `docs/design/delete-restore-trust-contract.md`, ADR, human review gate | privacy / trust / legal claims       |
-| 2    | `Hana_PRD_v1.md`                                                                                                     | product value and MVP success target |
-| 3    | `docs/design/design-evaluation-rubric.md`                                                                            | Go / Hold / No-Go judgment           |
-| 4    | `docs/design/quiet-heirloom-design-canon.md`                                                                         | visual and interaction direction     |
-| 5    | `docs/design/v0-prompt.md`                                                                                           | older screen reference               |
-| 6    | generated images and `docs/design/v0-output/`                                                                        | non-authoritative mood / example     |
+| 優先 | source                                                                                                               | 役割                                     |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| 1    | `docs/design/ai-consent-privacy-evidence.md`, `docs/design/delete-restore-trust-contract.md`, ADR, human review gate | privacy / trust / legal claims           |
+| 2    | `Hana_PRD_v1.md`                                                                                                     | product value and MVP success target     |
+| 3    | `docs/design/design-evaluation-rubric.md`                                                                            | Go / Hold / No-Go judgment               |
+| 4    | `docs/design/quiet-heirloom-design-canon.md`                                                                         | visual and interaction direction         |
+| 5    | `docs/design/lp-app-visual-grammar.md`                                                                               | LP / app visual parity and icon language |
+| 6    | `docs/design/v0-prompt.md`                                                                                           | older screen reference                   |
+| 7    | generated images and `docs/design/v0-output/`                                                                        | non-authoritative mood / example         |
 
 V0 prompt や生成画像が privacy / trust evidence と衝突する場合は、常に privacy / trust evidence を優先する。
 
@@ -112,6 +114,19 @@ pressed flower / paper fiber のような装飾は、次の条件をすべて満
 - baby sticker、generic pastel illustration、実写真風の人物素材にしない
 - privacy / trust / AI 同意の説明を装飾で曖昧にしない
 - PR evidence に実写真、画像 URL、`storage_key`、prompt、AI 生成本文を残さない
+
+### LP-App Visual Grammar
+
+LP や参照画像と本体アプリの見え方を揃えるときは、`docs/design/lp-app-visual-grammar.md`
+を追加の橋渡し正本として読む。ISSUE-076 以降の判断では、次を固定する。
+
+- 色 token を大きく変える前に、`PhotoMat`、`PaperSlip`、`QuietIcon`、`QuietIconButton`
+  など意味を持つ primitive 化を優先する
+- lucide icon を標準とし、通常操作の stroke は 1.75 前後、active は 1.9 前後にそろえる
+- fill を許可する操作 icon は favorite の `Heart` だけに限定する
+- `Sparkles` / `WandSparkles` のような AI 主役 icon は避け、必要なら `PenLine` / `FileText` にする
+- product app icon、wordmark、pressed flower / knot divider 以外の custom icon を操作に使わない
+- LP の product preview は、古い理想図ではなく現行 app QA artifact と同期していることを release gate で確認する
 
 ### Screen-Level Refinement Direction
 
@@ -220,10 +235,13 @@ OpenAPI / DB / 認証 / Storage 変更は含めない。1 Issue 1 PR を守り�
 | 3    | `ISSUE-068` | home first view を写真 / photo mat 主役へ調整  | `ISSUE-067` |
 | 4    | `ISSUE-069` | record を 1 判断ずつの bottom sheet へ調整     | `ISSUE-067` |
 | 5    | `ISSUE-070` | album / memory detail を private shelf へ調整  | `ISSUE-067` |
+| 6    | `ISSUE-076` | LP / 参照画像の視覚語彙を app 実装契約へ翻訳   | なし        |
 
 `ISSUE-068` から `ISSUE-070` は並行可能に見えるが、色・角丸・影の意味が
 `ISSUE-067` で固まってから着手する。視覚差分のレビューでは、好みではなく
 「写真が主役か」「30 秒記録が弱くなっていないか」「trust claim を増やしていないか」で判断する。
+`ISSUE-076` 以降は LP で強まった `photo mat + paper slip + sage pill + quiet icon` の語彙を
+本体アプリに戻すため、共通 primitive と QA gate を先に置いてから画面別実装を進める。
 
 ## サブエージェントレビュー
 

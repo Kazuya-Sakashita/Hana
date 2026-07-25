@@ -19,6 +19,8 @@ docs/design/
 │                            Design Review の入口条件・完了条件・証跡運用
 ├── quiet-heirloom-design-canon.md
 │                            大幅デザイン見直しで採用する Quiet Heirloom 正本
+├── lp-app-visual-grammar.md
+│                            LP / 参照画像の質感を本体アプリ実装契約に翻訳する橋渡し正本
 ├── quiet-copy-motion-ledger.md
 │                            大幅刷新時の copy / motion 証跡テンプレート
 ├── product-design-qa-v2.md
@@ -182,11 +184,14 @@ rm -rf docs/design/v0-output
 | ------------------- | -------------------------------- | ------------------ |
 | **既存設計憲章**    | `v0-prompt.md` 章 1〜4           | ✅                 |
 | **刷新方針 (正本)** | `quiet-heirloom-design-canon.md` | ✅                 |
+| **LP-App 橋渡し**   | `lp-app-visual-grammar.md`       | ✅                 |
 | **既存画面別仕様**  | `v0-prompt.md` 章 5              | ✅                 |
 | **設計の一実現例**  | `v0-output/`                     | ❌（ローカルのみ） |
 
 V0 出力と本体実装が食い違ったときは、**プロンプト側を正** とする。
 今回の大幅刷新に関する判断では、`quiet-heirloom-design-canon.md` を優先して参照する。
+LP や参照画像と本体アプリの見た目がずれる場合は、`lp-app-visual-grammar.md` の
+photo mat / paper slip / sage CTA / icon language を確認してから画面別に修正する。
 ただし、AI 同意、送信データ、retention、削除・復元、写真 alt など trust / privacy に関する判断は、
 `ai-consent-privacy-evidence.md`、`delete-restore-trust-contract.md`、`photo-alt-privacy-policy.md`、
 ADR、人間 review gate を最優先する。
