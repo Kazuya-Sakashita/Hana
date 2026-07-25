@@ -65,8 +65,8 @@ describe('Product Experience V2 contract', () => {
   it('separates current capability from future work in active UI copy', () => {
     const activeUi = `${settingsSource}\n${onboardingSource}\n${homeSource}\n${memoryActionsSource}`
 
-    expect(settingsTrustCenterCopySource).toContain('今できること')
-    expect(settingsTrustCenterCopySource).toContain('約束できる範囲だけを表示します')
+    expect(settingsTrustCenterCopySource).toContain('概要')
+    expect(settingsTrustCenterCopySource).toContain('削除と証跡は、約束できる範囲だけ')
     expect(settingsTrustCenterCopySource).toContain('まだこの画面では操作できません')
     expect(settingsTrustCenterCopySource).toContain('今は操作できません。')
     expect(onboardingSource).toContain('はじめてのページをつくる')
@@ -87,15 +87,14 @@ describe('Product Experience V2 contract', () => {
   it('keeps privacy and evidence promises conservative', () => {
     const activeUi = `${settingsSource}\n${settingsTrustCenterCopySource}\n${onboardingSource}`
 
-    expect(settingsTrustCenterCopySource).toContain(
-      'AI を使わずに、写真とことばだけでページを残すこともできます。',
-    )
+    expect(settingsTrustCenterCopySource).toContain('AI を使わない選択を残したまま')
     expect(settingsTrustCenterCopySource).toContain('登録した呼び名')
     expect(settingsTrustCenterCopySource).toContain('画像URL / presigned URL / 保存先のキー')
     expect(settingsTrustCenterCopySource).toContain('実名・メール・生年月日')
     expect(settingsTrustCenterCopySource).toContain('prompt・AI生成本文')
-    expect(settingsTrustCenterCopySource).toContain('通常30日以内に削除されます')
-    expect(settingsTrustCenterCopySource).toContain('安全確認など一部例外があります')
+    expect(settingsTrustCenterCopySource).toContain('商用 API 条件')
+    expect(settingsTrustCenterCopySource).toContain('プライバシーレビュー')
+    expect(settingsTrustCenterCopySource).not.toContain('通常30日以内に削除されます')
     expect(settingsTrustCenterCopySource).toContain(
       '完全削除や復元可能期間は、この画面では約束しません。',
     )

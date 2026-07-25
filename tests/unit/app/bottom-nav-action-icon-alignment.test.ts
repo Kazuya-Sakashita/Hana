@@ -80,7 +80,7 @@ describe('ISSUE-079 BottomNav and action icon alignment', () => {
     expect(toastSource).toContain('QuietIconButton')
     expect(toastSource).toContain('label="toast を とじる"')
     expect(issueSource).toContain('github_issue: 177')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('API / DB / Auth / Storage / OpenAPI の変更')
     expect(issueSource).toContain(
       'Evidence に実写真、画像 URL、signed URL、`storage_key`、prompt、AI 生成本文、メール',

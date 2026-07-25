@@ -822,7 +822,7 @@ const AI_CONSENT_SENT_COPY =
 const AI_CONSENT_NOT_SENT_COPY =
   'たんじょうび、メール、じゅうしょ、位置情報、画像URL、presigned URL、保存先のキーは おくりません。'
 const AI_CONSENT_RETENTION_COPY =
-  'API の入出力は 通常30日以内に削除されますが、安全確認など一部例外があります。'
+  'Anthropic の商用 API 条件と Hana のプライバシーレビューに沿って扱います。確認した範囲だけを表示します。'
 
 function AiConsentDialog({
   childName,

@@ -27,6 +27,9 @@ describe('settings trust center', () => {
     expect(settingsSource).toContain('settingsTrustCenterCopy.ai.choiceValue')
     expect(settingsSource).toContain('settingsTrustCenterCopy.data.memoryDeleteValue')
     expect(settingsSource).toContain('settingsTrustCenterCopy.future.items.map')
+    expect(settingsSource).toContain('data-testid="settings-trust-overview"')
+    expect(settingsSource).toContain('data-testid="settings-ai-boundary"')
+    expect(settingsSource).toContain('data-testid="settings-data-boundaries"')
     expect(settingsSource).toContain('role="status"')
   })
 
@@ -37,8 +40,14 @@ describe('settings trust center', () => {
     expect(settingsTrustCenterCopy.ai.notSentValue).toContain('たんじょうび')
     expect(settingsTrustCenterCopy.ai.notSentValue).toContain('presigned URL')
     expect(settingsTrustCenterCopy.ai.choiceValue).toContain('AI を使わずに')
-    expect(settingsTrustCenterCopy.ai.handlingValue).toContain('通常30日以内に削除されます')
-    expect(settingsTrustCenterCopy.ai.handlingValue).toContain('一部例外があります')
+    expect(settingsTrustCenterCopy.page.description).toContain('まだ約束しないこと')
+    expect(settingsTrustCenterCopy.current.eyebrow).toBe('概要')
+    expect(settingsTrustCenterCopy.ai.description).toContain('送るものと送らないもの')
+    expect(settingsTrustCenterCopy.ai.handlingValue).toContain('商用 API 条件')
+    expect(settingsTrustCenterCopy.ai.handlingValue).toContain('プライバシーレビュー')
+    expect(settingsTrustCenterCopy.ai.handlingValue).toContain('確認した範囲だけ')
+    expect(settingsTrustCenterCopy.ai.handlingValue).not.toContain('通常30日以内')
+    expect(settingsTrustCenterCopy.ai.handlingValue).not.toContain('人間のレビュー')
   })
 
   it('does not promise unsupported deletion, restore, or future functionality', () => {

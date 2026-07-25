@@ -1,6 +1,7 @@
 'use client'
 
 import { useQueryClient } from '@tanstack/react-query'
+import { Clock3, Database, FileText, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -84,6 +85,9 @@ export default function SettingsPage() {
       <section className="flex flex-col gap-5" aria-label="Hana の設定">
         <TrustSection
           eyebrow={settingsTrustCenterCopy.current.eyebrow}
+          icon={ShieldCheck}
+          iconTone="primary"
+          data-testid="settings-trust-overview"
           title={
             child
               ? settingsTrustCenterCopy.current.childRegisteredTitle(child.name)
@@ -115,6 +119,9 @@ export default function SettingsPage() {
         {me ? (
           <TrustSection
             eyebrow={settingsTrustCenterCopy.ai.eyebrow}
+            icon={FileText}
+            iconTone="muted"
+            data-testid="settings-ai-boundary"
             title={
               me.ai_consent_at
                 ? settingsTrustCenterCopy.ai.enabledTitle
@@ -143,6 +150,9 @@ export default function SettingsPage() {
 
         <TrustSection
           eyebrow={settingsTrustCenterCopy.data.eyebrow}
+          icon={Database}
+          iconTone="muted"
+          data-testid="settings-data-boundaries"
           title={settingsTrustCenterCopy.data.title}
           description={settingsTrustCenterCopy.data.description}
         >
@@ -158,6 +168,9 @@ export default function SettingsPage() {
 
         <TrustSection
           eyebrow={settingsTrustCenterCopy.future.eyebrow}
+          icon={Clock3}
+          iconTone="muted"
+          data-testid="settings-future-boundary"
           title={settingsTrustCenterCopy.future.title}
           description={settingsTrustCenterCopy.future.description}
         >

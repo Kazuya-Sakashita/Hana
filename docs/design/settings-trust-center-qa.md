@@ -29,7 +29,7 @@ requires_human_review:
 - 「おくるもの」は、しゃしん / 登録した呼び名 / 月齢 / ひにち / てんき / ひとこと。
 - 「おくらないもの」は、たんじょうび / メール / じゅうしょ / 位置情報 / 画像URL / presigned URL / 保存先のキー。
 - AI は optional。AI を使わずに写真とことばだけで保存できる。
-- Anthropic Claude API の入出力は通常30日以内に削除されるが、安全確認など一部例外がある。
+- AI の入出力は、Anthropic の商用 API 条件と Hana のプライバシーレビューに沿って扱う。active UI では確認した範囲だけを表示する。
 - zero data retention、完全削除、復元可能期間、近日対応は active UI で約束しない。
 
 ## Accessibility QA

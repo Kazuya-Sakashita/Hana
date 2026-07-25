@@ -2,13 +2,13 @@ export const settingsTrustCenterCopy = {
   page: {
     eyebrow: 'Hana',
     title: 'せってい',
-    description: '写真、AI、データの扱いをここで確認できます。',
+    description: 'できることと、まだ約束しないことを分けて確認できます。',
   },
   current: {
-    eyebrow: '今できること',
+    eyebrow: '概要',
     childRegisteredTitle: (childName: string) => `${childName} ちゃんの記録を残せます`,
     emptyTitle: '記録をはじめられます',
-    description: '写真からページを作り、アルバムにしまうための場所です。',
+    description: 'いま触れる機能だけをまとめています。AI、削除、将来項目は下で分けて確認できます。',
     childLabel: 'お子さん',
     missingChild: 'まだ登録されていません。',
     ageLabel: 'いまの月齢',
@@ -20,7 +20,7 @@ export const settingsTrustCenterCopy = {
     eyebrow: 'AI と写真',
     enabledTitle: 'AI の下書きを使えます',
     disabledTitle: 'AI は同意後だけ使います',
-    description: 'AI を使わずに、写真とことばだけでページを残すこともできます。',
+    description: 'AI を使わない選択を残したまま、送るものと送らないものを分けて表示します。',
     sentLabel: 'おくるもの',
     sentValue: 'しゃしん / 登録した呼び名 / 月齢 / ひにち / てんき / ひとこと',
     notSentLabel: 'おくらないもの',
@@ -28,13 +28,13 @@ export const settingsTrustCenterCopy = {
       'たんじょうび / メール / じゅうしょ / 位置情報 / 画像URL / presigned URL / 保存先のキー',
     handlingLabel: 'データの扱い',
     handlingValue:
-      'Anthropic Claude API の入出力は通常30日以内に削除されますが、安全確認など一部例外があります。',
+      'Anthropic の商用 API 条件と Hana のプライバシーレビューに沿って扱います。確認した範囲だけを表示します。',
     choiceLabel: 'AI を使わない選択',
     choiceValue: '記録画面で、AI を使わずに写真とことばだけで保存できます。',
   },
   data: {
     eyebrow: 'データと削除',
-    title: '約束できる範囲だけを表示します',
+    title: '削除と証跡は、約束できる範囲だけ',
     description:
       '記録を削除すると、アルバムには表示されなくなります。復元機能は今は提供していません。',
     memoryDeleteLabel: '記録の削除',
