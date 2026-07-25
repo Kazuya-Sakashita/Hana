@@ -1,9 +1,12 @@
 'use client'
 
+import { ImagePlus, PenLine, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
+import { FocusedShell } from '@/components/product/app-shell'
+import { QuietIcon } from '@/components/product/icons'
+import { StatePanel } from '@/components/product/surfaces'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 function GoogleGlyph() {
@@ -51,15 +54,57 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-6 py-12">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
-          <CardTitle className="font-serif text-2xl">Hana にサインイン</CardTitle>
-          <CardDescription className="mt-2">
-            きょうの ○○ちゃんを、ここに のこしましょう。
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4 pt-6">
+    <FocusedShell
+      className="items-stretch justify-start px-0 py-0 sm:items-center sm:justify-center sm:px-6 sm:py-12"
+      contentClassName="max-w-none sm:max-w-sm"
+    >
+      <StatePanel
+        className="flex min-h-dvh flex-col rounded-none px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-14 text-left sm:min-h-0 sm:rounded-[var(--radius-paper-slip)] sm:py-8"
+        aria-labelledby="signin-title"
+      >
+        <div className="text-center">
+          <p className="meta-label">Hana</p>
+          <h1 id="signin-title" className="mt-2 font-serif text-2xl leading-snug">
+            Hana に
+            <br />
+            サインイン
+          </h1>
+          <p className="text-ink-secondary mt-3 text-sm leading-narrative">
+            きょうの小さなできごとを、写真 1 まいから静かに残します。
+          </p>
+        </div>
+
+        <section
+          className="border-hairline mt-8 flex flex-col gap-4 border-y py-5"
+          data-testid="signin-trust-bridge"
+          aria-labelledby="signin-trust-title"
+        >
+          <h2 id="signin-trust-title" className="sr-only">
+            サインイン前に確認できること
+          </h2>
+          <ul className="flex flex-col gap-4">
+            <li className="flex gap-3">
+              <QuietIcon icon={ImagePlus} tone="primary" />
+              <p className="text-ink-secondary text-sm leading-narrative">
+                サインインだけでは、写真や記録は作成されません。
+              </p>
+            </li>
+            <li className="flex gap-3">
+              <QuietIcon icon={PenLine} tone="muted" />
+              <p className="text-ink-secondary text-sm leading-narrative">
+                AI を使う前に、送るものを確認します。
+              </p>
+            </li>
+            <li className="flex gap-3">
+              <QuietIcon icon={ShieldCheck} tone="muted" />
+              <p className="text-ink-secondary text-sm leading-narrative">
+                この先も、必要な確認をひとつずつ表示します。
+              </p>
+            </li>
+          </ul>
+        </section>
+
+        <div className="mt-auto flex flex-col gap-4 pt-8 sm:mt-0 sm:pt-7">
           <Button
             type="button"
             variant="outline"
@@ -76,11 +121,8 @@ export default function SignInPage() {
               {error}
             </p>
           ) : null}
-          <p className="text-ink-tertiary mt-2 text-center text-xs">
-            Apple での サインインは ちかぢか たいおう します。
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+        </div>
+      </StatePanel>
+    </FocusedShell>
   )
 }

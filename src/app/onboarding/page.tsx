@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { CalendarDays, PenLine, ShieldCheck } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { FocusedShell } from '@/components/product/app-shell'
+import { QuietIcon } from '@/components/product/icons'
 import { StatePanel } from '@/components/product/surfaces'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { useChildrenQuery, useCreateChildMutation } from '@/features/children/client/use-children'
@@ -274,6 +276,37 @@ export default function OnboardingPage() {
             記録のページで呼ぶ名前と、月齢の表示に使います。
           </p>
         </div>
+
+        <section
+          className="border-hairline mt-7 flex flex-col gap-4 border-y py-5"
+          data-testid="onboarding-trust-bridge"
+          aria-labelledby="onboarding-trust-title"
+        >
+          <h2 id="onboarding-trust-title" className="sr-only">
+            登録前に確認できること
+          </h2>
+          <ul className="flex flex-col gap-4">
+            <li className="flex gap-3">
+              <QuietIcon icon={PenLine} tone="primary" />
+              <p className="text-ink-secondary text-sm leading-narrative">
+                呼び名は、記録の見出しや下書きで呼ぶために使います。
+              </p>
+            </li>
+            <li className="flex gap-3">
+              <QuietIcon icon={CalendarDays} tone="muted" />
+              <p className="text-ink-secondary text-sm leading-narrative">
+                うまれたひは月齢の表示に使います。AI
+                に使う場合も、たんじょうびそのものではなく月齢として扱います。
+              </p>
+            </li>
+            <li className="flex gap-3">
+              <QuietIcon icon={ShieldCheck} tone="muted" />
+              <p className="text-ink-secondary text-sm leading-narrative">
+                この登録だけでは、写真や記録は作成されません。
+              </p>
+            </li>
+          </ul>
+        </section>
 
         {submitMessage ? (
           <div
