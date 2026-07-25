@@ -68,10 +68,15 @@ describe('Quiet Heirloom common UI contracts', () => {
     expect(cardSource).not.toContain('tracking-tight')
     expect(globalsCss).toContain('letter-spacing: 0')
     expect(bottomNavSource).toContain("from 'lucide-react'")
+    expect(bottomNavSource).toContain('ImagePlus')
+    expect(bottomNavSource).toContain('QuietIcon')
     expect(bottomNavSource).toContain('text-leaf-deep')
     expect(bottomNavSource).toContain('dark:text-leaf')
+    expect(bottomNavSource).toContain('data-active-indicator')
+    expect(bottomNavSource).toContain('grid-cols-[1fr_1fr_72px_1fr_1fr]')
     expect(bottomNavSource).not.toContain("glyph: '")
-    expect(bottomNavSource).toContain('aria-label="あたらしく のこす"')
+    expect(bottomNavSource).not.toContain('import { BookOpen, Home, Plus')
+    expect(bottomNavSource).toContain('aria-label="写真から あたらしく のこす"')
   })
 
   it('uses semantic radius tokens for primary paper and photo surfaces', () => {

@@ -66,7 +66,7 @@ describe('ISSUE-078 record LP-App visual alignment', () => {
 
   it('records local scope, acceptance, and evidence-safety boundaries', () => {
     expect(issueSource).toContain('github_issue: 175')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('API / DB / Auth / Storage / OpenAPI の変更')
     expect(issueSource).toContain(
       '写真 upload / confirm / AI generate / save の処理順や送信項目は変更しない',

@@ -2,7 +2,7 @@
 id: ISSUE-078
 title: Record 30秒 one-decision flow を LP-App visual grammar に合わせる
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: LP-APP-DESIGN-PARITY

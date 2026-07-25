@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, type ReactElement } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Heart, Trash2 } from 'lucide-react'
+import { Heart, Trash2, type LucideIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { QuietIcon, type QuietIconTone } from '@/components/product/icons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccessibleDialog } from '@/components/ui/dialog'
@@ -101,15 +102,16 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
         <div className="grid grid-cols-2 gap-2">
           <ActionGlyph
             label="しるし"
-            filled={isFavorite}
+            icon={Heart}
+            tone="favorite"
+            active={isFavorite}
             pressed={isFavorite}
             disabled={updateMemoryMutation.isPending}
             onClick={toggleFavorite}
-            icon={<Heart className="size-5" fill={isFavorite ? 'currentColor' : 'none'} />}
           />
           <ActionGlyph
             label="けす"
-            icon={<Trash2 className="size-5" />}
+            icon={Trash2}
             onClick={() => setDeleteDialog({ open: true, pending: false })}
           />
         </div>
@@ -134,14 +136,16 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
 function ActionGlyph({
   label,
   icon,
-  filled,
+  tone = 'default',
+  active = false,
   pressed,
   disabled,
   onClick,
 }: {
   label: string
-  icon: ReactElement<{ className?: string }>
-  filled?: boolean
+  icon: LucideIcon
+  tone?: QuietIconTone
+  active?: boolean
   pressed?: boolean
   disabled?: boolean
   onClick: () => void
@@ -152,13 +156,10 @@ function ActionGlyph({
       onClick={onClick}
       aria-pressed={typeof pressed === 'boolean' ? pressed : undefined}
       disabled={disabled}
-      className="text-ink-secondary hover:bg-warm disabled:text-ink-tertiary tap-target ease-organic flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-photo-mat)] px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:hover:bg-transparent"
+      className="text-ink-secondary hover:bg-warm disabled:text-ink-tertiary tap-target border-hairline bg-paper-slip ease-organic flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-photo-mat)] border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:hover:bg-transparent"
     >
-      <span
-        className={`flex size-8 items-center justify-center ${filled ? 'text-sakura' : ''}`}
-        aria-hidden="true"
-      >
-        {icon}
+      <span className="flex size-8 items-center justify-center" aria-hidden="true">
+        <QuietIcon icon={icon} tone={tone} active={active} />
       </span>
       <span className="text-xs">{label}</span>
     </button>

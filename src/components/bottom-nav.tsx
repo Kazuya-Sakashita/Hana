@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BookOpen, Home, Plus, Settings, type LucideIcon } from 'lucide-react'
+import { BookOpen, Home, ImagePlus, Settings, type LucideIcon } from 'lucide-react'
+import { QuietIcon } from '@/components/product/icons'
+import { cn } from '@/lib/utils'
 
 // Quiet Heirloom: Persistent bottom tab bar with 3 destinations + 中央記録ボタン
 // 表示しないページ (集中フロー / 認証画面)
@@ -48,25 +50,32 @@ export function BottomNav() {
 
   return (
     <nav
-      className="bg-elevated/96 border-hairline pb-safe fixed inset-x-0 bottom-0 z-40 border-t shadow-[0_-4px_18px_rgba(58,38,30,0.032)] backdrop-blur-sm"
+      className="bg-elevated border-hairline pb-safe fixed inset-x-0 bottom-0 z-40 border-t shadow-[0_-2px_12px_rgba(58,38,30,0.04)]"
       aria-label="メイン ナビゲーション"
     >
-      <div className="relative mx-auto flex h-16 max-w-md items-stretch">
+      <div className="mx-auto grid h-[72px] max-w-md grid-cols-[1fr_1fr_72px_1fr_1fr] items-center px-2">
         <TabLink tab={TABS[0]!} pathname={pathname} />
         <TabLink tab={TABS[1]!} pathname={pathname} />
+        <RecordAction />
+        <span aria-hidden="true" />
         <TabLink tab={TABS[2]!} pathname={pathname} />
-
-        {/* 中央 + ボタン (floating、tab bar に重なる) */}
-        <Link
-          href="/record"
-          prefetch={false}
-          aria-label="あたらしく のこす"
-          className="bg-primary text-primary-foreground hover:bg-leaf-deep hover:text-white active:bg-leaf-deep active:text-white shadow-soft ease-organic tap-target absolute left-1/2 top-0 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full transition-all active:scale-95"
-        >
-          <Plus aria-hidden="true" className="size-6" strokeWidth={1.8} />
-        </Link>
       </div>
     </nav>
+  )
+}
+
+function RecordAction() {
+  return (
+    <Link
+      href="/record"
+      prefetch={false}
+      aria-label="写真から あたらしく のこす"
+      className="bg-primary text-primary-foreground hover:bg-leaf-deep hover:text-white active:bg-leaf-deep active:text-white shadow-soft ease-organic tap-target mx-auto flex h-14 w-14 items-center justify-center rounded-full transition-all active:scale-95"
+      data-testid="bottom-nav-record-action"
+    >
+      <QuietIcon icon={ImagePlus} tone="onPrimary" size="lg" active />
+      <span className="sr-only">あたらしく のこす</span>
+    </Link>
   )
 }
 
@@ -78,13 +87,23 @@ function TabLink({ tab, pathname }: { tab: TabDef; pathname: string | null }) {
       href={tab.href}
       prefetch={true}
       aria-current={active ? 'page' : undefined}
-      className={`tap-target flex flex-1 flex-col items-center justify-center gap-1 py-2 transition-colors ${
+      className={cn(
+        'tap-target flex flex-col items-center justify-center gap-1 rounded-[var(--radius-paper-slip)] py-2 transition-colors',
         active
           ? 'text-leaf-deep dark:text-leaf font-medium'
-          : 'text-ink-tertiary hover:text-ink-secondary'
-      }`}
+          : 'text-ink-tertiary hover:text-ink-secondary',
+      )}
     >
-      <Icon aria-hidden="true" className="size-5" strokeWidth={active ? 2 : 1.7} />
+      <span
+        className={cn(
+          'border-hairline flex h-8 min-w-11 items-center justify-center rounded-full border transition-colors',
+          active ? 'bg-paper-slip shadow-soft' : 'border-transparent bg-transparent',
+        )}
+        data-active-indicator={active ? 'true' : undefined}
+        aria-hidden="true"
+      >
+        <QuietIcon icon={Icon} tone={active ? 'primary' : 'muted'} size="md" active={active} />
+      </span>
       <span className="text-xs">{tab.label}</span>
     </Link>
   )
