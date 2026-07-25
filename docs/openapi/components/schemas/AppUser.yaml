@@ -13,11 +13,11 @@ properties:
     description: |
       認証プロバイダ (Google) から取得した email。
       クライアント表示には用いず、サポート用途のみ。
-    example: 'parent@example.com'
+    example: null
   display_name:
     type: [string, 'null']
     description: 画面表示用のニックネーム (本名を入れる UI 誘導はしない)
-    example: 'はるとパパ'
+    example: null
   ai_consent_at:
     type: [string, 'null']
     format: date-time

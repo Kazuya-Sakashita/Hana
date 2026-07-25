@@ -42,6 +42,8 @@ tags:
     description: AI 文章生成 (Claude API)
   - name: metrics
     description: パフォーマンス計測 (Web Vitals RUM)
+  - name: waitlist
+    description: 公開前の待機リスト登録
 paths:
   /health:
     get:
@@ -84,7 +86,7 @@ paths:
                 $ref: '#/components/schemas/AppUser'
               example:
                 id: '8f7e6d5c-4b3a-4291-8765-0123456789ab'
-                email: 'parent@example.com'
+                email: null
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
@@ -533,6 +535,40 @@ paths:
           description: 受信成功 (body なし)
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+  /waitlist:
+    post:
+      operationId: createWaitlistSignup
+      summary: 公開前待機リストへ登録する
+      description: |
+        公開前検証フェーズの LP から、待機リスト登録・β版案内・任意のインタビューや
+        フィードバック協力のお願い・正式リリースのお知らせに使うメールアドレスを受け取る公開エンドポイント。
+
+        取得目的は上記に限定し、メールアドレスはレスポンスや構造化ログには含めない。
+        source と privacy_policy_version は既知値だけ受け付ける。
+        同じメールアドレスの再登録は重複作成せず、同じ 202 を返す。
+      tags: [waitlist]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaitlistSignupCreateRequest'
+      responses:
+        '202':
+          description: 待機リスト登録を受け付けた
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistSignupResponse'
+              example:
+                status: accepted
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /ai/generate:
     post:
       operationId: generateAiText
@@ -607,6 +643,10 @@ components:
       $ref: './components/schemas/MemoryListResponse.yaml'
     WebVitalsReport:
       $ref: './components/schemas/WebVitalsReport.yaml'
+    WaitlistSignupCreateRequest:
+      $ref: './components/schemas/WaitlistSignupCreateRequest.yaml'
+    WaitlistSignupResponse:
+      $ref: './components/schemas/WaitlistSignupResponse.yaml'
     MemoryCreateRequest:
       $ref: './components/schemas/MemoryCreateRequest.yaml'
     MemoryUpdateRequest:

@@ -1,0 +1,63 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+
+const homeSource = readFileSync(new URL('../../../src/app/page.tsx', import.meta.url), 'utf8')
+const lpSource = readFileSync(new URL('../../../src/app/lp/page.tsx', import.meta.url), 'utf8')
+const waitlistFormSource = readFileSync(
+  new URL('../../../src/components/waitlist-signup-form.tsx', import.meta.url),
+  'utf8',
+)
+const bottomNavSource = readFileSync(
+  new URL('../../../src/components/bottom-nav.tsx', import.meta.url),
+  'utf8',
+)
+const publicAssetUrl = new URL(
+  '../../../public/lp/hana-before-after-safe-still-life.svg',
+  import.meta.url,
+)
+
+describe('prelaunch public LP route', () => {
+  it('routes unauthenticated root visitors to the public waitlist LP', () => {
+    expect(homeSource).toContain("if (!user) redirect('/lp')")
+    expect(lpSource).toContain('export default function LandingPage')
+    expect(lpSource).toContain('data-public-lp="waitlist"')
+    expect(bottomNavSource).toContain("'/lp'")
+  })
+
+  it('renders a real waitlist conversion path on the public route', () => {
+    expect(lpSource).toContain('href="#waitlist-form"')
+    expect(lpSource).toContain('待機リストに登録する')
+    expect(lpSource).toContain('記録例を見る')
+    expect(lpSource).toContain('<WaitlistSignupForm />')
+    expect(waitlistFormSource).toContain('action="/v1/waitlist"')
+    expect(waitlistFormSource).toContain("fetch('/v1/waitlist'")
+    expect(waitlistFormSource).toContain('aria-live="polite"')
+    expect(waitlistFormSource).toContain('aria-atomic="true"')
+    expect(waitlistFormSource).toContain('aria-invalid={invalidField ===')
+    expect(waitlistFormSource).toContain('emailRef.current?.focus()')
+    expect(waitlistFormSource).toContain('consentRef.current?.focus()')
+    expect(waitlistFormSource).toContain('プライバシーポリシー')
+    expect(waitlistFormSource).toContain('response.status === 429')
+    expect(waitlistFormSource).toContain('response.status >= 500')
+    expect(waitlistFormSource).toContain('少し時間をおいてからお試しください')
+    expect(lpSource).toContain('<noscript>')
+  })
+
+  it('keeps the public LP visual safe and free of private examples', () => {
+    expect(existsSync(fileURLToPath(publicAssetUrl))).toBe(true)
+    expect(lpSource).toContain('/lp/hana-before-after-safe-still-life.svg')
+    expect(lpSource).toContain('実ユーザー写真ではない synthetic preview')
+    expect(`${lpSource}\n${waitlistFormSource}`).not.toMatch(
+      /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+    )
+  })
+
+  it('keeps the public route aligned with the three-step value proof', () => {
+    expect(lpSource).toContain('写真のみ')
+    expect(lpSource).toContain('写真 + タイトル')
+    expect(lpSource).toContain('写真 + 短い本文')
+    expect(lpSource).toContain('机の上の小さなくつした')
+    expect(lpSource).toContain('あとで開ける小さなページ')
+  })
+})

@@ -278,10 +278,13 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        border: 0;
         border-radius: 999px;
         padding: 0 22px;
+        font: inherit;
         font-weight: 700;
         text-decoration: none;
+        cursor: pointer;
         transition:
           transform 180ms ease,
           background-color 180ms ease,
@@ -305,6 +308,12 @@
       .button-primary:active {
         background: var(--success-leaf-deep);
         transform: translateY(0);
+      }
+
+      .button-primary:disabled {
+        cursor: wait;
+        opacity: 0.72;
+        transform: none;
       }
 
       .button-ghost {
@@ -333,6 +342,80 @@
         padding: 0 16px;
         color: rgba(255, 253, 249, 0.82);
         font-size: 13px;
+      }
+
+      .waitlist-form {
+        display: grid;
+        gap: 14px;
+        max-width: 560px;
+        margin-top: 28px;
+      }
+
+      .field-label {
+        display: block;
+        margin-bottom: 8px;
+        color: rgba(255, 253, 249, 0.92);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .email-input {
+        width: 100%;
+        min-height: 52px;
+        border: 1px solid rgba(255, 253, 249, 0.38);
+        border-radius: 999px;
+        background: rgba(255, 253, 249, 0.92);
+        color: var(--ink-primary);
+        font: inherit;
+        padding: 0 18px;
+      }
+
+      .email-input::placeholder {
+        color: rgba(107, 95, 87, 0.66);
+      }
+
+      .consent-row {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        color: rgba(255, 253, 249, 0.82);
+        font-size: 13px;
+        line-height: 1.8;
+      }
+
+      .consent-row input {
+        width: 18px;
+        height: 18px;
+        margin-top: 3px;
+        accent-color: var(--success-leaf);
+      }
+
+      .waitlist-note {
+        margin: 0;
+        color: rgba(255, 253, 249, 0.7);
+        font-size: 13px;
+        line-height: 1.8;
+      }
+
+      .waitlist-note a {
+        color: rgba(255, 253, 249, 0.92);
+      }
+
+      .waitlist-status {
+        min-height: 22px;
+        margin: 0;
+        color: rgba(255, 253, 249, 0.88);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .noscript-note {
+        max-width: 560px;
+        margin-top: 20px;
+        color: rgba(255, 253, 249, 0.82);
+        font-size: 13px;
+        line-height: 1.8;
       }
 
       .hero-trust-note {
@@ -944,6 +1027,7 @@
           <a href="#value">価値</a>
           <a href="#flow">30秒の流れ</a>
           <a href="#trust">安心の考え方</a>
+          <a href="#waitlist-form">待機リスト</a>
         </nav>
       </div>
     </header>
@@ -963,7 +1047,7 @@
               が静かな下書きにして、あとで読み返せるページに残します。
             </p>
             <div class="hero-actions">
-              <a class="button button-primary" href="#store-options">リリース通知を受け取る</a>
+              <a class="button button-primary" href="#waitlist-form">待機リストに登録する</a>
               <a class="button button-ghost" href="#value">記録例を見る</a>
             </div>
             <p class="hero-trust-note">
@@ -1195,14 +1279,79 @@
           <div>
             <p class="meta-label">Hana</p>
             <h2 id="final-title">今日の1まいを、はじめの1ページに。</h2>
-            <p>まずは写真を1まい選ぶ。書ける日も、書けない日も、あとで戻れる記憶にします。</p>
+            <p id="waitlist-purpose">
+              公開前の検証フェーズです。待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、
+              正式リリースのお知らせに限ってメールアドレスをお預かりします。
+            </p>
             <div id="store-options" class="store-row" aria-label="ストア導線">
               <span class="store-badge">App Store 準備中</span>
               <span class="store-badge">Google Play 準備中</span>
             </div>
-            <div class="hero-actions">
-              <a class="button button-primary" href="#store-options">ストア公開の準備を見る</a>
-            </div>
+            <form
+              id="waitlist-form"
+              class="waitlist-form"
+              action="/v1/waitlist"
+              method="post"
+              data-endpoint="/v1/waitlist"
+              aria-describedby="waitlist-purpose privacy-note waitlist-status"
+            >
+              <div>
+                <label class="field-label" for="waitlist-email">メールアドレス</label>
+                <input
+                  id="waitlist-email"
+                  class="email-input"
+                  name="email"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="email"
+                  maxlength="320"
+                  placeholder="メールアドレス"
+                  required
+                  disabled
+                />
+              </div>
+              <label class="consent-row" for="waitlist-consent">
+                <input
+                  id="waitlist-consent"
+                  name="consent"
+                  type="checkbox"
+                  value="true"
+                  required
+                  disabled
+                />
+                <span>
+                  待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせのためにメールを受け取ることに同意します。
+                </span>
+              </label>
+              <input type="hidden" name="source" value="current-lp" disabled />
+              <input
+                type="hidden"
+                name="privacy_policy_version"
+                value="prelaunch-2026-07-25"
+                disabled
+              />
+              <button class="button button-primary" type="submit" disabled>
+                待機リストに登録する
+              </button>
+              <p id="privacy-note" class="waitlist-note">
+                取得目的と管理方法は
+                <a href="/privacy" data-policy-link="prelaunch">プライバシーポリシー</a>
+                に明記します。メールアドレスは待機リスト管理の目的に限り、アクセス制御された環境で管理します。
+              </p>
+              <p
+                id="waitlist-status"
+                class="waitlist-status"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              ></p>
+            </form>
+            <noscript>
+              <p class="noscript-note">
+                待機リスト登録には JavaScript が必要です。メールアドレスがURLに残らないよう、
+                この環境では送信を受け付けません。
+              </p>
+            </noscript>
           </div>
         </div>
       </section>
@@ -1210,9 +1359,81 @@
 
     <footer class="footer">
       <div class="footer-inner">
-        <span>Hana LP static concept</span>
-        <span>静的プロトタイプ。実データは含みません。</span>
+        <span>Hana pre-launch LP concept</span>
+        <span>公開前検証用。実データは含みません。</span>
       </div>
     </footer>
+    <script>
+      const waitlistForm = document.querySelector('#waitlist-form')
+
+      waitlistForm?.querySelectorAll('input, button').forEach((control) => {
+        if (control instanceof HTMLInputElement || control instanceof HTMLButtonElement) {
+          control.disabled = false
+        }
+      })
+
+      waitlistForm?.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        const form = event.currentTarget
+        const status = document.querySelector('#waitlist-status')
+        if (!(form instanceof HTMLFormElement) || !(status instanceof HTMLElement)) return
+
+        const formData = new FormData(form)
+        const endpoint = form.dataset.endpoint ?? '/v1/waitlist'
+        const submitButton = form.querySelector('button[type="submit"]')
+        const emailInput = form.querySelector('#waitlist-email')
+        const consentInput = form.querySelector('#waitlist-consent')
+        const previousLabel = submitButton?.textContent ?? '待機リストに登録する'
+        if (emailInput instanceof HTMLInputElement) emailInput.removeAttribute('aria-invalid')
+        if (consentInput instanceof HTMLInputElement) consentInput.removeAttribute('aria-invalid')
+        if (submitButton instanceof HTMLButtonElement) {
+          submitButton.disabled = true
+          submitButton.textContent = '送信中...'
+        }
+        status.textContent = '送信しています。'
+
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: formData.get('email'),
+              consent: formData.get('consent') === 'true',
+              source: formData.get('source'),
+              privacy_policy_version: formData.get('privacy_policy_version'),
+            }),
+          })
+
+          if (!response.ok) {
+            status.textContent = '入力内容を確認してください。'
+            if (formData.get('consent') !== 'true') {
+              if (consentInput instanceof HTMLInputElement) {
+                consentInput.setAttribute('aria-invalid', 'true')
+                consentInput.focus()
+              }
+            } else if (emailInput instanceof HTMLInputElement) {
+              emailInput.setAttribute('aria-invalid', 'true')
+              emailInput.focus()
+            }
+            return
+          }
+
+          form.reset()
+          status.textContent =
+            '登録を受け付けました。β版や正式リリースの準備が整い次第、ご連絡します。'
+        } catch {
+          status.textContent = '送信できませんでした。時間をおいてもう一度お試しください。'
+          if (emailInput instanceof HTMLInputElement) {
+            emailInput.setAttribute('aria-invalid', 'true')
+            emailInput.focus()
+          }
+        } finally {
+          if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = false
+            submitButton.textContent = previousLabel
+          }
+        }
+      })
+    </script>
   </body>
 </html>
