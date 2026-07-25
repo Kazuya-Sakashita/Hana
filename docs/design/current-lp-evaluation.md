@@ -22,6 +22,7 @@
 | LP 化       | Hero、Before / After、30秒 flow、product preview、trust、final CTA を持つ静的 HTML を作成                |
 | CV 導線     | CTA をページ内説明リンクから、リリース通知 / Store 準備導線へ変更                                        |
 | 記録価値    | ISSUE-073 で synthetic safe asset と `写真のみ → 写真 + title → 写真 + 短い本文` の3段 proof を追加      |
+| Hero 構図   | ISSUE-074 で 2 台の phone mock を削り、Hero の主役を単一の keepsake preview に整理                       |
 | AI 同意     | `同意していれば下書きを待つ` とし、AI を使わず保存できることを flow と trust に明示                      |
 | Trust copy  | 保持期間、学習利用、削除保証などの未確認 claim は断定しない構成に調整                                    |
 | A11y        | H1 1つ、decorative image の空 alt、gallery alt、focus-visible、reduced motion、viewport、44px 対応を確認 |
@@ -31,13 +32,13 @@
 
 5名の read-only レビューを実施した。全員、編集は行っていない。
 
-| Reviewer                 | Framework                              | Verdict        | 主な指摘                                                                            |
-| ------------------------ | -------------------------------------- | -------------- | ----------------------------------------------------------------------------------- |
-| Product UX / HEART       | HEART + JTBD                           | Hold           | 情緒と JTBD は合う。ISSUE-073 で Before / After 証拠は改善、Adoption CTA は未解決   |
-| Brand / Conversion       | LIFT + AIDA                            | Hold           | Brand は Go 寄り。Action と Desire が低く、Store / 待機リスト導線が必要             |
-| Visual Art Direction     | Quiet Heirloom + AI slop blacklist     | Hold           | 色・書体は合うが、hero の主役が割れ、説明スライド感が残る                           |
-| Accessibility / Frontend | WCAG 2.2 AA + Nielsen                  | Conditional Go | 構造は良い。公開前に実ブラウザで touch target、mobile nav、画像 payload を確認      |
-| Privacy / Trust          | Trust before delight + evidence policy | Conditional Go | 内部 artifact としては可。公開前に AI 同意、送る/送らない説明、claim を人間レビュー |
+| Reviewer                 | Framework                              | Verdict        | 主な指摘                                                                               |
+| ------------------------ | -------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
+| Product UX / HEART       | HEART + JTBD                           | Hold           | 情緒と JTBD は合う。ISSUE-073 で Before / After 証拠は改善、Adoption CTA は未解決      |
+| Brand / Conversion       | LIFT + AIDA                            | Hold           | Brand は Go 寄り。Action と Desire が低く、Store / 待機リスト導線が必要                |
+| Visual Art Direction     | Quiet Heirloom + AI slop blacklist     | Conditional Go | ISSUE-074 で Hero の主役を単一の keepsake preview に整理。公開前に実ブラウザ QA は必要 |
+| Accessibility / Frontend | WCAG 2.2 AA + Nielsen                  | Conditional Go | 構造は良い。公開前に実ブラウザで touch target、mobile nav、画像 payload を確認         |
+| Privacy / Trust          | Trust before delight + evidence policy | Conditional Go | 内部 artifact としては可。公開前に AI 同意、送る/送らない説明、claim を人間レビュー    |
 
 ## フレームワーク別スコア
 
@@ -45,7 +46,7 @@
 | --------------- | ------: | -------------- | ------------------------------------------------ |
 | HEART / JTBD    | 3.5 / 5 | Hold           | Happiness と JTBD は強いが、Adoption が弱い      |
 | LIFT / AIDA     | 3.0 / 5 | Hold           | Attention は強いが、Action と Desire が未完成    |
-| Quiet Heirloom  | 3.4 / 5 | Hold           | 素材感はあるが、hero composition がまだ説明的    |
+| Quiet Heirloom  | 4.2 / 5 | Conditional Go | Hero composition は改善。実ブラウザ QA は未完    |
 | WCAG / Nielsen  | 4.0 / 5 | Conditional Go | 静的検査は良い。実ブラウザ QA は未完             |
 | Privacy / Trust | 4.0 / 5 | Conditional Go | 危険な断定は回避。公開 copy は最終レビューが必要 |
 
@@ -63,13 +64,13 @@
 
 ### P1
 
-| ID       | 課題                                              | Why                                                                                    | 完了条件                                                                                    |
-| -------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| LP-P1-01 | Hero composition を 1 strong visual anchor に絞る | 背景、Hana、phone mock、CTA、trust row が同時に立ち、Quiet Heirloom の静けさが薄まる   | Hero の主役を 1 つにし、product signal は大きな keepsake preview か 1 台の画面だけにする    |
-| LP-P1-02 | 「書けない親」の痛みを first view に少し上げる    | Brand は美しいが、忙しい親が「自分のことだ」と感じる Relevance が弱い                  | 寝かしつけ後、疲れている、でも忘れたくない、を短い支持文で伝える                            |
-| LP-P1-03 | 実ブラウザ QA を行う                              | 静的検査は通ったが、重なり、折返し、focus order、touch target はレンダリング確認が必要 | 390 / 430 / 768 / 1280px でスクリーンショット、横 overflow、focus、contrast、LCP 目安を確認 |
-| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針                 | 文字なし、実写真なし、Hana らしい photo mat / keepsake asset を用意する                     |
-| LP-P1-05 | Trust 詳細への導線を設計する                      | 安心材料はあるが、詳しく確認する場所が LP から見えない                                 | AI 同意、送る/送らない、削除、共有の説明へ進める導線を決める                                |
+| ID       | 課題                                              | Why                                                                                    | 完了条件                                                                                                           |
+| -------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| LP-P1-01 | Hero composition を 1 strong visual anchor に絞る | 背景、Hana、phone mock、CTA、trust row が同時に立ち、Quiet Heirloom の静けさが薄まる   | 対応済み。ISSUE-074 で Hero の主役を単一の keepsake preview に整理し、phone mock と hero 内 trust row の競合を削除 |
+| LP-P1-02 | 「書けない親」の痛みを first view に少し上げる    | Brand は美しいが、忙しい親が「自分のことだ」と感じる Relevance が弱い                  | 寝かしつけ後、疲れている、でも忘れたくない、を短い支持文で伝える                                                   |
+| LP-P1-03 | 実ブラウザ QA を行う                              | 静的検査は通ったが、重なり、折返し、focus order、touch target はレンダリング確認が必要 | 390 / 430 / 768 / 1280px でスクリーンショット、横 overflow、focus、contrast、LCP 目安を確認                        |
+| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針                 | 文字なし、実写真なし、Hana らしい photo mat / keepsake asset を用意する                                            |
+| LP-P1-05 | Trust 詳細への導線を設計する                      | 安心材料はあるが、詳しく確認する場所が LP から見えない                                 | AI 同意、送る/送らない、削除、共有の説明へ進める導線を決める                                                       |
 
 ### P2
 
@@ -83,5 +84,5 @@
 
 1. `LP-P0-01` と `LP-P0-02` を先に詰める。LP の目的が CV と価値証拠だから。
 2. `LP-P0-03` を人間レビュー gate にする。Trust は visual score で相殺しない。
-3. `LP-P1-01` で hero を再構成し、もう一度 Visual / Conversion / Trust の3観点で再レビューする。
+3. `LP-P1-01` は ISSUE-074 で対応済み。公開に近づける段階で実ブラウザ QA と trust human review を通す。
 4. 公開に近づける段階で `LP-P1-03` の実ブラウザ QA を必ず通す。

@@ -2,7 +2,7 @@
 id: ISSUE-073
 title: LP Before / After の価値証拠を強化
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: LP-PUBLIC-READINESS
@@ -66,8 +66,8 @@ Hana の差別化である「写真のみ → 写真 + ことば」の価値を�
 - [x] `pnpm format:check`
 - [x] `pnpm typecheck`
 - [x] `pnpm lint`
-- [ ] `pnpm pr:gate`
-- [ ] `git diff --check`
+- [x] `pnpm pr:gate`
+- [x] `git diff --check`
 
 ## 専門レビュー
 
