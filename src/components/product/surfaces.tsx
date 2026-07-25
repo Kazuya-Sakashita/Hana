@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { Camera, type LucideIcon } from 'lucide-react'
+import { QuietIcon } from '@/components/product/icons'
 import { cn } from '@/lib/utils'
 
 export function KeepsakeSurface({ className, ...props }: React.ComponentProps<'section'>) {
@@ -7,6 +9,72 @@ export function KeepsakeSurface({ className, ...props }: React.ComponentProps<'s
       className={cn('paper-surface rounded-[var(--radius-paper-slip)] px-5 py-5', className)}
       {...props}
     />
+  )
+}
+
+export function PaperSlip({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      className={cn('paper-surface rounded-[var(--radius-paper-slip)] px-4 py-4', className)}
+      {...props}
+    />
+  )
+}
+
+export function PhotoMat({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div className={cn('photo-mat rounded-[var(--radius-photo-mat)] p-2', className)} {...props} />
+  )
+}
+
+export function PhotoInner({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      className={cn('rounded-[var(--radius-photo-inner)] bg-paper-slip', className)}
+      {...props}
+    />
+  )
+}
+
+export function KeepsakePreview({ className, ...props }: React.ComponentProps<'section'>) {
+  return (
+    <section
+      className={cn('paper-surface rounded-[var(--radius-paper-slip)] p-3 shadow-soft', className)}
+      {...props}
+    />
+  )
+}
+
+export function PhotoPlaceholder({
+  title,
+  description,
+  icon = Camera,
+  className,
+}: {
+  title: React.ReactNode
+  description?: React.ReactNode
+  icon?: LucideIcon
+  className?: string
+}) {
+  return (
+    <PhotoMat
+      className={cn(
+        'flex min-h-44 flex-col items-center justify-center gap-3 text-center',
+        className,
+      )}
+    >
+      <PhotoInner className="flex min-h-36 w-full flex-col items-center justify-center gap-3 px-4 py-6 text-center">
+        <QuietIcon icon={icon} tone="muted" size="lg" />
+        <div className="space-y-1">
+          <p className="font-serif text-base leading-snug">{title}</p>
+          {description ? (
+            <p className="text-ink-secondary mx-auto max-w-48 text-xs leading-narrative">
+              {description}
+            </p>
+          ) : null}
+        </div>
+      </PhotoInner>
+    </PhotoMat>
   )
 }
 

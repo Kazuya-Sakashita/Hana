@@ -2,7 +2,7 @@
 id: ISSUE-076
 title: LP と本体アプリの視覚語彙を接続する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: APP-DESIGN-PARITY

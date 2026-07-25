@@ -41,13 +41,13 @@
 
 2026-07-25 時点:
 
-| status        | count | notes                              |
-| ------------- | ----- | ---------------------------------- |
-| `todo`        | 2     | LP 後続改善                        |
-| `in_progress` | 0     | 並行実行枠は空き                   |
-| `review`      | 2     | LP prototype / LP-App 視覚語彙接続 |
-| `done`        | 72    | archive を参照                     |
-| `blocked`     | 2     | 人間判断待ち                       |
+| status        | count | notes                             |
+| ------------- | ----- | --------------------------------- |
+| `todo`        | 2     | LP 後続改善                       |
+| `in_progress` | 0     | 並行実行枠は空き                  |
+| `review`      | 2     | LP prototype / keepsake primitive |
+| `done`        | 73    | archive を参照                    |
+| `blocked`     | 2     | 人間判断待ち                      |
 
 ---
 
@@ -140,8 +140,8 @@ Codex-ready と判断する条件:
 
 | order | issue       | GitHub | title                                         | note                        |
 | ----- | ----------- | ------ | --------------------------------------------- | --------------------------- |
-| 1     | `ISSUE-076` | `#171` | LP と本体アプリの視覚語彙を接続する           | review                      |
-| 2     | `ISSUE-077` | TBD    | 共通 keepsake primitive と icon language 実装 | candidate。Issue doc 未作成 |
+| 1     | `ISSUE-076` | `#171` | LP と本体アプリの視覚語彙を接続する           | done                        |
+| 2     | `ISSUE-077` | `#173` | 共通 keepsake primitive と icon language 実装 | review                      |
 | 3     | `ISSUE-078` | TBD    | Record 30秒 one-decision flow alignment       | candidate。Issue doc 未作成 |
 | 4     | `ISSUE-079` | TBD    | BottomNav と action icon の quiet alignment   | candidate。Issue doc 未作成 |
 | 5     | `ISSUE-080` | TBD    | Sign-in / Onboarding / Settings trust bridge  | candidate。Issue doc 未作成 |
@@ -169,10 +169,10 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                                             | note                         |
-| ----------- | ------------------------------------------------- | ---------------------------- |
-| `ISSUE-071` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | 静的 artifact 実装・評価済み |
-| `ISSUE-076` | LP と本体アプリの視覚語彙を接続する               | docs / QA gate 実装済み      |
+| issue       | title                                             | note                                 |
+| ----------- | ------------------------------------------------- | ------------------------------------ |
+| `ISSUE-071` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | 静的 artifact 実装・評価済み         |
+| `ISSUE-077` | 共通 keepsake primitive と icon language 実装     | UI primitive / focused test 実装済み |
 
 ---
 
@@ -188,6 +188,7 @@ Codex-ready と判断する条件:
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
+- lp-app design parity completed: `ISSUE-076`
 
 ---
 
