@@ -57,7 +57,7 @@ describe('ISSUE-071 LP static prototype review', () => {
     expect(evaluation).toContain('LP-P0-02')
     expect(evaluation).toContain('LP-P0-03')
 
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toMatch(/status: (review|done)/)
     expect(issueSource).toContain('github_issue: 162')
     expect(issueSource).toContain('- [x] 静的 LP prototype が作成されている')
     expect(issueSource).toContain('- [x] 専門サブエージェント 5 名の read-only review 結果')

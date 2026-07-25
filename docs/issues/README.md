@@ -41,13 +41,13 @@
 
 2026-07-25 時点:
 
-| status        | count | notes                               |
-| ------------- | ----- | ----------------------------------- |
-| `todo`        | 2     | LP 後続改善                         |
-| `in_progress` | 0     | 並行実行枠は空き                    |
-| `review`      | 2     | LP prototype / Private shelf polish |
-| `done`        | 77    | archive を参照                      |
-| `blocked`     | 2     | 人間判断待ち                        |
+| status        | count | notes            |
+| ------------- | ----- | ---------------- |
+| `todo`        | 1     | LP 後続改善      |
+| `in_progress` | 0     | 並行実行枠は空き |
+| `review`      | 1     | LP value proof   |
+| `done`        | 79    | archive を参照   |
+| `blocked`     | 2     | 人間判断待ち     |
 
 ---
 
@@ -130,23 +130,23 @@ Codex-ready と判断する条件:
 
 | order | issue       | GitHub | title                                             | note                                           |
 | ----- | ----------- | ------ | ------------------------------------------------- | ---------------------------------------------- |
-| 1     | `ISSUE-071` | `#162` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | review                                         |
+| 1     | `ISSUE-071` | `#162` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | done                                           |
 | 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | blocked: 待機リスト / Store 導線の人間判断待ち |
-| 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | todo                                           |
+| 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | review                                         |
 | 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | todo                                           |
 | 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | blocked: privacy / legal review 待ち           |
 
 ## Planned LP-App Design Parity Sequence
 
-| order | issue       | GitHub | title                                         | note   |
-| ----- | ----------- | ------ | --------------------------------------------- | ------ |
-| 1     | `ISSUE-076` | `#171` | LP と本体アプリの視覚語彙を接続する           | done   |
-| 2     | `ISSUE-077` | `#173` | 共通 keepsake primitive と icon language 実装 | done   |
-| 3     | `ISSUE-078` | `#175` | Record 30秒 one-decision flow alignment       | done   |
-| 4     | `ISSUE-079` | `#177` | BottomNav と action icon の quiet alignment   | done   |
-| 5     | `ISSUE-080` | `#179` | Sign-in / Onboarding / Settings trust bridge  | done   |
-| 6     | `ISSUE-081` | `#181` | Album / Memory Detail private shelf polish    | done   |
-| 7     | `ISSUE-082` | `#183` | LP-App visual parity QA gate                  | review |
+| order | issue       | GitHub | title                                         | note |
+| ----- | ----------- | ------ | --------------------------------------------- | ---- |
+| 1     | `ISSUE-076` | `#171` | LP と本体アプリの視覚語彙を接続する           | done |
+| 2     | `ISSUE-077` | `#173` | 共通 keepsake primitive と icon language 実装 | done |
+| 3     | `ISSUE-078` | `#175` | Record 30秒 one-decision flow alignment       | done |
+| 4     | `ISSUE-079` | `#177` | BottomNav と action icon の quiet alignment   | done |
+| 5     | `ISSUE-080` | `#179` | Sign-in / Onboarding / Settings trust bridge  | done |
+| 6     | `ISSUE-081` | `#181` | Album / Memory Detail private shelf polish    | done |
+| 7     | `ISSUE-082` | `#183` | LP-App visual parity QA gate                  | done |
 
 ---
 
@@ -169,10 +169,9 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                                             | note                          |
-| ----------- | ------------------------------------------------- | ----------------------------- |
-| `ISSUE-071` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | 静的 artifact 実装・評価済み  |
-| `ISSUE-082` | LP-App visual parity QA gate                      | 実装・専門レビュー・gate 済み |
+| issue       | title                              | note                        |
+| ----------- | ---------------------------------- | --------------------------- |
+| `ISSUE-073` | LP Before / After の価値証拠を強化 | 実装・専門レビュー・gate 前 |
 
 ---
 
@@ -188,7 +187,8 @@ Codex-ready と判断する条件:
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
-- lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`
+- lp public readiness completed: `ISSUE-071`
+- lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
 
 ---
 

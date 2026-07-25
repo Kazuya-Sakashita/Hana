@@ -21,7 +21,7 @@
 | ----------- | -------------------------------------------------------------------------------------------------------- |
 | LP 化       | Hero、Before / After、30秒 flow、product preview、trust、final CTA を持つ静的 HTML を作成                |
 | CV 導線     | CTA をページ内説明リンクから、リリース通知 / Store 準備導線へ変更                                        |
-| 記録価値    | Before / After に synthetic な短文例を追加し、「写真だけ」から「あとで戻れるページ」への差分を補強       |
+| 記録価値    | ISSUE-073 で synthetic safe asset と `写真のみ → 写真 + title → 写真 + 短い本文` の3段 proof を追加      |
 | AI 同意     | `同意していれば下書きを待つ` とし、AI を使わず保存できることを flow と trust に明示                      |
 | Trust copy  | 保持期間、学習利用、削除保証などの未確認 claim は断定しない構成に調整                                    |
 | A11y        | H1 1つ、decorative image の空 alt、gallery alt、focus-visible、reduced motion、viewport、44px 対応を確認 |
@@ -33,7 +33,7 @@
 
 | Reviewer                 | Framework                              | Verdict        | 主な指摘                                                                            |
 | ------------------------ | -------------------------------------- | -------------- | ----------------------------------------------------------------------------------- |
-| Product UX / HEART       | HEART + JTBD                           | Hold           | 情緒と JTBD は合うが、Adoption CTA と Before / After の証拠が弱い                   |
+| Product UX / HEART       | HEART + JTBD                           | Hold           | 情緒と JTBD は合う。ISSUE-073 で Before / After 証拠は改善、Adoption CTA は未解決   |
 | Brand / Conversion       | LIFT + AIDA                            | Hold           | Brand は Go 寄り。Action と Desire が低く、Store / 待機リスト導線が必要             |
 | Visual Art Direction     | Quiet Heirloom + AI slop blacklist     | Hold           | 色・書体は合うが、hero の主役が割れ、説明スライド感が残る                           |
 | Accessibility / Frontend | WCAG 2.2 AA + Nielsen                  | Conditional Go | 構造は良い。公開前に実ブラウザで touch target、mobile nav、画像 payload を確認      |
@@ -55,11 +55,11 @@
 
 ### P0
 
-| ID       | 課題                                   | Why                                                                                            | 完了条件                                                                                                  |
-| -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| LP-P0-01 | 実行可能な CV 導線を設計する           | 静的 prototype の Store 準備表示だけでは、LP 目的の DL / 事前登録検証にならない                | App Store / Google Play URL、待機リスト、または通知フォームのいずれかを決め、CTA が自己リンクで終わらない |
-| LP-P0-02 | Before / After を本物の価値証拠にする  | PRD は「写真のみ → 写真＋文章」で差別化を見せる前提。現状は synthetic 表現で感情価値がまだ弱い | 実データではない安全な日常写真風 asset と、人間レビュー済みの短い synthetic 例を用意する                  |
-| LP-P0-03 | Public trust copy の人間レビューを通す | AI、保持、学習、削除 claim は信頼を左右する。未確認の断定は No-Go                              | `ai-consent-privacy-evidence.md` と privacy/legal review に照らし、公開してよい文言だけにする             |
+| ID       | 課題                                   | Why                                                                                            | 完了条件                                                                                                                               |
+| -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| LP-P0-01 | 実行可能な CV 導線を設計する           | 静的 prototype の Store 準備表示だけでは、LP 目的の DL / 事前登録検証にならない                | App Store / Google Play URL、待機リスト、または通知フォームのいずれかを決め、CTA が自己リンクで終わらない                              |
+| LP-P0-02 | Before / After を本物の価値証拠にする  | PRD は「写真のみ → 写真＋文章」で差別化を見せる前提。写真のみとの差分を 3 秒で見せる必要がある | 対応済み。ISSUE-073 で synthetic safe asset と、人間レビュー済み synthetic 例を `写真のみ → 写真 + title → 写真 + 短い本文` として追加 |
+| LP-P0-03 | Public trust copy の人間レビューを通す | AI、保持、学習、削除 claim は信頼を左右する。未確認の断定は No-Go                              | `ai-consent-privacy-evidence.md` と privacy/legal review に照らし、公開してよい文言だけにする                                          |
 
 ### P1
 
