@@ -115,9 +115,13 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issueIndexSource).not.toContain('todo, blocked by `ISSUE-067`')
     expect(issueIndexSource).toContain('Planned LP Public Readiness Sequence')
     expect(issueIndexSource).toContain('| 1     | `ISSUE-071` | `#162`')
+    expect(issueIndexSource).toContain(
+      '| 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | done',
+    )
     expect(issueIndexSource).toContain('| 5     | `ISSUE-075` | `#166`')
-    expect(issueIndexSource).toContain('## Review Queue')
-    expect(issueIndexSource).toContain('`ISSUE-072`')
-    expect(issueIndexSource).toContain('待機リスト導線・API・保存先実装済み')
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      '| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |',
+    )
   })
 })

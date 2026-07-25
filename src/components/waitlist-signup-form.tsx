@@ -100,7 +100,7 @@ export function WaitlistSignupForm() {
       </div>
 
       <label
-        className="text-paper-slip/85 grid grid-cols-[24px_minmax(0,1fr)] gap-3 text-sm leading-7"
+        className="text-paper-slip/85 min-h-11 grid grid-cols-[24px_minmax(0,1fr)] gap-3 text-sm leading-7"
         htmlFor="waitlist-consent"
       >
         <input
@@ -129,13 +129,17 @@ export function WaitlistSignupForm() {
         {status === 'submitting' ? '送信中...' : '待機リストに登録する'}
       </button>
 
-      <p id="privacy-note" className="text-paper-slip/75 text-sm leading-7">
-        取得目的と管理方法は
-        <a className="text-paper-slip underline underline-offset-4" href="/privacy">
-          プライバシーポリシー
+      <div id="privacy-note" className="grid gap-2">
+        <p className="text-paper-slip/75 text-sm leading-7">
+          取得目的と管理方法はプライバシーポリシーに明記します。メールアドレスは待機リスト管理の目的に限り、アクセス制御された環境で管理します。
+        </p>
+        <a
+          className="border-paper-slip/30 text-paper-slip tap-target inline-flex w-fit items-center rounded-full border px-4 text-sm font-bold"
+          href="/privacy"
+        >
+          プライバシーポリシーを確認する
         </a>
-        に明記します。メールアドレスは待機リスト管理の目的に限り、アクセス制御された環境で管理します。
-      </p>
+      </div>
       <p
         id="waitlist-status"
         className="text-paper-slip/85 min-h-6 text-sm leading-7"
