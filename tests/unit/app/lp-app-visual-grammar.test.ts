@@ -97,7 +97,8 @@ describe('ISSUE-076 LP-App visual grammar', () => {
     expect(issueSource).toContain('OpenAPI / DB / Auth / Storage には触れない')
     expect(grammarSource).toContain('候補 ID')
     expect(grammarSource).toContain('Codex-ready ではない')
-    expect(issueIndex).toContain('candidate。Issue doc 未作成')
+    expect(issueIndex).toContain('`#183`')
+    expect(issueIndex).toContain('LP-App visual parity QA gate')
   })
 
   it('guards evidence safety for LP-App review artifacts', () => {

@@ -116,6 +116,24 @@ LP / 参照画像で強まった `photo mat + paper slip + sage pill + quiet ico
 - contrast gate は body text 7:1 目標、helper / status text 4.5:1 以上、focus indicator / non-text UI 3:1 以上を確認する
 - screenshot / manifest / PR body に実写真、画像 URL、signed URL、`storage_key`、prompt、AI 生成本文、メールを含めない
 
+## ISSUE-082 LP-App Visual Parity Contract
+
+`ISSUE-082` では、上記の LP-App visual parity を read-only CI contract として固定する。
+対象は LP artifact と、本体 app の Home / Record / Album / Memory Detail / Sign-in /
+Onboarding / Settings である。
+
+実行コマンド:
+
+```bash
+pnpm qa:issue082:lp-app-visual-parity -- --mode=contract
+```
+
+contract mode は `docs/design/lp-app-visual-parity-qa.md` の screenshot matrix、
+token parity、surface parity、icon parity、contrast、tap target、evidence safety、
+trust copy を検査する。CI は screenshot、accessibility snapshot、manifest、QA evidence file を
+書き込まない。出力 JSON は file id、surface id、matrix id、check 名だけに限定し、
+本文、画像 URL、signed URL、メール、prompt、AI 生成本文を保存しない。
+
 ## CI Contract
 
 実行コマンド:
