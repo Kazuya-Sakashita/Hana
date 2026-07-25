@@ -41,13 +41,13 @@
 
 2026-07-25 時点:
 
-| status        | count | notes            |
-| ------------- | ----- | ---------------- |
-| `todo`        | 0     | ready queue なし |
-| `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 0     | なし             |
-| `done`        | 83    | archive を参照   |
-| `blocked`     | 1     | 人間確認待ち     |
+| status        | count | notes                 |
+| ------------- | ----- | --------------------- |
+| `todo`        | 3     | public surface warmth |
+| `in_progress` | 0     | 並行実行枠は空き      |
+| `review`      | 0     | なし                  |
+| `done`        | 83    | archive を参照        |
+| `blocked`     | 1     | 人間確認待ち          |
 
 ---
 
@@ -89,7 +89,10 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-現在はありません。
+| order | issue       | GitHub | title                                                   | note  |
+| ----- | ----------- | ------ | ------------------------------------------------------- | ----- |
+| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | ready |
+| 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | ready |
 
 ## In Progress
 
@@ -147,6 +150,14 @@ Codex-ready と判断する条件:
 | 5     | `ISSUE-080` | `#179` | Sign-in / Onboarding / Settings trust bridge  | done |
 | 6     | `ISSUE-081` | `#181` | Album / Memory Detail private shelf polish    | done |
 | 7     | `ISSUE-082` | `#183` | LP-App visual parity QA gate                  | done |
+
+## Planned Public Surface Warmth Sequence
+
+| order | issue       | GitHub | title                                                   | note                             |
+| ----- | ----------- | ------ | ------------------------------------------------------- | -------------------------------- |
+| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | todo                             |
+| 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | todo                             |
+| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | blocked by ISSUE-084 / ISSUE-085 |
 
 ---
 

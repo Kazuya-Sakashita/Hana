@@ -23,6 +23,8 @@ docs/design/
 │                            LP / 参照画像の質感を本体アプリ実装契約に翻訳する橋渡し正本
 ├── lp-app-visual-parity-qa.md
 │                            LP と本体アプリの visual parity を継続確認する QA gate 正本
+├── public-surface-warmth-plan.md
+│                            /lp と /privacy を Quiet Heirloom に寄せる公開前 surface 計画
 ├── quiet-copy-motion-ledger.md
 │                            大幅刷新時の copy / motion 証跡テンプレート
 ├── product-design-qa-v2.md
