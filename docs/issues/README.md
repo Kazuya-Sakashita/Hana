@@ -138,15 +138,15 @@ Codex-ready と判断する条件:
 
 ## Planned LP-App Design Parity Sequence
 
-| order | issue       | GitHub | title                                         | note                        |
-| ----- | ----------- | ------ | --------------------------------------------- | --------------------------- |
-| 1     | `ISSUE-076` | `#171` | LP と本体アプリの視覚語彙を接続する           | done                        |
-| 2     | `ISSUE-077` | `#173` | 共通 keepsake primitive と icon language 実装 | done                        |
-| 3     | `ISSUE-078` | `#175` | Record 30秒 one-decision flow alignment       | done                        |
-| 4     | `ISSUE-079` | `#177` | BottomNav と action icon の quiet alignment   | done                        |
-| 5     | `ISSUE-080` | `#179` | Sign-in / Onboarding / Settings trust bridge  | done                        |
-| 6     | `ISSUE-081` | `#181` | Album / Memory Detail private shelf polish    | review                      |
-| 7     | `ISSUE-082` | TBD    | LP-App visual parity QA gate                  | candidate。Issue doc 未作成 |
+| order | issue       | GitHub | title                                         | note   |
+| ----- | ----------- | ------ | --------------------------------------------- | ------ |
+| 1     | `ISSUE-076` | `#171` | LP と本体アプリの視覚語彙を接続する           | done   |
+| 2     | `ISSUE-077` | `#173` | 共通 keepsake primitive と icon language 実装 | done   |
+| 3     | `ISSUE-078` | `#175` | Record 30秒 one-decision flow alignment       | done   |
+| 4     | `ISSUE-079` | `#177` | BottomNav と action icon の quiet alignment   | done   |
+| 5     | `ISSUE-080` | `#179` | Sign-in / Onboarding / Settings trust bridge  | done   |
+| 6     | `ISSUE-081` | `#181` | Album / Memory Detail private shelf polish    | done   |
+| 7     | `ISSUE-082` | `#183` | LP-App visual parity QA gate                  | review |
 
 ---
 
@@ -169,10 +169,10 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                                             | note                         |
-| ----------- | ------------------------------------------------- | ---------------------------- |
-| `ISSUE-071` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | 静的 artifact 実装・評価済み |
-| `ISSUE-081` | Album / Memory Detail private shelf polish        | 実装・専門レビュー・gate 前  |
+| issue       | title                                             | note                          |
+| ----------- | ------------------------------------------------- | ----------------------------- |
+| `ISSUE-071` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | 静的 artifact 実装・評価済み  |
+| `ISSUE-082` | LP-App visual parity QA gate                      | 実装・専門レビュー・gate 済み |
 
 ---
 
@@ -188,7 +188,7 @@ Codex-ready と判断する条件:
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
-- lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`
+- lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`
 
 ---
 
