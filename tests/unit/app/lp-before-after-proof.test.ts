@@ -53,7 +53,7 @@ describe('ISSUE-073 LP Before / After proof', () => {
   })
 
   it('keeps the issue evidence and review requirements explicit', () => {
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toMatch(/status: (review|done)/)
     expect(issueSource).toContain('github_issue: 164')
     expect(issueSource).toContain('- [x] Before / After が 3 秒で')
     expect(issueSource).toContain('- [x] 写真のみ、写真 + title、写真 + 短い本文')

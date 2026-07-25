@@ -43,10 +43,10 @@
 
 | status        | count | notes            |
 | ------------- | ----- | ---------------- |
-| `todo`        | 1     | LP 後続改善      |
+| `todo`        | 0     | ready queue なし |
 | `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 1     | LP value proof   |
-| `done`        | 79    | archive を参照   |
+| `review`      | 1     | LP hero 構図     |
+| `done`        | 80    | archive を参照   |
 | `blocked`     | 2     | 人間判断待ち     |
 
 ---
@@ -132,8 +132,8 @@ Codex-ready と判断する条件:
 | ----- | ----------- | ------ | ------------------------------------------------- | ---------------------------------------------- |
 | 1     | `ISSUE-071` | `#162` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | done                                           |
 | 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | blocked: 待機リスト / Store 導線の人間判断待ち |
-| 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | review                                         |
-| 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | todo                                           |
+| 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | done                                           |
+| 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | review                                         |
 | 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | blocked: privacy / legal review 待ち           |
 
 ## Planned LP-App Design Parity Sequence
@@ -169,9 +169,9 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                              | note                        |
-| ----------- | ---------------------------------- | --------------------------- |
-| `ISSUE-073` | LP Before / After の価値証拠を強化 | 実装・専門レビュー・gate 前 |
+| issue       | title                                  | note                        |
+| ----------- | -------------------------------------- | --------------------------- |
+| `ISSUE-074` | LP Hero を keepsake 主役の構図へ再構成 | 実装・専門レビュー・gate 前 |
 
 ---
 
@@ -187,7 +187,7 @@ Codex-ready と判断する条件:
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
-- lp public readiness completed: `ISSUE-071`
+- lp public readiness completed: `ISSUE-071`, `ISSUE-073`
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
 
 ---
