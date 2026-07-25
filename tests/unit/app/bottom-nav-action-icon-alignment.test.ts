@@ -65,14 +65,17 @@ describe('ISSUE-079 BottomNav and action icon alignment', () => {
     expect(iconsSource).toContain("favorite: 'text-ink-tertiary'")
     expect(iconsSource).toContain("tone === 'favorite' && active ? 'currentColor' : 'none'")
     expect(iconsSource).toContain("tone === 'favorite' && active ? 'text-sakura-deep'")
-    expect(albumListSource).toContain(
-      'QuietIcon icon={Heart} tone="favorite" active={memory.is_favorite}',
-    )
+    expect(albumListSource).toContain('QuietIconButton')
+    expect(albumListSource).toContain('icon={Heart}')
+    expect(albumListSource).toContain('tone="favorite"')
+    expect(albumListSource).toContain('active={memory.is_favorite}')
     expect(albumListSource).not.toContain('hover:text-sakura')
-    expect(memoryActionsSource).toContain('QuietIcon icon={icon} tone={tone} active={active}')
+    expect(memoryActionsSource).toContain('QuietIconButton')
     expect(memoryActionsSource).toContain('icon={Heart}')
     expect(memoryActionsSource).toContain('tone="favorite"')
+    expect(memoryActionsSource).toContain('active={isFavorite}')
     expect(memoryActionsSource).toContain('icon={Trash2}')
+    expect(memoryActionsSource).toContain('tone="warning"')
     expect(memoryActionsSource).not.toContain('fill={isFavorite')
   })
 

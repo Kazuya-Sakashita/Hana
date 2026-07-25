@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { CheckCircle2, ChevronLeft } from 'lucide-react'
 import { MemoryActions } from '@/components/memory-actions'
+import { QuietIcon } from '@/components/product/icons'
+import { PaperSlip } from '@/components/product/surfaces'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
@@ -159,12 +161,13 @@ function SavedMemoryNotice() {
         <ChevronLeft className="size-4" aria-hidden="true" />
         アルバムへ
       </Link>
-      <div
+      <PaperSlip
+        data-testid="memory-saved-notice"
         role="status"
         aria-live="polite"
-        className="border-hairline text-ink-secondary flex items-start gap-3 border-l px-3 py-2 text-left"
+        className="text-ink-secondary flex items-start gap-3 px-4 py-3 text-left"
       >
-        <CheckCircle2 className="text-leaf mt-0.5 size-5 shrink-0" aria-hidden="true" />
+        <QuietIcon icon={CheckCircle2} tone="primary" className="mt-0.5 shrink-0" />
         <div>
           <p className="meta-label">{quietStateCopy.record.savedLandingEyebrow}</p>
           <h2 id="memory-saved-moment-title" className="text-ink mt-1 font-serif text-lg">
@@ -174,7 +177,7 @@ function SavedMemoryNotice() {
             {quietStateCopy.record.savedLandingDescription}
           </p>
         </div>
-      </div>
+      </PaperSlip>
     </section>
   )
 }

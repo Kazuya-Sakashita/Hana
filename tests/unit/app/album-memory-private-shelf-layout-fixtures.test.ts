@@ -56,7 +56,7 @@ describe('ISSUE-070 private shelf layout fixtures', () => {
   it('keeps tap targets and focus surfaces for shelf interactions', () => {
     expect(albumPageSource).toContain('focus-visible:ring-2')
     expect(albumListSource).toContain('focus-visible:ring-2')
-    expect(albumListSource).toContain('tap-target flex h-11 w-11')
+    expect(albumListSource).toContain('QuietIconButton')
     expect(albumListSource).toContain('statusRef.current?.focus')
     expect(memoryDetailSource).toContain('tap-target absolute')
   })

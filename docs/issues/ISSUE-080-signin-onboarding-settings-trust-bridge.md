@@ -2,7 +2,7 @@
 id: ISSUE-080
 title: Sign-in / Onboarding / Settings trust bridge を整える
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: LP-APP-DESIGN-PARITY

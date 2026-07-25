@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Heart, Trash2, type LucideIcon } from 'lucide-react'
+import { Heart, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { QuietIcon, type QuietIconTone } from '@/components/product/icons'
+import { QuietIconButton } from '@/components/product/icons'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccessibleDialog } from '@/components/ui/dialog'
+import { StatePanel } from '@/components/product/surfaces'
 import {
   memoriesQueryKey,
   useDeleteMemoryMutation,
@@ -98,27 +98,40 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
 
   return (
     <>
-      <section aria-label="ページのしるしと操作" className="border-hairline mt-10 border-t pt-6">
-        <div className="grid grid-cols-2 gap-2">
-          <ActionGlyph
-            label="しるし"
-            icon={Heart}
-            tone="favorite"
-            active={isFavorite}
-            pressed={isFavorite}
-            disabled={updateMemoryMutation.isPending}
-            onClick={toggleFavorite}
-          />
-          <ActionGlyph
-            label="けす"
-            icon={Trash2}
-            onClick={() => setDeleteDialog({ open: true, pending: false })}
-          />
+      <section
+        aria-labelledby="memory-actions-title"
+        className="border-hairline mt-10 border-t pt-5"
+        data-testid="memory-quiet-action-band"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 id="memory-actions-title" className="meta-label">
+              ページの操作
+            </h2>
+            <p id="memory-edit-note" className="text-ink-tertiary mt-2 text-xs leading-narrative">
+              この画面では、しるしと削除だけ操作できます。
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <QuietIconButton
+              icon={Heart}
+              tone="favorite"
+              active={isFavorite}
+              label={isFavorite ? 'しるしを はずす' : 'しるしを つける'}
+              aria-pressed={isFavorite}
+              aria-describedby="memory-edit-note"
+              disabled={updateMemoryMutation.isPending}
+              onClick={toggleFavorite}
+            />
+            <QuietIconButton
+              icon={Trash2}
+              tone="warning"
+              label="このページを けす"
+              aria-describedby="memory-edit-note"
+              onClick={() => setDeleteDialog({ open: true, pending: false })}
+            />
+          </div>
         </div>
-
-        <p id="memory-edit-note" className="text-ink-tertiary mt-3 text-center text-xs">
-          この画面では、しるしと削除だけ操作できます。
-        </p>
       </section>
 
       {deleteDialog.open ? (
@@ -130,39 +143,6 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
         />
       ) : null}
     </>
-  )
-}
-
-function ActionGlyph({
-  label,
-  icon,
-  tone = 'default',
-  active = false,
-  pressed,
-  disabled,
-  onClick,
-}: {
-  label: string
-  icon: LucideIcon
-  tone?: QuietIconTone
-  active?: boolean
-  pressed?: boolean
-  disabled?: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={typeof pressed === 'boolean' ? pressed : undefined}
-      disabled={disabled}
-      className="text-ink-secondary hover:bg-warm disabled:text-ink-tertiary tap-target border-hairline bg-paper-slip ease-organic flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-photo-mat)] border px-3 py-2 transition-colors disabled:cursor-not-allowed disabled:hover:bg-transparent"
-    >
-      <span className="flex size-8 items-center justify-center" aria-hidden="true">
-        <QuietIcon icon={icon} tone={tone} active={active} />
-      </span>
-      <span className="text-xs">{label}</span>
-    </button>
   )
 }
 
@@ -185,16 +165,19 @@ function DeleteConfirmDialog({
       initialFocusId="delete-confirm-cancel"
       onClose={onCancel}
     >
-      <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
-          <CardTitle id="delete-confirm-title" className="font-serif text-xl">
+      <StatePanel className="w-full max-w-md">
+        <div className="text-center">
+          <h2 id="delete-confirm-title" className="font-serif text-xl">
             {quietStateCopy.memoryDetail.deleteConfirmTitle}
-          </CardTitle>
-          <CardDescription id="delete-confirm-description" className="leading-narrative mt-2">
+          </h2>
+          <p
+            id="delete-confirm-description"
+            className="text-ink-secondary leading-narrative mt-3 text-sm"
+          >
             {deleteMemoryDescription(childName)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+          </p>
+        </div>
+        <div className="mt-7 flex flex-col gap-3">
           <Button
             type="button"
             variant="outline"
@@ -218,8 +201,8 @@ function DeleteConfirmDialog({
           >
             やめる
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </StatePanel>
     </AccessibleDialog>
   )
 }
