@@ -68,18 +68,18 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <figure className="paper-surface rounded-[var(--radius-sheet)] p-3 sm:p-4">
-            <div className="photo-mat rounded-[var(--radius-photo-mat)] p-2">
+          <figure className="paper-surface lp-soft-frame p-3 sm:p-4">
+            <div className="photo-mat lp-soft-photo-mat p-2">
               <Image
                 src="/lp/hana-before-after-safe-still-life.svg"
                 width={720}
                 height={520}
                 alt="合成の日常静物ビジュアル"
                 priority
-                className="w-full rounded-[var(--radius-photo-inner)]"
+                className="lp-soft-photo-inner w-full"
               />
             </div>
-            <figcaption className="border-hairline mt-5 border-t pt-5">
+            <figcaption className="border-hairline bg-paper-slip/70 lp-soft-card mt-5 border p-5">
               <p className="meta-label">保存されたページ</p>
               <h2 className="mt-2 font-serif text-2xl">洗濯ものをたたむ前</h2>
               <p className="text-ink-secondary mt-3 leading-8">
@@ -100,7 +100,7 @@ export default function LandingPage() {
             写真を、記憶にかえる。
           </h2>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            <section className="border-hairline bg-paper-slip rounded-[var(--radius-paper-slip)] border p-5">
+            <section className="border-hairline bg-paper-slip lp-soft-card border p-5">
               <p className="meta-label">Before</p>
               <h3 className="mt-2 font-serif text-2xl">写真だけ</h3>
               <p className="text-ink-secondary mt-3 leading-8">
@@ -110,7 +110,7 @@ export default function LandingPage() {
                 写真のみ
               </span>
             </section>
-            <section className="border-hairline bg-paper-slip rounded-[var(--radius-paper-slip)] border p-5">
+            <section className="border-hairline bg-paper-slip lp-soft-card border p-5">
               <p className="meta-label">After</p>
               <h3 className="mt-2 font-serif text-2xl">写真 + タイトル</h3>
               <p className="text-ink-secondary mt-3 leading-8">
@@ -120,7 +120,7 @@ export default function LandingPage() {
                 机の上の小さなくつした
               </strong>
             </section>
-            <section className="border-hairline bg-paper-slip rounded-[var(--radius-paper-slip)] border p-5">
+            <section className="border-hairline bg-paper-slip lp-soft-card border p-5">
               <p className="meta-label">After</p>
               <h3 className="mt-2 font-serif text-2xl">写真 + 短い本文</h3>
               <p className="text-ink-secondary mt-3 leading-8">
@@ -155,10 +155,7 @@ export default function LandingPage() {
                 ],
               ] as const
             ).map(([title, body]) => (
-              <li
-                key={title}
-                className="border-hairline bg-paper-slip rounded-[var(--radius-paper-slip)] border p-5"
-              >
+              <li key={title} className="border-hairline bg-paper-slip lp-soft-card border p-5">
                 <strong className="font-serif text-xl font-normal">{title}</strong>
                 <p className="text-ink-secondary mt-3 leading-8">{body}</p>
               </li>
