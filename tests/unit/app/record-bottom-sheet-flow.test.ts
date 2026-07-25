@@ -28,7 +28,8 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toContain('data-testid="record-bottom-sheet-footer"')
     expect(recordSource).toContain('overflow-y-auto')
     expect(recordSource).toContain('pb-[calc(env(safe-area-inset-bottom)+1rem)]')
-    expect(recordSource).toContain('photo-mat')
+    expect(recordSource).toContain('PhotoMat')
+    expect(recordSource).toContain('PhotoPlaceholder')
     expect(recordSource).toContain('30びょう 記録')
     expect(recordSource).toContain('しゃしんを えらぶ')
     expect(recordSource).toContain('AI で 下書きする')
@@ -55,8 +56,10 @@ describe('record bottom-sheet capture flow', () => {
 
   it('keeps AI story confirmation visible and secondary edits folded', () => {
     expect(recordSource).toContain('data-testid="record-story-preview"')
+    expect(recordSource).toContain('KeepsakePreview')
     expect(recordSource).toContain('のこす ことば')
     expect(recordSource).toContain('<details')
+    expect(recordSource).toContain('<Textarea')
     expect(recordSource).toContain('ことば・日付を なおす')
   })
 

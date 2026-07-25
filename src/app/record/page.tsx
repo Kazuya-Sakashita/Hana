@@ -4,13 +4,23 @@ import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { Camera } from 'lucide-react'
+import { Check, ImagePlus, PenLine, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { QuietIcon } from '@/components/product/icons'
+import {
+  KeepsakePreview,
+  PaperSlip,
+  PhotoInner,
+  PhotoMat,
+  PhotoPlaceholder,
+  StatePanel,
+} from '@/components/product/surfaces'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccessibleDialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { useChildrenQuery } from '@/features/children/client/use-children'
 import {
   memoriesQueryKey,
@@ -375,11 +385,9 @@ export default function RecordPage() {
   if (phase === 'loading') {
     return (
       <Shell>
-        <Card className="w-full max-w-md">
-          <CardContent className="flex items-center justify-center py-16">
-            <span className="text-ink-tertiary text-sm">{quietStateCopy.common.loading}</span>
-          </CardContent>
-        </Card>
+        <StatePanel className="w-full max-w-md py-16">
+          <span className="text-ink-tertiary text-sm">{quietStateCopy.common.loading}</span>
+        </StatePanel>
       </Shell>
     )
   }
@@ -387,23 +395,17 @@ export default function RecordPage() {
   if (phase === 'no-child') {
     return (
       <Shell>
-        <Card className="w-full max-w-md">
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">
-              さきに お子さんの こと、おしえてください
-            </CardTitle>
-            <CardDescription className="mt-2">
-              記録を のこすには、お子さんの プロフィールが ひつようです。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="lg" className="w-full">
-              <Link href="/onboarding" prefetch={false}>
-                プロフィールを ひらく
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <StatePanel className="w-full max-w-md">
+          <h2 className="font-serif text-xl">さきに お子さんの こと、おしえてください</h2>
+          <p className="text-ink-secondary leading-narrative mt-2 text-sm">
+            記録を のこすには、お子さんの プロフィールが ひつようです。
+          </p>
+          <Button asChild size="lg" className="mt-6 w-full">
+            <Link href="/onboarding" prefetch={false}>
+              プロフィールを ひらく
+            </Link>
+          </Button>
+        </StatePanel>
       </Shell>
     )
   }
@@ -411,21 +413,15 @@ export default function RecordPage() {
   if (phase === 'error') {
     return (
       <Shell>
-        <Card className="w-full max-w-md">
-          <CardHeader className="items-center text-center">
-            <CardTitle className="font-serif text-xl">
-              {quietStateCopy.common.openFailedTitle}
-            </CardTitle>
-            <CardDescription className="mt-2">
-              {quietStateCopy.common.openFailedDescription}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => location.reload()} className="w-full">
-              {quietStateCopy.common.retryOpen}
-            </Button>
-          </CardContent>
-        </Card>
+        <StatePanel className="w-full max-w-md">
+          <h2 className="font-serif text-xl">{quietStateCopy.common.openFailedTitle}</h2>
+          <p className="text-ink-secondary leading-narrative mt-2 text-sm">
+            {quietStateCopy.common.openFailedDescription}
+          </p>
+          <Button onClick={() => location.reload()} className="mt-6 w-full">
+            {quietStateCopy.common.retryOpen}
+          </Button>
+        </StatePanel>
       </Shell>
     )
   }
@@ -450,29 +446,31 @@ export default function RecordPage() {
           しゃしんを 1まい えらんで、ことばを そえます。
         </p>
 
-        <div className="photo-mat mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-[var(--radius-photo-mat)]">
-          {filePreviewUrl && file ? (
-            <NextImage
-              src={filePreviewUrl}
-              alt="えらんだ しゃしん"
-              width={720}
-              height={900}
-              unoptimized
-              className="h-full max-h-[46dvh] w-full object-cover"
-            />
-          ) : (
-            <div
-              data-testid="record-photo-placeholder"
-              className="border-hairline/80 bg-paper-slip/55 mx-4 flex min-h-44 w-full flex-col items-center justify-center rounded-[var(--radius-photo-mat)] border border-dashed px-8 text-center"
-            >
-              <Camera className="text-sakura-deep size-8" aria-hidden="true" />
-              <p className="text-ink-secondary mt-4 font-serif text-lg">まずは 1まい</p>
-              <p className="text-ink-tertiary leading-narrative mt-2 max-w-64 text-sm">
-                うまく撮れた写真でなくても、残したい瞬間なら大丈夫です。
-              </p>
-            </div>
-          )}
-        </div>
+        {filePreviewUrl && file ? (
+          <PhotoMat
+            data-testid="record-photo-mat-selected"
+            className="mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden"
+          >
+            <PhotoInner className="h-full max-h-[46dvh] w-full overflow-hidden">
+              <NextImage
+                src={filePreviewUrl}
+                alt="えらんだ しゃしん"
+                width={720}
+                height={900}
+                unoptimized
+                className="h-full w-full object-cover"
+              />
+            </PhotoInner>
+          </PhotoMat>
+        ) : (
+          <PhotoPlaceholder
+            data-testid="record-photo-placeholder"
+            icon={ImagePlus}
+            title="まずは 1まい"
+            description="うまく撮れた写真でなくても、残したい瞬間なら大丈夫です。"
+            className="mt-6 min-h-[240px] flex-1"
+          />
+        )}
       </section>
 
       <form
@@ -496,22 +494,25 @@ export default function RecordPage() {
           ) : null}
 
           <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-            <StepPill active={!uploadedImage} done={!!uploadedImage} label="写真" />
+            <StepPill
+              active={!uploadedImage}
+              done={!!uploadedImage}
+              label="写真"
+              icon={ImagePlus}
+            />
             <StepPill
               active={!!uploadedImage && aiStatus !== 'done'}
               done={aiStatus === 'done'}
               label="下書き"
+              icon={PenLine}
             />
-            <StepPill active={canSubmit} done={false} label="保存" />
+            <StepPill active={canSubmit} done={false} label="保存" icon={Check} />
           </div>
 
-          <div
-            data-testid="record-decision-cue"
-            className="border-hairline bg-paper-slip rounded-[var(--radius-paper-slip)] border px-4 py-3"
-          >
+          <PaperSlip data-testid="record-decision-cue">
             <p className="meta-label">{decisionCue.eyebrow}</p>
             <p className="text-ink-secondary leading-narrative mt-2 text-sm">{decisionCue.body}</p>
-          </div>
+          </PaperSlip>
 
           <Input
             ref={fileInputRef}
@@ -573,11 +574,7 @@ export default function RecordPage() {
 
           {uploadedImage ? (
             <>
-              <div
-                data-testid="record-ai-decision"
-                className="paper-surface rounded-[var(--radius-paper-slip)] p-4"
-                aria-busy={aiStatus === 'generating'}
-              >
+              <PaperSlip data-testid="record-ai-decision" aria-busy={aiStatus === 'generating'}>
                 <p className="text-ink-secondary font-serif text-sm">
                   {quietStateCopy.record.aiReady}
                 </p>
@@ -622,7 +619,7 @@ export default function RecordPage() {
                     {aiError}
                   </p>
                 ) : null}
-              </div>
+              </PaperSlip>
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="memory-title" className="font-serif">
@@ -644,10 +641,9 @@ export default function RecordPage() {
               </div>
 
               {storyPreview ? (
-                <section
+                <KeepsakePreview
                   aria-labelledby="memory-story-preview-title"
                   data-testid="record-story-preview"
-                  className="paper-surface rounded-[var(--radius-paper-slip)] p-4"
                 >
                   <p
                     id="memory-story-preview-title"
@@ -658,76 +654,76 @@ export default function RecordPage() {
                   <p className="text-ink leading-narrative mt-2 whitespace-pre-wrap break-words font-serif text-base [overflow-wrap:anywhere]">
                     {storyPreview}
                   </p>
-                </section>
+                </KeepsakePreview>
               ) : (
                 <p className="text-ink-tertiary leading-narrative text-center text-sm">
                   AI の下書き、または ひとことを添えて残せます。
                 </p>
               )}
 
-              <details
-                data-testid="record-secondary-edits"
-                className="group rounded-[var(--radius-paper-slip)] bg-warm px-4 py-3"
-              >
-                <summary className="tap-target text-ink-secondary flex cursor-pointer list-none items-center justify-between font-serif text-sm [&::-webkit-details-marker]:hidden">
-                  ことば・日付を なおす
-                  <span className="text-ink-tertiary text-xs group-open:hidden">ひらく</span>
-                  <span className="text-ink-tertiary hidden text-xs group-open:inline">とじる</span>
-                </summary>
-                <div className="mt-4 flex flex-col gap-4">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="memory-body" className="font-serif">
-                      ほんぶん (任意)
-                    </Label>
-                    <textarea
-                      id="memory-body"
-                      value={body}
-                      onChange={(e) => setBody(e.target.value)}
-                      maxLength={1000}
-                      rows={4}
-                      placeholder="あの しゅんかんの こと、ひとこと だけでも。"
-                      className="border-hairline bg-elevated text-ink placeholder:text-ink-tertiary placeholder:font-serif leading-narrative focus-visible:border-sakura focus-visible:ring-ring/30 w-full rounded-xl border px-4 py-2 text-base transition-all focus-visible:outline-none focus-visible:ring-2"
-                    />
-                    {fieldErrors.body ? (
-                      <p role="alert" className="text-amber text-xs">
-                        {fieldErrors.body}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+              <PaperSlip className="px-4 py-3">
+                <details data-testid="record-secondary-edits" className="group">
+                  <summary className="tap-target text-ink-secondary flex cursor-pointer list-none items-center justify-between font-serif text-sm [&::-webkit-details-marker]:hidden">
+                    ことば・日付を なおす
+                    <span className="text-ink-tertiary text-xs group-open:hidden">ひらく</span>
+                    <span className="text-ink-tertiary hidden text-xs group-open:inline">
+                      とじる
+                    </span>
+                  </summary>
+                  <div className="mt-4 flex flex-col gap-4">
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="memory-date" className="font-serif">
-                        ひにち
+                      <Label htmlFor="memory-body" className="font-serif">
+                        ほんぶん (任意)
                       </Label>
-                      <Input
-                        id="memory-date"
-                        type="date"
-                        value={recordedAt}
-                        onChange={(e) => setRecordedAt(e.target.value)}
-                        max={todayIso}
+                      <Textarea
+                        id="memory-body"
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                        maxLength={1000}
+                        rows={4}
+                        placeholder="あの しゅんかんの こと、ひとこと だけでも。"
                       />
-                      {fieldErrors.recordedAt ? (
+                      {fieldErrors.body ? (
                         <p role="alert" className="text-amber text-xs">
-                          {fieldErrors.recordedAt}
+                          {fieldErrors.body}
                         </p>
                       ) : null}
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="memory-weather" className="font-serif">
-                        てんき (任意)
-                      </Label>
-                      <Input
-                        id="memory-weather"
-                        value={weather}
-                        onChange={(e) => setWeather(e.target.value)}
-                        placeholder="はれ"
-                        maxLength={20}
-                      />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="memory-date" className="font-serif">
+                          ひにち
+                        </Label>
+                        <Input
+                          id="memory-date"
+                          type="date"
+                          value={recordedAt}
+                          onChange={(e) => setRecordedAt(e.target.value)}
+                          max={todayIso}
+                        />
+                        {fieldErrors.recordedAt ? (
+                          <p role="alert" className="text-amber text-xs">
+                            {fieldErrors.recordedAt}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="memory-weather" className="font-serif">
+                          てんき (任意)
+                        </Label>
+                        <Input
+                          id="memory-weather"
+                          value={weather}
+                          onChange={(e) => setWeather(e.target.value)}
+                          placeholder="はれ"
+                          maxLength={20}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </details>
+                </details>
+              </PaperSlip>
             </>
           ) : null}
         </div>
@@ -906,18 +902,31 @@ function RecordShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function StepPill({ active, done, label }: { active: boolean; done: boolean; label: string }) {
+function StepPill({
+  active,
+  done,
+  label,
+  icon,
+}: {
+  active: boolean
+  done: boolean
+  label: string
+  icon: LucideIcon
+}) {
+  const iconTone = done || active ? 'primary' : 'muted'
+
   return (
     <div
       className={
         done
-          ? 'border-leaf/30 bg-warm text-leaf rounded-full border px-2 py-1'
+          ? 'border-leaf/30 bg-paper-slip text-leaf-deep inline-flex items-center justify-center gap-1 rounded-full border px-2 py-1'
           : active
-            ? 'border-sakura/40 bg-paper-slip text-sakura-deep rounded-full border px-2 py-1'
-            : 'border-hairline bg-warm text-ink-tertiary rounded-full border px-2 py-1'
+            ? 'border-leaf/35 bg-paper-slip text-leaf-deep inline-flex items-center justify-center gap-1 rounded-full border px-2 py-1 ring-1 ring-leaf/20'
+            : 'border-hairline bg-warm text-ink-tertiary inline-flex items-center justify-center gap-1 rounded-full border px-2 py-1'
       }
     >
-      {label}
+      <QuietIcon icon={done ? Check : icon} tone={iconTone} size="sm" active={active || done} />
+      <span>{label}</span>
     </div>
   )
 }
