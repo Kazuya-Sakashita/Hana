@@ -2,7 +2,7 @@
 id: ISSUE-077
 title: 共通 keepsake primitive と icon language を実装する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: APP-DESIGN-PARITY

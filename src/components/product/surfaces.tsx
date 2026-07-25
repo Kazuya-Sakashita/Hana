@@ -50,18 +50,20 @@ export function PhotoPlaceholder({
   description,
   icon = Camera,
   className,
+  ...props
 }: {
   title: React.ReactNode
   description?: React.ReactNode
   icon?: LucideIcon
   className?: string
-}) {
+} & Omit<React.ComponentProps<typeof PhotoMat>, 'children' | 'title'>) {
   return (
     <PhotoMat
       className={cn(
         'flex min-h-44 flex-col items-center justify-center gap-3 text-center',
         className,
       )}
+      {...props}
     >
       <PhotoInner className="flex min-h-36 w-full flex-col items-center justify-center gap-3 px-4 py-6 text-center">
         <QuietIcon icon={icon} tone="muted" size="lg" />

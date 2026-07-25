@@ -15,10 +15,13 @@ const issueSource = readFileSync(
 
 describe('ISSUE-069 record one-decision sheet refinement', () => {
   it('renders the unselected photo state as a quiet camera placeholder', () => {
-    expect(recordSource).toContain("import { Camera } from 'lucide-react'")
+    expect(recordSource).toContain('import { Check, ImagePlus, PenLine, type LucideIcon }')
+    expect(recordSource).toContain('PhotoPlaceholder')
     expect(recordSource).toContain('data-testid="record-photo-placeholder"')
-    expect(recordSource).toContain('border border-dashed')
-    expect(recordSource).toContain('rounded-[var(--radius-photo-mat)]')
+    expect(recordSource).toContain('icon={ImagePlus}')
+    expect(recordSource).toContain('record-photo-mat-selected')
+    expect(recordSource).toContain('PhotoMat')
+    expect(recordSource).toContain('PhotoInner')
     expect(recordSource).not.toContain(
       'photo-mat mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-[var(--radius-sheet)]',
     )
@@ -51,9 +54,11 @@ describe('ISSUE-069 record one-decision sheet refinement', () => {
 
   it('keeps secondary editing folded and low-density after the primary decision', () => {
     expect(recordSource).toContain('data-testid="record-secondary-edits"')
+    expect(recordSource).toContain('PaperSlip className="px-4 py-3"')
     expect(recordSource).toContain('<details')
     expect(recordSource).toContain('ことば・日付を なおす')
     expect(recordSource).toContain('ほんぶん (任意)')
+    expect(recordSource).toContain('<Textarea')
     expect(recordSource).toContain('てんき (任意)')
     expect(recordSource).toContain('AIの下書きか、ひとことのタイトルを足すかを選びます。')
     expect(recordSource).toContain('whitespace-pre-wrap break-words')
