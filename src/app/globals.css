@@ -191,6 +191,28 @@
   .radius-sheet {
     border-radius: var(--radius-sheet);
   }
+  .lp-soft-frame {
+    border-radius: calc(var(--radius-sheet) + 0.25rem);
+    box-shadow:
+      0 2px 4px rgba(58, 38, 30, 0.035),
+      0 18px 42px rgba(58, 38, 30, 0.045);
+  }
+  .lp-soft-form {
+    border-radius: var(--radius-sheet);
+  }
+  .lp-soft-card {
+    border-radius: calc(var(--radius-paper-slip) + 0.125rem);
+    box-shadow: none;
+  }
+  .lp-soft-photo-mat {
+    border-radius: var(--radius-photo-mat);
+  }
+  .lp-soft-photo-inner {
+    border-radius: calc(var(--radius-photo-inner) + 0.125rem);
+  }
+  .lp-soft-field {
+    border-radius: calc(var(--radius-paper-slip) + 0.125rem);
+  }
   .tap-target {
     min-height: 44px;
     min-width: 44px;

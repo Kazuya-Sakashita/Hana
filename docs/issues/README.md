@@ -46,7 +46,7 @@
 | `todo`        | 0     | ready queue なし |
 | `in_progress` | 0     | 並行実行枠は空き |
 | `review`      | 0     | なし             |
-| `done`        | 82    | archive を参照   |
+| `done`        | 83    | archive を参照   |
 | `blocked`     | 1     | 人間確認待ち     |
 
 ---
@@ -184,7 +184,7 @@ Codex-ready と判断する条件:
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
-- lp public readiness completed: `ISSUE-071`, `ISSUE-072`, `ISSUE-073`, `ISSUE-074`
+- lp public readiness completed: `ISSUE-071`, `ISSUE-072`, `ISSUE-073`, `ISSUE-074`, `ISSUE-083`
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
 
 ---
