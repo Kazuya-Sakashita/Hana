@@ -47,7 +47,10 @@ describe('ISSUE-077 Quiet Heirloom primitives and icon language', () => {
     expect(iconsSource).toContain('strokeWidth={active ? 1.9 : iconStrokeWidth[size]}')
     expect(iconsSource).toContain('sm: 1.75')
     expect(iconsSource).toContain('display: 1.55')
-    expect(iconsSource).toContain("favorite: 'text-sakura-deep'")
+    expect(iconsSource).toContain("favorite: 'text-ink-tertiary'")
+    expect(iconsSource).toContain(
+      "const toneClass = tone === 'favorite' && active ? 'text-sakura-deep' : iconToneClasses[tone]",
+    )
     expect(iconsSource).toContain("primary: 'text-leaf-deep dark:text-leaf'")
     expect(iconsSource).toContain(
       "const fill = tone === 'favorite' && active ? 'currentColor' : 'none'",

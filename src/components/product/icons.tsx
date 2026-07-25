@@ -9,7 +9,7 @@ const iconToneClasses: Record<QuietIconTone, string> = {
   default: 'text-ink-secondary',
   muted: 'text-ink-tertiary',
   primary: 'text-leaf-deep dark:text-leaf',
-  favorite: 'text-sakura-deep',
+  favorite: 'text-ink-tertiary',
   warning: 'text-amber',
   onPrimary: 'text-primary-foreground',
 }
@@ -60,13 +60,14 @@ export function QuietIcon({
   className,
 }: QuietIconProps) {
   const fill = tone === 'favorite' && active ? 'currentColor' : 'none'
+  const toneClass = tone === 'favorite' && active ? 'text-sakura-deep' : iconToneClasses[tone]
 
   return (
     <Icon
       aria-hidden={decorative}
       aria-label={decorative ? undefined : label}
       role={decorative ? undefined : 'img'}
-      className={cn(iconSizeClasses[size], iconToneClasses[tone], className)}
+      className={cn(iconSizeClasses[size], toneClass, className)}
       strokeWidth={active ? 1.9 : iconStrokeWidth[size]}
       fill={fill}
     />

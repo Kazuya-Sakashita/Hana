@@ -6,6 +6,7 @@ import { BookOpen, Camera, Heart } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
+import { QuietIcon } from '@/components/product/icons'
 import { Button } from '@/components/ui/button'
 import {
   memoriesQueryKey,
@@ -189,13 +190,9 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
       disabled={disabled || updateMemoryMutation.isPending}
       aria-pressed={memory.is_favorite}
       aria-label={memory.is_favorite ? 'しるしを はずす' : 'しるしを つける'}
-      className="text-ink-tertiary hover:text-sakura disabled:text-ink-tertiary tap-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50"
+      className="tap-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-hairline bg-paper-slip transition-colors hover:bg-warm disabled:opacity-50"
     >
-      <Heart
-        className="size-5"
-        fill={memory.is_favorite ? 'currentColor' : 'none'}
-        aria-hidden="true"
-      />
+      <QuietIcon icon={Heart} tone="favorite" active={memory.is_favorite} />
     </button>
   )
 }
