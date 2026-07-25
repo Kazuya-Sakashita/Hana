@@ -1,6 +1,6 @@
 ---
 title: Product Design QA v2
-last_updated: 2026-07-24
+last_updated: 2026-07-25
 owner: kazuya
 issue: ISSUE-064
 requires_human_review:
@@ -77,6 +77,44 @@ CI は artifact を上書きしない。screenshot / accessibility snapshot は�
 | `ISSUE-068` | home first view、photo mat primacy、pressure copy              | release of home refinement              |
 | `ISSUE-069` | record bottom sheet、one-decision density、AI consent boundary | release of record refinement            |
 | `ISSUE-070` | album private shelf、memory detail action density、多件数QA    | release of album/detail refinement      |
+
+## ISSUE-076 LP-App Visual Parity Gate
+
+`ISSUE-076` 以降は、LP と本体アプリが同じ視覚世界に見えることを
+`docs/design/lp-app-visual-grammar.md` で確認する。これは LP を理想図として固定するものではなく、
+LP / 参照画像で強まった `photo mat + paper slip + sage pill + quiet icon` を
+本体アプリの実装契約に戻すための gate である。
+
+| check          | pass condition                                                                                                     | hold condition                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| token parity   | LP と app の canvas、paper-slip、photo-mat、ink、sage、sakura、radius token が一致、または差分理由が記録されている | 差分理由のない token drift                             |
+| icon parity    | lucide icon の語彙、stroke、色、fill 例外が共通規約に沿う                                                          | 文字 glyph、default stroke 2 の散在、AI sparkles 多用  |
+| surface parity | Home は写真台紙、Record は写真 + 下部 sheet、Album は private shelf、Memory Detail は写真と本文が action より先    | 説明 card、一覧 list、操作 menu が主役に戻る           |
+| CTA parity     | 記録、保存、完了、待機リストの primary action が sage pill として見える                                            | sakura の大面積 CTA、強い shadow、浮きすぎた FAB       |
+| active state   | Bottom navigation や tabs が色だけに依存せず、pill / underline / surface 差で状態を示す                            | 色と太さだけで active を表す                           |
+| tap target     | 全 interactive target は 44px 以上、primary CTA は 48px 以上                                                       | toast close や小 text button が 44px 未満              |
+| contrast       | body text は 7:1 目標、helper / status text は 4.5:1 以上、focus indicator と non-text UI は 3:1 以上              | sakura / leaf の小文字 text や icon state の比率未測定 |
+| trust safety   | vendor retention、ZDR、完全削除、復元可能など未確認 claim を断定しない                                             | visual score で trust blocker を相殺する               |
+
+### LP-App Screenshot Matrix
+
+| 対象                            | 状態                                                                                | Viewports                            |
+| ------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------ |
+| LP                              | hero、Before/After、product preview、trust / final CTA                              | 390x844、430x932、768x1024、1280x900 |
+| Home                            | empty、1 memory、5 memories、long child name                                        | 390x640、390x844、430x932、768x1024  |
+| Record                          | empty、photo selected、AI consent、generating、manual save ready、save ready、error | 390x640、390x844、430x932            |
+| Album                           | empty、featured + shelf、long title / body、load more / end                         | 390x844、430x932、768x1024           |
+| Memory Detail                   | saved notice、normal、long body、additional photos                                  | 390x844、430x932                     |
+| Sign-in / Onboarding / Settings | auth entry、first-memory bridge、trust surface                                      | 390x844、430x932                     |
+
+### LP-App Static Checks
+
+- `lp-app-visual-grammar.md` が `quiet-heirloom-design-canon.md` とこの QA 文書から参照されている
+- `sage` は記録、保存、完了、待機リスト CTA に限定して primary として使われる
+- `sakura` は favorite、focus、pressed flower、小さな brand accent に限定される
+- icon は lucide を標準とし、操作 icon の custom 化を増やさない
+- contrast gate は body text 7:1 目標、helper / status text 4.5:1 以上、focus indicator / non-text UI 3:1 以上を確認する
+- screenshot / manifest / PR body に実写真、画像 URL、signed URL、`storage_key`、prompt、AI 生成本文、メールを含めない
 
 ## CI Contract
 
