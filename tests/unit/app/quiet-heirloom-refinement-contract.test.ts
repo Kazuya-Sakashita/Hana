@@ -35,6 +35,22 @@ const issue070Source = readFileSync(
   ),
   'utf8',
 )
+const publicSurfacePlanSource = readFileSync(
+  new URL('../../../docs/design/public-surface-warmth-plan.md', import.meta.url),
+  'utf8',
+)
+const issue084Source = readFileSync(
+  new URL('../../../docs/issues/ISSUE-084-public-privacy-trust-surface.md', import.meta.url),
+  'utf8',
+)
+const issue085Source = readFileSync(
+  new URL('../../../docs/issues/ISSUE-085-lp-keepsake-journey-trust-bridge.md', import.meta.url),
+  'utf8',
+)
+const issue086Source = readFileSync(
+  new URL('../../../docs/issues/ISSUE-086-public-surface-visual-qa-gate.md', import.meta.url),
+  'utf8',
+)
 const issueIndexSource = readFileSync(
   new URL('../../../docs/issues/README.md', import.meta.url),
   'utf8',
@@ -110,7 +126,12 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
       '| 5     | `ISSUE-070` | アルバムと記録詳細を private shelf 体験へ調整 | done',
     )
     expect(issueIndexSource).toContain('done')
-    expect(issueIndexSource).toContain('## Codex Ready Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      '| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する',
+    )
+    expect(issueIndexSource).toContain(
+      '| 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる',
+    )
     expect(issueIndexSource).not.toContain('todo, ready')
     expect(issueIndexSource).not.toContain('todo, blocked by `ISSUE-067`')
     expect(issueIndexSource).toContain('Planned LP Public Readiness Sequence')
@@ -120,6 +141,37 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     )
     expect(issueIndexSource).toContain('| 5     | `ISSUE-075` | `#166`')
     expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      '| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |',
+    )
+  })
+
+  it('records the public surface warmth plan without weakening the prelaunch privacy hold', () => {
+    expect(publicSurfacePlanSource).toContain('## 専門レビュー統合')
+    expect(publicSurfacePlanSource).toContain('/privacy')
+    expect(publicSurfacePlanSource).toContain('/lp')
+    expect(publicSurfacePlanSource).toContain('legal / privacy 承認済み扱いは禁止')
+
+    expect(issue084Source).toContain('github_issue: 190')
+    expect(issue084Source).toContain('status: todo')
+    expect(issue084Source).toContain('data-public-privacy')
+    expect(issue084Source).toContain('未確認 claim')
+
+    expect(issue085Source).toContain('github_issue: 191')
+    expect(issue085Source).toContain('status: todo')
+    expect(issue085Source).toContain('フォーム前')
+    expect(issue085Source).toContain('AI 同意')
+
+    expect(issue086Source).toContain('github_issue: 192')
+    expect(issue086Source).toContain('status: todo')
+    expect(issue086Source).toContain('blocked_by:')
+    expect(issue086Source).toContain('ISSUE-084')
+    expect(issue086Source).toContain('ISSUE-085')
+
+    expect(issueIndexSource).toContain('Planned Public Surface Warmth Sequence')
+    expect(issueIndexSource).toContain(
+      '| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する',
+    )
     expect(issueIndexSource).toContain(
       '| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |',
     )
