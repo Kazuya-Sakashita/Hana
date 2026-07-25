@@ -13,7 +13,10 @@ export default function LandingPage() {
     <main className="bg-canvas text-ink min-h-dvh" data-public-lp="waitlist">
       <header className="border-hairline/80 bg-canvas/92 sticky top-0 z-20 border-b px-5 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <Link href="/lp" className="font-serif text-2xl tracking-[0]">
+          <Link
+            href="/lp"
+            className="tap-target inline-flex items-center rounded-full font-serif text-2xl tracking-[0]"
+          >
             Hana
           </Link>
           <nav className="text-ink-secondary flex items-center gap-1 text-sm" aria-label="ページ内">
@@ -186,11 +189,14 @@ export default function LandingPage() {
           </div>
           <WaitlistSignupForm />
           <noscript>
-            <p className="text-paper-slip/80 text-sm leading-7">
-              待機リスト登録には JavaScript が必要です。メールアドレスがURLに残らないよう、
-              この環境では送信を受け付けません。
-            </p>
+            <style>
+              {'#waitlist-form{display:none}.no-js-waitlist-note{display:block!important}'}
+            </style>
           </noscript>
+          <p className="no-js-waitlist-note text-paper-slip/80 hidden text-sm leading-7">
+            待機リスト登録には JavaScript が必要です。メールアドレスがURLに残らないよう、
+            この環境では送信を受け付けません。
+          </p>
         </div>
       </section>
     </main>

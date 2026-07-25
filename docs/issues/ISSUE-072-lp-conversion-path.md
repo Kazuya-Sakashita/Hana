@@ -2,7 +2,7 @@
 id: ISSUE-072
 title: LP の実行可能な CV 導線を決めて接続
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: LP-PUBLIC-READINESS

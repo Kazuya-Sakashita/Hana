@@ -42,6 +42,8 @@ describe('prelaunch public LP route', () => {
     expect(waitlistFormSource).toContain('response.status >= 500')
     expect(waitlistFormSource).toContain('少し時間をおいてからお試しください')
     expect(lpSource).toContain('<noscript>')
+    expect(lpSource).toContain('#waitlist-form{display:none}')
+    expect(waitlistFormSource).toContain('プライバシーポリシーを確認する')
   })
 
   it('keeps the public LP visual safe and free of private examples', () => {
