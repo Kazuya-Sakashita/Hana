@@ -83,6 +83,26 @@ Before は「画像と撮影日だけ」、After は「写真 + タイトル + �
 | Brand / Visual  | Quiet Heirloom + AI slop blacklist    | Go      | 後続で比較パネルの紙片感をさらに強める                    |
 | Privacy / Trust | Trust before delight + content safety | Go      | 公開前 trust / legal review は `ISSUE-075` gate に残す    |
 
+### ISSUE-074 Hero 再構成
+
+`LP-P1-01` の改善として、Hero の背景画像と2台 phone mock を外し、1つの keepsake preview
+を visual anchor にした。写真台紙、紙片、撮影日、タイトル、短いことばを first view 内にまとめ、
+説明スライドではなく「保存された一枚の記録」に視線が集まる構成へ寄せた。
+
+- Hero asset: `hana-before-after-safe-still-life.svg` を再利用し、実写真、画像 URL、`storage_key`、prompt、AI 生成本文を含めない
+- CTA: Primary は `待機リストに登録する`、Secondary は `記録例を見る` の2つに抑える
+- Conversion copy: CTA 直下に「β版のご案内と正式リリースのお知らせだけに使う」旨を追加
+- Responsive contract: 390 / 430 / 768 / 1280px を想定し、920px 以下は1カラム、640px 以下は CTA を全幅化
+- 実ブラウザ screenshot QA はこの PR では未実施。公開前の `ISSUE-075` gate で横 overflow、focus order、contrast、LCP 目安を確認する
+
+### ISSUE-074 read-only review
+
+| Reviewer                    | Framework                          | Verdict        | Score / Notes                                                |
+| --------------------------- | ---------------------------------- | -------------- | ------------------------------------------------------------ |
+| Visual Art Direction        | Quiet Heirloom + AI slop blacklist | Go             | Hero composition 4.2 / 5.0。H1 と shadow の P1 を軽く反映    |
+| Product / Conversion UX     | LIFT + JTBD                        | Conditional Go | CTA は集中。待機リスト後の説明と trust row の圧縮を反映      |
+| Accessibility / Frontend QA | WCAG 2.2 AA + responsive contract  | Conditional Go | P0 なし。実ブラウザ screenshot QA は `ISSUE-075` gate に残す |
+
 ### P1
 
 | ID       | 課題                                              | Why                                                                                    | 完了条件                                                                                    |

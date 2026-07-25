@@ -14,12 +14,16 @@ const lpHtml = readFileSync(lpHtmlUrl, 'utf8')
 const lpProofAssetSource = readFileSync(lpProofAssetUrl, 'utf8')
 const evaluation = readFileSync(evaluationUrl, 'utf8')
 const issueSource = readFileSync(issueUrl, 'utf8')
+const beforeAfterSection = lpHtml.match(/<section id="value"[\s\S]*?<section id="flow"/)?.[0] ?? ''
 
 describe('ISSUE-073 LP before after proof', () => {
   it('uses a local safe synthetic asset for the before and after comparison', () => {
     expect(existsSync(fileURLToPath(lpProofAssetUrl))).toBe(true)
     expect(lpHtml).toContain('hana-before-after-safe-still-life.svg')
-    expect(lpHtml.match(/hana-before-after-safe-still-life\.svg/g) ?? []).toHaveLength(2)
+    expect(lpHtml.match(/hana-before-after-safe-still-life\.svg/g) ?? []).toHaveLength(3)
+    expect(beforeAfterSection.match(/hana-before-after-safe-still-life\.svg/g) ?? []).toHaveLength(
+      2,
+    )
     expect(lpHtml).toContain('合成サンプル')
     expect(lpHtml).toContain('実データなし')
     expect(lpHtml).toContain('合成アセットと人間作成の短い例文')

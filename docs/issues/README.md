@@ -41,13 +41,13 @@
 
 2026-07-25 時点:
 
-| status        | count | notes                                |
-| ------------- | ----- | ------------------------------------ |
-| `todo`        | 1     | LP hero 改善                         |
-| `in_progress` | 0     | 並行実行枠は空き                     |
-| `review`      | 2     | LP waitlist CTA / Before After proof |
-| `done`        | 73    | archive を参照                       |
-| `blocked`     | 1     | 人間確認待ち                         |
+| status        | count | notes                                                   |
+| ------------- | ----- | ------------------------------------------------------- |
+| `todo`        | 0     | なし                                                    |
+| `in_progress` | 0     | 並行実行枠は空き                                        |
+| `review`      | 3     | LP waitlist CTA / Before After proof / Hero composition |
+| `done`        | 73    | archive を参照                                          |
+| `blocked`     | 1     | 人間確認待ち                                            |
 
 ---
 
@@ -133,7 +133,7 @@ Codex-ready と判断する条件:
 | 1     | `ISSUE-071` | `#162` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | done                                  |
 | 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | review: 待機リスト導線を実装済み      |
 | 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | review: safe synthetic proof 実装済み |
-| 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | todo                                  |
+| 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | review: keepsake hero 実装済み        |
 | 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | blocked: privacy / legal review 待ち  |
 
 ---
@@ -156,10 +156,11 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-| issue       | title                               | note                                 |
-| ----------- | ----------------------------------- | ------------------------------------ |
-| `ISSUE-072` | LP の実行可能な CV 導線を決めて接続 | 待機リスト導線・API・保存先実装済み  |
-| `ISSUE-073` | LP Before / After の価値証拠を強化  | safe synthetic asset / copy 実装済み |
+| issue       | title                                  | note                                 |
+| ----------- | -------------------------------------- | ------------------------------------ |
+| `ISSUE-072` | LP の実行可能な CV 導線を決めて接続    | 待機リスト導線・API・保存先実装済み  |
+| `ISSUE-073` | LP Before / After の価値証拠を強化     | safe synthetic asset / copy 実装済み |
+| `ISSUE-074` | LP Hero を keepsake 主役の構図へ再構成 | keepsake visual anchor 実装済み      |
 
 ---
 
