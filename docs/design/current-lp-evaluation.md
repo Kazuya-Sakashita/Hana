@@ -82,7 +82,7 @@
 
 ## 次の推奨順
 
-1. 公開前検証 traffic 直前に env / bot 対策と最新 `pnpm pr:gate` を確認する。
+1. 公開前検証 traffic 直前に env / bot 対策と最新 `pnpm pr:gate` を確認する。ISSUE-091 で waitlist readiness contract を PR gate に追加する。
 2. 正式公開前にサービス内容や運用方法が変わる場合は privacy/legal review を再実施する。
 3. `LP-P1-02` と `LP-P1-05` で、書けない親への relevance と trust 詳細導線をさらに上げる。
 
