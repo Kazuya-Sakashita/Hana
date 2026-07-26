@@ -1,12 +1,53 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import { ClipboardList, FileText, ImagePlus, Mail, PenLine, ShieldCheck } from 'lucide-react'
+import { QuietIcon } from '@/components/product/icons'
 import { WaitlistSignupForm } from '@/components/waitlist-signup-form'
 
 export const metadata: Metadata = {
   title: 'Hana | 写真1枚から、30秒で残す育児記録',
   description: 'Hana の公開前待機リスト登録ページ',
 }
+
+const journeySteps = [
+  {
+    eyebrow: '写真のみ',
+    title: '撮った日の空気を置いておく',
+    body: '小さなくつした、木のくるま、朝の支度。まずは写真だけでも、その日の入口になります。',
+    icon: ImagePlus,
+  },
+  {
+    eyebrow: '写真 + タイトル',
+    title: '見返した時に戻れる名前を添える',
+    body: '「机の上の小さなくつした」のように、一覧で見つけやすい短い見出しを残します。',
+    icon: PenLine,
+  },
+  {
+    eyebrow: '写真 + 短い本文',
+    title: 'あとで開ける小さなページにする',
+    body: '洗濯ものをたたむ前、木のくるまをそっと横に置いた。何でもない朝の支度が、あとで開ける小さなページになります。',
+    icon: FileText,
+  },
+] as const
+
+const trustBridgeItems = [
+  {
+    title: 'メールだけお預かりします',
+    body: 'この待機リストでは、子どもの名前、写真、生年月日、住所、位置情報は取得しません。',
+    icon: Mail,
+  },
+  {
+    title: '使い道を限定します',
+    body: '待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせに限って使います。',
+    icon: ClipboardList,
+  },
+  {
+    title: 'AI 同意は記録時に別で確認します',
+    body: '待機リスト登録だけで、写真を AI に送る同意にはなりません。',
+    icon: ShieldCheck,
+  },
+] as const
 
 export default function LandingPage() {
   return (
@@ -79,7 +120,7 @@ export default function LandingPage() {
                 className="lp-soft-photo-inner w-full"
               />
             </div>
-            <figcaption className="border-hairline bg-paper-slip/70 lp-soft-card mt-5 border p-5">
+            <figcaption className="bg-paper-slip/80 lp-soft-card mt-5 p-5">
               <p className="meta-label">保存されたページ</p>
               <h2 className="mt-2 font-serif text-2xl">洗濯ものをたたむ前</h2>
               <p className="text-ink-secondary mt-3 leading-8">
@@ -93,95 +134,127 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="value" className="px-5 py-14" aria-labelledby="value-title">
+      <section
+        id="value"
+        className="px-5 py-14"
+        aria-labelledby="value-title"
+        data-lp-keepsake-journey="photo-to-memory"
+      >
         <div className="mx-auto max-w-6xl">
           <p className="meta-label">Before / After</p>
           <h2 id="value-title" className="mt-3 max-w-3xl font-serif text-4xl leading-tight">
             写真を、記憶にかえる。
           </h2>
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
-            <section className="border-hairline bg-paper-slip lp-soft-card border p-5">
-              <p className="meta-label">Before</p>
-              <h3 className="mt-2 font-serif text-2xl">写真だけ</h3>
-              <p className="text-ink-secondary mt-3 leading-8">
-                撮った日は残る。でも、何をしていたか、なぜ残したかったかは少しずつ薄れていく。
-              </p>
-              <span className="border-hairline text-leaf-deep mt-5 inline-flex min-h-8 items-center rounded-full border px-3 text-xs font-bold">
-                写真のみ
-              </span>
-            </section>
-            <section className="border-hairline bg-paper-slip lp-soft-card border p-5">
-              <p className="meta-label">After</p>
-              <h3 className="mt-2 font-serif text-2xl">写真 + タイトル</h3>
-              <p className="text-ink-secondary mt-3 leading-8">
-                一覧で見返したとき、その日の場面にすぐ戻れる短い見出しを添える。
-              </p>
-              <strong className="mt-5 block font-serif text-xl font-normal">
-                机の上の小さなくつした
-              </strong>
-            </section>
-            <section className="border-hairline bg-paper-slip lp-soft-card border p-5">
-              <p className="meta-label">After</p>
-              <h3 className="mt-2 font-serif text-2xl">写真 + 短い本文</h3>
-              <p className="text-ink-secondary mt-3 leading-8">
-                洗濯ものをたたむ前、木のくるまをそっと横に置いた。何でもない朝の支度が、
-                あとで開ける小さなページになった。
-              </p>
-            </section>
+          <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,0.48fr)_minmax(0,0.52fr)]">
+            <div className="photo-mat lp-soft-photo-mat p-2">
+              <div className="bg-paper-slip lp-soft-photo-inner flex min-h-72 flex-col justify-between p-6">
+                <div>
+                  <p className="meta-label">今日の1まい</p>
+                  <p className="mt-4 font-serif text-3xl leading-tight">机の上の小さなくつした</p>
+                </div>
+                <p className="text-ink-secondary leading-8">
+                  撮っただけの写真に、短い見出しと本文を添える。Hana
+                  はその変化を、静かな紙片として残します。
+                </p>
+              </div>
+            </div>
+            <ol className="paper-surface lp-soft-card px-5 py-5">
+              {journeySteps.map((step, index) => (
+                <li
+                  key={step.eyebrow}
+                  className="border-hairline flex gap-4 border-t py-5 first:border-t-0 first:pt-0 last:pb-0"
+                >
+                  <span
+                    className="border-hairline bg-warm flex size-11 shrink-0 items-center justify-center rounded-full border"
+                    aria-hidden="true"
+                  >
+                    <QuietIcon icon={step.icon} tone={index === 0 ? 'muted' : 'primary'} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="meta-label">{step.eyebrow}</p>
+                    <h3 className="mt-1 break-words font-serif text-xl leading-snug">
+                      {step.title}
+                    </h3>
+                    <p className="text-ink-secondary mt-3 break-words leading-8">{step.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
       </section>
 
-      <section id="trust" className="bg-warm px-5 py-14" aria-labelledby="trust-title">
-        <div className="mx-auto max-w-6xl">
-          <p className="meta-label">Trust before delight</p>
-          <h2 id="trust-title" className="mt-3 font-serif text-4xl">
-            Hana が、しないこと。
-          </h2>
-          <ul className="mt-8 grid gap-4 md:grid-cols-3">
-            {(
-              [
-                [
-                  'ストリークでせかしません。',
-                  '続かなかった日を責めず、戻ってこられる場所として設計します。',
-                ],
-                [
-                  'SNS のように見せません。',
-                  '公開や反応ではなく、家族のための私的なアルバムを優先します。',
-                ],
-                [
-                  'AI 利用を曖昧にしません。',
-                  'AI は同意後だけ。使わずに写真とことばを残す道も残します。',
-                ],
-              ] as const
-            ).map(([title, body]) => (
-              <li key={title} className="border-hairline bg-paper-slip lp-soft-card border p-5">
-                <strong className="font-serif text-xl font-normal">{title}</strong>
-                <p className="text-ink-secondary mt-3 leading-8">{body}</p>
-              </li>
-            ))}
-          </ul>
+      <section
+        id="trust"
+        className="bg-warm px-5 py-14"
+        aria-labelledby="trust-title"
+        data-lp-trust-bridge="waitlist"
+      >
+        <div className="mx-auto grid max-w-6xl gap-7 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)]">
+          <div>
+            <p className="meta-label">Trust before waitlist</p>
+            <h2 id="trust-title" className="mt-3 font-serif text-4xl leading-tight">
+              待機リストの前に、
+              <br />
+              預けるものを小さくする。
+            </h2>
+            <p className="text-ink-secondary mt-5 leading-8">
+              公開前の検証では、まず連絡先だけをお預かりします。AI
+              の利用や写真の扱いは、アプリ内で別に確認します。
+            </p>
+          </div>
+          <div className="paper-surface lp-soft-card px-5 py-5">
+            <ul>
+              {trustBridgeItems.map((item) => (
+                <li
+                  key={item.title}
+                  className="border-hairline flex gap-4 border-t py-4 first:border-t-0 first:pt-0 last:pb-0"
+                >
+                  <span
+                    className="border-hairline bg-warm flex size-11 shrink-0 items-center justify-center rounded-full border"
+                    aria-hidden="true"
+                  >
+                    <QuietIcon icon={item.icon} tone="muted" />
+                  </span>
+                  <span className="min-w-0">
+                    <strong className="block font-serif text-lg font-normal">{item.title}</strong>
+                    <span className="text-ink-secondary mt-2 block leading-8">{item.body}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/privacy"
+              className="border-hairline text-leaf-deep tap-target mt-5 inline-flex items-center rounded-full border bg-paper-slip px-4 text-sm font-bold"
+            >
+              プライバシーポリシーを確認する
+            </Link>
+          </div>
         </div>
       </section>
 
-      <section className="bg-leaf-deep px-5 py-16 text-white" aria-labelledby="waitlist-title">
+      <section className="bg-warm px-5 py-16" aria-labelledby="waitlist-title">
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[minmax(0,0.78fr)_minmax(320px,0.62fr)]">
-          <div>
-            <p className="text-paper-slip/75 text-sm font-bold uppercase">Pre-launch waitlist</p>
-            <h2 id="waitlist-title" className="mt-4 font-serif text-4xl leading-tight">
-              今日の1まいを、はじめの1ページに。
-            </h2>
-            <p id="waitlist-purpose" className="text-paper-slip/85 mt-5 leading-8">
-              公開前の検証フェーズです。待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、
-              正式リリースのお知らせに限ってメールアドレスをお預かりします。
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2" aria-label="ストア導線">
-              <span className="border-paper-slip/30 text-paper-slip/80 inline-flex min-h-11 items-center rounded-full border px-4 text-sm">
-                App Store 準備中
-              </span>
-              <span className="border-paper-slip/30 text-paper-slip/80 inline-flex min-h-11 items-center rounded-full border px-4 text-sm">
-                Google Play 準備中
-              </span>
+          <div className="photo-mat lp-soft-photo-mat p-2">
+            <div className="bg-paper-slip lp-soft-photo-inner px-6 py-7">
+              <p className="meta-label">Pre-launch waitlist</p>
+              <h2 id="waitlist-title" className="mt-4 font-serif text-4xl leading-tight">
+                今日の1まいを、
+                <br />
+                はじめの1ページに。
+              </h2>
+              <p id="waitlist-purpose" className="text-ink-secondary mt-5 leading-8">
+                公開前の検証フェーズです。待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、
+                正式リリースのお知らせに限ってメールアドレスをお預かりします。
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2" aria-label="ストア導線">
+                <span className="border-hairline text-ink-secondary inline-flex min-h-11 items-center rounded-full border bg-paper-slip px-4 text-sm">
+                  App Store 準備中
+                </span>
+                <span className="border-hairline text-ink-secondary inline-flex min-h-11 items-center rounded-full border bg-paper-slip px-4 text-sm">
+                  Google Play 準備中
+                </span>
+              </div>
             </div>
           </div>
           <WaitlistSignupForm />
@@ -190,7 +263,7 @@ export default function LandingPage() {
               {'#waitlist-form{display:none}.no-js-waitlist-note{display:block!important}'}
             </style>
           </noscript>
-          <p className="no-js-waitlist-note text-paper-slip/80 hidden text-sm leading-7">
+          <p className="no-js-waitlist-note bg-paper-slip text-ink-secondary lp-soft-card mt-4 hidden p-3 text-sm leading-7">
             待機リスト登録には JavaScript が必要です。メールアドレスがURLに残らないよう、
             この環境では送信を受け付けません。
           </p>

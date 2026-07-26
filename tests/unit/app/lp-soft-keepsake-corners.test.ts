@@ -36,23 +36,26 @@ describe('ISSUE-083 LP soft keepsake corners', () => {
     expect(lpSource).toContain('paper-surface lp-soft-frame')
     expect(lpSource).toContain('photo-mat lp-soft-photo-mat')
     expect(lpSource).toContain('className="lp-soft-photo-inner w-full"')
-    expect(lpSource).toContain('bg-paper-slip/70 lp-soft-card')
+    expect(lpSource).toContain('bg-paper-slip/80 lp-soft-card')
     expect(lpSource).toContain('実ユーザー写真ではない synthetic preview')
   })
 
-  it('uses the same soft paper card language for value and trust surfaces', () => {
-    expect(lpSource.match(/bg-paper-slip lp-soft-card border p-5/g) ?? []).toHaveLength(4)
+  it('turns repeated value cards into one keepsake journey and trust bridge', () => {
+    expect(lpSource).toContain('data-lp-keepsake-journey="photo-to-memory"')
+    expect(lpSource).toContain('paper-surface lp-soft-card px-5 py-5')
     expect(lpSource).toContain('写真のみ')
-    expect(lpSource).toContain('AI 利用を曖昧にしません。')
+    expect(lpSource).toContain('写真 + タイトル')
+    expect(lpSource).toContain('写真 + 短い本文')
+    expect(lpSource).toContain('data-lp-trust-bridge="waitlist"')
+    expect(lpSource).toContain('AI 同意は記録時に別で確認します')
   })
 
   it('turns the waitlist form into a soft paper slip without reducing tap targets', () => {
-    expect(waitlistFormSource).toContain('bg-paper-slip/[0.08] lp-soft-form')
+    expect(waitlistFormSource).toContain('paper-surface lp-soft-form')
     expect(waitlistFormSource).toContain(
-      'className="border-paper-slip/45 bg-paper-slip text-ink lp-soft-field',
+      'className="border-hairline bg-paper-slip text-ink lp-soft-field',
     )
-    expect(waitlistFormSource).toContain('bg-paper-slip/[0.07] lp-soft-card')
-    expect(waitlistFormSource).toContain('bg-paper-slip/[0.06] lp-soft-card')
+    expect(waitlistFormSource).toContain('bg-warm/70 lp-soft-card')
     expect(waitlistFormSource).toContain('tap-target')
     expect(waitlistFormSource).toContain('min-h-[52px]')
   })

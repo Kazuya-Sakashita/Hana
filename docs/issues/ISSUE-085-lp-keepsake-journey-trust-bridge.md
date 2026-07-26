@@ -2,7 +2,7 @@
 id: ISSUE-085
 title: /lp を keepsake journey と public trust bridge へ寄せる
 priority: P1
-status: todo
+status: done
 size: M
 created_at: 2026-07-26
 parent: PUBLIC-SURFACE-WARMTH
@@ -38,12 +38,12 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] `photo-mat` / `paper-slip` / sage CTA の意味分けが `docs/design/lp-app-visual-grammar.md` と一致している
-- [ ] LP上の repeated card 感が減り、画像・紙片・余白が主役になっている
-- [ ] 待機リスト CTA 前に、取得目的と AI 同意の境界が読める
-- [ ] 新しい vendor retention / 完全削除 / 配信基盤 claim を断定していない
-- [ ] `ISSUE-075` の privacy / legal blocker を解除扱いにしていない
-- [ ] 既存 `ISSUE-075` QA と `ISSUE-082` visual parity gate が通る
+- [x] `photo-mat` / `paper-slip` / sage CTA の意味分けが `docs/design/lp-app-visual-grammar.md` と一致している
+- [x] LP上の repeated card 感が減り、画像・紙片・余白が主役になっている
+- [x] 待機リスト CTA 前に、取得目的と AI 同意の境界が読める
+- [x] 新しい vendor retention / 完全削除 / 配信基盤 claim を断定していない
+- [x] `ISSUE-075` の privacy / legal blocker を解除扱いにしていない
+- [x] 既存 `ISSUE-075` QA と `ISSUE-082` visual parity gate が通る
 
 ## 検証
 
@@ -51,6 +51,28 @@ requires_human_review:
 - `pnpm qa:issue082:lp-app-visual-parity -- --mode=contract`
 - `pnpm qa:issue075:lp-public -- --mode=contract`
 - 必要に応じて app mode で `/lp` を 390 / 430 / 768 / 1280px 確認
+
+### 2026-07-26 実装結果
+
+- `/lp` の repeated card 型 value proof を、写真台紙から紙片へ流れる `data-lp-keepsake-journey="photo-to-memory"` に変更した
+- 待機リスト前に `data-lp-trust-bridge="waitlist"` を追加し、メールだけ / 目的限定 / AI 同意は別、を CTA 前に明示した
+- 待機リスト form と no-JS note を light paper slip に寄せ、dark surface 由来の低 contrast copy を除去した
+- `ISSUE-075` は privacy / legal review 待ちの blocked のまま維持した
+
+### 2026-07-26 検証結果
+
+- `pnpm exec vitest run tests/unit/app/lp-keepsake-journey-trust-bridge.test.ts tests/unit/app/lp-soft-keepsake-corners.test.ts tests/unit/app/prelaunch-lp-route.test.ts tests/unit/app/lp-public-qa-trust-gate.test.ts tests/unit/app/quiet-heirloom-refinement-contract.test.ts` pass (5 files / 24 tests)
+- `pnpm qa:issue075:lp-public -- --mode=contract` pass
+- `pnpm qa:issue082:lp-app-visual-parity -- --mode=contract` pass
+- `pnpm pr:gate` pass (format / lint / OpenAPI route-map / typecheck / 491 tests / ISSUE-064, ISSUE-075, ISSUE-082 contract QA / build:ci)
+- 追加 app mode 探索: `next dev` では Next Dev Tools の 32px button が混入。production app mode の no-JS timeout は `ISSUE-086` の実ブラウザ QA gate 拡張で扱う
+
+### 2026-07-26 専門レビュー結果
+
+- UX / IA: GO。photo-to-memory journey と待機リスト前 trust bridge は受け入れ条件に沿う
+- Privacy Trust: GO。vendor retention / AI training / 完全削除 / 法務確認済み / 配信基盤確定 claim の追加なし
+- Visual Systems: Round 1 HOLD → no-JS note の contrast と未使用 icon を修正 → Round 2 GO
+- Frontend / A11y: Round 1 HOLD → no-JS note regression test を追加 → Round 2 GO
 
 ## 専門レビュー観点
 
