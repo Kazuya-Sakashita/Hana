@@ -45,7 +45,7 @@
 | ------------- | ----- | ---------------- |
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 0     | なし             |
+| `review`      | 1     | `ISSUE-089`      |
 | `done`        | 90    | archive を参照   |
 | `blocked`     | 0     | なし             |
 
@@ -156,6 +156,12 @@ Codex-ready と判断する条件:
 | 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | done |
 | 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | done |
 
+## Planned Prelaunch Validation Sequence
+
+| order | issue       | GitHub | title                                    | note   |
+| ----- | ----------- | ------ | ---------------------------------------- | ------ |
+| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする | review |
+
 ---
 
 ## GitHub Intake Queue
@@ -174,7 +180,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-現在はありません。
+- `ISSUE-089` / `#202`: PR review / merge 待ち。merge 後に done archive へ同期する。
 
 ---
 

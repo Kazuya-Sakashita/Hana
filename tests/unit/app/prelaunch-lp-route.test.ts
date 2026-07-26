@@ -41,6 +41,11 @@ describe('prelaunch public LP route', () => {
     expect(waitlistFormSource).toContain('response.status === 429')
     expect(waitlistFormSource).toContain('response.status >= 500')
     expect(waitlistFormSource).toContain('少し時間をおいてからお試しください')
+    expect(waitlistFormSource).toContain('data-waitlist-accepted-guidance="prelaunch"')
+    expect(waitlistFormSource).toContain(
+      'β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせに限ります',
+    )
+    expect(waitlistFormSource).toContain('案内停止や登録情報の削除を希望する場合')
     expect(lpSource).toContain('<noscript>')
     expect(lpSource).toContain('#waitlist-form{display:none}')
     expect(waitlistFormSource).toContain('プライバシーポリシーを確認する')

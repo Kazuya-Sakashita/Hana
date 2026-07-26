@@ -157,7 +157,7 @@ export function WaitlistSignupForm() {
       >
         {status === 'submitting' ? '送信しています。' : null}
         {status === 'accepted'
-          ? '登録を受け付けました。β版や正式リリースの準備が整い次第、ご連絡します。'
+          ? '登録を受け付けました。今後のご案内内容を下に表示しています。'
           : null}
         {status === 'validationError' ? '入力内容を確認してください。' : null}
         {status === 'rateLimited'
@@ -167,6 +167,24 @@ export function WaitlistSignupForm() {
           ? '送信できませんでした。時間をおいてもう一度お試しください。'
           : null}
       </p>
+      {status === 'accepted' ? (
+        <div
+          aria-label="待機リスト登録後のご案内"
+          className="bg-warm/70 lp-soft-card grid gap-2 p-3"
+          data-waitlist-accepted-guidance="prelaunch"
+        >
+          <p className="text-ink-secondary text-sm leading-7">
+            今後のご連絡は、β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせに限ります。
+            案内停止や登録情報の削除を希望する場合は、下記メールアドレスまでご連絡ください。
+          </p>
+          <a
+            className="border-hairline text-leaf-deep tap-target inline-flex w-fit items-center rounded-full border bg-paper-slip px-4 text-sm font-bold"
+            href={`mailto:${waitlistContactEmail}`}
+          >
+            {waitlistContactEmail}
+          </a>
+        </div>
+      ) : null}
     </form>
   )
 }

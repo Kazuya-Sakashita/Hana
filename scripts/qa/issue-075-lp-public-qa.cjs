@@ -486,6 +486,21 @@ async function assertWaitlistSubmit(page, target) {
     const status = document.querySelector('#waitlist-status')
     return Boolean(status?.textContent?.includes('登録を受け付けました'))
   })
+  const guidance = page.locator('[data-waitlist-accepted-guidance="prelaunch"]')
+  await guidance.waitFor()
+  const guidanceText = await guidance.innerText()
+  if (
+    !guidanceText.includes('β版のご案内') ||
+    !guidanceText.includes('任意のインタビューやフィードバック協力のお願い') ||
+    !guidanceText.includes('正式リリースのお知らせ') ||
+    !guidanceText.includes('案内停止や登録情報の削除')
+  ) {
+    throw new Error(`${target.id}: waitlist_guidance_copy_missing`)
+  }
+  const contactHref = await guidance.locator('a[href^="mailto:"]').first().getAttribute('href')
+  if (contactHref !== `mailto:${publicContactEmail()}`) {
+    throw new Error(`${target.id}: waitlist_guidance_contact_missing`)
+  }
   return true
 }
 
