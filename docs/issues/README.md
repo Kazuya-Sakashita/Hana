@@ -43,10 +43,10 @@
 
 | status        | count | notes                 |
 | ------------- | ----- | --------------------- |
-| `todo`        | 3     | public surface warmth |
+| `todo`        | 2     | public surface warmth |
 | `in_progress` | 0     | 並行実行枠は空き      |
 | `review`      | 0     | なし                  |
-| `done`        | 83    | archive を参照        |
+| `done`        | 84    | archive を参照        |
 | `blocked`     | 1     | 人間確認待ち          |
 
 ---
@@ -91,8 +91,7 @@ Codex-ready と判断する条件:
 
 | order | issue       | GitHub | title                                                   | note  |
 | ----- | ----------- | ------ | ------------------------------------------------------- | ----- |
-| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | ready |
-| 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | ready |
+| 1     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | ready |
 
 ## In Progress
 
@@ -155,7 +154,7 @@ Codex-ready と判断する条件:
 
 | order | issue       | GitHub | title                                                   | note                             |
 | ----- | ----------- | ------ | ------------------------------------------------------- | -------------------------------- |
-| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | todo                             |
+| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | done                             |
 | 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | todo                             |
 | 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | blocked by ISSUE-084 / ISSUE-085 |
 
@@ -197,6 +196,7 @@ Codex-ready と判断する条件:
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
 - lp public readiness completed: `ISSUE-071`, `ISSUE-072`, `ISSUE-073`, `ISSUE-074`, `ISSUE-083`
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
+- public surface warmth completed: `ISSUE-084`
 
 ---
 

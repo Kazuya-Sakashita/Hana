@@ -36,7 +36,7 @@ Before / After と Trust が説明カードの反復に見えやすい。
 
 | issue       | title                                                     | status | blocked by               |
 | ----------- | --------------------------------------------------------- | ------ | ------------------------ |
-| `ISSUE-084` | `/privacy` を Quiet Heirloom trust surface に再設計する   | todo   | none                     |
+| `ISSUE-084` | `/privacy` を Quiet Heirloom trust surface に再設計する   | done   | none                     |
 | `ISSUE-085` | `/lp` を keepsake journey と public trust bridge へ寄せる | todo   | none                     |
 | `ISSUE-086` | Public LP / Privacy visual QA gate を拡張する             | todo   | `ISSUE-084`, `ISSUE-085` |
 

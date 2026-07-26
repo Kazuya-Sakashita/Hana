@@ -2,7 +2,7 @@
 id: ISSUE-084
 title: /privacy を Quiet Heirloom trust surface に再設計する
 priority: P1
-status: todo
+status: done
 size: M
 created_at: 2026-07-26
 parent: PUBLIC-SURFACE-WARMTH
@@ -37,18 +37,27 @@ requires_human_review:
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] `/privacy` が罫線テキストのみではなく、summary + detail の2段階で読める
-- [ ] policy item が `paper-surface` / `paper-slip` / hairline / warm canvas により Hana らしい trust surface として見える
-- [ ] 既存の目的限定 copy を超える新しい legal / vendor / deletion claim を追加していない
-- [ ] `ISSUE-075` の privacy / legal blocker を解除扱いにしていない
-- [ ] 390 / 430 / 768 / 1280px で横スクロール、重なり、tap target 不足がない
-- [ ] 証跡に実写真、画像 URL、`storage_key`、prompt、AI 生成本文、メールを含めない
+- [x] `/privacy` が罫線テキストのみではなく、summary + detail の2段階で読める
+- [x] policy item が `paper-surface` / `paper-slip` / hairline / warm canvas により Hana らしい trust surface として見える
+- [x] 既存の目的限定 copy を超える新しい legal / vendor / deletion claim を追加していない
+- [x] `ISSUE-075` の privacy / legal blocker を解除扱いにしていない
+- [x] 390 / 430 / 768 / 1280px で横スクロール、重なり、tap target 不足がない
+- [x] 証跡に実写真、画像 URL、`storage_key`、prompt、AI 生成本文、メールを含めない
 
 ## 検証
 
 - `pnpm exec vitest run tests/unit/app/prelaunch-privacy-policy.test.ts`
 - `pnpm qa:issue075:lp-public -- --mode=contract`
 - 必要に応じて app mode で `/privacy` を 390 / 430 / 768 / 1280px 確認
+
+## 実装メモ
+
+- `/privacy` に `data-public-privacy="waitlist"` を追加
+- 冒頭を `photo-mat` + `paper-slip` の trust summary に変更
+- 詳細項目を `paper-surface` と quiet icon で scan できる構成へ変更
+- `/lp` へ戻る導線を 44px 以上の quiet pill に変更
+- 2026-07-26: `/privacy` 単独 app QA は 390 / 430 / 768 / 1280px で pass
+- 2026-07-26: full `ISSUE-075` app mode は既存 `/lp` tap target で fail。`ISSUE-084` では混ぜず、`ISSUE-085` / follow-up 側で扱う
 
 ## 専門レビュー観点
 

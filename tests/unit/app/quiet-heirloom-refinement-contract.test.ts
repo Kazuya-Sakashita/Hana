@@ -127,10 +127,7 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     )
     expect(issueIndexSource).toContain('done')
     expect(issueIndexSource).toContain(
-      '| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する',
-    )
-    expect(issueIndexSource).toContain(
-      '| 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる',
+      '| 1     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | ready',
     )
     expect(issueIndexSource).not.toContain('todo, ready')
     expect(issueIndexSource).not.toContain('todo, blocked by `ISSUE-067`')
@@ -140,10 +137,13 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
       '| 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | done',
     )
     expect(issueIndexSource).toContain('| 5     | `ISSUE-075` | `#166`')
-    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      '| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | done',
+    )
     expect(issueIndexSource).toContain(
       '| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |',
     )
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
   })
 
   it('records the public surface warmth plan without weakening the prelaunch privacy hold', () => {
@@ -153,7 +153,7 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(publicSurfacePlanSource).toContain('legal / privacy 承認済み扱いは禁止')
 
     expect(issue084Source).toContain('github_issue: 190')
-    expect(issue084Source).toContain('status: todo')
+    expect(issue084Source).toContain('status: done')
     expect(issue084Source).toContain('data-public-privacy')
     expect(issue084Source).toContain('未確認 claim')
 
