@@ -2,7 +2,7 @@
 id: ISSUE-097
 title: LP 評価表の relevance と trust 完了状態を同期する
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 218
@@ -46,7 +46,7 @@ ISSUE-093 で LP hero の親 relevance cue と trust 詳細導線は実装済み
 - [x] `LP-P1-02` が ISSUE-093 対応済みとして記録されている
 - [x] `LP-P1-05` が ISSUE-093 対応済みとして記録されている
 - [x] 次の推奨順から完了済みの `LP-P1-02` / `LP-P1-05` が外れている
-- [x] Issue Index が `ISSUE-097` / `#218` の review 状態を示している
+- [x] Issue Index が `ISSUE-097` / `#218` の done 状態を示している
 - [x] 関連テストと `pnpm pr:gate` が通る
 
 ## セキュリティ・プライバシー考慮

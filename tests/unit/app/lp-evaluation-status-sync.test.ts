@@ -41,13 +41,12 @@ describe('ISSUE-097 LP evaluation status sync', () => {
 
   it('records the local issue and review queue state without adding product-surface scope', () => {
     expect(issueSource).toContain('github_issue: 218')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
+    expect(issueSource).toContain('Issue Index が `ISSUE-097` / `#218` の done 状態')
     expect(issueSource).toContain('LP 本体の追加変更')
     expect(issueIndexSource).toContain('`ISSUE-097`')
     expect(issueIndexSource).toContain('`#218`')
     expect(issueIndexSource).toContain('LP 評価表の relevance と trust 完了状態を同期する')
-    expect(issueIndexSource).toContain(
-      '## Review Queue\n\n- `ISSUE-097` / `#218`: PR 作成 / review / merge 待ち。',
-    )
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
   })
 })

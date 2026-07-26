@@ -144,14 +144,12 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
       /\|\s*1\s*\|\s*`ISSUE-089`\s*\|\s*`#202`\s*\|\s*待機リスト登録後の連絡期待値を明確にする\s*\|\s*done\s*\|/,
     )
     expect(issueIndexSource).toContain('## Blocked Or Needs Human Decision\n\n現在はありません。')
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
     expect(issueIndexSource).toContain(
-      '## Review Queue\n\n- `ISSUE-097` / `#218`: PR 作成 / review / merge 待ち。',
+      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`',
     )
     expect(issueIndexSource).toContain(
-      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`',
-    )
-    expect(issueIndexSource).toContain(
-      '`ISSUE-088`, `ISSUE-090`, `ISSUE-092`, `ISSUE-094`, `ISSUE-096`',
+      '`ISSUE-088`, `ISSUE-090`, `ISSUE-092`, `ISSUE-094`, `ISSUE-096`, `ISSUE-098`',
     )
   })
 
