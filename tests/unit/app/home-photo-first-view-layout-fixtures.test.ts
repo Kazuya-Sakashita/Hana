@@ -49,7 +49,7 @@ function estimateHomeLayout(viewportWidth: number, state: HomeState) {
   const shelfViewportWidth = Math.min(contentWidth + pagePadding, viewportWidth)
   const shelfItemWidth = 148
   const shelfGap = 12
-  const shelfItemCount = state.kind === 'existing' ? Math.max(0, state.memories.length - 1) + 1 : 0
+  const shelfItemCount = state.kind === 'existing' ? state.memories.length + 1 : 0
   const shelfScrollWidth =
     shelfItemCount === 0 ? 0 : shelfItemCount * shelfItemWidth + (shelfItemCount - 1) * shelfGap
   const statColumnWidth = (contentWidth - 16) / 3
@@ -102,6 +102,8 @@ describe('ISSUE-068 home photo-first layout fixtures', () => {
       expect(homeSource).toContain('overflow-x-auto')
       expect(homeSource).toContain('scroll-px-6')
       expect(homeSource).toContain('w-[148px] shrink-0 snap-start')
+      expect(homeSource).toContain('const shelfMemories = memories')
+      expect(homeSource).not.toContain('const shelfMemories = memories.slice(1)')
     }
   })
 
