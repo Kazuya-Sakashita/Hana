@@ -50,7 +50,11 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
       {
         id: 'privacy',
         path: '/privacy',
-        requiredSelectors: ['main h1', 'section[aria-label="待機リスト登録情報の扱い"]'],
+        requiredSelectors: [
+          '[data-public-privacy="waitlist"]',
+          'main h1',
+          'section[aria-label="待機リスト登録情報の扱い"]',
+        ],
       },
     ])
   })

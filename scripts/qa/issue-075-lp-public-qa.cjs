@@ -13,7 +13,11 @@ const targetSurfaces = [
   {
     id: 'privacy',
     path: '/privacy',
-    requiredSelectors: ['main h1', 'section[aria-label="待機リスト登録情報の扱い"]'],
+    requiredSelectors: [
+      '[data-public-privacy="waitlist"]',
+      'main h1',
+      'section[aria-label="待機リスト登録情報の扱い"]',
+    ],
   },
 ]
 
@@ -396,7 +400,7 @@ async function assertEvidenceSafety(page, target) {
       /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
       /https?:\/\/(?!(?:hana\.app\/problems\/|localhost:|127\.0\.0\.1:))/i,
       /storage[_-]?key|presigned[_-]?url|prompt\s*[:=]|AI生成本文/,
-      /zero data retention|0-day|復元可能/i,
+      /zero data retention|ZDR|0-day|vendor retention|AI training|学習に使いません|AI学習に使いません|復元可能|完全削除|法務確認済み|レビュー済み|配信基盤を確定済み|メール配信基盤は確定/i,
     ]
     return patterns.some((pattern) => pattern.test(text))
   })
