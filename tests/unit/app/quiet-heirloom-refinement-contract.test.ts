@@ -141,12 +141,12 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
       '| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | done',
     )
     expect(issueIndexSource).toContain(
-      '| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする | review',
+      '| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする | done',
     )
     expect(issueIndexSource).toContain('## Blocked Or Needs Human Decision\n\n現在はありません。')
-    expect(issueIndexSource).toContain(
-      '## Review Queue\n\n- `ISSUE-089` / `#202`: PR review / merge 待ち。',
-    )
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain('prelaunch validation completed: `ISSUE-089`')
+    expect(issueIndexSource).toContain('`ISSUE-088`, `ISSUE-090`')
   })
 
   it('records the public surface warmth plan without weakening the prelaunch privacy hold', () => {

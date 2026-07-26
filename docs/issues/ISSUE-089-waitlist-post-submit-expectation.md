@@ -2,7 +2,7 @@
 id: ISSUE-089
 title: 待機リスト登録後の連絡期待値を明確にする
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-26
 github_issue: 202
