@@ -38,6 +38,10 @@ const lpLoadingSource = readFileSync(
   new URL('../../../src/app/lp/loading.tsx', import.meta.url),
   'utf8',
 )
+const waitlistFormSource = readFileSync(
+  new URL('../../../src/components/waitlist-signup-form.tsx', import.meta.url),
+  'utf8',
+)
 const privacySource = readFileSync(
   new URL('../../../src/app/privacy/page.tsx', import.meta.url),
   'utf8',
@@ -133,6 +137,9 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
     expect(scriptSource).not.toMatch(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/)
     expect(scriptSource).toContain('safeFailureMessage')
     expect(scriptSource).toContain('redacted-failure-output')
+    expect(scriptSource).toContain('data-waitlist-accepted-guidance="prelaunch"')
+    expect(scriptSource).toContain('waitlist_guidance_copy_missing')
+    expect(scriptSource).toContain('waitlist_guidance_contact_missing')
   })
 
   it('anchors the public warmth selectors in the actual public routes', () => {
@@ -142,6 +149,9 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
     expect(privacySource).toContain('data-public-privacy-summary="waitlist"')
     expect(privacySource).toContain('data-public-privacy-details="waitlist"')
     expect(privacySource).toContain('data-public-privacy-footer="waitlist"')
+    expect(waitlistFormSource).toContain('data-waitlist-accepted-guidance="prelaunch"')
+    expect(waitlistFormSource).toContain('任意のインタビューやフィードバック協力のお願い')
+    expect(waitlistFormSource).toContain('案内停止や登録情報の削除を希望する場合')
   })
 
   it('records machine QA evidence and the human trust review boundary', () => {
