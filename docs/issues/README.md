@@ -39,13 +39,13 @@
 
 ## Status Snapshot
 
-2026-07-26 時点:
+2026-07-27 時点:
 
 | status        | count | notes            |
 | ------------- | ----- | ---------------- |
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 0     | なし             |
+| `review`      | 1     | `ISSUE-091`      |
 | `done`        | 92    | archive を参照   |
 | `blocked`     | 0     | なし             |
 
@@ -158,9 +158,10 @@ Codex-ready と判断する条件:
 
 ## Planned Prelaunch Validation Sequence
 
-| order | issue       | GitHub | title                                    | note |
-| ----- | ----------- | ------ | ---------------------------------------- | ---- |
-| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする | done |
+| order | issue       | GitHub | title                                      | note   |
+| ----- | ----------- | ------ | ------------------------------------------ | ------ |
+| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする   | done   |
+| 2     | `ISSUE-091` | `#206` | 待機リスト公開前 readiness gate を追加する | review |
 
 ---
 
@@ -180,7 +181,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-現在はありません。
+- `ISSUE-091` / `#206`: PR 作成 / review / merge 待ち。merge 後に done archive へ同期する。
 
 ---
 
