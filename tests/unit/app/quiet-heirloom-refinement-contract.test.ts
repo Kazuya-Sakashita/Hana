@@ -127,7 +127,7 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     )
     expect(issueIndexSource).toContain('done')
     expect(issueIndexSource).toContain(
-      '| 1     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | ready',
+      '| 1     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する | ready',
     )
     expect(issueIndexSource).not.toContain('todo, ready')
     expect(issueIndexSource).not.toContain('todo, blocked by `ISSUE-067`')
@@ -158,7 +158,7 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issue084Source).toContain('未確認 claim')
 
     expect(issue085Source).toContain('github_issue: 191')
-    expect(issue085Source).toContain('status: todo')
+    expect(issue085Source).toContain('status: done')
     expect(issue085Source).toContain('フォーム前')
     expect(issue085Source).toContain('AI 同意')
 
@@ -169,8 +169,14 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issue086Source).toContain('ISSUE-085')
 
     expect(issueIndexSource).toContain('Planned Public Surface Warmth Sequence')
+    expect(publicSurfacePlanSource).toContain(
+      '| `ISSUE-085` | `/lp` を keepsake journey と public trust bridge へ寄せる | done',
+    )
+    expect(publicSurfacePlanSource).toContain(
+      '| `ISSUE-086` | Public LP / Privacy visual QA gate を拡張する             | ready',
+    )
     expect(issueIndexSource).toContain(
-      '| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する',
+      '| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | ready',
     )
     expect(issueIndexSource).toContain(
       '| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |',

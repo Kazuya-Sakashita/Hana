@@ -74,14 +74,14 @@ export function WaitlistSignupForm() {
   return (
     <form
       id="waitlist-form"
-      className="border-paper-slip/20 bg-paper-slip/[0.08] lp-soft-form mt-8 grid gap-4 border p-4 sm:p-5"
+      className="paper-surface lp-soft-form mt-8 grid gap-4 p-4 sm:p-5"
       action="/v1/waitlist"
       method="post"
       aria-describedby="waitlist-purpose privacy-note waitlist-status"
       onSubmit={submitWaitlist}
     >
       <div>
-        <label className="text-paper-slip mb-2 block text-sm font-bold" htmlFor="waitlist-email">
+        <label className="text-ink mb-2 block text-sm font-bold" htmlFor="waitlist-email">
           メールアドレス
         </label>
         <input
@@ -95,12 +95,12 @@ export function WaitlistSignupForm() {
           placeholder="メールアドレス"
           required
           aria-invalid={invalidField === 'email'}
-          className="border-paper-slip/45 bg-paper-slip text-ink lp-soft-field min-h-[52px] w-full border px-5 text-base"
+          className="border-hairline bg-paper-slip text-ink lp-soft-field min-h-[52px] w-full border px-5 text-base"
         />
       </div>
 
       <label
-        className="border-paper-slip/14 bg-paper-slip/[0.07] lp-soft-card text-paper-slip/85 min-h-11 grid grid-cols-[24px_minmax(0,1fr)] gap-3 border p-3 text-sm leading-7"
+        className="bg-warm/70 lp-soft-card text-ink-secondary tap-target grid grid-cols-[24px_minmax(0,1fr)] gap-3 p-3 text-sm leading-7"
         htmlFor="waitlist-consent"
       >
         <input
@@ -129,15 +129,12 @@ export function WaitlistSignupForm() {
         {status === 'submitting' ? '送信中...' : '待機リストに登録する'}
       </button>
 
-      <div
-        id="privacy-note"
-        className="border-paper-slip/14 bg-paper-slip/[0.06] lp-soft-card grid gap-2 border p-3"
-      >
-        <p className="text-paper-slip/75 text-sm leading-7">
+      <div id="privacy-note" className="bg-warm/70 lp-soft-card grid gap-2 p-3">
+        <p className="text-ink-secondary text-sm leading-7">
           取得目的と管理方法はプライバシーポリシーに明記します。メールアドレスは待機リスト管理の目的に限り、アクセス制御された環境で管理します。
         </p>
         <a
-          className="border-paper-slip/30 text-paper-slip tap-target inline-flex w-fit items-center rounded-full border px-4 text-sm font-bold"
+          className="border-hairline text-leaf-deep tap-target inline-flex w-fit items-center rounded-full border bg-paper-slip px-4 text-sm font-bold"
           href="/privacy"
         >
           プライバシーポリシーを確認する
@@ -145,7 +142,7 @@ export function WaitlistSignupForm() {
       </div>
       <p
         id="waitlist-status"
-        className="text-paper-slip/85 min-h-6 text-sm leading-7"
+        className="text-ink-secondary min-h-6 text-sm leading-7"
         role="status"
         aria-live="polite"
         aria-atomic="true"
