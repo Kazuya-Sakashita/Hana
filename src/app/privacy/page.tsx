@@ -103,6 +103,7 @@ export default function PrivacyPage() {
         <section
           className="photo-mat mt-8 rounded-[var(--radius-sheet)] p-2"
           aria-labelledby="privacy-summary-title"
+          data-public-privacy-summary="waitlist"
         >
           <div className="bg-paper-slip rounded-[var(--radius-paper-slip)] px-5 py-6 sm:px-7">
             <p className="meta-label">待機リスト登録の前に</p>
@@ -130,7 +131,11 @@ export default function PrivacyPage() {
           </div>
         </section>
 
-        <section className="mt-9 grid gap-4" aria-label="待機リスト登録情報の扱い">
+        <section
+          className="mt-9 grid gap-4"
+          aria-label="待機リスト登録情報の扱い"
+          data-public-privacy-details="waitlist"
+        >
           {policyItems.map((item, index) => (
             <section
               key={item.title}
@@ -153,7 +158,10 @@ export default function PrivacyPage() {
           ))}
         </section>
 
-        <footer className="paper-surface text-ink-tertiary mt-6 rounded-[var(--radius-paper-slip)] px-5 py-4 text-sm leading-7">
+        <footer
+          className="paper-surface text-ink-tertiary mt-6 rounded-[var(--radius-paper-slip)] px-5 py-4 text-sm leading-7"
+          data-public-privacy-footer="waitlist"
+        >
           <p>制定日: 2026年7月25日</p>
           <p>版: prelaunch-2026-07-25</p>
         </footer>

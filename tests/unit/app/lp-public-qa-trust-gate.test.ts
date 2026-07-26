@@ -17,8 +17,15 @@ const contract = JSON.parse(contractOutput) as {
   result: string
   artifact_policy: string
   target_surfaces: { id: string; path: string; requiredSelectors: string[] }[]
+  no_js_fallback: {
+    path: string
+    viewport: { id: string; width: number; height: number }
+    requiredSelectors: string[]
+    hiddenSelectors: string[]
+  }
   viewports: { id: string; width: number; height: number }[]
   interactive_selector: string
+  ignored_interactive_selector: string
   checks: string[]
 }
 
@@ -27,8 +34,20 @@ const qaDoc = readFileSync(
   new URL('../../../docs/design/lp-public-qa-trust-gate.md', import.meta.url),
   'utf8',
 )
+const lpLoadingSource = readFileSync(
+  new URL('../../../src/app/lp/loading.tsx', import.meta.url),
+  'utf8',
+)
+const privacySource = readFileSync(
+  new URL('../../../src/app/privacy/page.tsx', import.meta.url),
+  'utf8',
+)
 const issueSource = readFileSync(
   new URL('../../../docs/issues/ISSUE-075-lp-public-qa-trust-gate.md', import.meta.url),
+  'utf8',
+)
+const issue086Source = readFileSync(
+  new URL('../../../docs/issues/ISSUE-086-public-surface-visual-qa-gate.md', import.meta.url),
   'utf8',
 )
 const packageSource = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
@@ -45,13 +64,23 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
       {
         id: 'lp',
         path: '/lp',
-        requiredSelectors: ['[data-public-lp="waitlist"]', '#waitlist-form', 'a[href="/privacy"]'],
+        requiredSelectors: [
+          '[data-public-lp="waitlist"]',
+          '[data-lp-keepsake-journey="photo-to-memory"]',
+          '[data-lp-trust-bridge="waitlist"]',
+          '#waitlist-form',
+          '#waitlist-purpose',
+          'a[href="/privacy"]',
+        ],
       },
       {
         id: 'privacy',
         path: '/privacy',
         requiredSelectors: [
           '[data-public-privacy="waitlist"]',
+          '[data-public-privacy-summary="waitlist"]',
+          '[data-public-privacy-details="waitlist"]',
+          '[data-public-privacy-footer="waitlist"]',
           'main h1',
           'section[aria-label="待機リスト登録情報の扱い"]',
         ],
@@ -64,6 +93,7 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
     expect(contract.interactive_selector).toContain('summary')
     expect(contract.interactive_selector).toContain('[role="button"]')
     expect(contract.interactive_selector).toContain('[tabindex]:not([tabindex="-1"])')
+    expect(contract.ignored_interactive_selector).toContain('Open Next.js Dev Tools')
     expect(contract.checks).toEqual(
       expect.arrayContaining([
         'tap-targets',
@@ -77,6 +107,17 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
         'evidence-safety',
       ]),
     )
+    expect(contract.no_js_fallback).toMatchObject({
+      path: '/lp',
+      viewport: { width: 390, height: 844 },
+      requiredSelectors: [
+        '[data-public-lp="waitlist"]',
+        '[data-public-lp-fallback="no-js-shell"]',
+        'text=待機リスト登録には JavaScript が必要です',
+        'a[href="/privacy"]',
+      ],
+      hiddenSelectors: ['#waitlist-form'],
+    })
   })
 
   it('keeps the QA gate read-only and safe for evidence', () => {
@@ -94,9 +135,19 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
     expect(scriptSource).toContain('redacted-failure-output')
   })
 
+  it('anchors the public warmth selectors in the actual public routes', () => {
+    expect(lpLoadingSource).toContain('data-public-lp-fallback="no-js-shell"')
+    expect(lpLoadingSource).toContain('待機リスト登録には JavaScript が必要です')
+    expect(lpLoadingSource).toContain('href="/privacy"')
+    expect(privacySource).toContain('data-public-privacy-summary="waitlist"')
+    expect(privacySource).toContain('data-public-privacy-details="waitlist"')
+    expect(privacySource).toContain('data-public-privacy-footer="waitlist"')
+  })
+
   it('records machine QA evidence and the human trust review boundary', () => {
     expect(qaDoc).toContain('390x844 / 430x932 / 768x1024 / 1280x900')
-    expect(qaDoc).toContain('JavaScript 無効時は form を非表示')
+    expect(qaDoc).toContain('data-public-lp-fallback="no-js-shell"')
+    expect(qaDoc).toContain('Next DevTools の 32px button')
     expect(qaDoc).toContain('AI は同意後だけ')
     expect(qaDoc).toContain('Do Not Publish Without Human Review')
     expect(qaDoc).toContain('zero data retention')
@@ -108,5 +159,7 @@ describe('ISSUE-075 LP public QA and trust gate', () => {
     expect(issueSource).toContain('status: blocked')
     expect(issueSource).toContain('公開 copy の privacy / legal review')
     expect(issueSource).toContain('- [ ] privacy / legal review 済みの trust copy')
+    expect(issue086Source).toContain('status: done')
+    expect(issue086Source).toContain('visual 改善が `ISSUE-075`')
   })
 })

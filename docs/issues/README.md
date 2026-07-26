@@ -41,13 +41,13 @@
 
 2026-07-26 時点:
 
-| status        | count | notes                 |
-| ------------- | ----- | --------------------- |
-| `todo`        | 1     | public surface warmth |
-| `in_progress` | 0     | 並行実行枠は空き      |
-| `review`      | 0     | なし                  |
-| `done`        | 85    | archive を参照        |
-| `blocked`     | 1     | 人間確認待ち          |
+| status        | count | notes            |
+| ------------- | ----- | ---------------- |
+| `todo`        | 0     | なし             |
+| `in_progress` | 0     | 並行実行枠は空き |
+| `review`      | 0     | なし             |
+| `done`        | 86    | archive を参照   |
+| `blocked`     | 1     | 人間確認待ち     |
 
 ---
 
@@ -89,9 +89,7 @@ Codex-ready と判断する条件:
 
 ## Codex Ready Queue
 
-| order | issue       | GitHub | title                                         | note  |
-| ----- | ----------- | ------ | --------------------------------------------- | ----- |
-| 1     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する | ready |
+現在はありません。
 
 ## In Progress
 
@@ -152,11 +150,11 @@ Codex-ready と判断する条件:
 
 ## Planned Public Surface Warmth Sequence
 
-| order | issue       | GitHub | title                                                   | note  |
-| ----- | ----------- | ------ | ------------------------------------------------------- | ----- |
-| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | done  |
-| 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | done  |
-| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | ready |
+| order | issue       | GitHub | title                                                   | note |
+| ----- | ----------- | ------ | ------------------------------------------------------- | ---- |
+| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | done |
+| 2     | `ISSUE-085` | `#191` | /lp を keepsake journey と public trust bridge へ寄せる | done |
+| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | done |
 
 ---
 
@@ -196,7 +194,7 @@ Codex-ready と判断する条件:
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
 - lp public readiness completed: `ISSUE-071`, `ISSUE-072`, `ISSUE-073`, `ISSUE-074`, `ISSUE-083`
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
-- public surface warmth completed: `ISSUE-084`, `ISSUE-085`
+- public surface warmth completed: `ISSUE-084`, `ISSUE-085`, `ISSUE-086`
 
 ---
 

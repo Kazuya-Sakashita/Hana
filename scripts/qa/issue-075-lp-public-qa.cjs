@@ -8,13 +8,23 @@ const targetSurfaces = [
   {
     id: 'lp',
     path: '/lp',
-    requiredSelectors: ['[data-public-lp="waitlist"]', '#waitlist-form', 'a[href="/privacy"]'],
+    requiredSelectors: [
+      '[data-public-lp="waitlist"]',
+      '[data-lp-keepsake-journey="photo-to-memory"]',
+      '[data-lp-trust-bridge="waitlist"]',
+      '#waitlist-form',
+      '#waitlist-purpose',
+      'a[href="/privacy"]',
+    ],
   },
   {
     id: 'privacy',
     path: '/privacy',
     requiredSelectors: [
       '[data-public-privacy="waitlist"]',
+      '[data-public-privacy-summary="waitlist"]',
+      '[data-public-privacy-details="waitlist"]',
+      '[data-public-privacy-footer="waitlist"]',
       'main h1',
       'section[aria-label="待機リスト登録情報の扱い"]',
     ],
@@ -40,6 +50,24 @@ const interactiveSelector = [
   '[role="button"]',
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ')
+
+const ignoredInteractiveSelector = [
+  '#nextjs-portal',
+  '[data-nextjs-devtools]',
+  '[aria-label="Open Next.js Dev Tools"]',
+].join(', ')
+
+const noJsFallback = {
+  path: '/lp',
+  viewport: { id: 'compact-phone', width: 390, height: 844 },
+  requiredSelectors: [
+    '[data-public-lp="waitlist"]',
+    '[data-public-lp-fallback="no-js-shell"]',
+    'text=待機リスト登録には JavaScript が必要です',
+    'a[href="/privacy"]',
+  ],
+  hiddenSelectors: ['#waitlist-form'],
+}
 
 const checkList = [
   'public-route-load',
@@ -171,49 +199,58 @@ async function assertHeadingOrder(page, target) {
 }
 
 async function collectTapTargets(page) {
-  return page.$$eval(interactiveSelector, (elements) => {
-    function effectiveTarget(element) {
-      const type = element.getAttribute('type')
-      if ((type === 'checkbox' || type === 'radio') && element.id) {
-        const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`)
-        if (label) return label
+  return page.$$eval(
+    interactiveSelector,
+    (elements, ignoredSelector) => {
+      function isIgnoredElement(element) {
+        return element.matches(ignoredSelector) || Boolean(element.closest(ignoredSelector))
       }
-      return element.closest('label') ?? element
-    }
 
-    function isVisibleElement(element) {
-      const rect = element.getBoundingClientRect()
-      const style = window.getComputedStyle(element)
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        style.display !== 'none' &&
-        style.visibility !== 'hidden' &&
-        element.getAttribute('aria-hidden') !== 'true' &&
-        !element.closest('[hidden], [aria-hidden="true"], [inert]')
-      )
-    }
-
-    const visible = elements
-      .filter(isVisibleElement)
-      .filter(
-        (element) =>
-          !element.hasAttribute('disabled') && element.getAttribute('aria-disabled') !== 'true',
-      )
-      .map((element, index) => {
-        const rect = effectiveTarget(element).getBoundingClientRect()
-        return {
-          element_index: index,
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
+      function effectiveTarget(element) {
+        const type = element.getAttribute('type')
+        if ((type === 'checkbox' || type === 'radio') && element.id) {
+          const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`)
+          if (label) return label
         }
-      })
+        return element.closest('label') ?? element
+      }
 
-    return {
-      count: visible.length,
-      failures: visible.filter((element) => element.width < 44 || element.height < 44),
-    }
-  })
+      function isVisibleElement(element) {
+        const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          element.getAttribute('aria-hidden') !== 'true' &&
+          !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
+          !isIgnoredElement(element)
+        )
+      }
+
+      const visible = elements
+        .filter(isVisibleElement)
+        .filter(
+          (element) =>
+            !element.hasAttribute('disabled') && element.getAttribute('aria-disabled') !== 'true',
+        )
+        .map((element, index) => {
+          const rect = effectiveTarget(element).getBoundingClientRect()
+          return {
+            element_index: index,
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          }
+        })
+
+      return {
+        count: visible.length,
+        failures: visible.filter((element) => element.width < 44 || element.height < 44),
+      }
+    },
+    ignoredInteractiveSelector,
+  )
 }
 
 async function assertTapTargets(page, target) {
@@ -223,7 +260,11 @@ async function assertTapTargets(page, target) {
 }
 
 async function assertHorizontalOverflow(page, target) {
-  const overflow = await page.evaluate(() => {
+  const overflow = await page.evaluate((ignoredSelector) => {
+    function isIgnoredElement(element) {
+      return element.matches(ignoredSelector) || Boolean(element.closest(ignoredSelector))
+    }
+
     function isVisibleElement(element) {
       const rect = element.getBoundingClientRect()
       const style = window.getComputedStyle(element)
@@ -233,7 +274,8 @@ async function assertHorizontalOverflow(page, target) {
         style.display !== 'none' &&
         style.visibility !== 'hidden' &&
         element.getAttribute('aria-hidden') !== 'true' &&
-        !element.closest('[hidden], [aria-hidden="true"], [inert]')
+        !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
+        !isIgnoredElement(element)
       )
     }
 
@@ -249,88 +291,103 @@ async function assertHorizontalOverflow(page, target) {
       .map((element, index) => ({ element_index: index, tag: element.tagName.toLowerCase() }))
 
     return [...documentOverflow, ...elementOverflow]
-  })
+  }, ignoredInteractiveSelector)
 
   if (overflow.length > 0) throw new Error(`${target.id}: horizontal_overflow`)
 }
 
 async function assertInteractiveOverlap(page, target) {
-  const overlaps = await page.$$eval(interactiveSelector, (elements) => {
-    function effectiveTarget(element) {
-      const type = element.getAttribute('type')
-      if ((type === 'checkbox' || type === 'radio') && element.id) {
-        const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`)
-        if (label) return label
+  const overlaps = await page.$$eval(
+    interactiveSelector,
+    (elements, ignoredSelector) => {
+      function isIgnoredElement(element) {
+        return element.matches(ignoredSelector) || Boolean(element.closest(ignoredSelector))
       }
-      return element.closest('label') ?? element
-    }
 
-    function isVisibleElement(element) {
-      const rect = element.getBoundingClientRect()
-      const style = window.getComputedStyle(element)
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        style.display !== 'none' &&
-        style.visibility !== 'hidden' &&
-        element.getAttribute('aria-hidden') !== 'true' &&
-        !element.closest('[hidden], [aria-hidden="true"], [inert]')
-      )
-    }
+      function effectiveTarget(element) {
+        const type = element.getAttribute('type')
+        if ((type === 'checkbox' || type === 'radio') && element.id) {
+          const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`)
+          if (label) return label
+        }
+        return element.closest('label') ?? element
+      }
 
-    const rects = elements.filter(isVisibleElement).map((element, index) => {
-      const rect = effectiveTarget(element).getBoundingClientRect()
-      return {
-        index,
-        left: rect.left,
-        top: rect.top,
-        right: rect.right,
-        bottom: rect.bottom,
-      }
-    })
-    const failures = []
-    for (let a = 0; a < rects.length; a += 1) {
-      for (let b = a + 1; b < rects.length; b += 1) {
-        const x = Math.max(
-          0,
-          Math.min(rects[a].right, rects[b].right) - Math.max(rects[a].left, rects[b].left),
+      function isVisibleElement(element) {
+        const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          element.getAttribute('aria-hidden') !== 'true' &&
+          !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
+          !isIgnoredElement(element)
         )
-        const y = Math.max(
-          0,
-          Math.min(rects[a].bottom, rects[b].bottom) - Math.max(rects[a].top, rects[b].top),
-        )
-        if (x * y > 8) failures.push({ a: rects[a].index, b: rects[b].index })
       }
-    }
-    return failures
-  })
+
+      const rects = elements.filter(isVisibleElement).map((element, index) => {
+        const rect = effectiveTarget(element).getBoundingClientRect()
+        return {
+          index,
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        }
+      })
+      const failures = []
+      for (let a = 0; a < rects.length; a += 1) {
+        for (let b = a + 1; b < rects.length; b += 1) {
+          const x = Math.max(
+            0,
+            Math.min(rects[a].right, rects[b].right) - Math.max(rects[a].left, rects[b].left),
+          )
+          const y = Math.max(
+            0,
+            Math.min(rects[a].bottom, rects[b].bottom) - Math.max(rects[a].top, rects[b].top),
+          )
+          if (x * y > 8) failures.push({ a: rects[a].index, b: rects[b].index })
+        }
+      }
+      return failures
+    },
+    ignoredInteractiveSelector,
+  )
 
   if (overlaps.length > 0) throw new Error(`${target.id}: interactive_overlap`)
 }
 
 async function activeElementDescriptor(page) {
-  return page.evaluate((selector) => {
-    const element = document.activeElement
-    if (!element || element === document.body || element.id === 'nextjs-portal') return null
-    const focusables = Array.from(document.querySelectorAll(selector)).filter((candidate) => {
-      const rect = candidate.getBoundingClientRect()
-      const style = window.getComputedStyle(candidate)
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        style.display !== 'none' &&
-        style.visibility !== 'hidden' &&
-        candidate.getAttribute('aria-hidden') !== 'true' &&
-        !candidate.closest('[hidden], [aria-hidden="true"], [inert]')
-      )
-    })
-    return {
-      element_index: focusables.indexOf(element),
-      tag: element.tagName.toLowerCase(),
-      role: element.getAttribute('role'),
-      type: element.getAttribute('type'),
-    }
-  }, interactiveSelector)
+  return page.evaluate(
+    ({ selector, ignoredSelector }) => {
+      const element = document.activeElement
+      if (!element || element === document.body || element.id === 'nextjs-portal') return null
+      if (element.matches(ignoredSelector) || element.closest(ignoredSelector)) return null
+      const focusables = Array.from(document.querySelectorAll(selector)).filter((candidate) => {
+        const rect = candidate.getBoundingClientRect()
+        const style = window.getComputedStyle(candidate)
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          candidate.getAttribute('aria-hidden') !== 'true' &&
+          !candidate.closest('[hidden], [aria-hidden="true"], [inert]') &&
+          !candidate.matches(ignoredSelector) &&
+          !candidate.closest(ignoredSelector)
+        )
+      })
+      return {
+        element_index: focusables.indexOf(element),
+        tag: element.tagName.toLowerCase(),
+        role: element.getAttribute('role'),
+        type: element.getAttribute('type'),
+      }
+    },
+    { selector: interactiveSelector, ignoredSelector: ignoredInteractiveSelector },
+  )
 }
 
 async function assertVisibleFocus(page, target) {
@@ -362,8 +419,12 @@ async function assertVisibleFocus(page, target) {
 }
 
 async function assertReducedMotion(page, target) {
-  const animated = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('body *'))
+  const animated = await page.evaluate((ignoredSelector) => {
+    function isIgnoredElement(element) {
+      return element.matches(ignoredSelector) || Boolean(element.closest(ignoredSelector))
+    }
+
+    return Array.from(document.querySelectorAll('body *'))
       .filter((element) => {
         const rect = element.getBoundingClientRect()
         const style = window.getComputedStyle(element)
@@ -373,7 +434,8 @@ async function assertReducedMotion(page, target) {
           style.display !== 'none' &&
           style.visibility !== 'hidden' &&
           element.getAttribute('aria-hidden') !== 'true' &&
-          !element.closest('[hidden], [aria-hidden="true"], [inert]')
+          !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
+          !isIgnoredElement(element)
         )
       })
       .map((element, index) => {
@@ -387,8 +449,8 @@ async function assertReducedMotion(page, target) {
       .filter((item) => item.animationName !== 'none')
       .filter((item) =>
         item.animationDuration.split(',').some((duration) => Number.parseFloat(duration) > 0.05),
-      ),
-  )
+      )
+  }, ignoredInteractiveSelector)
 
   if (animated.length > 0) throw new Error(`${target.id}: reduced_motion_animation`)
 }
@@ -473,26 +535,26 @@ async function collectLcp(page) {
 
 async function assertNoJsFallback(browser) {
   const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
+    viewport: { width: noJsFallback.viewport.width, height: noJsFallback.viewport.height },
     javaScriptEnabled: false,
   })
   try {
     const page = await context.newPage()
-    const response = await page.goto(new URL('/lp', baseUrl).toString(), {
+    const response = await page.goto(new URL(noJsFallback.path, baseUrl).toString(), {
       waitUntil: 'domcontentloaded',
     })
     await page.waitForLoadState('domcontentloaded')
     if ((response?.status() ?? 500) >= 400) throw new Error('no_js_route_status')
-    await page.locator('[data-public-lp="waitlist"]').waitFor({
-      state: 'visible',
-      timeout: 10_000,
-    })
-    await page.locator('text=待機リスト登録には JavaScript が必要です').waitFor({
-      state: 'visible',
-      timeout: 10_000,
-    })
-    const formVisible = await page.locator('#waitlist-form').isVisible()
-    if (formVisible) throw new Error('no_js_form_visible')
+    for (const selector of noJsFallback.requiredSelectors) {
+      await page.locator(selector).first().waitFor({
+        state: 'visible',
+        timeout: 10_000,
+      })
+    }
+    for (const selector of noJsFallback.hiddenSelectors) {
+      const visible = await page.locator(selector).first().isVisible()
+      if (visible) throw new Error('no_js_form_visible')
+    }
   } finally {
     await context.close()
   }
@@ -555,6 +617,27 @@ function assertContract() {
     if (!checkList.includes(check)) throw new Error(`missing_check_${check}`)
   }
 
+  for (const selector of [
+    '[data-lp-keepsake-journey="photo-to-memory"]',
+    '[data-lp-trust-bridge="waitlist"]',
+    '[data-public-privacy-summary="waitlist"]',
+    '[data-public-privacy-details="waitlist"]',
+    '[data-public-privacy-footer="waitlist"]',
+  ]) {
+    if (!targetSurfaces.some((target) => target.requiredSelectors.includes(selector))) {
+      throw new Error(`missing_public_surface_selector_${selector}`)
+    }
+  }
+
+  for (const selector of [
+    '[data-public-lp-fallback="no-js-shell"]',
+    'text=待機リスト登録には JavaScript が必要です',
+  ]) {
+    if (!noJsFallback.requiredSelectors.includes(selector)) {
+      throw new Error(`missing_no_js_selector_${selector}`)
+    }
+  }
+
   return {
     issue,
     mode: 'contract',
@@ -562,8 +645,10 @@ function assertContract() {
     artifact_policy:
       'read-only: no screenshot, accessibility snapshot, trace, HAR, or QA evidence file is written',
     target_surfaces: targetSurfaces,
+    no_js_fallback: noJsFallback,
     viewports: viewportMatrix,
     interactive_selector: interactiveSelector,
+    ignored_interactive_selector: ignoredInteractiveSelector,
     checks: checkList,
   }
 }
@@ -628,6 +713,7 @@ async function runAppSmoke() {
     artifact_policy:
       'read-only: no screenshot, accessibility snapshot, trace, HAR, or QA evidence file is written',
     no_js_fallback: 'pass',
+    ignored_interactive_selector: ignoredInteractiveSelector,
     results,
   }
 }

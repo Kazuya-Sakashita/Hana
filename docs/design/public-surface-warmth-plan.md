@@ -38,10 +38,10 @@ Before / After と Trust が説明カードの反復に見えやすい。
 | ----------- | --------------------------------------------------------- | ------ | ------------------------ |
 | `ISSUE-084` | `/privacy` を Quiet Heirloom trust surface に再設計する   | done   | none                     |
 | `ISSUE-085` | `/lp` を keepsake journey と public trust bridge へ寄せる | done   | none                     |
-| `ISSUE-086` | Public LP / Privacy visual QA gate を拡張する             | ready  | `ISSUE-084`, `ISSUE-085` |
+| `ISSUE-086` | Public LP / Privacy visual QA gate を拡張する             | done   | `ISSUE-084`, `ISSUE-085` |
 
 `ISSUE-084` と `ISSUE-085` は完了済み。ただし copy の legal / privacy 承認済み扱いは禁止。
-`ISSUE-086` は両方の実装後に、実ブラウザと contract で冷たさの回帰を検知する。
+`ISSUE-086` で、実ブラウザと contract で冷たさの回帰を検知する public surface QA gate を追加した。
 
 ## Non Goals
 

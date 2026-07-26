@@ -32,13 +32,13 @@ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3100 \
 node scripts/qa/issue-075-lp-public-qa.cjs --mode=app
 ```
 
-### 2026-07-25 Local Result
+### 2026-07-26 Local Result
 
 | Surface     | Viewports                               | Result | Notes                                                                          |
 | ----------- | --------------------------------------- | ------ | ------------------------------------------------------------------------------ |
 | `/lp`       | 390x844 / 430x932 / 768x1024 / 1280x900 | pass   | route load、heading、tap target、overlap、focus、overflow、reduced motion pass |
 | `/privacy`  | 390x844 / 430x932 / 768x1024 / 1280x900 | pass   | route load、heading、tap target、overlap、focus、overflow、reduced motion pass |
-| no-JS `/lp` | 390x844                                 | pass   | JavaScript 無効時は form を非表示にし、fallback notice を表示                  |
+| no-JS `/lp` | 390x844                                 | pass   | `data-public-lp-fallback="no-js-shell"` を表示し、form は非表示                |
 
 App mode output は redacted summary のみ:
 
@@ -46,7 +46,9 @@ App mode output は redacted summary のみ:
 - viewport widths: 390 / 430 / 768 / 1280
 - waitlist submit: mocked 202, response text only
 - image payload: path + transfer / encoded size only。LP synthetic SVG は static asset 4,388 bytes、transfer 1,883 bytes、encoded body 1,583 bytes
-- LCP: timing and size only。`/lp` は 390px 80ms、430px 44ms、768px 60ms、1280px 52ms
+- LCP: timing and size only。環境差があるため、文書には raw trace や screenshot を残さず redacted summary のみ記録する
+- Dev server では Next DevTools の 32px button が混入するため、`#nextjs-portal` / `[data-nextjs-devtools]` / `aria-label="Open Next.js Dev Tools"` は app 本体の interactive target から除外する
+- JavaScript 無効時は Next の streamed payload が hidden のまま残るため、`/lp/loading.tsx` の public fallback shell を no-JS gate の対象にする
 
 ### Build Route Evidence
 
