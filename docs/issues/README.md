@@ -46,7 +46,7 @@
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
 | `review`      | 0     | なし             |
-| `done`        | 87    | archive を参照   |
+| `done`        | 89    | archive を参照   |
 | `blocked`     | 1     | 人間確認待ち     |
 
 ---
@@ -188,7 +188,7 @@ Codex-ready と判断する条件:
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
 - design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
-- maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`, `ISSUE-065`
+- maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`, `ISSUE-065`, `ISSUE-088`
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`

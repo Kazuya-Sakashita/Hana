@@ -2,7 +2,7 @@
 id: ISSUE-074
 title: LP Hero を keepsake 主役の構図へ再構成
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-25
 parent: LP-PUBLIC-READINESS

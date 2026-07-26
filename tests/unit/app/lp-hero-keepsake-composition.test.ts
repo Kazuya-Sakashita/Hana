@@ -53,7 +53,7 @@ describe('ISSUE-074 LP hero keepsake composition', () => {
   })
 
   it('records the issue status, acceptance evidence, and LP evaluation update', () => {
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('github_issue: 165')
     expect(issueSource).toContain('- [x] Hero の主役が 1 つに絞られている')
     expect(issueSource).toContain('- [x] 390 / 430 / 768 / 1280px')
