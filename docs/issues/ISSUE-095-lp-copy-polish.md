@@ -2,7 +2,7 @@
 id: ISSUE-095
 title: LP の表記ゆれと artifact 文言を整える
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 214

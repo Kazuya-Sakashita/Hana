@@ -45,7 +45,7 @@ describe('ISSUE-095 LP public copy polish', () => {
 
   it('records the issue and evaluation without weakening public trust boundaries', () => {
     expect(issueSource).toContain('github_issue: 214')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('`1まい` / `1枚`')
     expect(issueSource).toContain('synthetic preview')
     expect(evaluationSource).toContain('対応済み。ISSUE-095')
