@@ -37,7 +37,7 @@ describe('ISSUE-083 LP soft keepsake corners', () => {
     expect(lpSource).toContain('photo-mat lp-soft-photo-mat')
     expect(lpSource).toContain('className="lp-soft-photo-inner w-full"')
     expect(lpSource).toContain('bg-paper-slip/80 lp-soft-card')
-    expect(lpSource).toContain('実ユーザー写真ではない synthetic preview')
+    expect(lpSource).toContain('公開前検証用の合成イメージです。実ユーザー写真ではありません。')
   })
 
   it('turns repeated value cards into one keepsake journey and trust bridge', () => {

@@ -10,7 +10,7 @@ export default function LandingLoading() {
       <section className="paper-surface lp-soft-frame mx-auto max-w-2xl p-5">
         <div className="photo-mat lp-soft-photo-mat p-2">
           <div className="bg-paper-slip lp-soft-photo-inner px-6 py-8">
-            <p className="meta-label">Pre-launch waitlist</p>
+            <p className="meta-label">公開前の待機リスト</p>
             <h1 className="mt-4 font-serif text-4xl leading-tight">Hana</h1>
             <p className="text-ink-secondary mt-5 leading-8">
               待機リスト登録には JavaScript が必要です。メールアドレスがURLに残らないよう、
