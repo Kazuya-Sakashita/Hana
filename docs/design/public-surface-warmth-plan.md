@@ -29,7 +29,7 @@ Before / After と Trust が説明カードの反復に見えやすい。
 
 - Visual Systems: 色ではなく `photo mat / paper slip / quiet icon` の使い分け不足が主因
 - UX / IA: 丸みを増やすより、読む順番と trust の置き場所を Hana らしくする
-- Privacy Trust: visual 改善は進めてよいが、`ISSUE-075` の privacy / legal blocker は解除しない
+- Privacy Trust: visual 改善だけでは blocker を解除しない。`ISSUE-075` の human review は 2026-07-26 に完了
 - Frontend / Accessibility: `/privacy` も public surface QA の対象に入れ、実表示で硬さを検知する
 
 ## Issue Split
@@ -40,13 +40,14 @@ Before / After と Trust が説明カードの反復に見えやすい。
 | `ISSUE-085` | `/lp` を keepsake journey と public trust bridge へ寄せる | done   | none                     |
 | `ISSUE-086` | Public LP / Privacy visual QA gate を拡張する             | done   | `ISSUE-084`, `ISSUE-085` |
 
-`ISSUE-084` と `ISSUE-085` は完了済み。ただし copy の legal / privacy 承認済み扱いは禁止。
+`ISSUE-084` と `ISSUE-085` は完了済み。当時は copy の legal / privacy 承認済み扱いを禁止し、最終判断を `ISSUE-075` に残した。
 `ISSUE-086` で、実ブラウザと contract で冷たさの回帰を検知する public surface QA gate を追加した。
+2026-07-26 に `ISSUE-075` で公開前検証 copy の Privacy / Legal Human Review を完了した。
 
 ## Non Goals
 
-- `ISSUE-075` の privacy / legal human review を完了扱いにしない
-- 削除連絡先、配信基盤、AI vendor retention、ZDR、完全削除、法務確認済み表現を新たに断定しない
+- visual 改善だけで privacy / legal human review を完了扱いにしない
+- 配信基盤、AI vendor retention、ZDR、完全削除、法務確認済み表現を新たに断定しない
 - 角丸を大きくしてかわいくするだけの対応にしない
 - 装飾で重要な同意、目的、未確定事項を目立たなくしない
 - API / DB / Auth / Storage / OpenAPI を変更しない
@@ -55,11 +56,11 @@ Before / After と Trust が説明カードの反復に見えやすい。
 
 各実装 PR は最大 3 回まで、次の read-only 専門レビューを実施する。
 
-| reviewer                 | gate                                                                    |
-| ------------------------ | ----------------------------------------------------------------------- |
-| Product UX / IA          | trust を読む順番、待機リスト前の安心、カード反復の低減                  |
-| Visual Systems           | Quiet Heirloom canon、photo mat / paper slip / radius / shadow          |
-| Privacy Trust            | 未承認 claim の追加なし、`ISSUE-075` blocker 維持                       |
-| Frontend / Accessibility | 390 / 430 / 768 / 1280px、tap target、focus-visible、contrast、overflow |
+| reviewer                 | gate                                                                     |
+| ------------------------ | ------------------------------------------------------------------------ |
+| Product UX / IA          | trust を読む順番、待機リスト前の安心、カード反復の低減                   |
+| Visual Systems           | Quiet Heirloom canon、photo mat / paper slip / radius / shadow           |
+| Privacy Trust            | 未承認 claim の追加なし、`ISSUE-075` の human review result と矛盾しない |
+| Frontend / Accessibility | 390 / 430 / 768 / 1280px、tap target、focus-visible、contrast、overflow  |
 
-GO が揃っても `ISSUE-075` は blocked のまま維持する。公開判断は別の human review gate で行う。
+GO が揃っても visual score だけでは公開判断にしない。公開判断は `ISSUE-075` の human review gate で行う。

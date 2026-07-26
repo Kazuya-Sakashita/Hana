@@ -46,8 +46,8 @@
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
 | `review`      | 0     | なし             |
-| `done`        | 89    | archive を参照   |
-| `blocked`     | 1     | 人間確認待ち     |
+| `done`        | 90    | archive を参照   |
+| `blocked`     | 0     | なし             |
 
 ---
 
@@ -128,13 +128,13 @@ Codex-ready と判断する条件:
 
 ## Planned LP Public Readiness Sequence
 
-| order | issue       | GitHub | title                                             | note                                 |
-| ----- | ----------- | ------ | ------------------------------------------------- | ------------------------------------ |
-| 1     | `ISSUE-071` | `#162` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | done                                 |
-| 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | done                                 |
-| 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | done                                 |
-| 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | done                                 |
-| 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | blocked: privacy / legal review 待ち |
+| order | issue       | GitHub | title                                             | note |
+| ----- | ----------- | ------ | ------------------------------------------------- | ---- |
+| 1     | `ISSUE-071` | `#162` | LP 静的プロトタイプと専門家評価を公開前課題へ整理 | done |
+| 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | done |
+| 3     | `ISSUE-073` | `#164` | LP Before / After の価値証拠を強化                | done |
+| 4     | `ISSUE-074` | `#165` | LP Hero を keepsake 主役の構図へ再構成            | done |
+| 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | done |
 
 ## Planned LP-App Design Parity Sequence
 
@@ -168,9 +168,7 @@ Codex-ready と判断する条件:
 
 ## Blocked Or Needs Human Decision
 
-| issue       | title                                   | blocker                             |
-| ----------- | --------------------------------------- | ----------------------------------- |
-| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |
+現在はありません。
 
 ---
 
@@ -192,7 +190,7 @@ Codex-ready と判断する条件:
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
-- lp public readiness completed: `ISSUE-071`, `ISSUE-072`, `ISSUE-073`, `ISSUE-074`, `ISSUE-083`
+- lp public readiness completed: `ISSUE-071`, `ISSUE-072`, `ISSUE-073`, `ISSUE-074`, `ISSUE-075`, `ISSUE-083`
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
 - public surface warmth completed: `ISSUE-084`, `ISSUE-085`, `ISSUE-086`
 

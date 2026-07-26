@@ -134,13 +134,13 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issueIndexSource).toContain(
       '| 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | done',
     )
-    expect(issueIndexSource).toContain('| 5     | `ISSUE-075` | `#166`')
+    expect(issueIndexSource).toContain(
+      '| 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | done',
+    )
     expect(issueIndexSource).toContain(
       '| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | done',
     )
-    expect(issueIndexSource).toContain(
-      '| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |',
-    )
+    expect(issueIndexSource).toContain('## Blocked Or Needs Human Decision\n\n現在はありません。')
     expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
   })
 
@@ -148,7 +148,7 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(publicSurfacePlanSource).toContain('## 専門レビュー統合')
     expect(publicSurfacePlanSource).toContain('/privacy')
     expect(publicSurfacePlanSource).toContain('/lp')
-    expect(publicSurfacePlanSource).toContain('legal / privacy 承認済み扱いは禁止')
+    expect(publicSurfacePlanSource).toContain('ISSUE-075` の human review は 2026-07-26 に完了')
 
     expect(issue084Source).toContain('github_issue: 190')
     expect(issue084Source).toContain('status: done')
@@ -176,8 +176,6 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issueIndexSource).toContain(
       '| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | done',
     )
-    expect(issueIndexSource).toContain(
-      '| `ISSUE-075` | LP 公開前 QA と trust human review gate | 公開 copy の privacy / legal review |',
-    )
+    expect(issueIndexSource).toContain('## Blocked Or Needs Human Decision\n\n現在はありません。')
   })
 })

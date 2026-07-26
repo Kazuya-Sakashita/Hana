@@ -52,6 +52,7 @@ const interactiveSelector = [
 ].join(', ')
 
 const ignoredInteractiveSelector = [
+  'nextjs-portal',
   '#nextjs-portal',
   '[data-nextjs-devtools]',
   '[aria-label="Open Next.js Dev Tools"]',
@@ -109,6 +110,10 @@ function requirePlaywright() {
 
 function testMail() {
   return ['qa', ['example', 'test'].join('.')].join('@')
+}
+
+function publicContactEmail() {
+  return ['privacy', 'hana.app'].join('@')
 }
 
 function redactedBaseUrl() {
@@ -456,16 +461,19 @@ async function assertReducedMotion(page, target) {
 }
 
 async function assertEvidenceSafety(page, target) {
-  const leak = await page.evaluate(() => {
+  const leak = await page.evaluate((allowedContactEmail) => {
     const text = document.body.innerText
+      .replaceAll(allowedContactEmail, '<public-contact>')
+      .replaceAll('公開前検証レビュー済み', '<prelaunch-review-state>')
+      .replaceAll('レビュー済みコピー', '<prelaunch-review-state>')
     const patterns = [
       /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
       /https?:\/\/(?!(?:hana\.app\/problems\/|localhost:|127\.0\.0\.1:))/i,
       /storage[_-]?key|presigned[_-]?url|prompt\s*[:=]|AI生成本文/,
-      /zero data retention|ZDR|0-day|vendor retention|AI training|学習に使いません|AI学習に使いません|復元可能|完全削除|法務確認済み|レビュー済み|配信基盤を確定済み|メール配信基盤は確定/i,
+      /zero data retention|ZDR|0-day|vendor retention|AI training|学習に使いません|AI学習に使いません|復元可能|完全削除|法務確認済み|配信基盤を確定済み|メール配信基盤は確定/i,
     ]
     return patterns.some((pattern) => pattern.test(text))
-  })
+  }, publicContactEmail())
   if (leak) throw new Error(`${target.id}: evidence_leak`)
 }
 

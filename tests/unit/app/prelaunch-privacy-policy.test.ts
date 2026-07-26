@@ -15,12 +15,15 @@ describe('prelaunch privacy policy route', () => {
     expect(privacyPageSource).toContain('プライバシーポリシー')
     expect(privacyPageSource).toContain('公開前検証')
     expect(privacyPageSource).toContain('待機リスト登録の前に')
-    expect(privacyPageSource).toContain('レビュー中のドラフト')
+    expect(privacyPageSource).toContain('公開前検証レビュー済み')
+    expect(privacyPageSource).toContain('サービス内容や運用方法が変わる場合は更新します')
     expect(privacyPageSource).toContain('メールアドレスを取得します')
     expect(privacyPageSource).toContain('待機リスト登録の管理')
     expect(privacyPageSource).toContain('β版のご案内')
     expect(privacyPageSource).toContain('正式リリースのお知らせ')
     expect(privacyPageSource).toContain('開発証跡にはメールアドレスを含めません')
+    expect(privacyPageSource).toContain('privacy@hana.app')
+    expect(privacyPageSource).toContain('サービス名を明記せず')
   })
 
   it('renders privacy as a quiet public trust surface instead of text-only rules', () => {
@@ -36,7 +39,7 @@ describe('prelaunch privacy policy route', () => {
 
   it('does not make unverified AI, retention, or restore claims', () => {
     expect(privacyPageSource).not.toMatch(
-      /zero data retention|ZDR|0-day|vendor retention|AI training|学習に使いません|AI学習に使いません|復元可能|完全削除|法務確認済み|レビュー済み|配信基盤を確定済み|メール配信基盤は確定/i,
+      /zero data retention|ZDR|0-day|vendor retention|AI training|学習に使いません|AI学習に使いません|復元可能|完全削除|法務確認済み|配信基盤を確定済み|メール配信基盤は確定/i,
     )
   })
 

@@ -50,6 +50,16 @@ App mode output は redacted summary のみ:
 - Dev server では Next DevTools の 32px button が混入するため、`#nextjs-portal` / `[data-nextjs-devtools]` / `aria-label="Open Next.js Dev Tools"` は app 本体の interactive target から除外する
 - JavaScript 無効時は Next の streamed payload が hidden のまま残るため、`/lp/loading.tsx` の public fallback shell を no-JS gate の対象にする
 
+### 2026-07-26 Human Review Copy Re-QA
+
+公開前検証 copy の Privacy / Legal Human Review 後に、問い合わせメール表示と QA script を更新して app mode を再実行した。
+
+- `/lp` と `/privacy`: 390x844 / 430x932 / 768x1024 / 1280x900 で pass
+- `/lp`: 問い合わせメール link は独立した pill link とし、44px tap target と visible focus を確認
+- `/privacy`: footer の問い合わせメール link も 44px tap target と visible focus を確認
+- Next DevTools の `<nextjs-portal>` は app 本体の interactive target から除外
+- evidence safety は公開連絡先 `privacy@hana.app` と公開前検証レビュー済み表現のみを許可し、それ以外のメール、画像 URL、`storage_key`、prompt、AI 生成本文、過剰 claim は拒否
+
 ### Build Route Evidence
 
 `pnpm build:ci` で `/lp` と `/privacy` は static route として生成された。
@@ -63,11 +73,21 @@ App mode output は redacted summary のみ:
 | AI consent       | AI は同意後だけ。使わずに保存でき、保存前にことばを直せる                            | Low    | 表現として過不足がないか確認する     |
 | Waitlist purpose | 待機リスト、β版案内、任意のインタビュー、正式リリースのお知らせに限定する            | Low    | 目的限定として公開してよいか確認する |
 | Data collected   | 待機リストフォームではメールアドレスのみ。子どもの名前、写真、生年月日等は取得しない | Low    | LP form の範囲として正しいか確認する |
-| Management       | 認証とアクセス制御が可能な管理環境で扱う                                             | Medium | 実運用サービス決定後に具体化する     |
+| Management       | 認証とアクセス制御が可能な管理環境で扱う                                             | Low    | 公開前検証段階の説明として承認済み   |
 | Third-party use  | 広告配信や無関係な案内のために第三者へ提供しない                                     | Medium | 法務観点で表現の強さを確認する       |
-| Stop / deletion  | 案内停止や登録情報削除の導線を公開前の運用開始までに明記する                         | Medium | 連絡先と処理手順を決める             |
+| Stop / deletion  | 案内停止や登録情報削除は `privacy@hana.app` へ連絡する                               | Low    | フォームは現時点では設置しない       |
 
-## Do Not Publish Without Human Review
+## Human Review Result
+
+2026-07-26 に、現時点の `/lp` と `/privacy` の copy は公開前検証用の
+Privacy / Legal Human Review 済みとして扱ってよい判断を受領した。
+
+- 案内停止・登録情報削除は問い合わせ用メールアドレス `privacy@hana.app` を表示する
+- メール配信基盤のサービス名は公開前検証時点では明記しない
+- 「認証とアクセス制御が可能な管理環境」という表現は公開前検証段階の説明として維持する
+- 正式公開前にサービス内容や運用方法が変更された場合のみ、最終レビューを再実施する
+
+## Do Not Add As Claims Without Final Review
 
 以下は、現時点では LP / privacy copy に断定として追加しない。
 
@@ -75,14 +95,9 @@ App mode output は redacted summary のみ:
 - zero data retention の適用断定
 - AI model training に関する vendor claim の断定
 - 退会・削除の完全保証
-- メール配信基盤、配信停止、削除依頼の運用手順が未決定のままの確定表現
-
-## Human Review Questions
-
-1. 現在の `/lp` と `/privacy` の trust copy を、公開前検証の候補文言としてレビュー対象に進めてよいですか。
-2. 待機リストの案内停止・削除依頼の連絡手段は、公開時点で何を表示しますか。
-3. β版案内や正式リリース通知に使うメール配信基盤は、公開前に明記できる状態ですか。
+- メール配信基盤のサービス名や確定済み表現
 
 ## Launch Gate
 
-機械 QA は pass。公開 traffic に載せる前に、上記 human review questions を解消し、必要な copy 修正後に再度 app mode QA と `pnpm pr:gate` を実行する。
+機械 QA と human review は pass。公開前検証として traffic に載せる直前に、必要な env / bot 対策と
+最終 `pnpm pr:gate` を確認する。

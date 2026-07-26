@@ -13,6 +13,7 @@ type FormStatus =
 
 const privacyPolicyVersion = 'prelaunch-2026-07-25'
 const waitlistSource = 'current-lp'
+const waitlistContactEmail = 'privacy@hana.app'
 
 export function WaitlistSignupForm() {
   const emailRef = useRef<HTMLInputElement>(null)
@@ -132,7 +133,14 @@ export function WaitlistSignupForm() {
       <div id="privacy-note" className="bg-warm/70 lp-soft-card grid gap-2 p-3">
         <p className="text-ink-secondary text-sm leading-7">
           取得目的と管理方法はプライバシーポリシーに明記します。メールアドレスは待機リスト管理の目的に限り、アクセス制御された環境で管理します。
+          案内停止や登録情報の削除は下記メールアドレスまでご連絡ください。
         </p>
+        <a
+          className="border-hairline text-leaf-deep tap-target inline-flex w-fit items-center rounded-full border bg-paper-slip px-4 text-sm font-bold"
+          href={`mailto:${waitlistContactEmail}`}
+        >
+          {waitlistContactEmail}
+        </a>
         <a
           className="border-hairline text-leaf-deep tap-target inline-flex w-fit items-center rounded-full border bg-paper-slip px-4 text-sm font-bold"
           href="/privacy"
