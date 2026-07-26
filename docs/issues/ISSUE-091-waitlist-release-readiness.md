@@ -2,7 +2,7 @@
 id: ISSUE-091
 title: 待機リスト公開前 readiness gate を追加する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 206

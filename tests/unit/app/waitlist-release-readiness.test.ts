@@ -90,13 +90,15 @@ describe('ISSUE-091 waitlist release readiness gate', () => {
     expect(releaseDoc).not.toContain('法務確認済み')
   })
 
-  it('records ISSUE-091 as the current prelaunch validation review item', () => {
+  it('records ISSUE-091 as the completed prelaunch validation readiness gate', () => {
     expect(issueSource).toContain('github_issue: 206')
-    expect(issueSource).toMatch(/status: (in_progress|review)/)
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('readiness QA が read-only')
     expect(issueIndexSource).toContain('Planned Prelaunch Validation Sequence')
-    expect(issueIndexSource).toContain('`ISSUE-091`')
-    expect(issueIndexSource).toContain('`#206`')
-    expect(issueIndexSource).toContain('待機リスト公開前 readiness gate を追加する')
+    expect(issueIndexSource).toMatch(
+      /\|\s*2\s*\|\s*`ISSUE-091`\s*\|\s*`#206`\s*\|\s*待機リスト公開前 readiness gate を追加する\s*\|\s*done\s*\|/,
+    )
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain('prelaunch validation completed: `ISSUE-089`, `ISSUE-091`')
   })
 })
