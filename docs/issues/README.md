@@ -46,7 +46,7 @@
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
 | `review`      | 0     | なし             |
-| `done`        | 86    | archive を参照   |
+| `done`        | 87    | archive を参照   |
 | `blocked`     | 1     | 人間確認待ち     |
 
 ---
@@ -183,7 +183,7 @@ Codex-ready と判断する条件:
 ## Done Archive
 
 - foundation: `ISSUE-001`, `ISSUE-002`, `ISSUE-003`, `ISSUE-004`, `ISSUE-005`, `ISSUE-006`, `ISSUE-006b`, `ISSUE-006c`, `ISSUE-007`, `ISSUE-008`, `ISSUE-009`, `ISSUE-010`
-- product UI: `ISSUE-012`, `ISSUE-013`, `ISSUE-014`, `ISSUE-014a`, `ISSUE-015`, `ISSUE-030`
+- product UI: `ISSUE-012`, `ISSUE-013`, `ISSUE-014`, `ISSUE-014a`, `ISSUE-015`, `ISSUE-030`, `ISSUE-087`
 - perf completed: `ISSUE-016`, `ISSUE-017`, `ISSUE-018`, `ISSUE-019`, `ISSUE-020`, `ISSUE-021`, `ISSUE-022`, `ISSUE-023`, `ISSUE-024`, `ISSUE-025`, `ISSUE-026`, `ISSUE-027`, `ISSUE-028`, `ISSUE-029`, `ISSUE-031`, `ISSUE-040`, `ISSUE-041`
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`

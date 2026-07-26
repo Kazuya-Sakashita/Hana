@@ -85,7 +85,8 @@ async function HomeBody({ userId }: { userId: string }) {
 
   const memories = memoriesResult.items
   const featuredMemory = memories[0] ?? null
-  const shelfMemories = memories.slice(1)
+  const shelfMemories = memories
+  const shelfTitle = memories.length === 1 ? 'アルバムのページ' : '最近のページたち'
   const ageLabel = formatAgeLabel(computeAge(child.birthdate, new Date()))
   const togetherDays = daysBetween(child.birthdate, new Date())
 
@@ -155,8 +156,11 @@ async function HomeBody({ userId }: { userId: string }) {
                 <div>
                   <p className="meta-label">アルバム</p>
                   <h2 id="home-keepsake-pages" className="mt-1 font-serif text-lg">
-                    しまってある ページ
+                    {shelfTitle}
                   </h2>
+                  <p className="text-ink-tertiary mt-1 text-xs leading-5">
+                    大きく見たページも、ここからまた開けます。
+                  </p>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="px-3">
                   <Link href="/album" prefetch={true}>
@@ -166,7 +170,7 @@ async function HomeBody({ userId }: { userId: string }) {
                 </Button>
               </div>
               <ul className="-mx-6 flex snap-x scroll-px-6 gap-3 overflow-x-auto px-6 py-2">
-                {shelfMemories.map((m) => {
+                {shelfMemories.map((m, index) => {
                   const url = m.coverThumbnailUrl
                   return (
                     <li key={m.id} className="w-[148px] shrink-0 snap-start">
@@ -193,6 +197,16 @@ async function HomeBody({ userId }: { userId: string }) {
                             <BookOpen className="text-sakura-deep size-7" />
                           </div>
                         )}
+                        <span
+                          className={`mt-3 inline-flex min-h-7 items-center rounded-full px-2.5 text-[11px] font-bold ${
+                            index === 0
+                              ? 'border-hairline text-leaf-deep border bg-warm'
+                              : 'text-transparent'
+                          }`}
+                          aria-hidden={index === 0 ? undefined : 'true'}
+                        >
+                          最近
+                        </span>
                         <p className="text-ink mt-3 line-clamp-2 min-h-10 break-words font-serif text-sm leading-5 [overflow-wrap:anywhere]">
                           {m.title}
                         </p>
@@ -206,7 +220,7 @@ async function HomeBody({ userId }: { userId: string }) {
                     prefetch={true}
                     className="photo-mat ease-organic flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-paper-slip)] px-4 text-center font-serif text-sm transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
                   >
-                    まえのページも
+                    すべてのページを
                     <span className="text-sakura-deep inline-flex items-center gap-1">
                       ひらく
                       <ChevronRight className="size-4" aria-hidden="true" />
