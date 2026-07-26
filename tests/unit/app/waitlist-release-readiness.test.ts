@@ -98,7 +98,9 @@ describe('ISSUE-091 waitlist release readiness gate', () => {
     expect(issueIndexSource).toMatch(
       /\|\s*2\s*\|\s*`ISSUE-091`\s*\|\s*`#206`\s*\|\s*待機リスト公開前 readiness gate を追加する\s*\|\s*done\s*\|/,
     )
-    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      '## Review Queue\n\n- `ISSUE-095` / `#214`: PR 作成 / review / merge 待ち。',
+    )
     expect(issueIndexSource).toContain(
       'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`',
     )

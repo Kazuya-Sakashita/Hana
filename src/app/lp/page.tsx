@@ -65,7 +65,7 @@ const relevanceCues = [
   },
   {
     title: '写真だけの日も',
-    body: 'まず1まいを置いておける',
+    body: 'まず1枚を置いておける',
     icon: ImagePlus,
   },
   {
@@ -134,7 +134,7 @@ export default function LandingPage() {
               10年後の宝物になる。
             </h1>
             <p className="text-ink-secondary mt-6 max-w-xl text-base leading-8 sm:text-lg">
-              寝かしつけのあと、もう書く気力がない日も。写真を1まい選ぶだけ。 必要なら Hana
+              寝かしつけのあと、もう書く気力がない日も。写真を1枚選ぶだけ。必要なら Hana
               が静かな下書きにして、あとで読み返せるページに残します。
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -190,7 +190,7 @@ export default function LandingPage() {
                 机の上に残った小さなくつした。忙しかった今日も、あとで開ける小さなページにします。
               </p>
               <p className="text-ink-tertiary mt-3 text-xs leading-6">
-                実ユーザー写真ではない synthetic preview です。
+                公開前検証用の合成イメージです。実ユーザー写真ではありません。
               </p>
             </figcaption>
           </figure>
@@ -204,7 +204,7 @@ export default function LandingPage() {
         data-lp-keepsake-journey="photo-to-memory"
       >
         <div className="mx-auto max-w-6xl">
-          <p className="meta-label">Before / After</p>
+          <p className="meta-label">記録の変化</p>
           <h2 id="value-title" className="mt-3 max-w-3xl font-serif text-4xl leading-tight">
             写真を、記憶にかえる。
           </h2>
@@ -212,7 +212,7 @@ export default function LandingPage() {
             <div className="photo-mat lp-soft-photo-mat p-2">
               <div className="bg-paper-slip lp-soft-photo-inner flex min-h-72 flex-col justify-between p-6">
                 <div>
-                  <p className="meta-label">今日の1まい</p>
+                  <p className="meta-label">今日の1枚</p>
                   <p className="mt-4 font-serif text-3xl leading-tight">机の上の小さなくつした</p>
                 </div>
                 <p className="text-ink-secondary leading-8">
@@ -255,7 +255,7 @@ export default function LandingPage() {
       >
         <div className="mx-auto grid max-w-6xl gap-7 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)]">
           <div>
-            <p className="meta-label">Trust before waitlist</p>
+            <p className="meta-label">待機リストの前に</p>
             <h2 id="trust-title" className="mt-3 font-serif text-4xl leading-tight">
               待機リストの前に、
               <br />
@@ -319,9 +319,9 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[minmax(0,0.78fr)_minmax(320px,0.62fr)]">
           <div className="photo-mat lp-soft-photo-mat p-2">
             <div className="bg-paper-slip lp-soft-photo-inner px-6 py-7">
-              <p className="meta-label">Pre-launch waitlist</p>
+              <p className="meta-label">公開前の待機リスト</p>
               <h2 id="waitlist-title" className="mt-4 font-serif text-4xl leading-tight">
-                今日の1まいを、
+                今日の1枚を、
                 <br />
                 はじめの1ページに。
               </h2>
