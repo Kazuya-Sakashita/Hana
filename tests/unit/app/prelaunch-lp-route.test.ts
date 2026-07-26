@@ -50,9 +50,12 @@ describe('prelaunch public LP route', () => {
     expect(existsSync(fileURLToPath(publicAssetUrl))).toBe(true)
     expect(lpSource).toContain('/lp/hana-before-after-safe-still-life.svg')
     expect(lpSource).toContain('実ユーザー写真ではない synthetic preview')
-    expect(`${lpSource}\n${waitlistFormSource}`).not.toMatch(
-      /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+    expect(waitlistFormSource).toContain('privacy@hana.app')
+    const publicContactRedacted = `${lpSource}\n${waitlistFormSource}`.replaceAll(
+      'privacy@hana.app',
+      '<public-contact>',
     )
+    expect(publicContactRedacted).not.toMatch(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/)
   })
 
   it('keeps the public route aligned with the three-step value proof', () => {

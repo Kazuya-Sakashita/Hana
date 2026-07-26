@@ -32,25 +32,25 @@
 
 5名の read-only レビューを実施した。全員、編集は行っていない。
 
-| Reviewer                 | Framework                              | Verdict        | 主な指摘                                                                               |
-| ------------------------ | -------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
-| Product UX / HEART       | HEART + JTBD                           | Conditional Go | 情緒と JTBD は合う。ISSUE-072 で待機リスト導線、ISSUE-073 で Before / After 証拠を追加 |
-| Brand / Conversion       | LIFT + AIDA                            | Conditional Go | Brand は Go 寄り。Action は待機リストで接続済み。公開前の人間レビューは ISSUE-075 残   |
-| Visual Art Direction     | Quiet Heirloom + AI slop blacklist     | Conditional Go | ISSUE-074 で Hero の主役を単一の keepsake preview に整理。公開前に実ブラウザ QA は必要 |
-| Accessibility / Frontend | WCAG 2.2 AA + Nielsen                  | Conditional Go | 構造は良い。公開前に実ブラウザで touch target、mobile nav、画像 payload を確認         |
-| Privacy / Trust          | Trust before delight + evidence policy | Conditional Go | 内部 artifact としては可。公開前に AI 同意、送る/送らない説明、claim を人間レビュー    |
+| Reviewer                 | Framework                              | Verdict | 主な指摘                                                                               |
+| ------------------------ | -------------------------------------- | ------- | -------------------------------------------------------------------------------------- |
+| Product UX / HEART       | HEART + JTBD                           | Go      | 情緒と JTBD は合う。ISSUE-072 で待機リスト導線、ISSUE-073 で Before / After 証拠を追加 |
+| Brand / Conversion       | LIFT + AIDA                            | Go      | Brand は Go 寄り。Action は待機リストで接続済み。公開前検証 copy review も完了         |
+| Visual Art Direction     | Quiet Heirloom + AI slop blacklist     | Go      | ISSUE-074 で Hero の主役を単一の keepsake preview に整理。実ブラウザ QA も完了         |
+| Accessibility / Frontend | WCAG 2.2 AA + Nielsen                  | Go      | 実ブラウザで touch target、mobile nav、画像 payload を確認済み                         |
+| Privacy / Trust          | Trust before delight + evidence policy | Go      | ISSUE-075 で公開前検証 copy を Privacy / Legal Human Review 済みとして扱う             |
 
 ## フレームワーク別スコア
 
-| Framework       |   Score | 判定           | 補足                                                      |
-| --------------- | ------: | -------------- | --------------------------------------------------------- |
-| HEART / JTBD    | 4.0 / 5 | Conditional Go | Happiness と JTBD は強く、Adoption は待機リストで接続済み |
-| LIFT / AIDA     | 3.8 / 5 | Conditional Go | Attention と Action は改善。公開前のCV計測は未実施        |
-| Quiet Heirloom  | 4.2 / 5 | Conditional Go | Hero composition は改善。実ブラウザ QA は未完             |
-| WCAG / Nielsen  | 4.0 / 5 | Conditional Go | 静的検査は良い。実ブラウザ QA は未完                      |
-| Privacy / Trust | 4.0 / 5 | Conditional Go | 危険な断定は回避。公開 copy は最終レビューが必要          |
+| Framework       |   Score | 判定 | 補足                                                      |
+| --------------- | ------: | ---- | --------------------------------------------------------- |
+| HEART / JTBD    | 4.0 / 5 | Go   | Happiness と JTBD は強く、Adoption は待機リストで接続済み |
+| LIFT / AIDA     | 3.8 / 5 | Go   | Attention と Action は改善。公開前のCV計測は未実施        |
+| Quiet Heirloom  | 4.2 / 5 | Go   | Hero composition は改善。実ブラウザ QA も完了             |
+| WCAG / Nielsen  | 4.0 / 5 | Go   | 実ブラウザ QA で主要 viewport を確認済み                  |
+| Privacy / Trust | 4.0 / 5 | Go   | 危険な断定は回避。公開前検証 copy review は完了           |
 
-総合判定: **公開前検証 LP としては Conditional Go。公開 traffic 前は ISSUE-075 の privacy/legal review と実ブラウザ QA を gate にする。**
+総合判定: **公開前検証 LP として Go。正式公開前にサービス内容や運用方法が変わる場合のみ、最終 privacy/legal review を再実施する。**
 
 ## 完成度を上げる課題
 
@@ -60,17 +60,17 @@
 | -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | LP-P0-01 | 実行可能な CV 導線を設計する           | 静的 prototype の Store 準備表示だけでは、LP 目的の DL / 事前登録検証にならない                | 対応済み。ISSUE-072 で `待機リストに登録する` を primary CTA とし、`POST /v1/waitlist` と公開 `/lp` に接続                             |
 | LP-P0-02 | Before / After を本物の価値証拠にする  | PRD は「写真のみ → 写真＋文章」で差別化を見せる前提。写真のみとの差分を 3 秒で見せる必要がある | 対応済み。ISSUE-073 で synthetic safe asset と、人間レビュー済み synthetic 例を `写真のみ → 写真 + title → 写真 + 短い本文` として追加 |
-| LP-P0-03 | Public trust copy の人間レビューを通す | AI、保持、学習、削除 claim は信頼を左右する。未確認の断定は No-Go                              | `ai-consent-privacy-evidence.md` と privacy/legal review に照らし、公開してよい文言だけにする                                          |
+| LP-P0-03 | Public trust copy の人間レビューを通す | AI、保持、学習、削除 claim は信頼を左右する。未確認の断定は No-Go                              | 対応済み。ISSUE-075 で公開前検証 copy の Privacy / Legal Human Review を完了                                                           |
 
 ### P1
 
-| ID       | 課題                                              | Why                                                                                    | 完了条件                                                                                                           |
-| -------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| LP-P1-01 | Hero composition を 1 strong visual anchor に絞る | 背景、Hana、phone mock、CTA、trust row が同時に立ち、Quiet Heirloom の静けさが薄まる   | 対応済み。ISSUE-074 で Hero の主役を単一の keepsake preview に整理し、phone mock と hero 内 trust row の競合を削除 |
-| LP-P1-02 | 「書けない親」の痛みを first view に少し上げる    | Brand は美しいが、忙しい親が「自分のことだ」と感じる Relevance が弱い                  | 寝かしつけ後、疲れている、でも忘れたくない、を短い支持文で伝える                                                   |
-| LP-P1-03 | 実ブラウザ QA を行う                              | 静的検査は通ったが、重なり、折返し、focus order、touch target はレンダリング確認が必要 | 390 / 430 / 768 / 1280px でスクリーンショット、横 overflow、focus、contrast、LCP 目安を確認                        |
-| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針                 | 文字なし、実写真なし、Hana らしい photo mat / keepsake asset を用意する                                            |
-| LP-P1-05 | Trust 詳細への導線を設計する                      | 安心材料はあるが、詳しく確認する場所が LP から見えない                                 | AI 同意、送る/送らない、削除、共有の説明へ進める導線を決める                                                       |
+| ID       | 課題                                              | Why                                                                                  | 完了条件                                                                                                           |
+| -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| LP-P1-01 | Hero composition を 1 strong visual anchor に絞る | 背景、Hana、phone mock、CTA、trust row が同時に立ち、Quiet Heirloom の静けさが薄まる | 対応済み。ISSUE-074 で Hero の主役を単一の keepsake preview に整理し、phone mock と hero 内 trust row の競合を削除 |
+| LP-P1-02 | 「書けない親」の痛みを first view に少し上げる    | Brand は美しいが、忙しい親が「自分のことだ」と感じる Relevance が弱い                | 寝かしつけ後、疲れている、でも忘れたくない、を短い支持文で伝える                                                   |
+| LP-P1-03 | 実ブラウザ QA を行う                              | 静的検査だけでは、重なり、折返し、focus order、touch target は判断しにくい           | 対応済み。390 / 430 / 768 / 1280px で redacted app QA を行い、横 overflow、focus、contrast、LCP 目安を確認         |
+| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針               | 文字なし、実写真なし、Hana らしい photo mat / keepsake asset を用意する                                            |
+| LP-P1-05 | Trust 詳細への導線を設計する                      | 安心材料はあるが、詳しく確認する場所が LP から見えない                               | AI 同意、送る/送らない、削除、共有の説明へ進める導線を決める                                                       |
 
 ### P2
 
@@ -82,8 +82,8 @@
 
 ## 次の推奨順
 
-1. `LP-P0-03` を人間レビュー gate にする。Trust は visual score で相殺しない。
-2. 公開に近づける段階で `LP-P1-03` の実ブラウザ QA を必ず通す。
+1. 公開前検証 traffic 直前に env / bot 対策と最新 `pnpm pr:gate` を確認する。
+2. 正式公開前にサービス内容や運用方法が変わる場合は privacy/legal review を再実施する。
 3. `LP-P1-02` と `LP-P1-05` で、書けない親への relevance と trust 詳細導線をさらに上げる。
 
 ## ISSUE-072 CV 導線更新
@@ -105,8 +105,8 @@
 | 乱用対策   | 同一 client key の短時間連続送信を 429 にする。公開直前の追加対策は `ISSUE-075` で確認          |
 
 公開有効化前に、`WAITLIST_EMAIL_HASH_PEPPER` の staging / production 設定、`waitlist_signups`
-migration の適用確認、配信停止・削除依頼・メール配信基盤の扱いを含む privacy/legal review を `ISSUE-075`
-で完了させる。
+migration の適用確認を行う。配信停止・削除依頼は `privacy@hana.app` で受け、メール配信基盤のサービス名は
+公開前検証時点では明記せず、正式公開時点で必要に応じて追記する。
 
 ### QA 手順
 

@@ -49,7 +49,8 @@ describe('ISSUE-085 LP keepsake journey and public trust bridge', () => {
     const activeCopy = `${lpSource}\n${waitlistFormSource}`
     expect(issue085Source).toMatch(/status: (in_progress|review|done)/)
     expect(issue085Source).toContain('privacy / legal review の完了扱い')
-    expect(issue075Source).toContain('status: blocked')
+    expect(issue075Source).toContain('status: done')
+    expect(issue075Source).toContain('Privacy / Legal Human Review 済み')
     expect(activeCopy).not.toMatch(
       /zero data retention|ZDR|0-day|vendor retention|AI training|学習に使いません|AI学習に使いません|復元可能|完全削除|法務確認済み|レビュー済み|配信基盤を確定済み|メール配信基盤は確定/i,
     )

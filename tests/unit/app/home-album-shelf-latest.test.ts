@@ -51,6 +51,6 @@ describe('ISSUE-087 Home album shelf includes latest memory', () => {
     expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('Home の横スクロール棚にも最新ページ')
     expect(issueSource).toContain('実写真 URL、`storage_key`、AI 生成本文、メール')
-    expect(issue075Source).toContain('status: blocked')
+    expect(issue075Source).toContain('status: done')
   })
 })
