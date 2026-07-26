@@ -2,7 +2,7 @@
 id: ISSUE-093
 title: LP の親 relevance と trust 詳細導線を強化する
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 210
