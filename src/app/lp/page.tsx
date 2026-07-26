@@ -1,7 +1,15 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ClipboardList, FileText, ImagePlus, Mail, PenLine, ShieldCheck } from 'lucide-react'
+import {
+  ClipboardList,
+  FileText,
+  ImagePlus,
+  Mail,
+  PenLine,
+  RotateCcw,
+  ShieldCheck,
+} from 'lucide-react'
 import { QuietIcon } from '@/components/product/icons'
 import { WaitlistSignupForm } from '@/components/waitlist-signup-form'
 
@@ -46,6 +54,45 @@ const trustBridgeItems = [
     title: 'AI 同意は記録時に別で確認します',
     body: '待機リスト登録だけで、写真を AI に送る同意にはなりません。',
     icon: ShieldCheck,
+  },
+] as const
+
+const relevanceCues = [
+  {
+    title: '寝かしつけ後でも',
+    body: '3行書く気力が残っていない夜に',
+    icon: PenLine,
+  },
+  {
+    title: '写真だけの日も',
+    body: 'まず1まいを置いておける',
+    icon: ImagePlus,
+  },
+  {
+    title: 'あとで直せる',
+    body: '保存前に自分のことばへ整えられる',
+    icon: FileText,
+  },
+] as const
+
+const trustDetailLinks = [
+  {
+    href: '/privacy#privacy-collected',
+    title: '取得する情報',
+    body: '待機リストではメールだけ',
+    icon: Mail,
+  },
+  {
+    href: '/privacy#privacy-purpose',
+    title: '利用目的',
+    body: '案内と任意の協力依頼に限定',
+    icon: ClipboardList,
+  },
+  {
+    href: '/privacy#privacy-stop-delete',
+    title: '停止・削除',
+    body: '問い合わせ先で受け付け',
+    icon: RotateCcw,
   },
 ] as const
 
@@ -107,6 +154,22 @@ export default function LandingPage() {
             <p className="text-ink-tertiary mt-5 text-sm leading-7">
               AI は同意後だけ。使わずに保存でき、保存前にことばを直せます。
             </p>
+            <ul
+              className="mt-5 flex max-w-2xl flex-wrap gap-2"
+              data-lp-relevance="tired-parent"
+              aria-label="忙しい日の記録の入口"
+            >
+              {relevanceCues.map((cue) => (
+                <li
+                  key={cue.title}
+                  className="border-hairline bg-paper-slip/78 flex min-h-11 items-center gap-2 rounded-full border px-3 text-sm"
+                >
+                  <QuietIcon icon={cue.icon} tone="muted" size="sm" />
+                  <span className="font-serif">{cue.title}</span>
+                  <span className="text-ink-secondary hidden sm:inline">{cue.body}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <figure className="paper-surface lp-soft-frame p-3 sm:p-4">
@@ -229,6 +292,25 @@ export default function LandingPage() {
             >
               プライバシーポリシーを確認する
             </Link>
+            <nav
+              className="border-hairline mt-5 grid gap-3 border-t pt-5 sm:grid-cols-3"
+              aria-label="プライバシー詳細"
+              data-lp-trust-detail-links="privacy-anchors"
+            >
+              {trustDetailLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="border-hairline bg-paper-slip tap-target rounded-[var(--radius-paper-slip)] border px-3 py-3 text-sm"
+                >
+                  <span className="flex items-center gap-2">
+                    <QuietIcon icon={item.icon} tone="muted" size="sm" />
+                    <strong className="font-serif font-normal">{item.title}</strong>
+                  </span>
+                  <span className="text-ink-secondary mt-2 block leading-6">{item.body}</span>
+                </Link>
+              ))}
+            </nav>
           </div>
         </div>
       </section>
