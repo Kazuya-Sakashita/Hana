@@ -40,38 +40,44 @@ const summaryItems: {
     icon: Bell,
   },
   {
-    title: '公開前検証レビュー済み',
-    body: '公開前検証用のレビュー済みコピーです。正式公開前にサービス内容が変わる場合は更新します。',
+    title: '公開前検証用に確認済み',
+    body: '公開前検証用の確認済みコピーです。正式公開前にサービス内容が変わる場合は更新します。',
     icon: ShieldCheck,
   },
 ]
 
 const policyItems: {
+  id: string
   title: string
   body: string
   icon: LucideIcon
 }[] = [
   {
+    id: 'privacy-collected',
     title: '取得する情報',
     body: '公開前の待機リストフォームでは、メールアドレスを取得します。子どもの名前、写真、生年月日、住所、位置情報はこのフォームでは取得しません。',
     icon: Mail,
   },
   {
+    id: 'privacy-purpose',
     title: '利用目的',
     body: '待機リスト登録の管理、β版のご案内、任意のインタビューやフィードバック協力のお願い、正式リリースのお知らせに限って利用します。',
     icon: ClipboardList,
   },
   {
+    id: 'privacy-management',
     title: '管理方法',
     body: '取得したメールアドレスは、認証とアクセス制御が可能な管理環境で扱います。LP の表示ログ、API レスポンス、開発証跡にはメールアドレスを含めません。',
     icon: ShieldCheck,
   },
   {
+    id: 'privacy-sharing',
     title: '第三者提供',
     body: '待機リストの連絡先を広告配信や無関係な案内のために第三者へ提供しません。β版や正式リリースの案内に必要な配信基盤は、現時点ではサービス名を明記せず、正式公開時点で必要に応じて追記します。',
     icon: Handshake,
   },
   {
+    id: 'privacy-stop-delete',
     title: '停止・削除',
     body: `案内の停止や登録情報の削除を希望する場合は、${waitlistContactEmail} までご連絡ください。フォームは現時点では設置しません。`,
     icon: RotateCcw,
@@ -98,7 +104,7 @@ export default function PrivacyPage() {
           <h1 className="font-serif text-4xl leading-tight sm:text-5xl">プライバシーポリシー</h1>
           <p className="text-ink-secondary max-w-2xl leading-8">
             このページは、Hana の公開前検証で待機リスト登録を受け付けるための安全側のドラフトです。
-            公開前検証用の文言としてレビュー済みで、正式公開前にサービス内容や運用方法が変わる場合は更新します。
+            公開前検証用の文言として確認済みで、正式公開前にサービス内容や運用方法が変わる場合は更新します。
           </p>
         </header>
 
@@ -140,8 +146,9 @@ export default function PrivacyPage() {
         >
           {policyItems.map((item, index) => (
             <section
+              id={item.id}
               key={item.title}
-              className="paper-surface rounded-[var(--radius-paper-slip)] px-5 py-5 sm:px-6"
+              className="paper-surface rounded-[var(--radius-paper-slip)] scroll-mt-24 px-5 py-5 sm:px-6"
             >
               <div className="flex min-w-0 gap-4">
                 <span
