@@ -33,7 +33,7 @@ describe('ISSUE-097 LP evaluation status sync', () => {
     expect(nextRecommendation).toContain('公開前検証 traffic 直前')
     expect(nextRecommendation).toContain('redacted aggregate')
     expect(nextRecommendation).toContain('privacy/legal review')
-    expect(nextRecommendation).toContain('LP-P2-02')
+    expect(nextRecommendation).toContain('LP-P2-02` まで対応済み')
     expect(nextRecommendation).not.toContain('LP-P1-02')
     expect(nextRecommendation).not.toContain('LP-P1-05')
   })
@@ -46,7 +46,9 @@ describe('ISSUE-097 LP evaluation status sync', () => {
     expect(issueIndexSource).toContain('`ISSUE-097`')
     expect(issueIndexSource).toContain('`#218`')
     expect(issueIndexSource).toContain('LP 評価表の relevance と trust 完了状態を同期する')
-    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      '## Review Queue\n\n- `ISSUE-101` / `#226`: PR 作成 / review / merge 待ち。',
+    )
     expect(issueIndexSource).toContain(
       'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`',
     )
