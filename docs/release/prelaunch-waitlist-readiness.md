@@ -24,20 +24,28 @@
 - reverse proxy / hosting platform が `x-forwarded-for` または `x-real-ip` を渡す
 - bot / abuse 対策は MVP の短時間 rate limit で開始し、異常 traffic が出たら追加対策を Issue 化する
 - 問い合わせ先 `privacy@hana.app` の受信と運用担当者へのアクセス制御が確認済みである
+- ISSUE-109 mailbox attestation で案内停止と登録情報削除を含む全4項目が `GO` である
 - `pnpm pr:gate` と app-mode public QA が最新 main で通っている
 
 ## Go/Hold Attestation
 
-確認結果は secret 値を command line に含めず、対象環境に env が設定された terminal で次のように入力する。
+ISSUE-109の直前のGO出力にある `attested_at` をPIIを含まない一時変数へ設定し、対象環境にenvが設定されたterminalで次のように入力する。
 
 ```bash
+PRIVACY_ATTESTED_AT='<ISSUE-109 GO 出力の attested_at>'
 pnpm qa:issue103:prelaunch-traffic -- \
   --mode=preflight \
   --target=staging \
   --migration=confirmed \
   --proxy-client-ip=confirmed \
   --rate-limit=confirmed \
-  --privacy-mailbox=confirmed \
+  --privacy-mailbox-receiving=confirmed \
+  --privacy-mailbox-access-control=confirmed \
+  --privacy-guidance-stop=confirmed \
+  --privacy-registration-deletion=confirmed \
+  --privacy-attestation-scope=prelaunch \
+  --privacy-attestation-version=prelaunch-mailbox-v1 \
+  --privacy-attested-at="$PRIVACY_ATTESTED_AT" \
   --public-qa=confirmed \
   --pr-gate=confirmed \
   --privacy-copy=confirmed
@@ -45,8 +53,11 @@ pnpm qa:issue103:prelaunch-traffic -- \
 
 - required env の値を出力しない。`WAITLIST_EMAIL_HASH_PEPPER` / `DATABASE_URL` / `DIRECT_URL` は set / missing だけを判定し、`WAITLIST_TRUST_PROXY_HEADERS` は厳密に `true` かだけを判定する
 - migration、proxy、rate limit、mailbox、public QA、PR gate、privacy copy は運用担当者の確認結果であり、外部状態を自動確認したことにはならない
+- privacy mailbox の4引数は、直前に同じ運用版で ISSUE-109が `GO` になった場合だけ `confirmed` にする
+- ISSUE-109の `scope=prelaunch`、`attestation_version=prelaunch-mailbox-v1`、`attested_at` が揃い、実行から30分以内の場合だけprivacy attestationを有効とする
 - required env または attestation が 1 つでも未確認なら `HOLD` と終了コード 1 を返す
 - 全項目が確認済みの場合だけ `GO` と終了コード 0 を返す
+- ISSUE-103単独の `GO` は公開可を意味せず、ISSUE-105の全解除条件とhuman reviewを別途満たす必要がある
 - production では `--target=production` を使い、staging の結果を流用しない
 
 ## Staging Target Contract
@@ -92,6 +103,31 @@ pnpm qa:issue107:migration-status -- --mode=status --target=staging
 - app 内 limiter は 1 process 内の best effort であり、複数 instance 全体の abuse 対策は hosting edge 側で補完する
 - header 設定が確認できない間は proxy / rate-limit attestation を `confirmed` にせず、ISSUE-105 を HOLD のままにする
 
+## Privacy Mailbox Attestation
+
+mailbox provider や問い合わせ内容を command line に含めず、運用担当者が確認した結果だけを入力する。
+
+```bash
+pnpm qa:issue109:privacy-mailbox -- \
+  --mode=attest \
+  --receiving=confirmed \
+  --access-control=confirmed \
+  --guidance-stop=confirmed \
+  --registration-deletion=confirmed
+```
+
+- `receiving`: 個人情報を含まない管理用test fixtureで受信でき、監視手順が実行可能である
+- `access-control`: 承認済みの個別accountだけがアクセスでき、認証強化と権限剥奪手順が確認できる。担当者名はevidenceに残さない
+- `guidance-stop`: 管理環境内で依頼対象を特定し、今後のbeta版案内・正式リリース通知から除外できる。evidenceはstatus / countだけにする
+- `registration-deletion`: `waitlist_signups` の `email` / `email_hash` を含む対象recordと下流連絡先copyを削除し、残存0件をstatus / countだけで確認できる
+- 未確認項目が 1 つでもあれば `HOLD` と終了コード 1、全項目確認時だけ `GO` と終了コード 0 を返す
+- 担当者名、実メール、問い合わせ本文、削除対象情報を argument や evidence に含めない
+- command は固定metadata、check ID、statusだけを出力し、mailbox接続、test mail送信、配信停止、DB削除を実行しない
+- 出力の `scope` は `prelaunch`、`attestation_version` は `prelaunch-mailbox-v1` とし、`attested_at` に実行時刻を記録する
+- access権、mailbox / 配信基盤、waitlist schema、案内停止・削除手順のいずれかが変わった場合は古いGOを再利用せず再確認する
+- `GO` は人間の運用確認結果であり、外部状態を自動確認したという claim にはしない
+- live mailbox で確認できるまでは ISSUE-105 と公開前 traffic を HOLD のままにする
+
 ## Do Not Record
 
 - 実ユーザーのメールアドレス
@@ -108,5 +144,5 @@ pnpm qa:issue107:migration-status -- --mode=status --target=staging
 - `WAITLIST_TRUST_PROXY_HEADERS=true` でない
 - migration 未適用
 - public QA 失敗
-- 問い合わせ先の受信・アクセス制御未確認
+- ISSUE-109 mailbox attestation が `GO` でない
 - privacy / legal review 済み copy から公開文言を変更した

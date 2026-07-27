@@ -41,13 +41,13 @@
 
 2026-07-28 時点:
 
-| status        | count | notes                                 |
-| ------------- | ----- | ------------------------------------- |
-| `todo`        | 0     | なし                                  |
-| `in_progress` | 0     | 並行実行枠は空き                      |
-| `review`      | 3     | `ISSUE-106`, `ISSUE-107`, `ISSUE-108` |
-| `done`        | 106   | archive を参照                        |
-| `blocked`     | 1     | `ISSUE-105`                           |
+| status        | count | notes                                              |
+| ------------- | ----- | -------------------------------------------------- |
+| `todo`        | 0     | なし                                               |
+| `in_progress` | 0     | 並行実行枠は空き                                   |
+| `review`      | 4     | `ISSUE-106`, `ISSUE-107`, `ISSUE-108`, `ISSUE-109` |
+| `done`        | 106   | archive を参照                                     |
+| `blocked`     | 1     | `ISSUE-105`                                        |
 
 ---
 
@@ -177,7 +177,7 @@ Codex-ready と判断する条件:
 | 1     | `ISSUE-106` | `#236` | staging target の read-only contract を追加する     | review         |
 | 2     | `ISSUE-107` | `#238` | staging migration status を redacted に確認する     | review         |
 | 3     | `ISSUE-108` | `#239` | proxy client IP と rate limit 境界を強化する        | review         |
-| 4     | `ISSUE-109` | `#237` | privacy mailbox 運用 attestation を追加する         | GitHub intake  |
+| 4     | `ISSUE-109` | `#237` | privacy mailbox 運用 attestation を追加する         | review         |
 | 5     | `ISSUE-110` | `#240` | staging public QA の strict runtime mode を追加する | blocked by 106 |
 
 ---
@@ -186,7 +186,6 @@ Codex-ready と判断する条件:
 
 以下は GitHub Issue 作成済みだが、ローカル正本 `docs/issues/ISSUE-<number>[suffix]-*.md` はまだ main に存在しない。Codex が着手する前に、各 Issue のローカルコピーを追加する。
 
-- `ISSUE-109` / `#237`: privacy mailbox 運用 attestation を追加する。
 - `ISSUE-110` / `#240`: staging public QA の strict runtime mode を追加する。`ISSUE-106` 完了待ち。
 
 ---
@@ -202,6 +201,7 @@ Codex-ready と判断する条件:
 - `ISSUE-106` / `#236`: PR 作成 / review / merge 待ち。
 - `ISSUE-107` / `#238`: PR 作成 / review / merge 待ち。
 - `ISSUE-108` / `#239`: PR 作成 / review / merge 待ち。
+- `ISSUE-109` / `#237`: PR 作成 / review / merge 待ち。
 
 ---
 

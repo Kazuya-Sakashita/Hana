@@ -2,9 +2,10 @@ const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 
 const issue = 'ISSUE-103'
-const requestedMode = argValue('--mode', 'contract')
-const mode = ['contract', 'preflight'].includes(requestedMode) ? requestedMode : 'unsupported'
 const repoRoot = process.cwd()
+const privacyAttestationScope = 'prelaunch'
+const privacyAttestationVersion = 'prelaunch-mailbox-v1'
+const privacyAttestationMaxAgeMs = 30 * 60 * 1000
 
 const files = {
   script: 'scripts/qa/issue-103-prelaunch-traffic-attestation.cjs',
@@ -26,26 +27,69 @@ const requiredEnvironment = [
 ]
 
 const attestations = [
-  { id: 'waitlist-migration-applied', argument: '--migration' },
-  { id: 'proxy-client-ip-confirmed', argument: '--proxy-client-ip' },
-  { id: 'rate-limit-confirmed', argument: '--rate-limit' },
-  { id: 'privacy-mailbox-confirmed', argument: '--privacy-mailbox' },
-  { id: 'public-qa-confirmed', argument: '--public-qa' },
-  { id: 'pr-gate-confirmed', argument: '--pr-gate' },
-  { id: 'privacy-copy-baseline-confirmed', argument: '--privacy-copy' },
+  { id: 'waitlist-migration-applied', name: 'migration' },
+  { id: 'proxy-client-ip-confirmed', name: 'proxy-client-ip' },
+  { id: 'rate-limit-confirmed', name: 'rate-limit' },
+  { id: 'privacy-mailbox-receiving-confirmed', name: 'privacy-mailbox-receiving' },
+  {
+    id: 'privacy-mailbox-access-control-confirmed',
+    name: 'privacy-mailbox-access-control',
+  },
+  { id: 'privacy-guidance-stop-confirmed', name: 'privacy-guidance-stop' },
+  {
+    id: 'privacy-registration-deletion-confirmed',
+    name: 'privacy-registration-deletion',
+  },
+  { id: 'public-qa-confirmed', name: 'public-qa' },
+  { id: 'pr-gate-confirmed', name: 'pr-gate' },
+  { id: 'privacy-copy-baseline-confirmed', name: 'privacy-copy' },
 ]
 
-function argValue(name, fallback = '') {
-  const prefix = `${name}=`
-  for (let index = 0; index < process.argv.length; index += 1) {
-    const argument = process.argv[index]
-    if (argument.startsWith(prefix)) return argument.slice(prefix.length)
-    if (argument === name) {
-      const nextArgument = process.argv[index + 1]
-      return nextArgument && !nextArgument.startsWith('--') ? nextArgument : ''
+const privacyMetadataArguments = [
+  'privacy-attestation-scope',
+  'privacy-attestation-version',
+  'privacy-attested-at',
+]
+const allowedArgumentNames = new Set([
+  'mode',
+  'target',
+  ...attestations.map(({ name }) => name),
+  ...privacyMetadataArguments,
+])
+
+function parseArguments(argv) {
+  const tokens = [...argv]
+  if (tokens[0] === '--') tokens.shift()
+  const values = new Map()
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (!token.startsWith('--') || token === '--') throw new Error('invalid_arguments')
+
+    const separatorIndex = token.indexOf('=')
+    const name = token.slice(2, separatorIndex >= 0 ? separatorIndex : undefined)
+    let value = separatorIndex >= 0 ? token.slice(separatorIndex + 1) : ''
+
+    if (separatorIndex < 0) {
+      const nextToken = tokens[index + 1]
+      if (!nextToken || nextToken.startsWith('--')) throw new Error('invalid_arguments')
+      value = nextToken
+      index += 1
     }
+
+    if (!allowedArgumentNames.has(name) || values.has(name) || value.length === 0) {
+      throw new Error('invalid_arguments')
+    }
+    values.set(name, value)
   }
-  return fallback
+
+  const requestedMode = values.get('mode') ?? 'contract'
+  const mode = ['contract', 'preflight'].includes(requestedMode) ? requestedMode : 'unsupported'
+  if (mode === 'contract' && [...values.keys()].some((name) => name !== 'mode')) {
+    throw new Error('invalid_arguments')
+  }
+
+  return { mode, values }
 }
 
 function source(file) {
@@ -74,8 +118,13 @@ function environmentStatus(name, kind) {
     : presenceStatus(name)
 }
 
-function attestationStatus(argument) {
-  return argValue(argument) === 'confirmed' ? 'pass' : 'hold'
+function privacyAttestedAtStatus(value, now) {
+  if (typeof value !== 'string') return 'hold'
+  const attestedAtMs = Date.parse(value)
+  const ageMs = now - attestedAtMs
+  return Number.isFinite(attestedAtMs) && ageMs >= 0 && ageMs <= privacyAttestationMaxAgeMs
+    ? 'pass'
+    : 'hold'
 }
 
 function runContract() {
@@ -112,12 +161,13 @@ function runContract() {
   assertIncludes(releaseDoc, '値を出力しない', 'release-doc')
   assertIncludes(releaseDoc, '外部状態を自動確認したことにはならない', 'release-doc')
   assertIncludes(releaseDoc, 'WAITLIST_TRUST_PROXY_HEADERS=true', 'release-doc')
+  assertIncludes(releaseDoc, '--privacy-attestation-version=prelaunch-mailbox-v1', 'release-doc')
   assertIncludes(envExample, 'WAITLIST_TRUST_PROXY_HEADERS=false', 'env-example')
   assertIncludes(issueDoc, '未確認項目が 1 つでもあれば HOLD', 'issue-doc')
 
   return {
     issue,
-    mode,
+    mode: 'contract',
     result: 'pass',
     evidence_policy:
       'read-only and redacted: no secret values, connection strings, emails, payloads, screenshots, traces, or HAR',
@@ -125,8 +175,10 @@ function runContract() {
     checks: [
       'read-only-policy',
       'redacted-output-policy',
+      'strict-cli-input',
       'required-environment-status-only',
       'trusted-proxy-exact-true',
+      'privacy-attestation-scope-version-freshness',
       'human-attestation-required',
       'hold-by-default',
       'pr-gate-integration',
@@ -134,8 +186,8 @@ function runContract() {
   }
 }
 
-function runPreflight() {
-  const target = argValue('--target')
+function runPreflight(values, now = Date.now()) {
+  const target = values.get('target')
   const targetCheck = {
     id: 'target-environment',
     kind: 'input',
@@ -146,18 +198,45 @@ function runPreflight() {
     kind,
     status: environmentStatus(name, kind),
   }))
-  const attestationChecks = attestations.map(({ id, argument }) => ({
+  const privacyAttestedAt = values.get('privacy-attested-at')
+  const privacyMetadataChecks = [
+    {
+      id: 'privacy-attestation-scope',
+      kind: 'exact-match',
+      status: values.get('privacy-attestation-scope') === privacyAttestationScope ? 'pass' : 'hold',
+    },
+    {
+      id: 'privacy-attestation-version',
+      kind: 'exact-match',
+      status:
+        values.get('privacy-attestation-version') === privacyAttestationVersion ? 'pass' : 'hold',
+    },
+    {
+      id: 'privacy-attestation-freshness',
+      kind: 'fresh-date-time',
+      status: privacyAttestedAtStatus(privacyAttestedAt, now),
+    },
+  ]
+  const attestationChecks = attestations.map(({ id, name }) => ({
     id,
     kind: 'human-attestation',
-    status: attestationStatus(argument),
+    status: values.get(name) === 'confirmed' ? 'pass' : 'hold',
   }))
-  const checks = [targetCheck, ...environmentChecks, ...attestationChecks]
+  const checks = [targetCheck, ...environmentChecks, ...privacyMetadataChecks, ...attestationChecks]
   const result = checks.every((check) => check.status === 'pass') ? 'go' : 'hold'
+  const hasFreshPrivacyAttestation = privacyMetadataChecks.every((check) => check.status === 'pass')
 
   return {
     issue,
-    mode,
+    mode: 'preflight',
     target: targetCheck.status === 'pass' ? target : 'unconfirmed',
+    privacy_attestation: {
+      scope: hasFreshPrivacyAttestation ? privacyAttestationScope : 'unconfirmed',
+      version: hasFreshPrivacyAttestation ? privacyAttestationVersion : 'unconfirmed',
+      attested_at: hasFreshPrivacyAttestation
+        ? new Date(Date.parse(privacyAttestedAt)).toISOString()
+        : 'unconfirmed',
+    },
     result,
     evidence_policy: 'status-only: environment and attestation values are never emitted',
     checks,
@@ -166,25 +245,61 @@ function runPreflight() {
 
 function emit(payload, exitCode = 0) {
   process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
-  process.exit(exitCode)
+  process.exitCode = exitCode
 }
 
-try {
-  if (mode === 'contract') emit(runContract())
-  if (mode === 'preflight') {
-    const result = runPreflight()
-    emit(result, result.result === 'go' ? 0 : 1)
+function safeFailureReason(error) {
+  if (!(error instanceof Error)) return 'contract_check_failed'
+  if (error.message === 'unsupported_mode') return 'unsupported_mode'
+  if (
+    /^(read-only-policy|package-script|pr-gate|release-doc|env-example|issue-doc):(missing_contract|forbidden_operation)$/.test(
+      error.message,
+    )
+  ) {
+    return error.message
   }
-  throw new Error('unsupported_mode')
-} catch (error) {
-  emit(
-    {
-      issue,
-      mode,
-      result: 'fail',
-      evidence: 'redacted-failure-output',
-      reason: error instanceof Error ? error.message : 'unknown_error',
-    },
-    1,
-  )
+  return 'contract_check_failed'
 }
+
+function main(argv) {
+  let parsed
+  try {
+    parsed = parseArguments(argv)
+  } catch {
+    emit(
+      {
+        issue,
+        mode: 'invalid',
+        result: 'hold',
+        evidence: 'redacted-invalid-arguments',
+        reason: 'invalid_arguments',
+      },
+      1,
+    )
+    return
+  }
+
+  try {
+    if (parsed.mode === 'contract') {
+      emit(runContract())
+    } else if (parsed.mode === 'preflight') {
+      const result = runPreflight(parsed.values)
+      emit(result, result.result === 'go' ? 0 : 1)
+    } else {
+      throw new Error('unsupported_mode')
+    }
+  } catch (error) {
+    emit(
+      {
+        issue,
+        mode: parsed.mode,
+        result: 'fail',
+        evidence: 'redacted-failure-output',
+        reason: safeFailureReason(error),
+      },
+      1,
+    )
+  }
+}
+
+if (require.main === module) main(process.argv.slice(2))

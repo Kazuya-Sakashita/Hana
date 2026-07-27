@@ -52,6 +52,7 @@ requires_human_review:
 - [ ] `waitlist_signups` migration の適用が確認済み
 - [ ] proxy client IP header と rate limit が確認済み
 - [ ] `privacy@hana.app` の受信とアクセス制御が確認済み
+- [ ] ISSUE-109 mailbox attestation が `GO` を返している
 - [ ] staging public QA と最新 `pnpm pr:gate` が成功している
 - [ ] Privacy / Legal review 済み copy から変更がない
 - [ ] ISSUE-103 preflight が `GO` を返す

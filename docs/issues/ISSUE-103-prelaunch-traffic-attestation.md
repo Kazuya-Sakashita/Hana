@@ -21,7 +21,9 @@ requires_human_review: []
 ## スコープ (What)
 
 - required env は値を出さず set / missing を確認し、trusted proxy 設定は厳密に `true` かを確認する
-- migration 適用、proxy client IP、rate limit、privacy mailbox、public QA、最新 PR gate、privacy copy baseline は human attestation として扱う
+- migration 適用、proxy client IP、rate limit、privacy mailboxの4運用項目、public QA、最新 PR gate、privacy copy baseline は human attestation として扱う
+- ISSUE-109のscope / version完全一致と、30分以内のattested-atを必須にする
+- CLIの重複、未知option、位置引数、欠損値は入力を出さずHOLDにする
 - 未確認項目が 1 つでもあれば HOLD にする
 - contract mode を `pnpm pr:gate` に追加する
 - 公開前検証の運用チェックリストと unit test を更新する
@@ -57,6 +59,8 @@ requires_human_review: []
 - secret、接続文字列、実メール、request / response body を出力しない
 - script は file contract と process env の存在だけを読み、外部接続や file write を行わない
 - GO は外部状態の自動検証ではなく、運用担当者の明示確認を含む
+- privacy mailbox の4項目は、同じ運用版のISSUE-109が直前にGOとなった場合だけconfirmedにする
+- ISSUE-109のattestation metadataが不一致または30分を超えた場合は再attestする
 
 ## 検証
 
