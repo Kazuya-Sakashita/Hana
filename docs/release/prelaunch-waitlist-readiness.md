@@ -63,6 +63,22 @@ pnpm qa:issue106:staging-target -- --mode=preflight
 - DNS 解決や到達確認は行わないため、GO は公開 URL shape の確認であり、hostname の解決先や稼働状態を保証しない
 - target contract の GO は staging target の入力境界だけを示し、migration、proxy、mailbox、public QA の完了を意味しない
 
+## Staging Migration Status
+
+対象 staging の `DIRECT_URL` が設定された terminal で、migration を適用せず status だけを確認する。
+
+```bash
+pnpm qa:issue107:migration-status -- --mode=status --target=staging
+```
+
+- contract mode は Prisma CLI や外部 DB へ接続しない
+- `--target=staging` の明示を operator attestation として必須にし、欠けている場合は Prisma CLI を起動しない
+- status mode が実行するのは `prisma migrate status` だけで、deploy / dev / reset / db push は行わない
+- Prisma の raw stdout / stderr は出力しない。connection string、host、database 名も evidence に残さない
+- Prisma 子 process へは allowlist 済み env だけを渡し、QA 実行中は `.env.local` / `.env` を自動読込しない
+- `DIRECT_URL` missing、timeout、signal、CLI error、未適用 migration はすべて `HOLD` と終了コード 1 に正規化する
+- `PASS` はローカル migration 履歴（`waitlist_signups` を含む）と対象 DB の status が一致したことだけを示し、ISSUE-105 全体の GO を意味しない
+
 ## Do Not Record
 
 - 実ユーザーのメールアドレス
