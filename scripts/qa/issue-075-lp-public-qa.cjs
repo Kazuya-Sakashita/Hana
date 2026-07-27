@@ -120,16 +120,59 @@ function redactedBaseUrl() {
   return baseUrl.replace(/:\/\/[^/]+/, '://<redacted-host>')
 }
 
-async function installWaitlistMock(page) {
-  await page.route('**/v1/waitlist', async (route) => {
+async function installReadOnlyNetworkGuard(context, targetBaseUrl = baseUrl) {
+  const allowedOrigin = new URL(targetBaseUrl).origin
+  const state = {
+    waitlistPostCount: 0,
+    metricsPostCount: 0,
+    blockedHttpRequestCount: 0,
+    blockedWebSocketCount: 0,
+  }
+
+  await context.route('**/*', async (route) => {
     const request = route.request()
-    if (request.method() !== 'POST') {
+    let url
+    try {
+      url = new URL(request.url())
+    } catch {
+      state.blockedHttpRequestCount += 1
+      await route.abort('blockedbyclient')
+      return
+    }
+
+    if (url.origin !== allowedOrigin) {
+      state.blockedHttpRequestCount += 1
+      await route.abort('blockedbyclient')
+      return
+    }
+
+    const method = request.method().toUpperCase()
+    if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
       await route.continue()
       return
     }
 
-    const payload = request.postDataJSON()
+    if (method === 'POST' && url.pathname === '/v1/metrics/vitals') {
+      state.metricsPostCount += 1
+      await route.fulfill({ status: 204, body: '' })
+      return
+    }
+
+    if (method !== 'POST' || url.pathname !== '/v1/waitlist') {
+      state.blockedHttpRequestCount += 1
+      await route.abort('blockedbyclient')
+      return
+    }
+
+    state.waitlistPostCount += 1
+    let payload
+    try {
+      payload = request.postDataJSON()
+    } catch {
+      payload = null
+    }
     if (
+      !payload ||
       typeof payload.email !== 'string' ||
       payload.consent !== true ||
       payload.source !== 'current-lp' ||
@@ -149,6 +192,26 @@ async function installWaitlistMock(page) {
       body: JSON.stringify({ status: 'accepted' }),
     })
   })
+
+  if (typeof context.routeWebSocket !== 'function') {
+    throw new Error('websocket_guard_unavailable')
+  }
+  await context.routeWebSocket('**/*', async (webSocketRoute) => {
+    state.blockedWebSocketCount += 1
+    await webSocketRoute.close({ code: 1008, reason: 'qa_read_only' })
+  })
+
+  return state
+}
+
+function assertNetworkState(target, networkState) {
+  const expectedWaitlistPostCount = target.id === 'lp' ? 1 : 0
+  if (networkState.waitlistPostCount !== expectedWaitlistPostCount) {
+    throw new Error(`${target.id}: waitlist_mock_count_mismatch`)
+  }
+  if (networkState.blockedHttpRequestCount !== 0 || networkState.blockedWebSocketCount !== 0) {
+    throw new Error(`${target.id}: network_policy_violation`)
+  }
 }
 
 async function assertLoadedTarget(page, target, response) {
@@ -158,8 +221,11 @@ async function assertLoadedTarget(page, target, response) {
     throw new Error(`${target.id}: route_status_${status}`)
   }
 
-  const currentPath = new URL(page.url()).pathname
-  if (currentPath !== target.path) {
+  const currentUrl = new URL(page.url())
+  if (currentUrl.origin !== new URL(baseUrl).origin) {
+    throw new Error(`${target.id}: unexpected_origin`)
+  }
+  if (currentUrl.pathname !== target.path) {
     throw new Error(`${target.id}: unexpected_path`)
   }
 
@@ -477,8 +543,12 @@ async function assertEvidenceSafety(page, target) {
   if (leak) throw new Error(`${target.id}: evidence_leak`)
 }
 
-async function assertWaitlistSubmit(page, target) {
-  if (target.id !== 'lp') return false
+async function assertWaitlistSubmit(page, target, networkState) {
+  const initialMockCount = networkState.waitlistPostCount
+  if (target.id !== 'lp') {
+    if (initialMockCount !== 0) throw new Error(`${target.id}: unexpected_waitlist_post`)
+    return false
+  }
   await page.fill('#waitlist-email', testMail())
   await page.check('#waitlist-consent')
   await page.click('button[type="submit"]')
@@ -500,6 +570,9 @@ async function assertWaitlistSubmit(page, target) {
   const contactHref = await guidance.locator('a[href^="mailto:"]').first().getAttribute('href')
   if (contactHref !== `mailto:${publicContactEmail()}`) {
     throw new Error(`${target.id}: waitlist_guidance_contact_missing`)
+  }
+  if (networkState.waitlistPostCount !== initialMockCount + 1) {
+    throw new Error(`${target.id}: waitlist_mock_count_mismatch`)
   }
   return true
 }
@@ -560,8 +633,11 @@ async function assertNoJsFallback(browser) {
   const context = await browser.newContext({
     viewport: { width: noJsFallback.viewport.width, height: noJsFallback.viewport.height },
     javaScriptEnabled: false,
+    serviceWorkers: 'block',
   })
+  let networkState
   try {
+    networkState = await installReadOnlyNetworkGuard(context)
     const page = await context.newPage()
     const response = await page.goto(new URL(noJsFallback.path, baseUrl).toString(), {
       waitUntil: 'domcontentloaded',
@@ -578,12 +654,14 @@ async function assertNoJsFallback(browser) {
       const visible = await page.locator(selector).first().isVisible()
       if (visible) throw new Error('no_js_form_visible')
     }
+    assertNetworkState({ id: 'no-js' }, networkState)
   } finally {
     await context.close()
   }
+  assertNetworkState({ id: 'no-js' }, networkState)
 }
 
-async function assertPage(page, target, response) {
+async function assertPage(page, target, response, networkState) {
   await assertLoadedTarget(page, target, response)
   await assertHeadingOrder(page, target)
   const interactiveCount = await assertTapTargets(page, target)
@@ -592,9 +670,10 @@ async function assertPage(page, target, response) {
   const focusStops = await assertVisibleFocus(page, target)
   await assertReducedMotion(page, target)
   await assertEvidenceSafety(page, target)
-  const waitlistMocked = await assertWaitlistSubmit(page, target)
+  const waitlistMocked = await assertWaitlistSubmit(page, target, networkState)
   const imagePayload = await collectImagePayload(page)
   const lcp = await collectLcp(page)
+  assertNetworkState(target, networkState)
 
   return {
     interactive_count: interactiveCount,
@@ -687,30 +766,37 @@ async function runAppSmoke() {
         const context = await browser.newContext({
           viewport: { width: viewport.width, height: viewport.height },
           reducedMotion: 'reduce',
+          serviceWorkers: 'block',
         })
+        const networkState = await installReadOnlyNetworkGuard(context)
         const page = await context.newPage()
-        await page.addInitScript(() => {
-          window.__hanaLcp = null
-          try {
-            const observer = new PerformanceObserver((list) => {
-              const entries = list.getEntries()
-              const latest = entries.at(-1)
-              if (!latest) return
-              window.__hanaLcp = {
-                start_time_ms: Math.round(latest.startTime),
-                size: Math.round(latest.size ?? 0),
-              }
-            })
-            observer.observe({ type: 'largest-contentful-paint', buffered: true })
-          } catch {
+        let result
+        try {
+          await page.addInitScript(() => {
             window.__hanaLcp = null
-          }
-        })
-        await installWaitlistMock(page)
-        const response = await page.goto(new URL(target.path, baseUrl).toString(), {
-          waitUntil: 'domcontentloaded',
-        })
-        const result = await assertPage(page, target, response)
+            try {
+              const observer = new PerformanceObserver((list) => {
+                const entries = list.getEntries()
+                const latest = entries.at(-1)
+                if (!latest) return
+                window.__hanaLcp = {
+                  start_time_ms: Math.round(latest.startTime),
+                  size: Math.round(latest.size ?? 0),
+                }
+              })
+              observer.observe({ type: 'largest-contentful-paint', buffered: true })
+            } catch {
+              window.__hanaLcp = null
+            }
+          })
+          const response = await page.goto(new URL(target.path, baseUrl).toString(), {
+            waitUntil: 'domcontentloaded',
+          })
+          result = await assertPage(page, target, response, networkState)
+        } finally {
+          await context.close()
+        }
+        assertNetworkState(target, networkState)
         results.push({
           target: target.id,
           path: target.path,
@@ -718,7 +804,6 @@ async function runAppSmoke() {
           result: 'pass',
           ...result,
         })
-        await context.close()
       }
     }
 
@@ -757,18 +842,25 @@ async function main() {
   console.log(JSON.stringify(result, null, 2))
 }
 
-main().catch((error) => {
-  console.error(
-    JSON.stringify(
-      {
-        issue,
-        result: 'fail',
-        error: safeFailureMessage(error),
-        evidence: 'redacted-failure-output',
-      },
-      null,
-      2,
-    ),
-  )
-  process.exit(1)
-})
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(
+      JSON.stringify(
+        {
+          issue,
+          result: 'fail',
+          error: safeFailureMessage(error),
+          evidence: 'redacted-failure-output',
+        },
+        null,
+        2,
+      ),
+    )
+    process.exit(1)
+  })
+}
+
+module.exports = {
+  assertNetworkState,
+  installReadOnlyNetworkGuard,
+}
