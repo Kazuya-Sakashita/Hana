@@ -45,7 +45,7 @@
 | ------------- | ----- | ---------------- |
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 0     | なし             |
+| `review`      | 1     | `ISSUE-101`      |
 | `done`        | 102   | archive を参照   |
 | `blocked`     | 0     | なし             |
 
@@ -158,14 +158,15 @@ Codex-ready と判断する条件:
 
 ## Planned Prelaunch Validation Sequence
 
-| order | issue       | GitHub | title                                             | note |
-| ----- | ----------- | ------ | ------------------------------------------------- | ---- |
-| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする          | done |
-| 2     | `ISSUE-091` | `#206` | 待機リスト公開前 readiness gate を追加する        | done |
-| 3     | `ISSUE-093` | `#210` | LP の親 relevance と trust 詳細導線を強化する     | done |
-| 4     | `ISSUE-095` | `#214` | LP の表記ゆれと artifact 文言を整える             | done |
-| 5     | `ISSUE-097` | `#218` | LP 評価表の relevance と trust 完了状態を同期する | done |
-| 6     | `ISSUE-099` | `#222` | LP 公開用 keepsake 画像 asset を追加する          | done |
+| order | issue       | GitHub | title                                             | note   |
+| ----- | ----------- | ------ | ------------------------------------------------- | ------ |
+| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする          | done   |
+| 2     | `ISSUE-091` | `#206` | 待機リスト公開前 readiness gate を追加する        | done   |
+| 3     | `ISSUE-093` | `#210` | LP の親 relevance と trust 詳細導線を強化する     | done   |
+| 4     | `ISSUE-095` | `#214` | LP の表記ゆれと artifact 文言を整える             | done   |
+| 5     | `ISSUE-097` | `#218` | LP 評価表の relevance と trust 完了状態を同期する | done   |
+| 6     | `ISSUE-099` | `#222` | LP 公開用 keepsake 画像 asset を追加する          | done   |
+| 7     | `ISSUE-101` | `#226` | LP の紙片と card 境界を Quiet Heirloom に寄せる   | review |
 
 ---
 
@@ -173,7 +174,7 @@ Codex-ready と判断する条件:
 
 以下は GitHub Issue 作成済みだが、ローカル正本 `docs/issues/ISSUE-<number>[suffix]-*.md` はまだ main に存在しない。Codex が着手する前に、各 Issue のローカルコピーを追加する。
 
-現在はありません。
+- `ISSUE-101` / `#226`: PR 作成 / review / merge 待ち。merge 後に done archive へ同期する。
 
 ---
 
@@ -185,7 +186,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-現在はありません。
+- `ISSUE-101` / `#226`: PR 作成 / review / merge 待ち。
 
 ---
 

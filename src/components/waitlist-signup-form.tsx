@@ -75,7 +75,7 @@ export function WaitlistSignupForm() {
   return (
     <form
       id="waitlist-form"
-      className="paper-surface lp-soft-form mt-8 grid gap-4 p-4 sm:p-5"
+      className="paper-surface lp-soft-form mt-8 grid gap-4 p-4 sm:p-5 lp-paper-surface"
       action="/v1/waitlist"
       method="post"
       aria-describedby="waitlist-purpose privacy-note waitlist-status"
@@ -96,12 +96,12 @@ export function WaitlistSignupForm() {
           placeholder="メールアドレス"
           required
           aria-invalid={invalidField === 'email'}
-          className="border-hairline bg-paper-slip text-ink lp-soft-field min-h-[52px] w-full border px-5 text-base"
+          className="border-hairline bg-paper-slip text-ink lp-soft-field min-h-[52px] w-full border px-5 text-base lp-paper-field"
         />
       </div>
 
       <label
-        className="bg-warm/70 lp-soft-card text-ink-secondary tap-target grid grid-cols-[24px_minmax(0,1fr)] gap-3 p-3 text-sm leading-7"
+        className="bg-warm/70 lp-soft-card text-ink-secondary tap-target grid grid-cols-[24px_minmax(0,1fr)] gap-3 p-3 text-sm leading-7 lp-paper-slip"
         htmlFor="waitlist-consent"
       >
         <input
@@ -130,7 +130,7 @@ export function WaitlistSignupForm() {
         {status === 'submitting' ? '送信中...' : '待機リストに登録する'}
       </button>
 
-      <div id="privacy-note" className="bg-warm/70 lp-soft-card grid gap-2 p-3">
+      <div id="privacy-note" className="bg-warm/70 lp-soft-card grid gap-2 p-3 lp-paper-slip">
         <p className="text-ink-secondary text-sm leading-7">
           取得目的と管理方法はプライバシーポリシーに明記します。メールアドレスは待機リスト管理の目的に限り、アクセス制御された環境で管理します。
           案内停止や登録情報の削除は下記メールアドレスまでご連絡ください。
@@ -170,7 +170,7 @@ export function WaitlistSignupForm() {
       {status === 'accepted' ? (
         <div
           aria-label="待機リスト登録後のご案内"
-          className="bg-warm/70 lp-soft-card grid gap-2 p-3"
+          className="bg-warm/70 lp-soft-card grid gap-2 p-3 lp-paper-slip"
           data-waitlist-accepted-guidance="prelaunch"
         >
           <p className="text-ink-secondary text-sm leading-7">

@@ -172,7 +172,7 @@ export default function LandingPage() {
             </ul>
           </div>
 
-          <figure className="paper-surface lp-soft-frame p-3 sm:p-4">
+          <figure className="paper-surface lp-soft-frame p-3 sm:p-4 lp-paper-surface">
             <div className="photo-mat lp-soft-photo-mat p-2">
               <Image
                 src="/lp/hana-public-keepsake-still-life.webp"
@@ -183,7 +183,7 @@ export default function LandingPage() {
                 className="lp-soft-photo-inner w-full"
               />
             </div>
-            <figcaption className="bg-paper-slip/80 lp-soft-card mt-5 p-5">
+            <figcaption className="bg-paper-slip/80 lp-soft-card mt-5 p-5 lp-paper-slip">
               <p className="meta-label">保存されたページ</p>
               <h2 className="mt-2 font-serif text-2xl">洗濯ものをたたむ前</h2>
               <p className="text-ink-secondary mt-3 leading-8">
@@ -210,7 +210,7 @@ export default function LandingPage() {
           </h2>
           <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,0.48fr)_minmax(0,0.52fr)]">
             <div className="photo-mat lp-soft-photo-mat p-2">
-              <div className="bg-paper-slip lp-soft-photo-inner flex min-h-72 flex-col justify-between p-6">
+              <div className="bg-paper-slip lp-soft-photo-inner flex min-h-72 flex-col justify-between p-6 lp-paper-slip">
                 <div>
                   <p className="meta-label">今日の1枚</p>
                   <p className="mt-4 font-serif text-3xl leading-tight">机の上の小さなくつした</p>
@@ -221,11 +221,11 @@ export default function LandingPage() {
                 </p>
               </div>
             </div>
-            <ol className="paper-surface lp-soft-card px-5 py-5">
+            <ol className="paper-surface lp-soft-card px-5 py-5 lp-paper-surface">
               {journeySteps.map((step, index) => (
                 <li
                   key={step.eyebrow}
-                  className="border-hairline flex gap-4 border-t py-5 first:border-t-0 first:pt-0 last:pb-0"
+                  className="border-hairline flex gap-4 border-t py-5 first:border-t-0 first:pt-0 last:pb-0 lp-paper-divider"
                 >
                   <span
                     className="border-hairline bg-warm flex size-11 shrink-0 items-center justify-center rounded-full border"
@@ -266,12 +266,12 @@ export default function LandingPage() {
               の利用や写真の扱いは、アプリ内で別に確認します。
             </p>
           </div>
-          <div className="paper-surface lp-soft-card px-5 py-5">
+          <div className="paper-surface lp-soft-card px-5 py-5 lp-paper-surface">
             <ul>
               {trustBridgeItems.map((item) => (
                 <li
                   key={item.title}
-                  className="border-hairline flex gap-4 border-t py-4 first:border-t-0 first:pt-0 last:pb-0"
+                  className="border-hairline flex gap-4 border-t py-4 first:border-t-0 first:pt-0 last:pb-0 lp-paper-divider"
                 >
                   <span
                     className="border-hairline bg-warm flex size-11 shrink-0 items-center justify-center rounded-full border"
@@ -301,7 +301,7 @@ export default function LandingPage() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="border-hairline bg-paper-slip tap-target rounded-[var(--radius-paper-slip)] border px-3 py-3 text-sm"
+                  className="border-hairline bg-paper-slip tap-target rounded-[var(--radius-paper-slip)] border px-3 py-3 text-sm lp-paper-link"
                 >
                   <span className="flex items-center gap-2">
                     <QuietIcon icon={item.icon} tone="muted" size="sm" />
@@ -318,7 +318,7 @@ export default function LandingPage() {
       <section className="bg-warm px-5 py-16" aria-labelledby="waitlist-title">
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[minmax(0,0.78fr)_minmax(320px,0.62fr)]">
           <div className="photo-mat lp-soft-photo-mat p-2">
-            <div className="bg-paper-slip lp-soft-photo-inner px-6 py-7">
+            <div className="bg-paper-slip lp-soft-photo-inner px-6 py-7 lp-paper-slip">
               <p className="meta-label">公開前の待機リスト</p>
               <h2 id="waitlist-title" className="mt-4 font-serif text-4xl leading-tight">
                 今日の1枚を、
@@ -345,7 +345,7 @@ export default function LandingPage() {
               {'#waitlist-form{display:none}.no-js-waitlist-note{display:block!important}'}
             </style>
           </noscript>
-          <p className="no-js-waitlist-note bg-paper-slip text-ink-secondary lp-soft-card mt-4 hidden p-3 text-sm leading-7">
+          <p className="no-js-waitlist-note bg-paper-slip text-ink-secondary lp-soft-card mt-4 hidden p-3 text-sm leading-7 lp-paper-slip">
             待機リスト登録には JavaScript が必要です。メールアドレスがURLに残らないよう、
             この環境では送信を受け付けません。
           </p>
