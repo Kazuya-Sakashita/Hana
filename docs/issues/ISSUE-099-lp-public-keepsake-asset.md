@@ -2,7 +2,7 @@
 id: ISSUE-099
 title: LP 公開用 keepsake 画像 asset を追加する
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 222
