@@ -3,8 +3,10 @@ import { defineConfig } from 'prisma/config'
 
 // .env.local を優先してロード (Next.js 慣習)。値が無ければ .env にフォールバック。
 // prisma.config.ts は CLI から直接評価されるため、.env を自動では読まない。
-loadEnv({ path: '.env.local' })
-loadEnv({ path: '.env' })
+if (process.env.HANA_QA_SKIP_DOTENV !== '1') {
+  loadEnv({ path: '.env.local' })
+  loadEnv({ path: '.env' })
+}
 
 // Prisma 7 では `url` も `directUrl` も schema.prisma に書けず、prisma.config.ts 側で扱う。
 // 役割分担:
