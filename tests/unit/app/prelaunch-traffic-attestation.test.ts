@@ -166,9 +166,13 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
     expect(releaseDoc).toContain('--mode=preflight')
     expect(releaseDoc).toContain('外部状態を自動確認したことにはならない')
     expect(issueSource).toContain('github_issue: 230')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
     expect(issueIndexSource).toContain(
-      '## Review Queue\n\n- `ISSUE-103` / `#230`: PR 作成 / review / merge 待ち。',
+      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`',
+    )
+    expect(issueIndexSource).toContain(
+      '`ISSUE-088`, `ISSUE-090`, `ISSUE-092`, `ISSUE-094`, `ISSUE-096`, `ISSUE-098`, `ISSUE-100`, `ISSUE-102`, `ISSUE-104`',
     )
   })
 })

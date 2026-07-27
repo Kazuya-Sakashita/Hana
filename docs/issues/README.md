@@ -45,8 +45,8 @@
 | ------------- | ----- | ---------------- |
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 1     | `ISSUE-103`      |
-| `done`        | 104   | archive を参照   |
+| `review`      | 0     | なし             |
+| `done`        | 106   | archive を参照   |
 | `blocked`     | 0     | なし             |
 
 ---
@@ -158,16 +158,16 @@ Codex-ready と判断する条件:
 
 ## Planned Prelaunch Validation Sequence
 
-| order | issue       | GitHub | title                                             | note   |
-| ----- | ----------- | ------ | ------------------------------------------------- | ------ |
-| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする          | done   |
-| 2     | `ISSUE-091` | `#206` | 待機リスト公開前 readiness gate を追加する        | done   |
-| 3     | `ISSUE-093` | `#210` | LP の親 relevance と trust 詳細導線を強化する     | done   |
-| 4     | `ISSUE-095` | `#214` | LP の表記ゆれと artifact 文言を整える             | done   |
-| 5     | `ISSUE-097` | `#218` | LP 評価表の relevance と trust 完了状態を同期する | done   |
-| 6     | `ISSUE-099` | `#222` | LP 公開用 keepsake 画像 asset を追加する          | done   |
-| 7     | `ISSUE-101` | `#226` | LP の紙片と card 境界を Quiet Heirloom に寄せる   | done   |
-| 8     | `ISSUE-103` | `#230` | 公開前 traffic の Go/Hold attestation を追加する  | review |
+| order | issue       | GitHub | title                                             | note |
+| ----- | ----------- | ------ | ------------------------------------------------- | ---- |
+| 1     | `ISSUE-089` | `#202` | 待機リスト登録後の連絡期待値を明確にする          | done |
+| 2     | `ISSUE-091` | `#206` | 待機リスト公開前 readiness gate を追加する        | done |
+| 3     | `ISSUE-093` | `#210` | LP の親 relevance と trust 詳細導線を強化する     | done |
+| 4     | `ISSUE-095` | `#214` | LP の表記ゆれと artifact 文言を整える             | done |
+| 5     | `ISSUE-097` | `#218` | LP 評価表の relevance と trust 完了状態を同期する | done |
+| 6     | `ISSUE-099` | `#222` | LP 公開用 keepsake 画像 asset を追加する          | done |
+| 7     | `ISSUE-101` | `#226` | LP の紙片と card 境界を Quiet Heirloom に寄せる   | done |
+| 8     | `ISSUE-103` | `#230` | 公開前 traffic の Go/Hold attestation を追加する  | done |
 
 ---
 
@@ -187,7 +187,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-- `ISSUE-103` / `#230`: PR 作成 / review / merge 待ち。
+現在はありません。
 
 ---
 
@@ -199,14 +199,14 @@ Codex-ready と判断する条件:
 - qa tooling completed: `ISSUE-038`
 - release/process completed: `ISSUE-032`, `ISSUE-033`, `ISSUE-034`, `ISSUE-035`, `ISSUE-036`, `ISSUE-037`
 - design process completed: `ISSUE-043`, `ISSUE-044`, `ISSUE-045`, `ISSUE-046`, `ISSUE-047`, `ISSUE-048`, `ISSUE-049`, `ISSUE-050`, `ISSUE-051`, `ISSUE-053`
-- maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`, `ISSUE-065`, `ISSUE-088`, `ISSUE-090`, `ISSUE-092`, `ISSUE-094`, `ISSUE-096`, `ISSUE-098`, `ISSUE-100`, `ISSUE-102`
+- maintenance completed: `ISSUE-039`, `ISSUE-042`, `ISSUE-052`, `ISSUE-065`, `ISSUE-088`, `ISSUE-090`, `ISSUE-092`, `ISSUE-094`, `ISSUE-096`, `ISSUE-098`, `ISSUE-100`, `ISSUE-102`, `ISSUE-104`
 - design rebuild completed: `ISSUE-054`, `ISSUE-058`, `ISSUE-055`, `ISSUE-056`, `ISSUE-057`, `ISSUE-059`
 - product experience completed: `ISSUE-060`, `ISSUE-061`, `ISSUE-062`, `ISSUE-063`, `ISSUE-064`
 - refinement completed: `ISSUE-066`, `ISSUE-067`, `ISSUE-068`, `ISSUE-069`, `ISSUE-070`
 - lp public readiness completed: `ISSUE-071`, `ISSUE-072`, `ISSUE-073`, `ISSUE-074`, `ISSUE-075`, `ISSUE-083`
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
 - public surface warmth completed: `ISSUE-084`, `ISSUE-085`, `ISSUE-086`
-- prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`
+- prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`
 
 ---
 
