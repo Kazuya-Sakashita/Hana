@@ -31,7 +31,7 @@ const targetSurfaces = [
   },
 ]
 
-const publicLpImage = '/lp/hana-before-after-safe-still-life.svg'
+const publicLpImage = '/lp/hana-public-keepsake-still-life.webp'
 
 const viewportMatrix = [
   { id: 'compact-phone', width: 390, height: 844 },
