@@ -21,13 +21,20 @@ const issueIndexSource = readFileSync(
   'utf8',
 )
 
+const freshPrivacyAttestedAt = new Date().toISOString()
 const confirmationArgs = [
   '--mode=preflight',
   '--target=staging',
   '--migration=confirmed',
   '--proxy-client-ip=confirmed',
   '--rate-limit=confirmed',
-  '--privacy-mailbox=confirmed',
+  '--privacy-mailbox-receiving=confirmed',
+  '--privacy-mailbox-access-control=confirmed',
+  '--privacy-guidance-stop=confirmed',
+  '--privacy-registration-deletion=confirmed',
+  '--privacy-attestation-scope=prelaunch',
+  '--privacy-attestation-version=prelaunch-mailbox-v1',
+  `--privacy-attested-at=${freshPrivacyAttestedAt}`,
   '--public-qa=confirmed',
   '--pr-gate=confirmed',
   '--privacy-copy=confirmed',
@@ -124,10 +131,121 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
     expect(result.status).toBe(0)
     expect(payload.result).toBe('go')
     expect(payload.target).toBe('staging')
+    expect(payload).toMatchObject({
+      privacy_attestation: {
+        scope: 'prelaunch',
+        version: 'prelaunch-mailbox-v1',
+        attested_at: freshPrivacyAttestedAt,
+      },
+    })
     expect(payload.checks.every((check) => check.status === 'pass')).toBe(true)
     expect(result.stdout).not.toContain(sensitiveValues.WAITLIST_EMAIL_HASH_PEPPER)
     expect(result.stdout).not.toContain(sensitiveValues.DATABASE_URL)
     expect(result.stdout).not.toContain(sensitiveValues.DIRECT_URL)
+  })
+
+  it.each([
+    ['--privacy-mailbox-receiving', 'privacy-mailbox-receiving-confirmed'],
+    ['--privacy-mailbox-access-control', 'privacy-mailbox-access-control-confirmed'],
+    ['--privacy-guidance-stop', 'privacy-guidance-stop-confirmed'],
+    ['--privacy-registration-deletion', 'privacy-registration-deletion-confirmed'],
+  ])('holds when ISSUE-109 confirmation %s is missing', (missingArgument, checkId) => {
+    const result = run(
+      confirmationArgs.filter((argument) => !argument.startsWith(missingArgument)),
+      {
+        WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
+        DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        WAITLIST_TRUST_PROXY_HEADERS: 'true',
+      },
+    )
+    const payload = JSON.parse(result.stdout) as {
+      result: string
+      checks: Array<{ id: string; status: string }>
+    }
+
+    expect(result.status).toBe(1)
+    expect(payload.result).toBe('hold')
+    expect(payload.checks).toContainEqual({
+      id: checkId,
+      kind: 'human-attestation',
+      status: 'hold',
+    })
+  })
+
+  it.each([
+    '--privacy-mailbox-receiving',
+    '--privacy-mailbox-access-control',
+    '--privacy-guidance-stop',
+    '--privacy-registration-deletion',
+  ])('holds and redacts a duplicate ISSUE-109 confirmation: %s', (argumentName) => {
+    const result = run([...confirmationArgs, `${argumentName}=revoked`], {
+      WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
+      DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+      DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+      WAITLIST_TRUST_PROXY_HEADERS: 'true',
+    })
+    const output = `${result.stdout}\n${result.stderr}`
+
+    expect(result.status).toBe(1)
+    expect(JSON.parse(result.stdout)).toEqual({
+      issue: 'ISSUE-103',
+      mode: 'invalid',
+      result: 'hold',
+      evidence: 'redacted-invalid-arguments',
+      reason: 'invalid_arguments',
+    })
+    expect(output).not.toContain('revoked')
+  })
+
+  it.each([
+    ['unknown option', [...confirmationArgs, '--operator-name=private-sentinel']],
+    ['positional input', [...confirmationArgs, 'private-sentinel']],
+    ['missing value', ['--mode=preflight', '--target']],
+    ['contract option pollution', ['--mode=contract', '--target=staging']],
+  ])('holds and redacts invalid preflight arguments: %s', (_label, args) => {
+    const result = run(args)
+    const output = `${result.stdout}\n${result.stderr}`
+
+    expect(result.status).toBe(1)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      mode: 'invalid',
+      result: 'hold',
+      reason: 'invalid_arguments',
+    })
+    expect(output).not.toContain('private-sentinel')
+  })
+
+  it('holds when the ISSUE-109 attestation is stale', () => {
+    const staleTimestamp = '2020-01-01T00:00:00.000Z'
+    const result = run(
+      confirmationArgs.map((argument) =>
+        argument.startsWith('--privacy-attested-at=')
+          ? `--privacy-attested-at=${staleTimestamp}`
+          : argument,
+      ),
+      {
+        WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
+        DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        WAITLIST_TRUST_PROXY_HEADERS: 'true',
+      },
+    )
+    const payload = JSON.parse(result.stdout) as {
+      result: string
+      privacy_attestation: { attested_at: string }
+      checks: Array<{ id: string; status: string }>
+    }
+
+    expect(result.status).toBe(1)
+    expect(payload.result).toBe('hold')
+    expect(payload.privacy_attestation.attested_at).toBe('unconfirmed')
+    expect(payload.checks).toContainEqual({
+      id: 'privacy-attestation-freshness',
+      kind: 'fresh-date-time',
+      status: 'hold',
+    })
+    expect(result.stdout).not.toContain(staleTimestamp)
   })
 
   it('supports separated CLI values without falling back to contract mode', () => {
