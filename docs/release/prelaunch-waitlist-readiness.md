@@ -74,6 +74,32 @@ pnpm qa:issue106:staging-target -- --mode=preflight
 - DNS 解決や到達確認は行わないため、GO は公開 URL shape の確認であり、hostname の解決先や稼働状態を保証しない
 - target contract の GO は staging target の入力境界だけを示し、migration、proxy、mailbox、public QA の完了を意味しない
 
+## Staging Public QA Strict Runtime
+
+対象 staging の `STAGING_BASE_URL` を設定した terminal で、既存の LP / privacy public QA を read-only で実行する。
+
+```bash
+STAGING_BASE_URL=<public-https-origin> \
+STAGING_EGRESS_CONTROL_CONFIRMED=confirmed \
+CODEX_RUNTIME_NODE_MODULES=<node-modules-with-playwright> \
+pnpm qa:issue110:staging-public -- --mode=runtime
+```
+
+- URL は command line ではなく `STAGING_BASE_URL` からだけ読み、ISSUE-106 と同じ公開 HTTPS origin 境界で判定する
+- URL 未設定、localhost、loopback、IP literal、内部向け hostname、非 HTTPS、default 以外の port、credential、path / query / hash 付き URL は browser 起動前に HOLD にする
+- runtime では A / AAAA を直前に解決し、private、loopback、link-local、reserved address が 1 件でも含まれれば browser を起動しない
+- hosting / network 側で private、loopback、link-local、metadata address への egress が遮断されていることを operator が確認した場合だけ `STAGING_EGRESS_CONTROL_CONFIRMED=confirmed` を設定する。未設定・別値は HOLD にする
+- browser QA は ISSUE-075 の app mode だけを固定引数で実行し、`/lp` と `/privacy` を既定 viewport matrix で確認する
+- browser context は service worker を無効化し、WebSocketをserver接続前にcloseし、同一 origin の GET / HEAD / OPTIONS 以外を fail-closed にする
+- waitlist POST だけを navigation 前に browser route で mockし、mock 発火回数を検証して実 DB へ書き込まない
+- Web Vitals POST も204でmockし、stagingのログ基盤へQA telemetryを送らない
+- 遮断対象のHTTP requestまたはWebSocketが1件でも発生した場合は、画面表示が正常でもQAをHOLDにする
+- 子 process へ渡す env は allowlist に限定し、raw stdout / stderr を破棄する
+- `CODEX_RUNTIME_NODE_MODULES` は Playwright を提供する operator 管理下の code path として扱い、QA 専用 terminal でだけ設定する
+- evidence は固定 check ID と status だけとし、host、email、payload、browser raw output を残さない
+- contract mode は外部 process や network request を実行せず、`pnpm pr:gate` に含める
+- runtime PASS はegress制御のoperator確認、実行直前のDNS判定、staging public QAの成功だけを示す。DNS rebindingをapp内だけでは完全に防げないためegress制御を維持し、ISSUE-105全体のGOやproduction公開可とは扱わない
+
 ## Staging Migration Status
 
 対象 staging の `DIRECT_URL` が設定された terminal で、migration を適用せず status だけを確認する。

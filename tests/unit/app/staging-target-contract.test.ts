@@ -98,6 +98,7 @@ describe('ISSUE-106 staging target contract', () => {
     'https://@staging.example.com',
     'https://:@staging.example.com',
     'https://user:password@staging.example.com',
+    'https://staging.example.com:8443',
     'https://staging.example.com/lp',
     'https://staging.example.com\\private',
     'https://staging.example.com/%2e%2e/lp',
