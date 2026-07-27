@@ -46,11 +46,15 @@ describe('ISSUE-099 LP public keepsake asset', () => {
     expect(evaluationSource).toContain('対応済み。ISSUE-099')
     expect(evaluationSource).toContain('公開用 keepsake WebP asset')
     expect(issueSource).toContain('github_issue: 222')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('文字なし、人物なし、実ユーザー写真なし')
     expect(issueIndexSource).toContain('`ISSUE-099`')
     expect(issueIndexSource).toContain('`#222`')
     expect(issueIndexSource).toContain('LP 公開用 keepsake 画像 asset を追加する')
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`',
+    )
     expect(`${lpSource}\n${issueSource}`).not.toMatch(
       /https?:\/\/|uploads\/|previewUrl|storage_key\s*[:=]|presigned_url\s*[:=]|prompt\s*[:=]/i,
     )
