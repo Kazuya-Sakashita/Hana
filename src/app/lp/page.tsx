@@ -175,10 +175,10 @@ export default function LandingPage() {
           <figure className="paper-surface lp-soft-frame p-3 sm:p-4">
             <div className="photo-mat lp-soft-photo-mat p-2">
               <Image
-                src="/lp/hana-before-after-safe-still-life.svg"
-                width={720}
-                height={520}
-                alt="合成の日常静物ビジュアル"
+                src="/lp/hana-public-keepsake-still-life.webp"
+                width={1440}
+                height={1080}
+                alt="合成の keepsake 静物ビジュアル"
                 priority
                 className="lp-soft-photo-inner w-full"
               />

@@ -69,7 +69,7 @@
 | LP-P1-01 | Hero composition を 1 strong visual anchor に絞る | 背景、Hana、phone mock、CTA、trust row が同時に立ち、Quiet Heirloom の静けさが薄まる | 対応済み。ISSUE-074 で Hero の主役を単一の keepsake preview に整理し、phone mock と hero 内 trust row の競合を削除                |
 | LP-P1-02 | 「書けない親」の痛みを first view に少し上げる    | Brand は美しいが、忙しい親が「自分のことだ」と感じる Relevance が弱い                | 対応済み。ISSUE-093 で hero 支持文と relevance pills を追加し、寝かしつけ後 / 写真だけの日 / あとで直せる文脈を first view に配置 |
 | LP-P1-03 | 実ブラウザ QA を行う                              | 静的検査だけでは、重なり、折返し、focus order、touch target は判断しにくい           | 対応済み。390 / 430 / 768 / 1280px で redacted app QA を行い、横 overflow、focus、contrast、LCP 目安を確認                        |
-| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針               | 文字なし、実写真なし、Hana らしい photo mat / keepsake asset を用意する                                                           |
+| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針               | 対応済み。ISSUE-099 で文字なし・人物なし・実写真なしの公開用 keepsake WebP asset を追加し、公開 `/lp` の主要ビジュアルへ接続      |
 | LP-P1-05 | Trust 詳細への導線を設計する                      | 安心材料はあるが、詳しく確認する場所が LP から見えない                               | 対応済み。ISSUE-093 で `/privacy` の取得情報 / 利用目的 / 停止・削除 anchor へ進める導線を追加                                    |
 
 ### P2
@@ -86,7 +86,7 @@
 2. 公開前検証開始後は、待機リスト登録率、form error、privacy link click を redacted aggregate でレビューする。
 3. 正式公開前にサービス内容や運用方法が変わる場合は privacy/legal review を再実施する。
 
-残る純粋なデザイン磨き込みは、公開用画像 asset (`LP-P1-04`) と紙片 / card 境界 (`LP-P2-02`) を別 Issue で扱う。
+残る純粋なデザイン磨き込みは、紙片 / card 境界 (`LP-P2-02`) を別 Issue で扱う。
 
 ## ISSUE-072 CV 導線更新
 

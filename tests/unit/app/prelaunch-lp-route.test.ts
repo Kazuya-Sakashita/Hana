@@ -13,7 +13,7 @@ const bottomNavSource = readFileSync(
   'utf8',
 )
 const publicAssetUrl = new URL(
-  '../../../public/lp/hana-before-after-safe-still-life.svg',
+  '../../../public/lp/hana-public-keepsake-still-life.webp',
   import.meta.url,
 )
 
@@ -53,7 +53,7 @@ describe('prelaunch public LP route', () => {
 
   it('keeps the public LP visual safe and free of private examples', () => {
     expect(existsSync(fileURLToPath(publicAssetUrl))).toBe(true)
-    expect(lpSource).toContain('/lp/hana-before-after-safe-still-life.svg')
+    expect(lpSource).toContain('/lp/hana-public-keepsake-still-life.webp')
     expect(lpSource).toContain('公開前検証用の合成イメージです。実ユーザー写真ではありません。')
     expect(waitlistFormSource).toContain('privacy@hana.app')
     const publicContactRedacted = `${lpSource}\n${waitlistFormSource}`.replaceAll(
