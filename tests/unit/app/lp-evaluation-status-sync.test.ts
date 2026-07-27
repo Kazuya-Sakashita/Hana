@@ -46,11 +46,9 @@ describe('ISSUE-097 LP evaluation status sync', () => {
     expect(issueIndexSource).toContain('`ISSUE-097`')
     expect(issueIndexSource).toContain('`#218`')
     expect(issueIndexSource).toContain('LP 評価表の relevance と trust 完了状態を同期する')
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
     expect(issueIndexSource).toContain(
-      '## Review Queue\n\n- `ISSUE-101` / `#226`: PR 作成 / review / merge 待ち。',
-    )
-    expect(issueIndexSource).toContain(
-      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`',
+      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`',
     )
   })
 })

@@ -2,7 +2,7 @@
 id: ISSUE-101
 title: LP の紙片と card 境界を Quiet Heirloom に寄せる
 priority: P2
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 226

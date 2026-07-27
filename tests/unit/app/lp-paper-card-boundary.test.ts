@@ -57,12 +57,13 @@ describe('ISSUE-101 LP paper/card boundary refinement', () => {
     expect(evaluationSource).toContain('対応済み。ISSUE-101')
     expect(evaluationSource).toContain('paper surface / paper slip / paper link primitive')
     expect(issueSource).toContain('github_issue: 226')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('public trust copy、API、保存処理、ログ出力は変更していない')
     expect(issueIndexSource).toContain('`ISSUE-101`')
     expect(issueIndexSource).toContain('`#226`')
+    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
     expect(issueIndexSource).toContain(
-      '## Review Queue\n\n- `ISSUE-101` / `#226`: PR 作成 / review / merge 待ち。',
+      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`',
     )
     expect(`${lpSource}\n${waitlistFormSource}\n${issueSource}`).not.toMatch(
       /uploads\/|previewUrl|storage_key\s*[:=]|presigned_url\s*[:=]|prompt\s*[:=]/i,
