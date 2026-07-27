@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
-import { isApiProblemError } from '@/lib/api/error'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { prisma } from '@/server/db/prisma'
 import { readJsonBody } from '@/features/children/server/parse'
 import { parseWaitlistSignupCreate } from '@/features/waitlist/server/parse'
 import {
   assertWaitlistRateLimit,
-  WAITLIST_RETRY_AFTER_SECONDS,
+  waitlistRetryAfterSeconds,
 } from '@/features/waitlist/server/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -59,9 +58,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'accepted' }, { status: 202 })
   } catch (e) {
     const response = toProblemResponse(e)
-    if (isApiProblemError(e) && e.reason === 'rate_limited') {
-      response.headers.set('Retry-After', String(WAITLIST_RETRY_AFTER_SECONDS))
-    }
+    const retryAfterSeconds = waitlistRetryAfterSeconds(e)
+    if (retryAfterSeconds !== null) response.headers.set('Retry-After', String(retryAfterSeconds))
     return response
   }
 }

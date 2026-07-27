@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 
 const mocks = vi.hoisted(() => ({
@@ -22,6 +22,7 @@ import {
 } from '@/features/waitlist/server/rate-limit'
 
 const TEST_MAIL_DOMAIN = ['example', 'test'].join('.')
+const originalTrustProxyHeaders = process.env.WAITLIST_TRUST_PROXY_HEADERS
 
 function testMail(local: string): string {
   return [local, TEST_MAIL_DOMAIN].join('@')
@@ -35,8 +36,18 @@ function jsonRequest(body: unknown, headers: Record<string, string> = {}) {
   })
 }
 
+beforeEach(() => {
+  process.env.WAITLIST_TRUST_PROXY_HEADERS = 'true'
+})
+
 afterEach(() => {
+  if (originalTrustProxyHeaders === undefined) {
+    delete process.env.WAITLIST_TRUST_PROXY_HEADERS
+  } else {
+    process.env.WAITLIST_TRUST_PROXY_HEADERS = originalTrustProxyHeaders
+  }
   vi.restoreAllMocks()
+  vi.useRealTimers()
   vi.clearAllMocks()
   resetWaitlistRateLimitForTests()
 })
@@ -161,6 +172,8 @@ describe('POST /v1/waitlist', () => {
   })
 
   it('rate-limits repeated submissions from the same client key', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
     mocks.waitlistUpsert.mockResolvedValue({})
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -192,6 +205,98 @@ describe('POST /v1/waitlist', () => {
     )
 
     expect(limited.status).toBe(429)
-    expect(limited.headers.get('Retry-After')).toBe(String(WAITLIST_RETRY_AFTER_SECONDS))
+    expect(WAITLIST_RETRY_AFTER_SECONDS).toBe(600)
+    expect(limited.headers.get('Retry-After')).toBe('600')
+  })
+
+  it('separates forwarded client buckets by the first IP and keeps Retry-After', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    mocks.waitlistUpsert.mockResolvedValue({})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    for (let i = 0; i < 12; i += 1) {
+      const res = await POST(
+        jsonRequest(
+          {
+            email: testMail(`forwarded-parent${i}`),
+            consent: true,
+            source: 'current-lp',
+            privacy_policy_version: 'prelaunch-2026-07-25',
+          },
+          { 'x-forwarded-for': '203.0.113.10, 198.51.100.20' },
+        ),
+      )
+      expect(res.status).toBe(202)
+    }
+
+    const separateClient = await POST(
+      jsonRequest(
+        {
+          email: testMail('forwarded-separate'),
+          consent: true,
+          source: 'current-lp',
+          privacy_policy_version: 'prelaunch-2026-07-25',
+        },
+        { 'x-forwarded-for': '203.0.113.11, 198.51.100.20' },
+      ),
+    )
+    expect(separateClient.status).toBe(202)
+
+    const limited = await POST(
+      jsonRequest(
+        {
+          email: testMail('forwarded-limited'),
+          consent: true,
+          source: 'current-lp',
+          privacy_policy_version: 'prelaunch-2026-07-25',
+        },
+        { 'x-forwarded-for': '203.0.113.10, 192.0.2.40' },
+      ),
+    )
+    expect(limited.status).toBe(429)
+    expect(limited.headers.get('Retry-After')).toBe('600')
+  })
+
+  it('shares the unknown bucket unless the proxy trust setting is exactly true', async () => {
+    mocks.waitlistUpsert.mockResolvedValue({})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    for (const setting of [undefined, 'false', 'TRUE', '1']) {
+      resetWaitlistRateLimitForTests()
+      if (setting === undefined) {
+        delete process.env.WAITLIST_TRUST_PROXY_HEADERS
+      } else {
+        process.env.WAITLIST_TRUST_PROXY_HEADERS = setting
+      }
+
+      for (let count = 0; count < 12; count += 1) {
+        const accepted = await POST(
+          jsonRequest(
+            {
+              email: testMail(`untrusted-${setting ?? 'missing'}-${count}`),
+              consent: true,
+              source: 'current-lp',
+              privacy_policy_version: 'prelaunch-2026-07-25',
+            },
+            { 'x-forwarded-for': `203.0.113.${count + 1}` },
+          ),
+        )
+        expect(accepted.status).toBe(202)
+      }
+
+      const limited = await POST(
+        jsonRequest(
+          {
+            email: testMail(`untrusted-${setting ?? 'missing'}-limited`),
+            consent: true,
+            source: 'current-lp',
+            privacy_policy_version: 'prelaunch-2026-07-25',
+          },
+          { 'x-forwarded-for': '198.51.100.200' },
+        ),
+      )
+      expect(limited.status).toBe(429)
+    }
   })
 })

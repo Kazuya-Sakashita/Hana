@@ -20,7 +20,7 @@ requires_human_review: []
 
 ## スコープ (What)
 
-- required env は値を出さず set / missing だけ確認する
+- required env は値を出さず set / missing を確認し、trusted proxy 設定は厳密に `true` かを確認する
 - migration 適用、proxy client IP、rate limit、privacy mailbox、public QA、最新 PR gate、privacy copy baseline は human attestation として扱う
 - 未確認項目が 1 つでもあれば HOLD にする
 - contract mode を `pnpm pr:gate` に追加する
@@ -46,7 +46,7 @@ requires_human_review: []
 ## 受け入れ条件 (Acceptance Criteria)
 
 - [x] contract mode が read-only / redacted policy を検証する
-- [x] preflight mode は required env の値を出さず存在だけ判定する
+- [x] preflight mode は required env の値を出さず、存在または trusted proxy の有効状態だけを判定する
 - [x] human attestation が不足すると HOLD になる
 - [x] 全項目確認時だけ GO になる
 - [x] focused tests と `pnpm pr:gate` が通る

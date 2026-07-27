@@ -43,7 +43,7 @@ pnpm qa:issue103:prelaunch-traffic -- \
   --privacy-copy=confirmed
 ```
 
-- `WAITLIST_EMAIL_HASH_PEPPER` / `DATABASE_URL` / `DIRECT_URL` は値を出力しない。set / missing だけを判定する
+- required env の値を出力しない。`WAITLIST_EMAIL_HASH_PEPPER` / `DATABASE_URL` / `DIRECT_URL` は set / missing だけを判定し、`WAITLIST_TRUST_PROXY_HEADERS` は厳密に `true` かだけを判定する
 - migration、proxy、rate limit、mailbox、public QA、PR gate、privacy copy は運用担当者の確認結果であり、外部状態を自動確認したことにはならない
 - required env または attestation が 1 つでも未確認なら `HOLD` と終了コード 1 を返す
 - 全項目が確認済みの場合だけ `GO` と終了コード 0 を返す
@@ -79,6 +79,19 @@ pnpm qa:issue107:migration-status -- --mode=status --target=staging
 - `DIRECT_URL` missing、timeout、signal、CLI error、未適用 migration はすべて `HOLD` と終了コード 1 に正規化する
 - `PASS` はローカル migration 履歴（`waitlist_signups` を含む）と対象 DB の status が一致したことだけを示し、ISSUE-105 全体の GO を意味しない
 
+## Proxy Client IP / Rate Limit Boundary
+
+- hosting proxy が外部から届く `x-forwarded-for` / `x-real-ip` を除去または上書きすることを公開前に確認する
+- 上記を確認できた環境でだけ `WAITLIST_TRUST_PROXY_HEADERS=true` を設定する。未設定または `false` では forwarding header を無視する
+- trusted proxy 環境では `x-forwarded-for` の先頭にある local 用途でない valid IP、同条件の `x-real-ip`、共有 `unknown` bucket の順で client key を選ぶ
+- private / loopback / link-local / invalid header 値は bucket key に使わず、header なしと同じ `unknown` bucket へ集約する
+- IPv6 と IPv4-mapped IPv6 は canonical key に正規化し、同じ client が表記差で bucket を分割できないようにする
+- active bucket は最大 1024 bucket とし、超過 client は共有 overflow bucket で安全側に制限する。期限切れ bucket は次の request で削除する
+- 429 の `Retry-After` は該当 bucket の window reset までの残り秒数を返す
+- client IP は process memory の bucket key にだけ使い、ログ、response、evidence、DB へ出力・保存しない
+- app 内 limiter は 1 process 内の best effort であり、複数 instance 全体の abuse 対策は hosting edge 側で補完する
+- header 設定が確認できない間は proxy / rate-limit attestation を `confirmed` にせず、ISSUE-105 を HOLD のままにする
+
 ## Do Not Record
 
 - 実ユーザーのメールアドレス
@@ -92,6 +105,7 @@ pnpm qa:issue107:migration-status -- --mode=status --target=staging
 次のいずれかが未確認なら、公開前 traffic は Hold にする。
 
 - production pepper 未設定
+- `WAITLIST_TRUST_PROXY_HEADERS=true` でない
 - migration 未適用
 - public QA 失敗
 - 問い合わせ先の受信・アクセス制御未確認

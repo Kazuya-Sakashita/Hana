@@ -8,6 +8,7 @@ const repoRoot = process.cwd()
 
 const files = {
   packageJson: 'package.json',
+  envExample: '.env.example',
   parse: 'src/features/waitlist/server/parse.ts',
   rateLimit: 'src/features/waitlist/server/rate-limit.ts',
   route: 'src/app/v1/waitlist/route.ts',
@@ -124,11 +125,21 @@ function assertMigration() {
 function assertRateLimit() {
   const rateLimitSource = source(files.rateLimit)
   const routeSource = source(files.route)
-  assertIncludes(rateLimitSource, 'const WINDOW_MS = 10 * 60 * 1000', 'rate-limit')
-  assertIncludes(rateLimitSource, 'const MAX_SUBMISSIONS = 12', 'rate-limit')
+  const envExample = source(files.envExample)
+  const releaseDoc = source(files.releaseDoc)
+  assertIncludes(
+    rateLimitSource,
+    'export const WAITLIST_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000',
+    'rate-limit',
+  )
+  assertIncludes(rateLimitSource, 'export const WAITLIST_MAX_SUBMISSIONS = 12', 'rate-limit')
+  assertIncludes(rateLimitSource, 'export const WAITLIST_MAX_BUCKETS = 1024', 'rate-limit')
+  assertIncludes(rateLimitSource, 'WAITLIST_TRUST_PROXY_HEADERS', 'rate-limit')
   assertIncludes(rateLimitSource, 'x-forwarded-for', 'rate-limit')
   assertIncludes(rateLimitSource, 'x-real-ip', 'rate-limit')
-  assertIncludes(rateLimitSource, 'WAITLIST_RETRY_AFTER_SECONDS', 'rate-limit')
+  assertIncludes(rateLimitSource, 'waitlistRetryAfterSeconds', 'rate-limit')
+  assertIncludes(envExample, 'WAITLIST_TRUST_PROXY_HEADERS=false', 'rate-limit-env')
+  assertIncludes(releaseDoc, 'WAITLIST_TRUST_PROXY_HEADERS=true', 'rate-limit-release')
   assertIncludes(routeSource, 'assertWaitlistRateLimit(request)', 'route-rate-limit')
   assertIncludes(routeSource, "response.headers.set('Retry-After'", 'route-rate-limit')
 }

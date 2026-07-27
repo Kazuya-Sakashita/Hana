@@ -48,6 +48,7 @@ requires_human_review:
 
 - [ ] hosting target と staging public URL が確定している
 - [ ] staging に `WAITLIST_EMAIL_HASH_PEPPER` / `DATABASE_URL` / `DIRECT_URL` が設定されている
+- [ ] proxy header の除去・上書き確認後に staging の `WAITLIST_TRUST_PROXY_HEADERS=true` が設定されている
 - [ ] `waitlist_signups` migration の適用が確認済み
 - [ ] proxy client IP header と rate limit が確認済み
 - [ ] `privacy@hana.app` の受信とアクセス制御が確認済み
@@ -80,7 +81,7 @@ requires_human_review:
 
 ## セキュリティ・プライバシー考慮
 
-- environment variable は名前と set / missing だけを扱い、値を記録しない
+- environment variable は名前と status-only の判定結果だけを扱い、値を記録しない
 - 実メール、request / response body、screenshot、trace、HAR を記録しない
 - external blocker が未確認の間は公開前 traffic を HOLD にする
 

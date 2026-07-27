@@ -9,14 +9,20 @@ const repoRoot = process.cwd()
 const files = {
   script: 'scripts/qa/issue-103-prelaunch-traffic-attestation.cjs',
   packageJson: 'package.json',
+  envExample: '.env.example',
   releaseDoc: 'docs/release/prelaunch-waitlist-readiness.md',
   issueDoc: 'docs/issues/ISSUE-103-prelaunch-traffic-attestation.md',
 }
 
 const requiredEnvironment = [
-  { id: 'waitlist-email-hash-pepper', name: 'WAITLIST_EMAIL_HASH_PEPPER' },
-  { id: 'database-url', name: 'DATABASE_URL' },
-  { id: 'direct-url', name: 'DIRECT_URL' },
+  { id: 'waitlist-email-hash-pepper', name: 'WAITLIST_EMAIL_HASH_PEPPER', kind: 'presence' },
+  { id: 'database-url', name: 'DATABASE_URL', kind: 'presence' },
+  { id: 'direct-url', name: 'DIRECT_URL', kind: 'presence' },
+  {
+    id: 'trusted-proxy-headers-enabled',
+    name: 'WAITLIST_TRUST_PROXY_HEADERS',
+    kind: 'exact-true',
+  },
 ]
 
 const attestations = [
@@ -60,6 +66,14 @@ function presenceStatus(name) {
     : 'hold'
 }
 
+function environmentStatus(name, kind) {
+  return kind === 'exact-true'
+    ? process.env[name] === 'true'
+      ? 'pass'
+      : 'hold'
+    : presenceStatus(name)
+}
+
 function attestationStatus(argument) {
   return argValue(argument) === 'confirmed' ? 'pass' : 'hold'
 }
@@ -67,6 +81,7 @@ function attestationStatus(argument) {
 function runContract() {
   const scriptSource = source(files.script)
   const packageJson = JSON.parse(source(files.packageJson))
+  const envExample = source(files.envExample)
   const releaseDoc = source(files.releaseDoc)
   const issueDoc = source(files.issueDoc)
 
@@ -96,6 +111,8 @@ function runContract() {
   assertIncludes(releaseDoc, '--mode=preflight', 'release-doc')
   assertIncludes(releaseDoc, '値を出力しない', 'release-doc')
   assertIncludes(releaseDoc, '外部状態を自動確認したことにはならない', 'release-doc')
+  assertIncludes(releaseDoc, 'WAITLIST_TRUST_PROXY_HEADERS=true', 'release-doc')
+  assertIncludes(envExample, 'WAITLIST_TRUST_PROXY_HEADERS=false', 'env-example')
   assertIncludes(issueDoc, '未確認項目が 1 つでもあれば HOLD', 'issue-doc')
 
   return {
@@ -108,7 +125,8 @@ function runContract() {
     checks: [
       'read-only-policy',
       'redacted-output-policy',
-      'required-environment-presence-only',
+      'required-environment-status-only',
+      'trusted-proxy-exact-true',
       'human-attestation-required',
       'hold-by-default',
       'pr-gate-integration',
@@ -123,10 +141,10 @@ function runPreflight() {
     kind: 'input',
     status: ['staging', 'production'].includes(target) ? 'pass' : 'hold',
   }
-  const environmentChecks = requiredEnvironment.map(({ id, name }) => ({
+  const environmentChecks = requiredEnvironment.map(({ id, name, kind }) => ({
     id,
-    kind: 'presence',
-    status: presenceStatus(name),
+    kind,
+    status: environmentStatus(name, kind),
   }))
   const attestationChecks = attestations.map(({ id, argument }) => ({
     id,
