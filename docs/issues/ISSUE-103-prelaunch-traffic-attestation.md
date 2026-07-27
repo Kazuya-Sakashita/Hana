@@ -2,7 +2,7 @@
 id: ISSUE-103
 title: 公開前 traffic の Go/Hold attestation を追加する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 230
