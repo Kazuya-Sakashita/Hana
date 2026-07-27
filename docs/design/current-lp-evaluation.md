@@ -82,11 +82,11 @@
 
 ## 次の推奨順
 
-1. 公開前検証 traffic 直前に env / bot 対策、migration 適用、最新 `pnpm pr:gate` を確認する。
+1. 公開前検証 traffic 直前に env / bot 対策、migration 適用、最新 `pnpm pr:gate` を ISSUE-103 の Go/Hold attestation で確認する。
 2. 公開前検証開始後は、待機リスト登録率、form error、privacy link click を redacted aggregate でレビューする。
 3. 正式公開前にサービス内容や運用方法が変わる場合は privacy/legal review を再実施する。
 
-現時点の純粋なデザイン磨き込みは `LP-P2-02` まで対応済み。次は公開前検証 traffic 直前の env / bot 対策、migration 適用、最新 gate 確認を別 Issue で扱う。
+現時点の純粋なデザイン磨き込みは `LP-P2-02` まで対応済み。公開前検証 traffic 直前の env / bot 対策、migration 適用、最新 gate 確認は ISSUE-103 で扱う。
 
 ## ISSUE-072 CV 導線更新
 

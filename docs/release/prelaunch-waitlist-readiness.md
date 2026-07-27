@@ -26,6 +26,29 @@
 - 問い合わせ先 `privacy@hana.app` の受信と運用担当者へのアクセス制御が確認済みである
 - `pnpm pr:gate` と app-mode public QA が最新 main で通っている
 
+## Go/Hold Attestation
+
+確認結果は secret 値を command line に含めず、対象環境に env が設定された terminal で次のように入力する。
+
+```bash
+pnpm qa:issue103:prelaunch-traffic -- \
+  --mode=preflight \
+  --target=staging \
+  --migration=confirmed \
+  --proxy-client-ip=confirmed \
+  --rate-limit=confirmed \
+  --privacy-mailbox=confirmed \
+  --public-qa=confirmed \
+  --pr-gate=confirmed \
+  --privacy-copy=confirmed
+```
+
+- `WAITLIST_EMAIL_HASH_PEPPER` / `DATABASE_URL` / `DIRECT_URL` は値を出力しない。set / missing だけを判定する
+- migration、proxy、rate limit、mailbox、public QA、PR gate、privacy copy は運用担当者の確認結果であり、外部状態を自動確認したことにはならない
+- required env または attestation が 1 つでも未確認なら `HOLD` と終了コード 1 を返す
+- 全項目が確認済みの場合だけ `GO` と終了コード 0 を返す
+- production では `--target=production` を使い、staging の結果を流用しない
+
 ## Do Not Record
 
 - 実ユーザーのメールアドレス

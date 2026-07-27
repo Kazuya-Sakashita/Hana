@@ -61,7 +61,9 @@ describe('ISSUE-101 LP paper/card boundary refinement', () => {
     expect(issueSource).toContain('public trust copy、API、保存処理、ログ出力は変更していない')
     expect(issueIndexSource).toContain('`ISSUE-101`')
     expect(issueIndexSource).toContain('`#226`')
-    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
+    expect(issueIndexSource).toContain(
+      '## Review Queue\n\n- `ISSUE-103` / `#230`: PR 作成 / review / merge 待ち。',
+    )
     expect(issueIndexSource).toContain(
       'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`',
     )
