@@ -67,7 +67,8 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
       expect.arrayContaining([
         'read-only-policy',
         'redacted-output-policy',
-        'required-environment-presence-only',
+        'required-environment-status-only',
+        'trusted-proxy-exact-true',
         'human-attestation-required',
         'hold-by-default',
         'pr-gate-integration',
@@ -80,6 +81,7 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
       WAITLIST_EMAIL_HASH_PEPPER: '',
       DATABASE_URL: '',
       DIRECT_URL: '',
+      WAITLIST_TRUST_PROXY_HEADERS: 'false',
     })
     const payload = JSON.parse(result.stdout) as {
       result: string
@@ -98,13 +100,19 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
       kind: 'human-attestation',
       status: 'hold',
     })
+    expect(payload.checks).toContainEqual({
+      id: 'trusted-proxy-headers-enabled',
+      kind: 'exact-true',
+      status: 'hold',
+    })
   })
 
-  it('returns go only when every presence check and attestation passes', () => {
+  it('returns go only when every environment check and attestation passes', () => {
     const sensitiveValues = {
       WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
       DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
       DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+      WAITLIST_TRUST_PROXY_HEADERS: 'true',
     }
     const result = run(confirmationArgs, sensitiveValues)
     const payload = JSON.parse(result.stdout) as {
@@ -127,6 +135,7 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
       WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
       DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
       DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+      WAITLIST_TRUST_PROXY_HEADERS: 'true',
     })
     const payload = JSON.parse(result.stdout) as {
       mode: string
@@ -141,6 +150,31 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
       target: 'staging',
     })
   })
+
+  it.each(['false', 'TRUE', '1'])(
+    'holds without revealing a non-exact trusted proxy setting: %s',
+    (setting) => {
+      const result = run(confirmationArgs, {
+        WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
+        DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        WAITLIST_TRUST_PROXY_HEADERS: setting,
+      })
+      const payload = JSON.parse(result.stdout) as {
+        result: string
+        checks: Array<{ id: string; status: string }>
+      }
+
+      expect(result.status).toBe(1)
+      expect(payload.result).toBe('hold')
+      expect(payload.checks).toContainEqual({
+        id: 'trusted-proxy-headers-enabled',
+        kind: 'exact-true',
+        status: 'hold',
+      })
+      expect(result.stdout).not.toContain(`"${setting}"`)
+    },
+  )
 
   it('redacts an unsupported mode instead of echoing the input', () => {
     const unsupportedMode = 'postgresql://sentinel-secret-value'
