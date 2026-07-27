@@ -146,7 +146,6 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issueIndexSource).toContain(
       '## Blocked Or Needs Human Decision\n\n- `ISSUE-105` / `#234`: staging hosting target と運用確認待ち。公開前 traffic は HOLD。',
     )
-    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
     expect(issueIndexSource).toContain(
       'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`',
     )

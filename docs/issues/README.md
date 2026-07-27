@@ -45,7 +45,7 @@
 | ------------- | ----- | ---------------- |
 | `todo`        | 0     | なし             |
 | `in_progress` | 0     | 並行実行枠は空き |
-| `review`      | 0     | なし             |
+| `review`      | 1     | `ISSUE-106`      |
 | `done`        | 106   | archive を参照   |
 | `blocked`     | 1     | `ISSUE-105`      |
 
@@ -170,13 +170,26 @@ Codex-ready と判断する条件:
 | 8     | `ISSUE-103` | `#230` | 公開前 traffic の Go/Hold attestation を追加する               | done    |
 | 9     | `ISSUE-105` | `#234` | staging preflight を実行し公開前 traffic の Go/Hold を判定する | blocked |
 
+## Planned Staging Readiness Sequence
+
+| order | issue       | GitHub | title                                               | note           |
+| ----- | ----------- | ------ | --------------------------------------------------- | -------------- |
+| 1     | `ISSUE-106` | `#236` | staging target の read-only contract を追加する     | review         |
+| 2     | `ISSUE-107` | `#238` | staging migration status を redacted に確認する     | GitHub intake  |
+| 3     | `ISSUE-108` | `#239` | proxy client IP と rate limit 境界を強化する        | GitHub intake  |
+| 4     | `ISSUE-109` | `#237` | privacy mailbox 運用 attestation を追加する         | GitHub intake  |
+| 5     | `ISSUE-110` | `#240` | staging public QA の strict runtime mode を追加する | blocked by 106 |
+
 ---
 
 ## GitHub Intake Queue
 
 以下は GitHub Issue 作成済みだが、ローカル正本 `docs/issues/ISSUE-<number>[suffix]-*.md` はまだ main に存在しない。Codex が着手する前に、各 Issue のローカルコピーを追加する。
 
-現在はありません。
+- `ISSUE-107` / `#238`: staging migration status を redacted に確認する。
+- `ISSUE-108` / `#239`: proxy client IP と rate limit 境界を強化する。
+- `ISSUE-109` / `#237`: privacy mailbox 運用 attestation を追加する。
+- `ISSUE-110` / `#240`: staging public QA の strict runtime mode を追加する。`ISSUE-106` 完了待ち。
 
 ---
 
@@ -188,7 +201,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-現在はありません。
+- `ISSUE-106` / `#236`: PR 作成 / review / merge 待ち。
 
 ---
 

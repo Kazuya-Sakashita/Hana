@@ -49,6 +49,20 @@ pnpm qa:issue103:prelaunch-traffic -- \
 - 全項目が確認済みの場合だけ `GO` と終了コード 0 を返す
 - production では `--target=production` を使い、staging の結果を流用しない
 
+## Staging Target Contract
+
+staging の hosting target は、値を command line や evidence に含めず、対象 terminal の env から確認する。
+
+```bash
+pnpm qa:issue106:staging-target -- --mode=preflight
+```
+
+- `STAGING_HOSTING_PLATFORM` と `STAGING_BASE_URL` は set / missing と URL shape だけを判定する
+- localhost、loopback、IP literal、内部向け hostname、非 HTTPS、credential 付き URL、path / query / hash 付き URL は HOLD にする
+- platform と host 名は出力しない
+- DNS 解決や到達確認は行わないため、GO は公開 URL shape の確認であり、hostname の解決先や稼働状態を保証しない
+- target contract の GO は staging target の入力境界だけを示し、migration、proxy、mailbox、public QA の完了を意味しない
+
 ## Do Not Record
 
 - 実ユーザーのメールアドレス

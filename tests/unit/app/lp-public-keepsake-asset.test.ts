@@ -51,7 +51,6 @@ describe('ISSUE-099 LP public keepsake asset', () => {
     expect(issueIndexSource).toContain('`ISSUE-099`')
     expect(issueIndexSource).toContain('`#222`')
     expect(issueIndexSource).toContain('LP 公開用 keepsake 画像 asset を追加する')
-    expect(issueIndexSource).toContain('## Review Queue\n\n現在はありません。')
     expect(issueIndexSource).toContain(
       'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`',
     )
