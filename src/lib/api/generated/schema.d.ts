@@ -290,6 +290,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metrics/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 記録体験の仮名化プロダクトイベントを報告する
+         * @description 認証済みユーザーの記録フローについて、許可リスト化したイベントだけを受け付ける。
+         *     actor は session の user_id からサーバー側で HMAC-SHA256 に変換した仮名識別子として保存し、
+         *     クライアントからユーザー識別子を受け取らない。
+         *
+         *     request body は event_name / event_id / flow_id / elapsed_bucket に限定する。
+         *     記録本文、画像情報、氏名、生年月日、メール、URL、storage_key、自由記述は受け付けない。
+         *     同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
+         *     同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
+         */
+        post: operations["reportProductEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/waitlist": {
         parameters: {
             query?: never;
@@ -809,6 +836,37 @@ export interface components {
              * @example /album
              */
             route: string;
+        };
+        /**
+         * @description 記録体験のファネル計測に使う仮名化イベント。
+         *     許可された4フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
+         */
+        ProductEventReport: {
+            /**
+             * @description 許可リスト化したプロダクトイベント名
+             * @example photo_selected
+             * @enum {string}
+             */
+            event_name: "record_started" | "photo_selected" | "ai_draft_shown" | "memory_saved" | "memory_viewed";
+            /**
+             * Format: uuid
+             * @description 冪等な再送判定に使うイベント単位のUUID
+             * @example 8f7e6d5c-4b3a-4291-8765-0123456789ab
+             */
+            event_id: string;
+            /**
+             * Format: uuid
+             * @description 1回の記録フロー内だけで共有するUUID
+             * @example 123e4567-e89b-42d3-a456-426614174000
+             */
+            flow_id: string;
+            /**
+             * @description フロー開始からの経過時間を粗く分類した値。
+             *     record_started と memory_viewed は not_applicable、それ以外のイベントは時間帯を指定する。
+             * @example from_10_to_30s
+             * @enum {string}
+             */
+            elapsed_bucket: "not_applicable" | "under_10s" | "from_10_to_30s" | "from_31_to_60s" | "over_60s";
         };
         /**
          * @description 公開前 LP の待機リスト登録 payload。
@@ -1582,6 +1640,33 @@ export interface operations {
                 content?: never;
             };
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    reportProductEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductEventReport"];
+            };
+        };
+        responses: {
+            /** @description 受信成功または冪等な再送 (body なし) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     createWaitlistSignup: {

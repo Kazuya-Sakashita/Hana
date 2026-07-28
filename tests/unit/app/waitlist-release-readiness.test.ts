@@ -81,6 +81,7 @@ describe('ISSUE-091 waitlist release readiness gate', () => {
 
   it('documents the human gates without recording secrets or operational overclaims', () => {
     expect(releaseDoc).toContain('WAITLIST_EMAIL_HASH_PEPPER')
+    expect(releaseDoc).toContain('PRODUCT_EVENT_HASH_PEPPER')
     expect(releaseDoc).toContain('pnpm db:migrate:deploy')
     expect(releaseDoc).toContain('x-forwarded-for')
     expect(releaseDoc).toContain('privacy@hana.app')

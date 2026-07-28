@@ -535,6 +535,39 @@ paths:
           description: 受信成功 (body なし)
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+  /metrics/events:
+    post:
+      operationId: reportProductEvent
+      summary: 記録体験の仮名化プロダクトイベントを報告する
+      description: |
+        認証済みユーザーの記録フローについて、許可リスト化したイベントだけを受け付ける。
+        actor は session の user_id からサーバー側で HMAC-SHA256 に変換した仮名識別子として保存し、
+        クライアントからユーザー識別子を受け取らない。
+
+        request body は event_name / event_id / flow_id / elapsed_bucket に限定する。
+        記録本文、画像情報、氏名、生年月日、メール、URL、storage_key、自由記述は受け付けない。
+        同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
+        同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
+      tags: [metrics]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductEventReport'
+      responses:
+        '204':
+          description: 受信成功または冪等な再送 (body なし)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /waitlist:
     post:
       operationId: createWaitlistSignup
@@ -643,6 +676,8 @@ components:
       $ref: './components/schemas/MemoryListResponse.yaml'
     WebVitalsReport:
       $ref: './components/schemas/WebVitalsReport.yaml'
+    ProductEventReport:
+      $ref: './components/schemas/ProductEventReport.yaml'
     WaitlistSignupCreateRequest:
       $ref: './components/schemas/WaitlistSignupCreateRequest.yaml'
     WaitlistSignupResponse:

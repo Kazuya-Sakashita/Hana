@@ -17,6 +17,11 @@ const files = {
 
 const requiredEnvironment = [
   { id: 'waitlist-email-hash-pepper', name: 'WAITLIST_EMAIL_HASH_PEPPER', kind: 'presence' },
+  {
+    id: 'product-event-hash-pepper',
+    name: 'PRODUCT_EVENT_HASH_PEPPER',
+    kind: 'minimum-length-32',
+  },
   { id: 'database-url', name: 'DATABASE_URL', kind: 'presence' },
   { id: 'direct-url', name: 'DIRECT_URL', kind: 'presence' },
   {
@@ -28,6 +33,7 @@ const requiredEnvironment = [
 
 const attestations = [
   { id: 'waitlist-migration-applied', name: 'migration' },
+  { id: 'product-event-retention-scheduled', name: 'product-event-retention' },
   { id: 'proxy-client-ip-confirmed', name: 'proxy-client-ip' },
   { id: 'rate-limit-confirmed', name: 'rate-limit' },
   { id: 'privacy-mailbox-receiving-confirmed', name: 'privacy-mailbox-receiving' },
@@ -111,11 +117,11 @@ function presenceStatus(name) {
 }
 
 function environmentStatus(name, kind) {
-  return kind === 'exact-true'
-    ? process.env[name] === 'true'
-      ? 'pass'
-      : 'hold'
-    : presenceStatus(name)
+  if (kind === 'exact-true') return process.env[name] === 'true' ? 'pass' : 'hold'
+  if (kind === 'minimum-length-32') {
+    return typeof process.env[name] === 'string' && process.env[name].length >= 32 ? 'pass' : 'hold'
+  }
+  return presenceStatus(name)
 }
 
 function privacyAttestedAtStatus(value, now) {
@@ -163,6 +169,7 @@ function runContract() {
   assertIncludes(releaseDoc, 'WAITLIST_TRUST_PROXY_HEADERS=true', 'release-doc')
   assertIncludes(releaseDoc, '--privacy-attestation-version=prelaunch-mailbox-v1', 'release-doc')
   assertIncludes(envExample, 'WAITLIST_TRUST_PROXY_HEADERS=false', 'env-example')
+  assertIncludes(envExample, 'PRODUCT_EVENT_HASH_PEPPER=', 'env-example')
   assertIncludes(issueDoc, '未確認項目が 1 つでもあれば HOLD', 'issue-doc')
 
   return {

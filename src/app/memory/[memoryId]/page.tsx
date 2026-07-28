@@ -10,6 +10,7 @@ import { computeAge, formatAgeLabel } from '@/lib/age'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
 import { fetchMemoryWithPreviews } from '@/features/memories/server/queries'
+import { ProductEventMarker } from '@/features/metrics/client/product-event-marker'
 import { quietStateCopy, recordSavedLandingTitle } from '@/lib/ui/quiet-state-copy'
 
 // ISSUE-057: Memory detail keepsake refresh.
@@ -73,6 +74,7 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
 
   return (
     <>
+      <ProductEventMarker eventName="memory_viewed" />
       <section className="photo-mat space-y-3 overflow-hidden rounded-[var(--radius-sheet)] p-2">
         {heroImage?.previewUrl ? (
           <Image

@@ -1,0 +1,29 @@
+type: object
+description: |
+  記録体験のファネル計測に使う仮名化イベント。
+  許可された4フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
+additionalProperties: false
+required: [event_name, event_id, flow_id, elapsed_bucket]
+properties:
+  event_name:
+    type: string
+    enum: [record_started, photo_selected, ai_draft_shown, memory_saved, memory_viewed]
+    description: 許可リスト化したプロダクトイベント名
+    example: photo_selected
+  event_id:
+    type: string
+    format: uuid
+    description: 冪等な再送判定に使うイベント単位のUUID
+    example: 8f7e6d5c-4b3a-4291-8765-0123456789ab
+  flow_id:
+    type: string
+    format: uuid
+    description: 1回の記録フロー内だけで共有するUUID
+    example: 123e4567-e89b-42d3-a456-426614174000
+  elapsed_bucket:
+    type: string
+    enum: [not_applicable, under_10s, from_10_to_30s, from_31_to_60s, over_60s]
+    description: |
+      フロー開始からの経過時間を粗く分類した値。
+      record_started と memory_viewed は not_applicable、それ以外のイベントは時間帯を指定する。
+    example: from_10_to_30s

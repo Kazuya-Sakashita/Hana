@@ -147,6 +147,25 @@ model AiGeneration {
   @@map("ai_generations")
 }
 
+// 記録体験の匿名化ファネルイベント。
+// actor_hash は認証済み user_id をサーバー側で HMAC-SHA256 に変換した値。
+// 記録本文、画像情報、氏名、生年月日、メール、URL、storage_key は保存しない。
+model ProductEvent {
+  eventId       String   @id @map("event_id") @db.Uuid
+  actorHash     String   @map("actor_hash") @db.Char(64)
+  flowId        String   @map("flow_id") @db.Uuid
+  eventName     String   @map("event_name") @db.VarChar(40)
+  elapsedBucket String   @map("elapsed_bucket") @db.VarChar(24)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([actorHash, flowId, eventName])
+  @@index([actorHash, createdAt])
+  @@index([flowId, createdAt])
+  @@index([eventName, createdAt])
+  @@index([createdAt])
+  @@map("product_events")
+}
+
 // 公開前 LP の待機リスト登録。
 // メールアドレスは待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、
 // 正式リリースのお知らせにだけ使う。

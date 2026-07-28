@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, ImagePlus, PenLine, type LucideIcon } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { QuietIcon } from '@/components/product/icons'
 import {
   KeepsakePreview,
@@ -29,6 +29,11 @@ import {
   type MemoryCreateRequest,
 } from '@/features/memories/client/use-memories'
 import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
+import {
+  createProductEventFlowId,
+  reportProductEvent,
+  type ProductEventName,
+} from '@/features/metrics/client/product-events'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { optimisticAddMemoryToLists, optimisticReplaceMemoryInLists } from '@/lib/perf/optimistic'
@@ -124,6 +129,9 @@ export default function RecordPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const productFlowIdRef = useRef<string | null>(null)
+  const productFlowStartedAtRef = useRef<number | null>(null)
+  const reportedProductEventsRef = useRef(new Set<ProductEventName>())
   const currentUserQuery = useCurrentUserQuery()
   const childrenQuery = useChildrenQuery()
   const setAiConsentMutation = useSetAiConsentMutation()
@@ -157,6 +165,24 @@ export default function RecordPage() {
     hasStory: storyPreview.length > 0,
   })
 
+  const reportRecordProductEvent = useCallback((eventName: ProductEventName) => {
+    if (reportedProductEventsRef.current.has(eventName)) return
+    try {
+      const flowId = productFlowIdRef.current ?? createProductEventFlowId()
+      const startedAt = productFlowStartedAtRef.current ?? performance.now()
+      productFlowIdRef.current = flowId
+      productFlowStartedAtRef.current = startedAt
+      reportedProductEventsRef.current.add(eventName)
+      reportProductEvent({
+        eventName,
+        flowId,
+        elapsedMs: eventName === 'record_started' ? null : performance.now() - startedAt,
+      })
+    } catch {
+      return
+    }
+  }, [])
+
   function onCancelClick() {
     if (hasUnsavedChanges) {
       setCancelDialogOpen(true)
@@ -172,6 +198,16 @@ export default function RecordPage() {
   }, [isUnauthorized, router])
 
   useEffect(() => {
+    if (phase !== 'form') return
+    reportRecordProductEvent('record_started')
+  }, [phase, reportRecordProductEvent])
+
+  useEffect(() => {
+    if (aiStatus !== 'done' || storyPreview.length === 0) return
+    reportRecordProductEvent('ai_draft_shown')
+  }, [aiStatus, reportRecordProductEvent, storyPreview])
+
+  useEffect(() => {
     if (!filePreviewUrl) return
     return () => URL.revokeObjectURL(filePreviewUrl)
   }, [filePreviewUrl])
@@ -179,6 +215,7 @@ export default function RecordPage() {
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const f = event.target.files?.[0] ?? null
     if (!f) return
+    reportRecordProductEvent('photo_selected')
     setFile(f)
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
     setFilePreviewUrl(URL.createObjectURL(f))
@@ -343,6 +380,7 @@ export default function RecordPage() {
         title: quietStateCopy.record.saveDoneTitle,
         description: quietStateCopy.record.saveDoneDescription,
       })
+      reportRecordProductEvent('memory_saved')
       router.push(`/memory/${created.id}?saved=1`)
       router.refresh()
     } catch (e) {
