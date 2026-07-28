@@ -614,7 +614,13 @@ paths:
         `profile.ai_consent_at` をセット (本Issueでは UI ダイアログで同意取得)。
         未同意で叩くと 403 `ai_consent_required` を返す。
 
+        AI vendor 呼び出しに到達した生成リクエストは、成功・失敗を問わず
         **月間 20 回まで** (Free tier)。超過時は 429 `ai_quota_exceeded`。
+
+        生成結果が出力ポリシーに違反した場合は内部で1回だけ再生成する。
+        再生成時は、拒否本文やカテゴリを含めず、安全基準を再確認する固定指示だけを追加する。
+        再生成後も違反する場合、生成本文や違反カテゴリを返さず
+        422 `ai_output_rejected` を返す。
       tags: [ai]
       requestBody:
         required: true
@@ -636,7 +642,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+          $ref: '#/components/responses/AiGenerateUnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -710,6 +716,8 @@ components:
       $ref: './components/responses/Conflict.yaml'
     UnprocessableEntity:
       $ref: './components/responses/UnprocessableEntity.yaml'
+    AiGenerateUnprocessableEntity:
+      $ref: './components/responses/AiGenerateUnprocessableEntity.yaml'
     TooManyRequests:
       $ref: './components/responses/TooManyRequests.yaml'
     InternalServerError:

@@ -196,6 +196,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
+- `ISSUE-117` / `#252`: PR 作成 / review / merge 待ち。
 - `ISSUE-111` / `#246`: PR 作成 / review / merge 待ち。
 - `ISSUE-106` / `#236`: PR 作成 / review / merge 待ち。
 - `ISSUE-107` / `#238`: PR 作成 / review / merge 待ち。

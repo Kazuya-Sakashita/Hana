@@ -8,11 +8,13 @@ import { getAiModel } from '@/lib/ai/client'
 import { parseAiGenerateRequest, readJsonBody } from '@/features/ai/server/parse'
 import { computeAge, PROMPT_VERSION } from '@/features/ai/server/prompt'
 import {
+  AiOutputRejectedError,
+  AiRetryFailedError,
   generateAi,
   isMediaTypeSupportedByClaude,
   type AiImageInput,
 } from '@/features/ai/server/generate'
-import { checkMonthlyQuota } from '@/features/ai/server/quota'
+import { checkMonthlyQuota, reserveMonthlyAiQuota } from '@/features/ai/server/quota'
 import { resizeForClaude } from '@/features/ai/server/resize'
 import { ApiProblemError } from '@/lib/api/error'
 
@@ -51,12 +53,10 @@ async function prepareImageInputForClaude(
 
 export async function POST(request: Request) {
   const startTime = Date.now()
-  let userIdForLog: string | undefined
-  let childIdForLog: string | undefined
+  let generationLogId: string | undefined
 
   try {
     const user = await requireUser()
-    userIdForLog = user.id
 
     // 1. AI 同意チェック
     if (!user.aiConsentAt) {
@@ -72,7 +72,6 @@ export async function POST(request: Request) {
     // 3. body 検証
     const raw = await readJsonBody(request)
     const input = parseAiGenerateRequest(raw)
-    childIdForLog = input.childId
 
     // 4. child 所有権 + 月齢計算用の birthdate 取得
     const child = await prisma.child.findFirst({
@@ -122,7 +121,15 @@ export async function POST(request: Request) {
     const age = computeAge(child.birthdate, recordedAtDate)
     const recordedAtIso = recordedAtDate.toISOString().slice(0, 10)
 
-    // 8. Claude へ
+    // 8. quota枠を原子的に予約してからClaudeへ
+    const generationLog = await reserveMonthlyAiQuota({
+      userId: user.id,
+      childId: child.id,
+      model: getAiModel(),
+      promptVersion: PROMPT_VERSION,
+    })
+    generationLogId = generationLog.id
+
     const result = await generateAi(
       {
         childName: child.name,
@@ -136,17 +143,20 @@ export async function POST(request: Request) {
     )
 
     // 9. 成功ログ。生成本文自体は保管しない (PII)
-    const log = await prisma.aiGeneration.create({
+    const log = await prisma.aiGeneration.update({
+      where: { id: generationLogId },
       data: {
-        userId: user.id,
-        childId: child.id,
-        model: getAiModel(),
-        promptVersion: PROMPT_VERSION,
         succeeded: true,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         durationMs: Date.now() - startTime,
+        attemptCount: result.attempts,
+        policyCategoryIds: result.policyRejections,
+        policyOutcome:
+          result.policyRejections.length > 0 ? 'accepted_after_retry' : 'accepted_first_attempt',
+        errorReason: null,
       },
+      select: { id: true },
     })
 
     return NextResponse.json({
@@ -155,25 +165,36 @@ export async function POST(request: Request) {
       body: result.body,
       tags: result.tags,
     })
-  } catch (e) {
+  } catch (error) {
+    const isOutputRejected = error instanceof AiOutputRejectedError
+    const isRetryFailed = error instanceof AiRetryFailedError
+    const policyFailure = isOutputRejected || isRetryFailed ? error : null
+    const e = isOutputRejected ? problems.aiOutputRejected() : error
+
     // 失敗ログ (quota チェック・所有権チェック等は除く)
     const isProblem = e instanceof ApiProblemError
     const shouldLogFailure =
-      userIdForLog &&
+      !!generationLogId &&
       !(
         isProblem &&
         ['unauthorized', 'forbidden', 'not_found', 'validation_error'].includes(e.reason)
       )
-    if (shouldLogFailure && userIdForLog) {
+    if (shouldLogFailure && generationLogId) {
       try {
-        await prisma.aiGeneration.create({
+        await prisma.aiGeneration.update({
+          where: { id: generationLogId },
           data: {
-            userId: userIdForLog,
-            childId: childIdForLog,
-            model: getAiModel(),
-            promptVersion: PROMPT_VERSION,
             succeeded: false,
+            inputTokens: policyFailure?.inputTokens,
+            outputTokens: policyFailure?.outputTokens,
             durationMs: Date.now() - startTime,
+            attemptCount: policyFailure?.attempts ?? 1,
+            policyCategoryIds: policyFailure?.categoryIds ?? [],
+            policyOutcome: isOutputRejected
+              ? 'rejected_after_retry'
+              : isRetryFailed
+                ? 'retry_failed'
+                : null,
             errorReason: isProblem ? e.reason : 'internal_error',
           },
         })
@@ -183,7 +204,7 @@ export async function POST(request: Request) {
     }
 
     if (!isProblem) {
-      console.error('AI generate failed', { error: e instanceof Error ? e.message : String(e) })
+      console.error('AI generate failed', { reason: 'internal_error' })
       return toProblemResponse(problems.aiGenerationFailed())
     }
     return toProblemResponse(e)

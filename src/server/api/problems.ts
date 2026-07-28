@@ -58,6 +58,13 @@ export const problems = {
       500,
       '生成に失敗しました。もういちど ためしてみてください',
     ),
+  aiOutputRejected: () =>
+    build(
+      'ai_output_rejected',
+      'Unprocessable Entity',
+      422,
+      'AIの下書きを表示できませんでした。手動で入力するか、もう一度お試しください',
+    ),
 } as const
 
 export type { FieldError }

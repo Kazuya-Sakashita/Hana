@@ -80,7 +80,11 @@ Current public / anonymous exceptions:
 - Anthropic Claude に送るデータは ADR-0011 の範囲だけにする。
 - 送信可: child given name、計算済み月齢、撮影日、天気、親のひとこと、EXIF 削除済み写真。
 - 送信禁止: parent email、parent name、surname / full name、birthdate、生年月日、住所、raw location、storage_key、presigned URL。
-- generation log は user_id / child_id / model / prompt version / token / duration / success / error reason / created_at まで。prompt 本文と生成本文は保存しない。
+- generation log は user_id / child_id / model / prompt version / token / duration / success /
+  error reason / attempt count / 型付き出力ポリシーカテゴリID / 固定outcome / created_at まで。
+  prompt 本文と生成本文は保存しない。
+- 出力ポリシーカテゴリIDとoutcomeは`ai_generations`だけに保存し、一般ログへ出さない。
+  アカウント削除時のcascade対象とし、AI安全性の集計・監査以外に使用しない。
 - prompt 本文と生成本文は AI log に保存しない。
 - vendor retention / zero data retention / training non-use の公開文言は `docs/design/ai-consent-privacy-evidence.md` を入力に、
   release 前の人間 privacy / legal review gate とする。

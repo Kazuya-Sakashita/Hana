@@ -299,6 +299,10 @@ export default function RecordPage() {
             setAiStatus('failed')
             setAiError(quietStateCopy.record.aiQuotaExceeded)
             return
+          case 'ai_output_rejected':
+            setAiStatus('failed')
+            setAiError(quietStateCopy.record.aiFailed)
+            return
           default:
             setAiStatus('failed')
             setAiError(quietStateCopy.record.aiFailed)

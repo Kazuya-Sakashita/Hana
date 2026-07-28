@@ -127,19 +127,24 @@ model Memory {
 //   - 子どもの名前を渡したフラグは boolean のみで、name 自体は保管しない。
 // 月次 quota チェックに `(user_id, created_at)` の index を張る。
 model AiGeneration {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
-  childId       String?  @map("child_id") @db.Uuid
-  model         String   @db.VarChar(100)
-  promptVersion String   @map("prompt_version") @db.VarChar(20)
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  childId           String?  @map("child_id") @db.Uuid
+  model             String   @db.VarChar(100)
+  promptVersion     String   @map("prompt_version") @db.VarChar(20)
   // 成否・コスト等の集計情報のみ。生成本文は保管しない (PII)。
-  succeeded     Boolean  @default(true)
-  inputTokens   Int?     @map("input_tokens")
-  outputTokens  Int?     @map("output_tokens")
-  durationMs    Int?     @map("duration_ms")
+  succeeded         Boolean  @default(true)
+  inputTokens       Int?     @map("input_tokens")
+  outputTokens      Int?     @map("output_tokens")
+  durationMs        Int?     @map("duration_ms")
+  attemptCount      Int      @default(1) @map("attempt_count")
+  countsTowardQuota Boolean  @default(false) @map("counts_toward_quota")
+  // 型付きallowlistのカテゴリIDと固定outcomeのみ。生成本文・promptは保存しない。
+  policyCategoryIds String[] @default([]) @map("policy_category_ids") @db.VarChar(50)
+  policyOutcome     String?  @map("policy_outcome") @db.VarChar(40)
   // 失敗理由 (NG ワード検出 / API エラー / quota 超過 等の集計用 enum-ish)
-  errorReason   String?  @map("error_reason") @db.VarChar(50)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  errorReason       String?  @map("error_reason") @db.VarChar(50)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
