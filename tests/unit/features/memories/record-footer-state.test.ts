@@ -5,6 +5,7 @@ const base = {
   hasSelectedPhoto: false,
   uploaded: false,
   uploadStatus: 'idle' as const,
+  uploadFailureStage: null,
   aiStatus: 'idle' as const,
   aiQuotaExceeded: false,
   hasTitle: false,
@@ -36,6 +37,26 @@ describe('getRecordFooterState', () => {
       primaryAction: 'uploading',
       primaryLabel,
       primaryDisabled: true,
+    })
+  })
+
+  it.each([
+    ['prepare', '同じ写真で もういちど'],
+    ['put', '同じ写真を もういちど送る'],
+    ['confirm', '保存の確認を もういちど'],
+  ] as const)('retries from the failed %s stage without requiring reselection', (stage, label) => {
+    expect(
+      getRecordFooterState({
+        ...base,
+        hasSelectedPhoto: true,
+        uploadStatus: 'failed',
+        uploadFailureStage: stage,
+      }),
+    ).toMatchObject({
+      primaryAction: 'retry-upload',
+      primaryLabel: label,
+      primaryDisabled: false,
+      secondaryAction: 'choose-photo',
     })
   })
 
