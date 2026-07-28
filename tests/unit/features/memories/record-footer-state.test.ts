@@ -7,6 +7,7 @@ const base = {
   uploadStatus: 'idle' as const,
   uploadFailureStage: null,
   aiStatus: 'idle' as const,
+  aiTimedOut: false,
   aiQuotaExceeded: false,
   hasTitle: false,
   canSubmit: false,
@@ -102,6 +103,25 @@ describe('getRecordFooterState', () => {
     ).toMatchObject({
       primaryAction: 'retry-ai',
       secondaryAction: 'manual',
+    })
+  })
+
+  it('offers retry and manual writing after timeout even when existing input remains', () => {
+    expect(
+      getRecordFooterState({
+        ...base,
+        hasSelectedPhoto: true,
+        uploaded: true,
+        uploadStatus: 'done',
+        aiStatus: 'failed',
+        aiTimedOut: true,
+        hasTitle: true,
+        canSubmit: true,
+      }),
+    ).toMatchObject({
+      primaryAction: 'retry-ai',
+      secondaryAction: 'manual',
+      statusLabel: 'AIの待機を終えました。再試行するか、手動入力で続けられます',
     })
   })
 

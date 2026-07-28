@@ -29,6 +29,8 @@ export const quietStateCopy = {
     aiReady: 'AI が、ことばの下書きを手伝えます。',
     aiWaitingHint: 'できあがったら、自由に なおせます。',
     aiDone: 'タイトルと ほんぶんに、ていあんを いれました。じゆうに なおせます。',
+    aiTimedOut:
+      'AIの待機を ここで終えました。入力はそのままです。もういちど試すか、AIを使わずに書けます。',
     aiFailed: 'ことばの ていあんを つくれませんでした。AI を使わずに、このまま残せます。',
     aiQuotaExceeded: '今月の AI 提案は ここまでです。AI を使わずに、このまま残せます。',
     consentSaveFailed: '同意を ほぞんできませんでした。もういちど ためしてください。',
