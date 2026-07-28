@@ -151,13 +151,18 @@ export function getRecordFooterState({
   }
 
   if (hasTitle) {
+    const canRetryCompletedAi = aiStatus === 'done' && !aiQuotaExceeded
     return {
       primaryAction: 'save',
       primaryLabel: 'このまま 残す',
       primaryDisabled: !canSubmit,
-      secondaryAction: null,
-      secondaryLabel: null,
-      statusLabel: canSubmit ? '保存できる状態です' : '日付とタイトルを確認してください',
+      secondaryAction: canRetryCompletedAi ? 'retry-ai' : null,
+      secondaryLabel: canRetryCompletedAi ? 'もういちど AI で 下書きする' : null,
+      statusLabel: canSubmit
+        ? canRetryCompletedAi
+          ? 'この内容を保存するか、AIの下書きを作り直せます'
+          : '保存できる状態です'
+        : '日付とタイトルを確認してください',
     }
   }
 
