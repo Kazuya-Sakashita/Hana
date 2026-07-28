@@ -8,6 +8,7 @@
 `pnpm qa:issue091:waitlist-readiness -- --mode=contract` は、次の契約を read-only で確認する。
 
 - production では `WAITLIST_EMAIL_HASH_PEPPER` が必須で、未設定なら待機リスト登録を失敗させる
+- production では32文字以上の `PRODUCT_EVENT_HASH_PEPPER` が必須で、Secret Managerで管理する
 - local / test では development pepper fallback が使えるが、production では使えない
 - `waitlist_signups` migration が存在し、`email_hash` unique index と `created_at` index がある
 - `WaitlistSignup.emailHash` は HMAC-SHA256 用の 64 文字 hash として扱われる
@@ -20,6 +21,8 @@
 公開前 traffic を入れる前に、人間が次を確認する。
 
 - staging と production に `WAITLIST_EMAIL_HASH_PEPPER` が設定されている
+- staging と production に32文字以上の `PRODUCT_EVENT_HASH_PEPPER` が設定されている
+- Supabase Cron (`pg_cron`) を有効化し、`hana-product-event-retention` が毎日実行される
 - `pnpm db:migrate:deploy` 相当の手順で `waitlist_signups` migration が対象環境に適用済みである
 - reverse proxy / hosting platform が `x-forwarded-for` または `x-real-ip` を渡す
 - bot / abuse 対策は MVP の短時間 rate limit で開始し、異常 traffic が出たら追加対策を Issue 化する
@@ -37,6 +40,7 @@ pnpm qa:issue103:prelaunch-traffic -- \
   --mode=preflight \
   --target=staging \
   --migration=confirmed \
+  --product-event-retention=confirmed \
   --proxy-client-ip=confirmed \
   --rate-limit=confirmed \
   --privacy-mailbox-receiving=confirmed \
@@ -51,7 +55,7 @@ pnpm qa:issue103:prelaunch-traffic -- \
   --privacy-copy=confirmed
 ```
 
-- required env の値を出力しない。`WAITLIST_EMAIL_HASH_PEPPER` / `DATABASE_URL` / `DIRECT_URL` は set / missing だけを判定し、`WAITLIST_TRUST_PROXY_HEADERS` は厳密に `true` かだけを判定する
+- required env の値を出力しない。`WAITLIST_EMAIL_HASH_PEPPER` / `PRODUCT_EVENT_HASH_PEPPER` / `DATABASE_URL` / `DIRECT_URL` は set / missing だけを判定し、`WAITLIST_TRUST_PROXY_HEADERS` は厳密に `true` かだけを判定する
 - migration、proxy、rate limit、mailbox、public QA、PR gate、privacy copy は運用担当者の確認結果であり、外部状態を自動確認したことにはならない
 - privacy mailbox の4引数は、直前に同じ運用版で ISSUE-109が `GO` になった場合だけ `confirmed` にする
 - ISSUE-109の `scope=prelaunch`、`attestation_version=prelaunch-mailbox-v1`、`attested_at` が揃い、実行から30分以内の場合だけprivacy attestationを有効とする
@@ -158,6 +162,7 @@ pnpm qa:issue109:privacy-mailbox -- \
 
 - 実ユーザーのメールアドレス
 - `WAITLIST_EMAIL_HASH_PEPPER` の値
+- `PRODUCT_EVENT_HASH_PEPPER` の値
 - request / response body の raw dump
 - screenshot / trace / HAR / accessibility snapshot
 - 実写真、子ども / 親の実名、生年月日、画像 URL、`storage_key`、prompt、AI 生成本文

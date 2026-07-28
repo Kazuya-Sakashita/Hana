@@ -26,6 +26,7 @@ const confirmationArgs = [
   '--mode=preflight',
   '--target=staging',
   '--migration=confirmed',
+  '--product-event-retention=confirmed',
   '--proxy-client-ip=confirmed',
   '--rate-limit=confirmed',
   '--privacy-mailbox-receiving=confirmed',
@@ -48,7 +49,11 @@ function run(args: string[], env: Record<string, string | undefined> = {}) {
   return spawnSync(process.execPath, [scriptPath, ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      PRODUCT_EVENT_HASH_PEPPER: 'test-product-event-pepper-with-32-bytes',
+      ...env,
+    },
   })
 }
 
@@ -86,6 +91,7 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
   it('holds when environment presence or human attestations are missing', () => {
     const result = run(['--mode=preflight', '--target=production'], {
       WAITLIST_EMAIL_HASH_PEPPER: '',
+      PRODUCT_EVENT_HASH_PEPPER: '',
       DATABASE_URL: '',
       DIRECT_URL: '',
       WAITLIST_TRUST_PROXY_HEADERS: 'false',
@@ -103,6 +109,11 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
       status: 'hold',
     })
     expect(payload.checks).toContainEqual({
+      id: 'product-event-hash-pepper',
+      kind: 'minimum-length-32',
+      status: 'hold',
+    })
+    expect(payload.checks).toContainEqual({
       id: 'waitlist-migration-applied',
       kind: 'human-attestation',
       status: 'hold',
@@ -117,6 +128,7 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
   it('returns go only when every environment check and attestation passes', () => {
     const sensitiveValues = {
       WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
+      PRODUCT_EVENT_HASH_PEPPER: 'test-product-event-pepper-sentinel',
       DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
       DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
       WAITLIST_TRUST_PROXY_HEADERS: 'true',
@@ -140,8 +152,33 @@ describe('ISSUE-103 prelaunch traffic attestation', () => {
     })
     expect(payload.checks.every((check) => check.status === 'pass')).toBe(true)
     expect(result.stdout).not.toContain(sensitiveValues.WAITLIST_EMAIL_HASH_PEPPER)
+    expect(result.stdout).not.toContain(sensitiveValues.PRODUCT_EVENT_HASH_PEPPER)
     expect(result.stdout).not.toContain(sensitiveValues.DATABASE_URL)
     expect(result.stdout).not.toContain(sensitiveValues.DIRECT_URL)
+  })
+
+  it('holds until the product event retention job is confirmed', () => {
+    const result = run(
+      confirmationArgs.filter((argument) => !argument.startsWith('--product-event-retention=')),
+      {
+        WAITLIST_EMAIL_HASH_PEPPER: 'test-pepper-sentinel',
+        DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        DIRECT_URL: 'postgresql://test:test@127.0.0.1:5432/hana_test',
+        WAITLIST_TRUST_PROXY_HEADERS: 'true',
+      },
+    )
+    const payload = JSON.parse(result.stdout) as {
+      result: string
+      checks: Array<{ id: string; status: string }>
+    }
+
+    expect(result.status).toBe(1)
+    expect(payload.result).toBe('hold')
+    expect(payload.checks).toContainEqual({
+      id: 'product-event-retention-scheduled',
+      kind: 'human-attestation',
+      status: 'hold',
+    })
   })
 
   it.each([
