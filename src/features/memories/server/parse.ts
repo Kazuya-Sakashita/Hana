@@ -36,6 +36,8 @@ export interface MemoryUpdateInput {
 export interface ListMemoriesQuery {
   limit: number
   cursor: { id: string } | null
+  recordedFrom: Date | null
+  recordedBefore: Date | null
 }
 
 export async function readJsonBody(request: Request): Promise<unknown> {
@@ -162,8 +164,46 @@ export function parseListMemoriesQuery(url: URL): ListMemoriesQuery {
     }
   }
 
+  const rawRecordedFrom = url.searchParams.get('recorded_from')
+  const rawRecordedBefore = url.searchParams.get('recorded_before')
+  let recordedFrom: Date | null = null
+  let recordedBefore: Date | null = null
+
+  if ((rawRecordedFrom === null) !== (rawRecordedBefore === null)) {
+    errors.push({
+      path: rawRecordedFrom === null ? 'query.recorded_from' : 'query.recorded_before',
+      reason: 'required_with',
+      message: 'recorded_from と recorded_before は同時に指定してください',
+    })
+  } else if (rawRecordedFrom !== null && rawRecordedBefore !== null) {
+    recordedFrom = parseIsoDate(rawRecordedFrom)
+    recordedBefore = parseIsoDate(rawRecordedBefore)
+
+    if (!recordedFrom) {
+      errors.push({
+        path: 'query.recorded_from',
+        reason: 'invalid_format',
+        message: 'YYYY-MM-DD 形式の実在する日付を指定してください',
+      })
+    }
+    if (!recordedBefore) {
+      errors.push({
+        path: 'query.recorded_before',
+        reason: 'invalid_format',
+        message: 'YYYY-MM-DD 形式の実在する日付を指定してください',
+      })
+    }
+    if (recordedFrom && recordedBefore && recordedFrom >= recordedBefore) {
+      errors.push({
+        path: 'query.recorded_before',
+        reason: 'invalid_range',
+        message: 'recorded_from より後の日付を指定してください',
+      })
+    }
+  }
+
   if (errors.length) throw problems.validation(errors)
-  return { limit, cursor }
+  return { limit, cursor, recordedFrom, recordedBefore }
 }
 
 export function encodeCursor(id: string): string {
@@ -254,8 +294,8 @@ function parseDate(
     })
     return null
   }
-  const date = new Date(`${value}T00:00:00Z`)
-  if (Number.isNaN(date.getTime())) {
+  const date = parseIsoDate(value)
+  if (!date) {
     errors.push({ path, reason: 'invalid_format', message: '存在しない日付です' })
     return null
   }
@@ -264,6 +304,13 @@ function parseDate(
     errors.push({ path, reason: 'future_date', message: '未来の日付は指定できません' })
     return null
   }
+  return date
+}
+
+function parseIsoDate(value: string): Date | null {
+  if (!ISO_DATE_RE.test(value)) return null
+  const date = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return null
   return date
 }
 

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   imageFindMany: vi.fn(),
   memoryFindFirst: vi.fn(),
   memoryFindMany: vi.fn(),
+  memoryCount: vi.fn(),
   memoryUpdate: vi.fn(),
   transaction: vi.fn(),
   txMemoryCreate: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('@/server/db/prisma', () => ({
     memory: {
       findFirst: mocks.memoryFindFirst,
       findMany: mocks.memoryFindMany,
+      count: mocks.memoryCount,
       update: mocks.memoryUpdate,
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -56,6 +58,7 @@ vi.mock('@/server/db/prisma', () => ({
 }))
 
 import { GET as LIST_GET, POST as LIST_POST } from '@/app/v1/memories/route'
+import { encodeCursor } from '@/features/memories/server/parse'
 import {
   DELETE as DETAIL_DELETE,
   GET as DETAIL_GET,
@@ -101,6 +104,7 @@ const memoryRow = {
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
   mocks.profileFindUnique.mockResolvedValue(profileRow)
+  mocks.memoryCount.mockResolvedValue(0)
 }
 
 function unauthed() {
@@ -129,12 +133,16 @@ describe('GET /v1/memories', () => {
     mocks.memoryFindMany.mockResolvedValue([])
     const res = await LIST_GET(jsonRequest('/v1/memories', 'GET'))
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ data: [], page: { next_cursor: null } })
+    expect(await res.json()).toEqual({
+      data: [],
+      page: { next_cursor: null, total_count: 0 },
+    })
   })
 
   it('returns 200 + one memory + null cursor when no more pages', async () => {
     authed()
     mocks.memoryFindMany.mockResolvedValue([memoryRow])
+    mocks.memoryCount.mockResolvedValue(1)
     mocks.createSignedUrl.mockResolvedValue({
       data: { signedUrl: 'https://example.com/thumb-1' },
       error: null,
@@ -143,12 +151,13 @@ describe('GET /v1/memories', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       data: Array<{ id: string; cover_thumbnail_url: string | null }>
-      page: { next_cursor: string | null }
+      page: { next_cursor: string | null; total_count: number }
     }
     expect(body.data).toHaveLength(1)
     expect(body.data[0]?.id).toBe(MEMORY_ID)
     expect(body.data[0]?.cover_thumbnail_url).toBe('https://example.com/thumb-1')
     expect(body.page.next_cursor).toBeNull()
+    expect(body.page.total_count).toBe(1)
   })
 
   it('returns multiple memories without collapsing the list', async () => {
@@ -169,6 +178,7 @@ describe('GET /v1/memories', () => {
       ],
     }
     mocks.memoryFindMany.mockResolvedValue([memoryRow, olderMemory])
+    mocks.memoryCount.mockResolvedValue(2)
     mocks.createSignedUrl
       .mockResolvedValueOnce({ data: { signedUrl: 'https://example.com/thumb-1' }, error: null })
       .mockResolvedValueOnce({ data: { signedUrl: 'https://example.com/thumb-2' }, error: null })
@@ -244,6 +254,83 @@ describe('GET /v1/memories', () => {
     authed()
     const res = await LIST_GET(jsonRequest('/v1/memories?cursor=garbage', 'GET'))
     expect(res.status).toBe(422)
+  })
+
+  it('applies the owner, deletion and requested month range to list and count queries', async () => {
+    authed()
+    mocks.memoryFindMany.mockResolvedValue([memoryRow])
+    mocks.memoryCount.mockResolvedValue(1)
+
+    const res = await LIST_GET(
+      jsonRequest('/v1/memories?recorded_from=2026-05-01&recorded_before=2026-06-01', 'GET'),
+    )
+
+    expect(res.status).toBe(200)
+    const range = {
+      gte: new Date('2026-05-01T00:00:00.000Z'),
+      lt: new Date('2026-06-01T00:00:00.000Z'),
+    }
+    expect(mocks.memoryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: USER_ID, deletedAt: null, recordedAt: range },
+      }),
+    )
+    expect(mocks.memoryCount).toHaveBeenCalledWith({
+      where: { userId: USER_ID, deletedAt: null, recordedAt: range },
+    })
+  })
+
+  it('keeps cursor pagination within the same owner and month range', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue({ id: MEMORY_ID })
+    mocks.memoryFindMany.mockResolvedValue([])
+    const cursor = encodeCursor(MEMORY_ID)
+
+    const res = await LIST_GET(
+      jsonRequest(
+        `/v1/memories?recorded_from=2026-05-01&recorded_before=2026-06-01&cursor=${cursor}`,
+        'GET',
+      ),
+    )
+
+    expect(res.status).toBe(200)
+    expect(mocks.memoryFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: MEMORY_ID,
+        userId: USER_ID,
+        deletedAt: null,
+        recordedAt: {
+          gte: new Date('2026-05-01T00:00:00.000Z'),
+          lt: new Date('2026-06-01T00:00:00.000Z'),
+        },
+      },
+      select: { id: true },
+    })
+    expect(mocks.memoryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ cursor: { id: MEMORY_ID }, skip: 1 }),
+    )
+  })
+
+  it('rejects a cursor from another owner or month before listing memories', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(null)
+    const cursor = encodeCursor('00000000-0000-4000-8000-000000000099')
+
+    const res = await LIST_GET(
+      jsonRequest(
+        `/v1/memories?recorded_from=2026-05-01&recorded_before=2026-06-01&cursor=${cursor}`,
+        'GET',
+      ),
+    )
+    const body = (await res.json()) as {
+      reason: string
+      errors: Array<{ reason: string }>
+    }
+
+    expect(res.status).toBe(422)
+    expect(body.reason).toBe('validation_error')
+    expect(body.errors[0]?.reason).toBe('cursor_out_of_scope')
+    expect(mocks.memoryFindMany).not.toHaveBeenCalled()
   })
 })
 

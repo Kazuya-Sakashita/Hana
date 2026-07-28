@@ -35,7 +35,7 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 }
 
 function makeList(data: Memory[]): MemoryListResponse {
-  return { data, page: { next_cursor: null } }
+  return { data, page: { next_cursor: null, total_count: data.length } }
 }
 
 function makeInfiniteList(pages: MemoryListResponse[]): InfiniteData<MemoryListResponse> {

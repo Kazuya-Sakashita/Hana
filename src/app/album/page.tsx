@@ -5,19 +5,41 @@ import { redirect } from 'next/navigation'
 import { BookOpen, Camera, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AlbumList } from '@/features/memories/client/album-list'
+import { MonthNavigator } from '@/features/memories/components/month-navigator'
 import { getCurrentUser } from '@/server/auth/current-user'
-import { fetchMemoriesWithCovers } from '@/features/memories/server/queries'
+import { countMemories, fetchMemoriesWithCovers } from '@/features/memories/server/queries'
 import { encodeCursor } from '@/features/memories/server/parse'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
+import {
+  albumMonthRange,
+  currentAlbumMonth,
+  normalizeAlbumMonth,
+  type MemoryDateRange,
+} from '@/features/memories/month'
 
 // ISSUE-057: Album keepsake refresh.
 // Keep SSR first page + Suspense while changing only the visual hierarchy.
 
 export const dynamic = 'force-dynamic'
 
-export default async function AlbumPage() {
+interface AlbumPageProps {
+  searchParams: Promise<{ month?: string | string[] }>
+}
+
+export default async function AlbumPage({ searchParams }: AlbumPageProps) {
   const user = await getCurrentUser()
   if (!user) redirect('/sign-in')
+  const params = await searchParams
+  const rawMonth = typeof params.month === 'string' ? params.month : undefined
+  const currentMonth = currentAlbumMonth()
+  const month = normalizeAlbumMonth(rawMonth, currentMonth)
+  if (params.month !== undefined && rawMonth !== month) {
+    redirect(`/album?month=${month}`)
+  }
+  const dateRange = albumMonthRange(month)
+  const recordedFrom = new Date(`${dateRange.recordedFrom}T00:00:00Z`)
+  const recordedBefore = new Date(`${dateRange.recordedBefore}T00:00:00Z`)
+  const totalCount = await countMemories({ userId: user.id, recordedFrom, recordedBefore })
 
   return (
     <main className="bg-canvas min-h-dvh px-6 pb-28 pt-10">
@@ -40,16 +62,39 @@ export default async function AlbumPage() {
           </div>
         </header>
 
-        <Suspense fallback={<AlbumListSkeleton />}>
-          <AlbumListBoundary userId={user.id} />
+        <MonthNavigator month={month} currentMonth={currentMonth} totalCount={totalCount} />
+        <Suspense key={month} fallback={<AlbumListSkeleton />}>
+          <AlbumListBoundary
+            userId={user.id}
+            month={month}
+            dateRange={dateRange}
+            totalCount={totalCount}
+          />
         </Suspense>
       </div>
     </main>
   )
 }
 
-async function AlbumListBoundary({ userId }: { userId: string }) {
-  const { items, hasMore } = await fetchMemoriesWithCovers({ userId, limit: 50 })
+async function AlbumListBoundary({
+  userId,
+  month,
+  dateRange,
+  totalCount,
+}: {
+  userId: string
+  month: string
+  dateRange: MemoryDateRange
+  totalCount: number
+}) {
+  const recordedFrom = new Date(`${dateRange.recordedFrom}T00:00:00Z`)
+  const recordedBefore = new Date(`${dateRange.recordedBefore}T00:00:00Z`)
+  const { items, hasMore } = await fetchMemoriesWithCovers({
+    userId,
+    limit: 50,
+    recordedFrom,
+    recordedBefore,
+  })
   const last = items[items.length - 1]
   const featured = items[0] ?? null
 
@@ -57,11 +102,16 @@ async function AlbumListBoundary({ userId }: { userId: string }) {
     <div className="flex flex-col gap-8">
       {featured ? <FeaturedAlbumPage item={featured} /> : null}
       <AlbumList
+        month={month}
+        dateRange={dateRange}
         initialData={{
           data: items.map(({ coverThumbnailUrl, ...memory }) =>
             toMemoryResponse(memory, { coverThumbnailUrl }),
           ),
-          page: { next_cursor: hasMore && last ? encodeCursor(last.id) : null },
+          page: {
+            next_cursor: hasMore && last ? encodeCursor(last.id) : null,
+            total_count: totalCount,
+          },
         }}
       />
     </div>
@@ -99,7 +149,7 @@ function FeaturedAlbumPage({
         )}
         <div className="mt-4 flex items-center justify-between gap-3 px-1 pb-1">
           <div className="min-w-0">
-            <p className="meta-label">最近しまったページ</p>
+            <p className="meta-label">この月の一ページ</p>
             <h2
               id="album-featured-page"
               className="text-ink mt-1 line-clamp-2 break-words font-serif text-xl leading-7 [overflow-wrap:anywhere]"

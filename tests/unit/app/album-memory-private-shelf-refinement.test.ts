@@ -25,7 +25,7 @@ describe('ISSUE-070 album and memory private shelf refinement', () => {
   it('adds a large featured page before the practical shelf list', () => {
     expect(albumPageSource).toContain('function FeaturedAlbumPage')
     expect(albumPageSource).toContain('data-testid="album-featured-page"')
-    expect(albumPageSource).toContain('最近しまったページ')
+    expect(albumPageSource).toContain('この月の一ページ')
     expect(albumPageSource).toContain('const featured = items[0] ?? null')
     expect(albumPageSource).toContain('data: items.map')
     expect(albumPageSource).not.toContain('const [featured, ...shelfItems] = items')

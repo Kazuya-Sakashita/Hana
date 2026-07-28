@@ -12,10 +12,37 @@ describe('client query keys', () => {
 
   it('normalizes optional memory cursor values', () => {
     expect(memoriesQueryKey).toEqual(['memories'])
-    expect(memoryListQueryKey(20)).toEqual(['memories', { limit: 20, cursor: null }])
+    expect(memoryListQueryKey(20)).toEqual([
+      'memories',
+      {
+        limit: 20,
+        cursor: null,
+        recordedFrom: null,
+        recordedBefore: null,
+      },
+    ])
     expect(memoryListQueryKey(20, 'cursor_1')).toEqual([
       'memories',
-      { limit: 20, cursor: 'cursor_1' },
+      {
+        limit: 20,
+        cursor: 'cursor_1',
+        recordedFrom: null,
+        recordedBefore: null,
+      },
+    ])
+    expect(
+      memoryListQueryKey(20, null, {
+        recordedFrom: '2026-05-01',
+        recordedBefore: '2026-06-01',
+      }),
+    ).toEqual([
+      'memories',
+      {
+        limit: 20,
+        cursor: null,
+        recordedFrom: '2026-05-01',
+        recordedBefore: '2026-06-01',
+      },
     ])
   })
 
