@@ -5,12 +5,18 @@ const recordSource = readFileSync(
   new URL('../../../src/app/record/page.tsx', import.meta.url),
   'utf8',
 )
+const footerStateSource = readFileSync(
+  new URL('../../../src/features/memories/client/record-footer-state.ts', import.meta.url),
+  'utf8',
+)
 
 type RecordState =
   | 'empty'
   | 'selected-uploading'
   | 'consent-pending'
   | 'generating'
+  | 'ai-choice'
+  | 'ai-failed'
   | 'manual-ready'
   | 'ai-ready'
 
@@ -19,11 +25,14 @@ const states: RecordState[] = [
   'selected-uploading',
   'consent-pending',
   'generating',
+  'ai-choice',
+  'ai-failed',
   'manual-ready',
   'ai-ready',
 ]
 
 const viewports = [
+  { id: 'narrow-phone', width: 320, height: 640 },
   { id: 'compact-short', width: 390, height: 640 },
   { id: 'compact-tall', width: 390, height: 844 },
   { id: 'large-phone', width: 430, height: 932 },
@@ -35,13 +44,15 @@ function estimateRecordLayout(viewport: { width: number; height: number }, state
   const horizontalPadding = 40
   const innerWidth = contentWidth - horizontalPadding
   const sheetMaxHeight = viewport.height * 0.68
-  const footerHeight = 76
+  const footerHeight = state === 'ai-choice' || state === 'ai-failed' ? 120 : 76
   const sheetBodyHeight = sheetMaxHeight - footerHeight
   const requiredBodyHeightByState: Record<RecordState, number> = {
     empty: 152,
     'selected-uploading': 188,
     'consent-pending': 244,
     generating: 280,
+    'ai-choice': 280,
+    'ai-failed': 304,
     'manual-ready': 340,
     'ai-ready': 420,
   }
@@ -65,14 +76,14 @@ describe('ISSUE-069 record one-decision layout fixtures', () => {
         const layout = estimateRecordLayout(viewport, state)
 
         expect(layout.contentWidth, `${viewport.id}:${state} content`).toBeLessThanOrEqual(448)
-        expect(layout.innerWidth, `${viewport.id}:${state} inner`).toBeGreaterThanOrEqual(350)
+        expect(layout.innerWidth, `${viewport.id}:${state} inner`).toBeGreaterThanOrEqual(280)
         expect(layout.primaryCtaInLower35, `${viewport.id}:${state} CTA`).toBe(true)
       }
     }
   })
 
   it('allows body-only scrolling when dense states exceed compact sheet height', () => {
-    const compactViewport = viewports[0]
+    const compactViewport = viewports[1]
     if (!compactViewport) throw new Error('compact viewport fixture is required')
     const compactAiReady = estimateRecordLayout(compactViewport, 'ai-ready')
 
@@ -88,8 +99,8 @@ describe('ISSUE-069 record one-decision layout fixtures', () => {
   it('keeps tap targets, initial consent focus, and non-occluded manual editing affordances', () => {
     expect(recordSource).toContain('tap-target absolute')
     expect(recordSource).toContain('tap-target text-ink-secondary')
-    expect(recordSource).toContain('Button type="button" size="lg"')
-    expect(recordSource).toContain('Button type="submit" size="lg"')
+    expect(recordSource).toContain("footerState.primaryAction === 'generate-ai'")
+    expect(recordSource).toContain("footerState.primaryAction === 'save'")
     expect(recordSource).toContain('initialFocusId="ai-consent-decline"')
     expect(recordSource).toContain('focusManualTitle')
     expect(recordSource).toContain('titleInputRef.current?.focus()')
@@ -100,7 +111,8 @@ describe('ISSUE-069 record one-decision layout fixtures', () => {
     expect(recordSource).toContain("aiStatus === 'consent_pending'")
     expect(recordSource).toContain("aiStatus === 'generating'")
     expect(recordSource).toContain("aiStatus === 'done'")
-    expect(recordSource).toContain('AI を使わずに 書く')
+    expect(footerStateSource).toContain('AI を使わずに 書く')
+    expect(footerStateSource).toContain("primaryAction: 'retry-ai'")
     expect(recordSource).toContain('タイトルがあれば、AIを使わずにこのまま保存できます。')
     expect(recordSource).toContain('role="alert"')
     expect(recordSource).toContain("event.currentTarget.value = ''")

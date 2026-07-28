@@ -5,6 +5,10 @@ const recordSource = readFileSync(
   new URL('../../../src/app/record/page.tsx', import.meta.url),
   'utf8',
 )
+const footerStateSource = readFileSync(
+  new URL('../../../src/features/memories/client/record-footer-state.ts', import.meta.url),
+  'utf8',
+)
 const qaNoteSource = readFileSync(
   new URL('../../../docs/design/record-bottom-sheet-capture-qa.md', import.meta.url),
   'utf8',
@@ -32,12 +36,12 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toContain('PhotoPlaceholder')
     expect(recordSource).toContain('30びょう 記録')
     expect(recordSource).toContain('しゃしんを えらぶ')
-    expect(recordSource).toContain('AI で 下書きする')
-    expect(recordSource).toContain('このまま 残す')
+    expect(footerStateSource).toContain('AI で 下書きする')
+    expect(footerStateSource).toContain('このまま 残す')
   })
 
   it('keeps AI optional while preserving the consent boundary', () => {
-    expect(recordSource).toContain('AI を使わずに 書く')
+    expect(footerStateSource).toContain('AI を使わずに 書く')
     expect(recordSource).toContain('focusManualTitle')
     expect(recordSource).toContain('ref={titleInputRef}')
     expect(recordSource).toContain('initialFocusId="ai-consent-decline"')
@@ -83,6 +87,17 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toMatch(/fieldErrors\.title \?[\s\S]+role="alert"/)
     expect(recordSource).toMatch(/fieldErrors\.imageIds \?[\s\S]+role="alert"/)
     expect(recordSource).not.toContain("router.push('/record')")
+  })
+
+  it('locks manual content during generation and preserves AI provenance across retry failure', () => {
+    expect(recordSource).toContain(
+      'const [hasAiGeneratedContent, setHasAiGeneratedContent] = useState(false)',
+    )
+    expect(recordSource).toContain('setHasAiGeneratedContent(false)')
+    expect(recordSource).toContain('setHasAiGeneratedContent(true)')
+    expect(recordSource).toContain('ai_generated: hasAiGeneratedContent')
+    expect(recordSource).toMatch(/id="memory-title"[\s\S]+disabled=\{aiStatus === 'generating'\}/)
+    expect(recordSource).toMatch(/id="memory-body"[\s\S]+disabled=\{aiStatus === 'generating'\}/)
   })
 
   it('records timing conditions and evidence-safety policy for the PR', () => {

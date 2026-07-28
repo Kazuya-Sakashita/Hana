@@ -5,6 +5,10 @@ const recordSource = readFileSync(
   new URL('../../../src/app/record/page.tsx', import.meta.url),
   'utf8',
 )
+const footerStateSource = readFileSync(
+  new URL('../../../src/features/memories/client/record-footer-state.ts', import.meta.url),
+  'utf8',
+)
 const issueSource = readFileSync(
   new URL(
     '../../../docs/issues/ISSUE-069-record-one-decision-sheet-refinement.md',
@@ -34,17 +38,17 @@ describe('ISSUE-069 record one-decision sheet refinement', () => {
     expect(recordSource).toContain('sticky bottom-0')
     expect(recordSource).toContain('data-testid="record-bottom-sheet-footer"')
     expect(recordSource).toContain('pb-[calc(env(safe-area-inset-bottom)+1rem)]')
-    expect(recordSource).toContain('!hasSelectedPhoto ? (')
+    expect(recordSource).toContain('getRecordFooterState')
     expect(recordSource).toContain('しゃしんを えらぶ')
-    expect(recordSource).toContain('このまま 残す')
+    expect(footerStateSource).toContain('このまま 残す')
   })
 
   it('keeps AI optional and consent explicit before generation', () => {
     expect(recordSource).toContain('data-testid="record-decision-cue"')
     expect(recordSource).toContain('選ぶだけでは、まだAIには送りません。')
     expect(recordSource).toContain('data-testid="record-ai-decision"')
-    expect(recordSource).toContain('AI で 下書きする')
-    expect(recordSource).toContain('AI を使わずに 書く')
+    expect(footerStateSource).toContain('AI で 下書きする')
+    expect(footerStateSource).toContain('AI を使わずに 書く')
     expect(recordSource).toContain('AI を つかわない')
     expect(recordSource).toContain('AI_CONSENT_SENT_COPY')
     expect(recordSource).toContain('AI_CONSENT_NOT_SENT_COPY')
