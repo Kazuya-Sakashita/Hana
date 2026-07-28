@@ -1,6 +1,8 @@
 import 'server-only'
 
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/server/db/prisma'
+import { problems } from '@/server/api/problems'
 import { generateSignedImageUrl } from '@/features/uploads/server/signed-url'
 import { isUuid } from '@/features/memories/server/parse'
 import type { MemoryWithImages } from '@/features/memories/view-models/memory'
@@ -17,6 +19,8 @@ export interface FetchMemoriesOptions {
   userId: string
   limit: number
   cursorId?: string | null
+  recordedFrom?: Date | null
+  recordedBefore?: Date | null
 }
 
 export interface FetchMemoriesResult {
@@ -36,8 +40,24 @@ export interface FetchMemoriesResult {
 export async function fetchMemoriesWithCovers(
   opts: FetchMemoriesOptions,
 ): Promise<FetchMemoriesResult> {
+  if (opts.cursorId) {
+    const cursor = await prisma.memory.findFirst({
+      where: { ...memoryListWhere(opts), id: opts.cursorId },
+      select: { id: true },
+    })
+    if (!cursor) {
+      throw problems.validation([
+        {
+          path: 'query.cursor',
+          reason: 'cursor_out_of_scope',
+          message: '指定した絞り込み条件では利用できないカーソルです',
+        },
+      ])
+    }
+  }
+
   const rows = await prisma.memory.findMany({
-    where: { userId: opts.userId, deletedAt: null },
+    where: memoryListWhere(opts),
     orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
     take: opts.limit + 1,
     ...(opts.cursorId ? { cursor: { id: opts.cursorId }, skip: 1 } : {}),
@@ -66,6 +86,29 @@ export async function fetchMemoriesWithCovers(
   )
 
   return { items, hasMore }
+}
+
+export function countMemories(opts: Omit<FetchMemoriesOptions, 'limit' | 'cursorId'>) {
+  return prisma.memory.count({ where: memoryListWhere(opts) })
+}
+
+function memoryListWhere(opts: {
+  userId: string
+  recordedFrom?: Date | null
+  recordedBefore?: Date | null
+}): Prisma.MemoryWhereInput {
+  return {
+    userId: opts.userId,
+    deletedAt: null,
+    ...(opts.recordedFrom && opts.recordedBefore
+      ? {
+          recordedAt: {
+            gte: opts.recordedFrom,
+            lt: opts.recordedBefore,
+          },
+        }
+      : {}),
+  }
 }
 
 // === ISSUE-027: memory 詳細 SC化用 ===

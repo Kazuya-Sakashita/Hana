@@ -214,6 +214,8 @@ export interface paths {
          * 記録一覧
          * @description 現在のユーザーが所有する記録をカーソル方式で返す。
          *     並び順: `recorded_at` 降順 → `id` 降順 (タイブレーカー)。
+         *     `recorded_from` と `recorded_before` は必ず同時に指定し、
+         *     `recorded_from <= recorded_at < recorded_before` の範囲に絞り込む。
          *     画像 URL は含めない (`GET /uploads/{imageId}/url` で取得)。
          */
         get: operations["listMemories"];
@@ -806,6 +808,11 @@ export interface components {
                  * @example eyJpZCI6IjdkNmU1ZjRjLTNiMmEtNDI5MS04NzY1LTAxMjM0NTY3ODlhYiJ9
                  */
                 next_cursor: string | null;
+                /**
+                 * @description 指定した絞り込み条件に一致する記録の総件数
+                 * @example 12
+                 */
+                total_count: number;
             };
         };
         /**
@@ -1500,6 +1507,10 @@ export interface operations {
                 limit?: number;
                 /** @description 前回レスポンスの `page.next_cursor` */
                 cursor?: string;
+                /** @description 記録日の範囲開始日（含む）。`recorded_before` と同時に指定する */
+                recorded_from?: string;
+                /** @description 記録日の範囲終了日（含まない）。`recorded_from` と同時に指定する */
+                recorded_before?: string;
             };
             header?: never;
             path?: never;

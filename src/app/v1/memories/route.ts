@@ -9,7 +9,7 @@ import {
   parseMemoryCreate,
   readJsonBody,
 } from '@/features/memories/server/parse'
-import { fetchMemoriesWithCovers } from '@/features/memories/server/queries'
+import { countMemories, fetchMemoriesWithCovers } from '@/features/memories/server/queries'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
 
 export const dynamic = 'force-dynamic'
@@ -21,11 +21,20 @@ export async function GET(request: Request) {
     const query = parseListMemoriesQuery(url)
 
     // ISSUE-026: 共通 server function に抽出 (Server Component と共有)
-    const { items, hasMore } = await fetchMemoriesWithCovers({
-      userId: user.id,
-      limit: query.limit,
-      cursorId: query.cursor?.id ?? null,
-    })
+    const [{ items, hasMore }, totalCount] = await Promise.all([
+      fetchMemoriesWithCovers({
+        userId: user.id,
+        limit: query.limit,
+        cursorId: query.cursor?.id ?? null,
+        recordedFrom: query.recordedFrom,
+        recordedBefore: query.recordedBefore,
+      }),
+      countMemories({
+        userId: user.id,
+        recordedFrom: query.recordedFrom,
+        recordedBefore: query.recordedBefore,
+      }),
+    ])
 
     const last = items[items.length - 1]
     const nextCursor = hasMore && last ? encodeCursor(last.id) : null
@@ -34,7 +43,7 @@ export async function GET(request: Request) {
       data: items.map(({ coverThumbnailUrl, ...memory }) =>
         toMemoryResponse(memory, { coverThumbnailUrl }),
       ),
-      page: { next_cursor: nextCursor },
+      page: { next_cursor: nextCursor, total_count: totalCount },
     })
   } catch (e) {
     return toProblemResponse(e)

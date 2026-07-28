@@ -3,6 +3,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import type { components } from '@/lib/api/generated/schema'
+import type { MemoryDateRange } from '@/features/memories/month'
 
 export type Memory = components['schemas']['Memory']
 export type MemoryCreateRequest = components['schemas']['MemoryCreateRequest']
@@ -11,23 +12,52 @@ export type MemoryListResponse = components['schemas']['MemoryListResponse']
 
 export const memoriesQueryKey = ['memories'] as const
 
-export function memoryListQueryKey(limit: number, cursor?: string | null) {
-  return [...memoriesQueryKey, { limit, cursor: cursor ?? null }] as const
+export function memoryListQueryKey(
+  limit: number,
+  cursor?: string | null,
+  dateRange?: MemoryDateRange,
+) {
+  return [
+    ...memoriesQueryKey,
+    {
+      limit,
+      cursor: cursor ?? null,
+      recordedFrom: dateRange?.recordedFrom ?? null,
+      recordedBefore: dateRange?.recordedBefore ?? null,
+    },
+  ] as const
 }
 
-export function infiniteMemoryListQueryKey(limit: number) {
-  return [...memoriesQueryKey, 'infinite', { limit }] as const
+export function infiniteMemoryListQueryKey(limit: number, dateRange?: MemoryDateRange) {
+  return [
+    ...memoriesQueryKey,
+    'infinite',
+    {
+      limit,
+      recordedFrom: dateRange?.recordedFrom ?? null,
+      recordedBefore: dateRange?.recordedBefore ?? null,
+    },
+  ] as const
 }
 
 async function fetchMemories({
   limit,
   cursor,
+  dateRange,
 }: {
   limit: number
   cursor?: string | null
+  dateRange?: MemoryDateRange
 }): Promise<MemoryListResponse> {
   const { data } = await getBrowserApiClient().GET('/memories', {
-    params: { query: { limit, cursor: cursor ?? undefined } },
+    params: {
+      query: {
+        limit,
+        cursor: cursor ?? undefined,
+        recorded_from: dateRange?.recordedFrom,
+        recorded_before: dateRange?.recordedBefore,
+      },
+    },
   })
   if (!data) throw new Error('GET /memories returned empty response')
   return data
@@ -42,29 +72,33 @@ async function createMemory(body: MemoryCreateRequest): Promise<Memory> {
 export function useMemoriesQuery({
   limit = 20,
   cursor,
+  dateRange,
   initialData,
 }: {
   limit?: number
   cursor?: string | null
+  dateRange?: MemoryDateRange
   initialData?: MemoryListResponse
 }) {
   return useQuery({
-    queryKey: memoryListQueryKey(limit, cursor),
-    queryFn: () => fetchMemories({ limit, cursor }),
+    queryKey: memoryListQueryKey(limit, cursor, dateRange),
+    queryFn: () => fetchMemories({ limit, cursor, dateRange }),
     initialData,
   })
 }
 
 export function useInfiniteMemoriesQuery({
   limit = 20,
+  dateRange,
   initialData,
 }: {
   limit?: number
+  dateRange?: MemoryDateRange
   initialData?: MemoryListResponse
 }) {
   return useInfiniteQuery({
-    queryKey: infiniteMemoryListQueryKey(limit),
-    queryFn: ({ pageParam }) => fetchMemories({ limit, cursor: pageParam }),
+    queryKey: infiniteMemoryListQueryKey(limit, dateRange),
+    queryFn: ({ pageParam }) => fetchMemories({ limit, cursor: pageParam, dateRange }),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.page.next_cursor ?? undefined,
     initialData: initialData ? { pages: [initialData], pageParams: [null] } : undefined,

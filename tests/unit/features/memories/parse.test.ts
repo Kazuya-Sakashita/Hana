@@ -141,7 +141,12 @@ describe('parseMemoryUpdate', () => {
 describe('parseListMemoriesQuery', () => {
   it('returns default limit and null cursor when query is empty', () => {
     const url = new URL('http://localhost/v1/memories')
-    expect(parseListMemoriesQuery(url)).toEqual({ limit: 20, cursor: null })
+    expect(parseListMemoriesQuery(url)).toEqual({
+      limit: 20,
+      cursor: null,
+      recordedFrom: null,
+      recordedBefore: null,
+    })
   })
 
   it('parses limit', () => {
@@ -163,6 +168,32 @@ describe('parseListMemoriesQuery', () => {
   it('rejects invalid cursor', () => {
     const url = new URL('http://localhost/v1/memories?cursor=garbage')
     expectValidationError(() => parseListMemoriesQuery(url), 'query.cursor')
+  })
+
+  it('parses an inclusive-exclusive recorded date range', () => {
+    const url = new URL(
+      'http://localhost/v1/memories?recorded_from=2026-05-01&recorded_before=2026-06-01',
+    )
+    const query = parseListMemoriesQuery(url)
+    expect(query.recordedFrom?.toISOString()).toBe('2026-05-01T00:00:00.000Z')
+    expect(query.recordedBefore?.toISOString()).toBe('2026-06-01T00:00:00.000Z')
+  })
+
+  it('requires both recorded range boundaries', () => {
+    const url = new URL('http://localhost/v1/memories?recorded_from=2026-05-01')
+    expectValidationError(() => parseListMemoriesQuery(url), 'query.recorded_before')
+  })
+
+  it('rejects an invalid or empty recorded range', () => {
+    const invalidDate = new URL(
+      'http://localhost/v1/memories?recorded_from=2026-02-30&recorded_before=2026-03-01',
+    )
+    expectValidationError(() => parseListMemoriesQuery(invalidDate), 'query.recorded_from')
+
+    const emptyRange = new URL(
+      'http://localhost/v1/memories?recorded_from=2026-05-01&recorded_before=2026-05-01',
+    )
+    expectValidationError(() => parseListMemoriesQuery(emptyRange), 'query.recorded_before')
   })
 })
 

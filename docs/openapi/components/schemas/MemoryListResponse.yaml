@@ -11,9 +11,14 @@ properties:
     description: 記録の配列 (recorded_at + id の降順)
   page:
     type: object
-    required: [next_cursor]
+    required: [next_cursor, total_count]
     properties:
       next_cursor:
         type: [string, 'null']
         description: 次ページの取得カーソル。最終ページなら null
         example: 'eyJpZCI6IjdkNmU1ZjRjLTNiMmEtNDI5MS04NzY1LTAxMjM0NTY3ODlhYiJ9'
+      total_count:
+        type: integer
+        minimum: 0
+        description: 指定した絞り込み条件に一致する記録の総件数
+        example: 12

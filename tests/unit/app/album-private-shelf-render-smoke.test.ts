@@ -64,8 +64,13 @@ function memory(overrides: Partial<Memory> = {}): Memory {
 function response(data: Memory[], nextCursor: string | null = null): MemoryListResponse {
   return {
     data,
-    page: { next_cursor: nextCursor },
+    page: { next_cursor: nextCursor, total_count: data.length },
   }
+}
+
+const MAY_RANGE = {
+  recordedFrom: '2026-05-01',
+  recordedBefore: '2026-06-01',
 }
 
 describe('ISSUE-070 AlbumList rendered smoke', () => {
@@ -88,6 +93,8 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
     const html = renderToStaticMarkup(
       React.createElement(AlbumList, {
         initialData: response([memory()]),
+        month: '2026-05',
+        dateRange: MAY_RANGE,
       }),
     )
 
@@ -106,6 +113,8 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
     const html = renderToStaticMarkup(
       React.createElement(AlbumList, {
         initialData: response([memory({ id: 'memory-001', is_favorite: false })], 'cursor-next'),
+        month: '2026-05',
+        dateRange: MAY_RANGE,
       }),
     )
 
@@ -113,5 +122,20 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
     expect(html).toContain('まえのページも みる')
     expect(html).toContain('w-full')
     expect(html).not.toMatch(/uploads\/|storage_key|presigned_url|prompt|previewUrl/i)
+  })
+
+  it('renders a non-judgmental empty state for a month without memories', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlbumList, {
+        initialData: response([]),
+        month: '2026-05',
+        dateRange: MAY_RANGE,
+      }),
+    )
+
+    expect(html).toContain('album-month-empty-state')
+    expect(html).toContain('この月のページは、')
+    expect(html).toContain('静かな余白です')
+    expect(html).not.toMatch(/未記録|連続|達成|失敗/)
   })
 })

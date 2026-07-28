@@ -19,11 +19,20 @@ import { optimisticUpdateMemoryInLists } from '@/lib/perf/optimistic'
 import { isApiProblemError } from '@/lib/api/error'
 import { useToast } from '@/components/ui/toast'
 import { albumLoadMoreStatus, quietStateCopy } from '@/lib/ui/quiet-state-copy'
+import { formatAlbumMonth, type MemoryDateRange } from '@/features/memories/month'
 
 const ALBUM_LIMIT = 50
 
-export function AlbumList({ initialData }: { initialData: MemoryListResponse }) {
-  const query = useInfiniteMemoriesQuery({ limit: ALBUM_LIMIT, initialData })
+export function AlbumList({
+  initialData,
+  month,
+  dateRange,
+}: {
+  initialData: MemoryListResponse
+  month: string
+  dateRange: MemoryDateRange
+}) {
+  const query = useInfiniteMemoriesQuery({ limit: ALBUM_LIMIT, dateRange, initialData })
   const items = query.data?.pages.flatMap((page) => page.data) ?? []
   const [loadMoreStatus, setLoadMoreStatus] = useState('')
   const statusRef = useRef<HTMLParagraphElement>(null)
@@ -51,14 +60,14 @@ export function AlbumList({ initialData }: { initialData: MemoryListResponse }) 
   }
 
   if (items.length === 0) {
-    return <EmptyState />
+    return <EmptyState monthLabel={formatAlbumMonth(month)} />
   }
 
   return (
     <section aria-labelledby="album-private-shelf" className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4" data-testid="album-shelf-heading">
         <div className="min-w-0">
-          <p className="meta-label">棚のページ</p>
+          <p className="meta-label">{formatAlbumMonth(month)}のページ</p>
           <h2 id="album-private-shelf" className="mt-1 font-serif text-lg">
             しまってあるページ
           </h2>
@@ -208,23 +217,26 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
   )
 }
 
-function EmptyState() {
+function EmptyState({ monthLabel }: { monthLabel: string }) {
   return (
-    <section className="photo-mat rounded-[var(--radius-photo-mat)] px-5 py-8 text-center">
+    <section
+      className="photo-mat rounded-[var(--radius-photo-mat)] px-5 py-8 text-center"
+      data-testid="album-month-empty-state"
+    >
       <div
         className="bg-paper-slip border-hairline mx-auto flex h-14 w-14 items-center justify-center rounded-[var(--radius-photo-mat)] border"
         aria-hidden="true"
       >
         <BookOpen className="text-sakura-deep size-6" />
       </div>
-      <p className="meta-label mt-5">はじめのページ</p>
+      <p className="meta-label mt-5">{monthLabel}</p>
       <h2 className="mt-3 font-serif text-xl leading-snug">
-        最初のページを、
+        この月のページは、
         <br />
-        ここにしまえます
+        静かな余白です
       </h2>
       <p className="text-ink-secondary mx-auto mt-3 max-w-[18rem] text-sm leading-7">
-        {quietStateCopy.album.emptyDescription}
+        残しておきたい日があったら、いつでもここにしまえます。
       </p>
       <Button asChild size="lg" className="mt-6 w-full">
         <Link href="/record" prefetch={false}>
