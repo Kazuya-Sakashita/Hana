@@ -28,6 +28,10 @@ import {
   type Memory,
   type MemoryCreateRequest,
 } from '@/features/memories/client/use-memories'
+import {
+  PARENT_NOTE_MAX_LENGTH,
+  toAiParentNote,
+} from '@/features/memories/client/record-parent-note'
 import { getRecordFooterState } from '@/features/memories/client/record-footer-state'
 import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
 import {
@@ -122,6 +126,7 @@ export default function RecordPage() {
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [parentNote, setParentNote] = useState('')
   const [recordedAt, setRecordedAt] = useState(todayIso)
   const [weather, setWeather] = useState('')
 
@@ -163,7 +168,11 @@ export default function RecordPage() {
     submitting
   const storyPreview = body.trim()
   const hasUnsavedChanges =
-    hasSelectedPhoto || !!uploadedImage || title.trim().length > 0 || storyPreview.length > 0
+    hasSelectedPhoto ||
+    !!uploadedImage ||
+    title.trim().length > 0 ||
+    storyPreview.length > 0 ||
+    parentNote.trim().length > 0
   const decisionCue = getRecordDecisionCue({
     uploaded: !!uploadedImage,
     aiStatus,
@@ -244,6 +253,7 @@ export default function RecordPage() {
     setHasAiGeneratedContent(false)
     setTitle('')
     setBody('')
+    setParentNote('')
 
     try {
       const { blob, contentType, width, height } = await reencodeImage(f)
@@ -286,8 +296,12 @@ export default function RecordPage() {
     fileInputRef.current?.click()
   }
 
-  async function callAiGenerate() {
+  async function callAiGenerate({ consentConfirmed }: { consentConfirmed: boolean }) {
     if (!uploadedImage || !childId) return
+    if (!consentConfirmed) {
+      setAiStatus('consent_pending')
+      return
+    }
     const requestId = aiRequestIdRef.current + 1
     aiRequestIdRef.current = requestId
     setAiStatus('generating')
@@ -300,7 +314,7 @@ export default function RecordPage() {
           image_ids: [uploadedImage.id],
           recorded_at: recordedAt || null,
           weather: weather.trim() === '' ? null : weather,
-          parent_note: body.trim() === '' ? null : body,
+          parent_note: toAiParentNote(parentNote),
         },
       })
       if (aiRequestIdRef.current !== requestId) return
@@ -339,13 +353,16 @@ export default function RecordPage() {
     }
   }
 
+  function requestAiGenerate() {
+    void callAiGenerate({ consentConfirmed: aiConsentAt !== null })
+  }
+
   async function acceptAiConsent() {
     try {
       const user = await setAiConsentMutation.mutateAsync()
       setAiConsentAtOverride(user.ai_consent_at)
       setAiStatus('idle')
-      // 同意完了 → 自動で生成リトライ
-      void callAiGenerate()
+      void callAiGenerate({ consentConfirmed: user.ai_consent_at !== null })
     } catch {
       setAiStatus('failed')
       setAiError(quietStateCopy.record.consentSaveFailed)
@@ -652,6 +669,31 @@ export default function RecordPage() {
                 <p className="text-ink-secondary font-serif text-sm">
                   {quietStateCopy.record.aiReady}
                 </p>
+                <div className="mt-4 flex flex-col gap-2" data-testid="record-parent-note">
+                  <Label htmlFor="memory-parent-note" className="font-serif">
+                    写真だけでは分からないこと (任意)
+                  </Label>
+                  <p
+                    id="memory-parent-note-description"
+                    className="text-ink-tertiary leading-narrative text-xs"
+                  >
+                    AIの下書きにだけ使います。記録には保存されません。
+                  </p>
+                  <Textarea
+                    id="memory-parent-note"
+                    value={parentNote}
+                    onChange={(event) => setParentNote(event.target.value)}
+                    disabled={aiStatus === 'generating'}
+                    maxLength={PARENT_NOTE_MAX_LENGTH}
+                    rows={3}
+                    aria-describedby="memory-parent-note-description memory-parent-note-count"
+                    placeholder="このとき初めて名前を呼んでくれました"
+                    className="min-h-24"
+                  />
+                  <p id="memory-parent-note-count" className="text-ink-tertiary text-right text-xs">
+                    {parentNote.length} / {PARENT_NOTE_MAX_LENGTH}
+                  </p>
+                </div>
                 {aiStatus === 'generating' ? (
                   <p
                     role="status"
@@ -812,7 +854,7 @@ export default function RecordPage() {
                 type="button"
                 size="lg"
                 className="w-full"
-                onClick={callAiGenerate}
+                onClick={requestAiGenerate}
                 disabled={footerState.primaryDisabled}
               >
                 {footerState.primaryLabel}
@@ -840,7 +882,7 @@ export default function RecordPage() {
               size="sm"
               className="mt-1 w-full"
               onClick={
-                footerState.secondaryAction === 'retry-ai' ? callAiGenerate : focusManualTitle
+                footerState.secondaryAction === 'retry-ai' ? requestAiGenerate : focusManualTitle
               }
             >
               {footerState.secondaryLabel}

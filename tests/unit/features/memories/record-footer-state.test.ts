@@ -115,6 +115,7 @@ describe('getRecordFooterState', () => {
       primaryAction: 'save',
       primaryLabel: 'このまま 残す',
       primaryDisabled: false,
+      secondaryAction: 'retry-ai',
     })
   })
 
