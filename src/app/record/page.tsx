@@ -32,6 +32,7 @@ import {
   PARENT_NOTE_MAX_LENGTH,
   toAiParentNote,
 } from '@/features/memories/client/record-parent-note'
+import { runTimedAiRequest } from '@/features/memories/client/record-ai-request'
 import { getRecordFooterState } from '@/features/memories/client/record-footer-state'
 import {
   getUploadRetryStartStage,
@@ -97,6 +98,11 @@ interface ActiveUploadAttempt {
   signal: AbortSignal
 }
 
+interface ActiveAiAttempt {
+  id: number
+  controller: AbortController
+}
+
 async function reencodeImage(file: File): Promise<EncodedPhoto> {
   const url = URL.createObjectURL(file)
   try {
@@ -142,6 +148,7 @@ export default function RecordPage() {
 
   const [aiStatus, setAiStatus] = useState<AiStatus>('idle')
   const [aiError, setAiError] = useState<string | null>(null)
+  const [aiTimedOut, setAiTimedOut] = useState(false)
   const [aiQuotaExceeded, setAiQuotaExceeded] = useState(false)
   const [hasAiGeneratedContent, setHasAiGeneratedContent] = useState(false)
 
@@ -157,11 +164,14 @@ export default function RecordPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const aiRecoveryButtonRef = useRef<HTMLButtonElement>(null)
   const uploadAttemptIdRef = useRef(0)
   const uploadAbortControllerRef = useRef<AbortController | null>(null)
   const uploadActionInFlightRef = useRef(false)
   const uploadCacheRef = useRef<UploadCache | null>(null)
   const aiRequestIdRef = useRef(0)
+  const aiAbortControllerRef = useRef<AbortController | null>(null)
+  const aiActionInFlightRef = useRef(false)
   const productFlowIdRef = useRef<string | null>(null)
   const productFlowStartedAtRef = useRef<number | null>(null)
   const reportedProductEventsRef = useRef(new Set<ProductEventName>())
@@ -187,7 +197,7 @@ export default function RecordPage() {
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
   const hasSelectedPhoto = !!filePreviewUrl && !!file
-  const photoReplacementLocked = aiStatus === 'generating' || submitting
+  const photoReplacementLocked = submitting
   const storyPreview = body.trim()
   const hasUnsavedChanges =
     hasSelectedPhoto ||
@@ -207,6 +217,7 @@ export default function RecordPage() {
     uploadStatus,
     uploadFailureStage,
     aiStatus,
+    aiTimedOut,
     aiQuotaExceeded,
     hasTitle: title.trim().length > 0,
     canSubmit,
@@ -256,12 +267,22 @@ export default function RecordPage() {
   }, [aiStatus, reportRecordProductEvent, storyPreview])
 
   useEffect(() => {
+    if (aiStatus !== 'failed' || !aiTimedOut) return
+    aiRecoveryButtonRef.current?.focus()
+  }, [aiStatus, aiTimedOut])
+
+  useEffect(() => {
     if (!filePreviewUrl) return
     return () => URL.revokeObjectURL(filePreviewUrl)
   }, [filePreviewUrl])
 
   useEffect(() => {
-    return () => uploadAbortControllerRef.current?.abort()
+    return () => {
+      uploadAbortControllerRef.current?.abort()
+      aiRequestIdRef.current += 1
+      aiAbortControllerRef.current?.abort()
+      aiActionInFlightRef.current = false
+    }
   }, [])
 
   function startUploadAttempt(): ActiveUploadAttempt {
@@ -281,6 +302,36 @@ export default function RecordPage() {
   function finishUploadAttempt(attempt: ActiveUploadAttempt) {
     if (!isCurrentUploadAttempt(attempt)) return
     uploadActionInFlightRef.current = false
+  }
+
+  function startAiAttempt(): ActiveAiAttempt | null {
+    if (aiActionInFlightRef.current) return null
+    const id = aiRequestIdRef.current + 1
+    aiRequestIdRef.current = id
+    aiAbortControllerRef.current?.abort()
+    const controller = new AbortController()
+    aiAbortControllerRef.current = controller
+    aiActionInFlightRef.current = true
+    return { id, controller }
+  }
+
+  function isCurrentAiAttempt(attempt: ActiveAiAttempt): boolean {
+    return aiRequestIdRef.current === attempt.id
+  }
+
+  function finishAiAttempt(attempt: ActiveAiAttempt) {
+    if (!isCurrentAiAttempt(attempt)) return
+    aiActionInFlightRef.current = false
+    if (aiAbortControllerRef.current === attempt.controller) {
+      aiAbortControllerRef.current = null
+    }
+  }
+
+  function cancelAiAttempt() {
+    aiRequestIdRef.current += 1
+    aiAbortControllerRef.current?.abort()
+    aiAbortControllerRef.current = null
+    aiActionInFlightRef.current = false
   }
 
   function getUploadFailureMessage(stage: UploadFailureStage): string {
@@ -370,7 +421,7 @@ export default function RecordPage() {
     const nextFile = event.target.files?.[0] ?? null
     if (!nextFile) return
     const attempt = startUploadAttempt()
-    aiRequestIdRef.current += 1
+    cancelAiAttempt()
     reportRecordProductEvent('photo_selected')
     setFile(nextFile)
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
@@ -382,6 +433,7 @@ export default function RecordPage() {
     setUploadedImage(null)
     setAiStatus('idle')
     setAiError(null)
+    setAiTimedOut(false)
     setHasAiGeneratedContent(false)
     setTitle('')
     setBody('')
@@ -442,54 +494,76 @@ export default function RecordPage() {
       setAiStatus('consent_pending')
       return
     }
-    const requestId = aiRequestIdRef.current + 1
-    aiRequestIdRef.current = requestId
+    const attempt = startAiAttempt()
+    if (!attempt) return
     setAiStatus('generating')
     setAiError(null)
+    setAiTimedOut(false)
     const client = getBrowserApiClient()
-    try {
-      const res = await client.POST('/ai/generate', {
-        body: {
-          child_id: childId,
-          image_ids: [uploadedImage.id],
-          recorded_at: recordedAt || null,
-          weather: weather.trim() === '' ? null : weather,
-          parent_note: toAiParentNote(parentNote),
-        },
-      })
-      if (aiRequestIdRef.current !== requestId) return
-      if (!res.data) throw new Error('生成結果が からでした')
+    const result = await runTimedAiRequest({
+      controller: attempt.controller,
+      isCurrent: () => isCurrentAiAttempt(attempt),
+      request: (signal) =>
+        client.POST('/ai/generate', {
+          body: {
+            child_id: childId,
+            image_ids: [uploadedImage.id],
+            recorded_at: recordedAt || null,
+            weather: weather.trim() === '' ? null : weather,
+            parent_note: toAiParentNote(parentNote),
+          },
+          signal,
+        }),
+    })
+    if (result.kind === 'stale') return
+    finishAiAttempt(attempt)
+
+    if (result.kind === 'timeout') {
+      setAiStatus('failed')
+      setAiTimedOut(true)
+      setAiError(quietStateCopy.record.aiTimedOut)
+      return
+    }
+
+    if (result.kind === 'success') {
+      const res = result.value
+      if (!res.data) {
+        setAiStatus('failed')
+        setAiError(quietStateCopy.record.aiFailed)
+        return
+      }
       setTitle(res.data.title)
       setBody(res.data.body)
       setHasAiGeneratedContent(true)
       setAiStatus('done')
-    } catch (e) {
-      if (aiRequestIdRef.current !== requestId) return
-      if (isApiProblemError(e)) {
-        switch (e.reason) {
-          case 'unauthorized':
-            router.push('/sign-in')
-            return
-          case 'ai_consent_required':
-            setAiStatus('consent_pending')
-            return
-          case 'ai_quota_exceeded':
-            setAiQuotaExceeded(true)
-            setAiStatus('failed')
-            setAiError(quietStateCopy.record.aiQuotaExceeded)
-            return
-          case 'ai_output_rejected':
-            setAiStatus('failed')
-            setAiError(quietStateCopy.record.aiFailed)
-            return
-          default:
-            setAiStatus('failed')
-            setAiError(quietStateCopy.record.aiFailed)
-        }
-      } else {
-        setAiStatus('failed')
-        setAiError(quietStateCopy.record.aiFailed)
+      return
+    }
+
+    const e = result.error
+    if (isApiProblemError(e)) {
+      switch (e.reason) {
+        case 'unauthorized':
+          router.push('/sign-in')
+          return
+        case 'ai_consent_required':
+          setAiStatus('consent_pending')
+          return
+        case 'ai_quota_exceeded':
+          setAiQuotaExceeded(true)
+          setAiStatus('failed')
+          setAiError(quietStateCopy.record.aiQuotaExceeded)
+          return
+        case 'ai_output_rejected':
+          setAiStatus('failed')
+          setAiError(quietStateCopy.record.aiFailed)
+          return
+        default:
+          setAiStatus('failed')
+          setAiError(quietStateCopy.record.aiFailed)
       }
+    } else {
+      setAiStatus('failed')
+      setAiError(quietStateCopy.record.aiFailed)
     }
   }
 
@@ -514,6 +588,11 @@ export default function RecordPage() {
   }
 
   function focusManualTitle() {
+    if (aiStatus === 'failed') {
+      setAiStatus('idle')
+      setAiTimedOut(false)
+      setAiError(null)
+    }
     titleInputRef.current?.focus()
   }
 
@@ -1003,6 +1082,7 @@ export default function RecordPage() {
             ) : footerState.primaryAction === 'generate-ai' ||
               footerState.primaryAction === 'retry-ai' ? (
               <Button
+                ref={aiTimedOut ? aiRecoveryButtonRef : undefined}
                 type="button"
                 size="lg"
                 className="w-full"

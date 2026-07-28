@@ -39,6 +39,7 @@ export function getRecordFooterState({
   uploadStatus,
   uploadFailureStage,
   aiStatus,
+  aiTimedOut,
   aiQuotaExceeded,
   hasTitle,
   canSubmit,
@@ -49,6 +50,7 @@ export function getRecordFooterState({
   uploadStatus: RecordUploadStatus
   uploadFailureStage: UploadFailureStage | null
   aiStatus: RecordAiStatus
+  aiTimedOut: boolean
   aiQuotaExceeded: boolean
   hasTitle: boolean
   canSubmit: boolean
@@ -127,6 +129,16 @@ export function getRecordFooterState({
   }
 
   if (aiStatus === 'failed') {
+    if (aiTimedOut) {
+      return {
+        primaryAction: 'retry-ai',
+        primaryLabel: 'もういちど AI で 下書きする',
+        primaryDisabled: false,
+        secondaryAction: 'manual',
+        secondaryLabel: 'AI を使わずに 書く',
+        statusLabel: 'AIの待機を終えました。再試行するか、手動入力で続けられます',
+      }
+    }
     if (hasTitle) {
       return {
         primaryAction: 'save',
