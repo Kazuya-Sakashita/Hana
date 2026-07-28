@@ -28,6 +28,7 @@ import {
   type Memory,
   type MemoryCreateRequest,
 } from '@/features/memories/client/use-memories'
+import { getRecordFooterState } from '@/features/memories/client/record-footer-state'
 import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
 import {
   createProductEventFlowId,
@@ -117,6 +118,7 @@ export default function RecordPage() {
   const [aiStatus, setAiStatus] = useState<AiStatus>('idle')
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiQuotaExceeded, setAiQuotaExceeded] = useState(false)
+  const [hasAiGeneratedContent, setHasAiGeneratedContent] = useState(false)
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -129,6 +131,7 @@ export default function RecordPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const aiRequestIdRef = useRef(0)
   const productFlowIdRef = useRef<string | null>(null)
   const productFlowStartedAtRef = useRef<number | null>(null)
   const reportedProductEventsRef = useRef(new Set<ProductEventName>())
@@ -153,8 +156,11 @@ export default function RecordPage() {
           : 'no-child'
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
-  const canGenerateAi = !!uploadedImage && aiStatus !== 'generating' && !aiQuotaExceeded
   const hasSelectedPhoto = !!filePreviewUrl && !!file
+  const photoReplacementLocked =
+    ['preparing', 'uploading', 'confirming'].includes(uploadStatus) ||
+    aiStatus === 'generating' ||
+    submitting
   const storyPreview = body.trim()
   const hasUnsavedChanges =
     hasSelectedPhoto || !!uploadedImage || title.trim().length > 0 || storyPreview.length > 0
@@ -163,6 +169,16 @@ export default function RecordPage() {
     aiStatus,
     canSubmit,
     hasStory: storyPreview.length > 0,
+  })
+  const footerState = getRecordFooterState({
+    hasSelectedPhoto,
+    uploaded: !!uploadedImage,
+    uploadStatus,
+    aiStatus,
+    aiQuotaExceeded,
+    hasTitle: title.trim().length > 0,
+    canSubmit,
+    submitting,
   })
 
   const reportRecordProductEvent = useCallback((eventName: ProductEventName) => {
@@ -215,6 +231,7 @@ export default function RecordPage() {
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const f = event.target.files?.[0] ?? null
     if (!f) return
+    aiRequestIdRef.current += 1
     reportRecordProductEvent('photo_selected')
     setFile(f)
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
@@ -224,6 +241,9 @@ export default function RecordPage() {
     setUploadedImage(null)
     setAiStatus('idle')
     setAiError(null)
+    setHasAiGeneratedContent(false)
+    setTitle('')
+    setBody('')
 
     try {
       const { blob, contentType, width, height } = await reencodeImage(f)
@@ -268,6 +288,8 @@ export default function RecordPage() {
 
   async function callAiGenerate() {
     if (!uploadedImage || !childId) return
+    const requestId = aiRequestIdRef.current + 1
+    aiRequestIdRef.current = requestId
     setAiStatus('generating')
     setAiError(null)
     const client = getBrowserApiClient()
@@ -281,11 +303,14 @@ export default function RecordPage() {
           parent_note: body.trim() === '' ? null : body,
         },
       })
+      if (aiRequestIdRef.current !== requestId) return
       if (!res.data) throw new Error('生成結果が からでした')
       setTitle(res.data.title)
       setBody(res.data.body)
+      setHasAiGeneratedContent(true)
       setAiStatus('done')
     } catch (e) {
+      if (aiRequestIdRef.current !== requestId) return
       if (isApiProblemError(e)) {
         switch (e.reason) {
           case 'unauthorized':
@@ -337,13 +362,19 @@ export default function RecordPage() {
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!uploadedImage || !childId) return
+    if (
+      !uploadedImage ||
+      !childId ||
+      !canSubmit ||
+      aiStatus === 'generating' ||
+      aiStatus === 'consent_pending'
+    )
+      return
     setSubmitting(true)
     setFieldErrors({})
     setTopMessage(null)
 
     const trimmedTitle = title.trim()
-    const wasAiGenerated = aiStatus === 'done'
     const requestBody: MemoryCreateRequest = {
       child_id: childId,
       title: trimmedTitle,
@@ -351,7 +382,7 @@ export default function RecordPage() {
       recorded_at: recordedAt,
       weather: weather.trim() === '' ? null : weather,
       image_ids: [uploadedImage.id],
-      ai_generated: wasAiGenerated,
+      ai_generated: hasAiGeneratedContent,
     }
     const now = new Date().toISOString()
     const optimisticId =
@@ -576,6 +607,7 @@ export default function RecordPage() {
               size="sm"
               className="w-full"
               onClick={openPhotoPicker}
+              disabled={photoReplacementLocked}
             >
               しゃしんを えらびなおす
             </Button>
@@ -620,27 +652,6 @@ export default function RecordPage() {
                 <p className="text-ink-secondary font-serif text-sm">
                   {quietStateCopy.record.aiReady}
                 </p>
-                <div className="mt-3 grid gap-2">
-                  <Button
-                    type="button"
-                    variant={aiStatus === 'done' ? 'outline' : 'default'}
-                    size="lg"
-                    className="w-full"
-                    onClick={callAiGenerate}
-                    disabled={!canGenerateAi}
-                  >
-                    {aiStatus === 'generating'
-                      ? recordAiGeneratingCopy(childName)
-                      : aiStatus === 'done'
-                        ? 'もういちど AI に たのむ'
-                        : 'AI で 下書きする'}
-                  </Button>
-                  {aiStatus !== 'done' ? (
-                    <Button type="button" variant="ghost" size="sm" onClick={focusManualTitle}>
-                      AI を使わずに 書く
-                    </Button>
-                  ) : null}
-                </div>
                 {aiStatus === 'generating' ? (
                   <p
                     role="status"
@@ -672,6 +683,7 @@ export default function RecordPage() {
                   id="memory-title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                  disabled={aiStatus === 'generating'}
                   placeholder="はじめての すなあそび"
                   maxLength={100}
                 />
@@ -721,6 +733,7 @@ export default function RecordPage() {
                         id="memory-body"
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
+                        disabled={aiStatus === 'generating'}
                         maxLength={1000}
                         rows={4}
                         placeholder="あの しゅんかんの こと、ひとこと だけでも。"
@@ -774,25 +787,65 @@ export default function RecordPage() {
           data-testid="record-bottom-sheet-footer"
           className="bg-elevated border-hairline -mx-5 border-t px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3"
         >
-          {!hasSelectedPhoto ? (
-            <Button type="button" size="lg" className="w-full" onClick={openPhotoPicker}>
-              しゃしんを えらぶ
-            </Button>
-          ) : !uploadedImage ? (
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {footerState.statusLabel}
+          </p>
+          <div
+            aria-busy={
+              footerState.primaryAction === 'uploading' ||
+              footerState.primaryAction === 'generating-ai' ||
+              footerState.primaryAction === 'saving'
+            }
+          >
+            {footerState.primaryAction === 'save' || footerState.primaryAction === 'saving' ? (
+              <Button
+                type="submit"
+                size="lg"
+                disabled={footerState.primaryDisabled}
+                className="w-full"
+              >
+                {footerState.primaryLabel}
+              </Button>
+            ) : footerState.primaryAction === 'generate-ai' ||
+              footerState.primaryAction === 'retry-ai' ? (
+              <Button
+                type="button"
+                size="lg"
+                className="w-full"
+                onClick={callAiGenerate}
+                disabled={footerState.primaryDisabled}
+              >
+                {footerState.primaryLabel}
+              </Button>
+            ) : footerState.primaryAction === 'manual' ? (
+              <Button type="button" size="lg" className="w-full" onClick={focusManualTitle}>
+                {footerState.primaryLabel}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="lg"
+                className="w-full"
+                onClick={footerState.primaryAction === 'choose-photo' ? openPhotoPicker : undefined}
+                disabled={footerState.primaryDisabled}
+              >
+                {footerState.primaryLabel}
+              </Button>
+            )}
+          </div>
+          {footerState.secondaryAction ? (
             <Button
               type="button"
-              variant="outline"
-              size="lg"
-              className="w-full"
-              onClick={openPhotoPicker}
+              variant="ghost"
+              size="sm"
+              className="mt-1 w-full"
+              onClick={
+                footerState.secondaryAction === 'retry-ai' ? callAiGenerate : focusManualTitle
+              }
             >
-              しゃしんを えらびなおす
+              {footerState.secondaryLabel}
             </Button>
-          ) : (
-            <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
-              {submitting ? quietStateCopy.record.submitting : 'このまま 残す'}
-            </Button>
-          )}
+          ) : null}
         </div>
       </form>
 

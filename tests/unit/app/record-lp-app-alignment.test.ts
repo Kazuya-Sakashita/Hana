@@ -5,6 +5,10 @@ const recordSource = readFileSync(
   new URL('../../../src/app/record/page.tsx', import.meta.url),
   'utf8',
 )
+const footerStateSource = readFileSync(
+  new URL('../../../src/features/memories/client/record-footer-state.ts', import.meta.url),
+  'utf8',
+)
 const surfacesSource = readFileSync(
   new URL('../../../src/components/product/surfaces.tsx', import.meta.url),
   'utf8',
@@ -60,8 +64,9 @@ describe('ISSUE-078 record LP-App visual alignment', () => {
     expect(recordSource).toContain('border-leaf/35 bg-paper-slip text-leaf-deep')
     expect(recordSource).not.toContain('border-sakura/40 bg-paper-slip text-sakura-deep')
     expect(recordSource).not.toContain('focus-visible:border-sakura')
-    expect(recordSource).toContain('AI を使わずに 書く')
-    expect(recordSource).toContain('このまま 残す')
+    expect(footerStateSource).toContain('AI を使わずに 書く')
+    expect(footerStateSource).toContain('このまま 残す')
+    expect(footerStateSource).toContain('AI で 下書きする')
   })
 
   it('records local scope, acceptance, and evidence-safety boundaries', () => {
