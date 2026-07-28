@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Anthropic SDK / Supabase / Prisma を全モック
 const mocks = vi.hoisted(() => ({
@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   imageFindMany: vi.fn(),
   aiGenerationCount: vi.fn(),
   aiGenerationCreate: vi.fn(),
+  aiGenerationUpdate: vi.fn(),
+  advisoryLock: vi.fn(),
+  transaction: vi.fn(),
   storageDownload: vi.fn(),
   resizeForClaude: vi.fn(),
   messagesCreate: vi.fn(),
@@ -40,12 +43,14 @@ vi.mock('@/features/ai/server/resize', () => ({
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
+    $transaction: mocks.transaction,
     profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
     child: { findFirst: mocks.childFindFirst },
     image: { findMany: mocks.imageFindMany },
     aiGeneration: {
       count: mocks.aiGenerationCount,
       create: mocks.aiGenerationCreate,
+      update: mocks.aiGenerationUpdate,
     },
   },
 }))
@@ -129,6 +134,10 @@ function mockClaudeSuccess(text: string) {
   })
 }
 
+function syntheticClaudeJson(body = 'あ'.repeat(80)) {
+  return JSON.stringify({ title: 'きろく', body, tags: ['合成'] })
+}
+
 function mockStorageReturnsImage() {
   // Blob with arrayBuffer() that returns a small fake JPEG byte sequence
   const blob = {
@@ -143,6 +152,32 @@ function mockResizeIdentity() {
     mediaType: 'image/jpeg' as const,
   }))
 }
+
+beforeEach(() => {
+  mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-default' })
+  mocks.aiGenerationUpdate.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+    id: where.id,
+  }))
+  mocks.advisoryLock.mockResolvedValue(1)
+  mocks.transaction.mockImplementation(
+    async (
+      callback: (transaction: {
+        $executeRaw: typeof mocks.advisoryLock
+        aiGeneration: {
+          count: typeof mocks.aiGenerationCount
+          create: typeof mocks.aiGenerationCreate
+        }
+      }) => Promise<unknown>,
+    ) =>
+      callback({
+        $executeRaw: mocks.advisoryLock,
+        aiGeneration: {
+          count: mocks.aiGenerationCount,
+          create: mocks.aiGenerationCreate,
+        },
+      }),
+  )
+})
 
 afterEach(() => vi.clearAllMocks())
 
@@ -159,6 +194,7 @@ describe('POST /v1/ai/generate', () => {
     expect(res.status).toBe(403)
     const body = (await res.json()) as { reason: string }
     expect(body.reason).toBe('ai_consent_required')
+    expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
   })
 
   it('returns 429 ai_quota_exceeded when monthly limit reached', async () => {
@@ -168,6 +204,7 @@ describe('POST /v1/ai/generate', () => {
     expect(res.status).toBe(429)
     const body = (await res.json()) as { reason: string }
     expect(body.reason).toBe('ai_quota_exceeded')
+    expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
   })
 
   it('returns 404 when child not found', async () => {
@@ -213,7 +250,7 @@ describe('POST /v1/ai/generate', () => {
     mocks.imageFindMany.mockResolvedValue([imageRow])
     mockStorageReturnsImage()
     mockResizeIdentity()
-    mockClaudeSuccess('{"title":"はじめて","body":"きょうは...","tags":["はじめて","おそと"]}')
+    mockClaudeSuccess(syntheticClaudeJson())
     mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-1' })
 
     const res = await POST(jsonRequest(validBody))
@@ -224,16 +261,28 @@ describe('POST /v1/ai/generate', () => {
       body: string
       tags: string[]
     }
-    expect(body.title).toBe('はじめて')
-    expect(body.body).toBe('きょうは...')
-    expect(body.tags).toEqual(['はじめて', 'おそと'])
+    expect(body.title).toBe('きろく')
+    expect(body.body).toBe('あ'.repeat(80))
+    expect(body.tags).toEqual(['合成'])
     expect(body.generation_id).toBe('gen-1')
-    // 成功ログが作成された
+    // vendor呼び出し前にquota枠を予約し、同じ行を成功状態へ更新する
     expect(mocks.aiGenerationCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ succeeded: true, userId: USER_ID }),
+        data: expect.objectContaining({
+          succeeded: false,
+          countsTowardQuota: true,
+          errorReason: 'in_progress',
+          userId: USER_ID,
+        }),
       }),
     )
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'gen-1' },
+        data: expect.objectContaining({ succeeded: true, errorReason: null }),
+      }),
+    )
+    expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
   })
 
   it('starts download and resize for five images in parallel', async () => {
@@ -241,7 +290,7 @@ describe('POST /v1/ai/generate', () => {
     mocks.aiGenerationCount.mockResolvedValue(0)
     mocks.childFindFirst.mockResolvedValue(childRow)
     mocks.imageFindMany.mockResolvedValue(makeImageRows(IMAGE_IDS))
-    mockClaudeSuccess('{"title":"はじめて","body":"きょうは...","tags":["はじめて","おそと"]}')
+    mockClaudeSuccess(syntheticClaudeJson())
     mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-1' })
 
     const blob = {
@@ -307,14 +356,7 @@ describe('POST /v1/ai/generate', () => {
     const body = (await res.json()) as { reason: string }
     expect(body.reason).toBe('ai_generation_failed')
     expect(mocks.messagesCreate).not.toHaveBeenCalled()
-    expect(mocks.aiGenerationCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          succeeded: false,
-          errorReason: 'internal_error',
-        }),
-      }),
-    )
+    expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
   })
 
   it('returns 500 ai_generation_failed when Claude returns invalid JSON', async () => {
@@ -330,11 +372,131 @@ describe('POST /v1/ai/generate', () => {
     expect(res.status).toBe(500)
     const body = (await res.json()) as { reason: string }
     expect(body.reason).toBe('ai_generation_failed')
-    // 失敗ログが作成された
-    expect(mocks.aiGenerationCreate).toHaveBeenCalledWith(
+    // 予約済み行が失敗状態へ更新された
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ succeeded: false }),
       }),
     )
+  })
+
+  it('regenerates once and returns only the accepted synthetic output', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+    const rejectedBody = '奇跡のような瞬間でした'.padEnd(80, 'あ')
+    mocks.messagesCreate
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: syntheticClaudeJson(rejectedBody) }],
+        usage: { input_tokens: 100, output_tokens: 50 },
+      })
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: syntheticClaudeJson() }],
+        usage: { input_tokens: 110, output_tokens: 55 },
+      })
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-safe-retry' })
+
+    const res = await POST(jsonRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(mocks.messagesCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          succeeded: true,
+          inputTokens: 210,
+          outputTokens: 105,
+          attemptCount: 2,
+          policyCategoryIds: ['exaggerated_expression'],
+          policyOutcome: 'accepted_after_retry',
+        }),
+      }),
+    )
+    const secondRequest = mocks.messagesCreate.mock.calls[1]?.[0]
+    expect(JSON.stringify(secondRequest)).toContain(
+      '前回の出力はHanaの安全基準を満たしませんでした',
+    )
+    expect(JSON.stringify(secondRequest)).not.toContain(rejectedBody)
+  })
+
+  it('stops after one retry and returns 422 without rejected output details', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+    mocks.messagesCreate.mockResolvedValue({
+      content: [{ type: 'text', text: syntheticClaudeJson('発達が早いです'.padEnd(80, 'あ')) }],
+      usage: { input_tokens: 100, output_tokens: 50 },
+    })
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-safety-rejected' })
+
+    const res = await POST(jsonRequest(validBody))
+    const body = (await res.json()) as Record<string, unknown>
+
+    expect(res.status).toBe(422)
+    expect(body.reason).toBe('ai_output_rejected')
+    expect(body.title).toBe('Unprocessable Entity')
+    expect(body).not.toHaveProperty('body')
+    expect(body).not.toHaveProperty('categoryIds')
+    expect(mocks.messagesCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          succeeded: false,
+          inputTokens: 200,
+          outputTokens: 100,
+          attemptCount: 2,
+          policyCategoryIds: ['medical_development_claim'],
+          policyOutcome: 'rejected_after_retry',
+          errorReason: 'ai_output_rejected',
+        }),
+      }),
+    )
+    expect(JSON.stringify(mocks.aiGenerationUpdate.mock.calls)).not.toContain('発達が早いです')
+  })
+
+  it('records safe metadata when the retry fails without logging the external error message', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+    mocks.messagesCreate
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: syntheticClaudeJson('奇跡のような瞬間'.padEnd(80, 'あ')) }],
+        usage: { input_tokens: 100, output_tokens: 50 },
+      })
+      .mockRejectedValueOnce(new Error('SENSITIVE_SENTINEL'))
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-retry-failed' })
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    const res = await POST(jsonRequest(validBody))
+    const body = (await res.json()) as Record<string, unknown>
+
+    expect(res.status).toBe(500)
+    expect(body.reason).toBe('ai_generation_failed')
+    expect(mocks.messagesCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          succeeded: false,
+          inputTokens: 100,
+          outputTokens: 50,
+          attemptCount: 2,
+          policyCategoryIds: ['exaggerated_expression'],
+          policyOutcome: 'retry_failed',
+          errorReason: 'internal_error',
+        }),
+      }),
+    )
+    expect(errorLog).toHaveBeenCalledWith('AI generate failed', { reason: 'internal_error' })
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('SENSITIVE_SENTINEL')
+    expect(JSON.stringify(body)).not.toContain('SENSITIVE_SENTINEL')
   })
 })

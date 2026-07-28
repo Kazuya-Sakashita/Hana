@@ -1,0 +1,25 @@
+description: |
+  入力値が不正、またはAI生成結果が出力ポリシーを満たさず表示できない。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      validation_error:
+        summary: Field validation failure
+        value:
+          type: 'https://hana.app/problems/validation-error'
+          title: 'Validation Error'
+          status: 422
+          detail: '入力内容に誤りがあります'
+          reason: 'validation_error'
+          instance: 'req_01HXYZABCDEFG'
+      ai_output_rejected:
+        summary: Generated output rejected by safety policy
+        value:
+          type: 'https://hana.app/problems/ai-output-rejected'
+          title: 'Unprocessable Entity'
+          status: 422
+          detail: 'AIの下書きを表示できませんでした。手動で入力するか、もう一度お試しください'
+          reason: 'ai_output_rejected'
+          instance: 'req_01HXYZABCDEFG'

@@ -360,7 +360,13 @@ export interface paths {
          *     `profile.ai_consent_at` をセット (本Issueでは UI ダイアログで同意取得)。
          *     未同意で叩くと 403 `ai_consent_required` を返す。
          *
+         *     AI vendor 呼び出しに到達した生成リクエストは、成功・失敗を問わず
          *     **月間 20 回まで** (Free tier)。超過時は 429 `ai_quota_exceeded`。
+         *
+         *     生成結果が出力ポリシーに違反した場合は内部で1回だけ再生成する。
+         *     再生成時は、拒否本文やカテゴリを含めず、安全基準を再確認する固定指示だけを追加する。
+         *     再生成後も違反する場合、生成本文や違反カテゴリを返さず
+         *     422 `ai_output_rejected` を返す。
          */
         post: operations["generateAiText"];
         delete?: never;
@@ -1100,6 +1106,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /** @description 入力値が不正、またはAI生成結果が出力ポリシーを満たさず表示できない。 */
+        AiGenerateUnprocessableEntity: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /**
          * @description レート制限を超過した。`Retry-After` ヘッダで再試行可能時刻を返す。
          *     AI 生成 API（`/v1/ai/*`）と認証系 API で特に重要。
@@ -1726,7 +1741,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            422: components["responses"]["AiGenerateUnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
         };

@@ -77,15 +77,15 @@ PRD §16 マネタイズ:
 
 実装:
 
-- `ai_generations` テーブルで `(user_id, created_at, succeeded=true)` をカウント
+- `ai_generations` テーブルでAI vendor呼び出しに到達したrequestを成否にかかわらずカウント
 - UTC 月境界 (1 日 00:00:00) でリセット
-- 失敗した generation は quota にカウントしない (kazuya が AI のエラーで loss しないように)
+- 1 request内の安全性retryは最大1回で、quota上は1回として扱う
 
-### 6. 禁止表現の制御: system prompt のみ (MVP)
+### 6. 禁止表現の制御: system prompt + 高精度post-check
 
-system prompt に PRD §9 の禁止リストを明記。Claude は通常従う。
-
-将来 (違反観測時): post 生成後の regex フィルタ + 自動再生成を追加 (別 ISSUE)。
+system prompt に PRD §9 の禁止リストを明記し、生成後に安定カテゴリIDの高精度ルールで検査する。
+違反時は拒否本文やカテゴリをpromptへ戻さず、固定の安全指示で1回だけ再生成する。再失敗時は
+本文を返さず`ai_output_rejected`とする。ルールは完全な意味判定ではなく安全網として扱う。
 
 ### 7. 生成ログ: メタ情報のみ、本文は保管しない
 
@@ -94,6 +94,7 @@ system prompt に PRD §9 の禁止リストを明記。Claude は通常従う�
 - model_version / prompt_version
 - input_tokens / output_tokens / duration_ms
 - succeeded (boolean) / error_reason
+- attempt_count / policy_category_ids / policy_outcome
 - user_id / child_id / created_at
 
 **保管しない**:
