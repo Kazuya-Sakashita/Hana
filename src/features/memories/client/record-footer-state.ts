@@ -1,3 +1,8 @@
+import {
+  getUploadRetryCopy,
+  type UploadFailureStage,
+} from '@/features/memories/client/record-upload-retry'
+
 export type RecordUploadStatus =
   | 'idle'
   | 'preparing'
@@ -11,6 +16,7 @@ export type RecordAiStatus = 'idle' | 'consent_pending' | 'generating' | 'done' 
 export type RecordFooterPrimaryAction =
   | 'choose-photo'
   | 'uploading'
+  | 'retry-upload'
   | 'generate-ai'
   | 'generating-ai'
   | 'retry-ai'
@@ -22,7 +28,7 @@ export interface RecordFooterState {
   primaryAction: RecordFooterPrimaryAction
   primaryLabel: string
   primaryDisabled: boolean
-  secondaryAction: 'manual' | 'retry-ai' | null
+  secondaryAction: 'manual' | 'retry-ai' | 'choose-photo' | null
   secondaryLabel: string | null
   statusLabel: string
 }
@@ -31,6 +37,7 @@ export function getRecordFooterState({
   hasSelectedPhoto,
   uploaded,
   uploadStatus,
+  uploadFailureStage,
   aiStatus,
   aiQuotaExceeded,
   hasTitle,
@@ -40,6 +47,7 @@ export function getRecordFooterState({
   hasSelectedPhoto: boolean
   uploaded: boolean
   uploadStatus: RecordUploadStatus
+  uploadFailureStage: UploadFailureStage | null
   aiStatus: RecordAiStatus
   aiQuotaExceeded: boolean
   hasTitle: boolean
@@ -70,13 +78,14 @@ export function getRecordFooterState({
 
   if (!uploaded) {
     if (uploadStatus === 'failed') {
+      const retryCopy = getUploadRetryCopy(uploadFailureStage ?? 'prepare')
       return {
-        primaryAction: 'choose-photo',
-        primaryLabel: 'もういちど しゃしんを えらぶ',
+        primaryAction: 'retry-upload',
+        primaryLabel: retryCopy.primaryLabel,
         primaryDisabled: false,
-        secondaryAction: null,
-        secondaryLabel: null,
-        statusLabel: '写真を準備できませんでした',
+        secondaryAction: 'choose-photo',
+        secondaryLabel: 'べつの写真を えらぶ',
+        statusLabel: retryCopy.statusLabel,
       }
     }
     const statusLabel =

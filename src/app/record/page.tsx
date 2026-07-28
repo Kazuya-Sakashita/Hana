@@ -33,6 +33,11 @@ import {
   toAiParentNote,
 } from '@/features/memories/client/record-parent-note'
 import { getRecordFooterState } from '@/features/memories/client/record-footer-state'
+import {
+  getUploadRetryStartStage,
+  runUploadStages,
+  type UploadFailureStage,
+} from '@/features/memories/client/record-upload-retry'
 import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
 import {
   createProductEventFlowId,
@@ -51,7 +56,6 @@ type AiStatus = 'idle' | 'consent_pending' | 'generating' | 'done' | 'failed'
 
 interface UploadedImage {
   id: string
-  previewUrl: string
 }
 
 interface FieldErrors {
@@ -75,9 +79,25 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
 
 type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic'
 
-async function reencodeImage(
-  file: File,
-): Promise<{ blob: Blob; contentType: AllowedMime; width: number; height: number }> {
+interface EncodedPhoto {
+  blob: Blob
+  contentType: AllowedMime
+  width: number
+  height: number
+}
+
+interface UploadCache {
+  encoded: EncodedPhoto
+  fileName: string
+  target: { presignedUrl: string; storageKey: string } | null
+}
+
+interface ActiveUploadAttempt {
+  id: number
+  signal: AbortSignal
+}
+
+async function reencodeImage(file: File): Promise<EncodedPhoto> {
   const url = URL.createObjectURL(file)
   try {
     const img = new Image()
@@ -117,6 +137,7 @@ export default function RecordPage() {
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadFailureStage, setUploadFailureStage] = useState<UploadFailureStage | null>(null)
   const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null)
 
   const [aiStatus, setAiStatus] = useState<AiStatus>('idle')
@@ -136,6 +157,10 @@ export default function RecordPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadAttemptIdRef = useRef(0)
+  const uploadAbortControllerRef = useRef<AbortController | null>(null)
+  const uploadActionInFlightRef = useRef(false)
+  const uploadCacheRef = useRef<UploadCache | null>(null)
   const aiRequestIdRef = useRef(0)
   const productFlowIdRef = useRef<string | null>(null)
   const productFlowStartedAtRef = useRef<number | null>(null)
@@ -162,10 +187,7 @@ export default function RecordPage() {
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
   const hasSelectedPhoto = !!filePreviewUrl && !!file
-  const photoReplacementLocked =
-    ['preparing', 'uploading', 'confirming'].includes(uploadStatus) ||
-    aiStatus === 'generating' ||
-    submitting
+  const photoReplacementLocked = aiStatus === 'generating' || submitting
   const storyPreview = body.trim()
   const hasUnsavedChanges =
     hasSelectedPhoto ||
@@ -183,6 +205,7 @@ export default function RecordPage() {
     hasSelectedPhoto,
     uploaded: !!uploadedImage,
     uploadStatus,
+    uploadFailureStage,
     aiStatus,
     aiQuotaExceeded,
     hasTitle: title.trim().length > 0,
@@ -237,15 +260,124 @@ export default function RecordPage() {
     return () => URL.revokeObjectURL(filePreviewUrl)
   }, [filePreviewUrl])
 
+  useEffect(() => {
+    return () => uploadAbortControllerRef.current?.abort()
+  }, [])
+
+  function startUploadAttempt(): ActiveUploadAttempt {
+    const id = uploadAttemptIdRef.current + 1
+    uploadAttemptIdRef.current = id
+    uploadAbortControllerRef.current?.abort()
+    const controller = new AbortController()
+    uploadAbortControllerRef.current = controller
+    uploadActionInFlightRef.current = true
+    return { id, signal: controller.signal }
+  }
+
+  function isCurrentUploadAttempt(attempt: ActiveUploadAttempt): boolean {
+    return uploadAttemptIdRef.current === attempt.id && !attempt.signal.aborted
+  }
+
+  function finishUploadAttempt(attempt: ActiveUploadAttempt) {
+    if (!isCurrentUploadAttempt(attempt)) return
+    uploadActionInFlightRef.current = false
+  }
+
+  function getUploadFailureMessage(stage: UploadFailureStage): string {
+    if (stage === 'confirm') return quietStateCopy.record.uploadConfirmFailed
+    if (stage === 'put') return quietStateCopy.record.uploadPutFailed
+    return quietStateCopy.record.uploadPrepareFailed
+  }
+
+  function markUploadFailed(attempt: ActiveUploadAttempt, stage: UploadFailureStage) {
+    if (!isCurrentUploadAttempt(attempt)) return
+    setUploadFailureStage(stage)
+    setUploadStatus('failed')
+    setUploadError(getUploadFailureMessage(stage))
+    finishUploadAttempt(attempt)
+  }
+
+  async function runCachedUpload(
+    cache: UploadCache,
+    attempt: ActiveUploadAttempt,
+    startStage: UploadFailureStage,
+  ) {
+    const client = getBrowserApiClient()
+    const result = await runUploadStages({
+      startStage,
+      target: cache.target,
+      isCurrent: () => isCurrentUploadAttempt(attempt),
+      onStageChange: (stage) => {
+        if (!isCurrentUploadAttempt(attempt)) return
+        setUploadStatus(
+          stage === 'prepare' ? 'preparing' : stage === 'put' ? 'uploading' : 'confirming',
+        )
+      },
+      prepare: async () => {
+        const presigned = await client.POST('/uploads/presigned-url', {
+          body: {
+            file_name: cache.fileName,
+            content_type: cache.encoded.contentType,
+          },
+          signal: attempt.signal,
+        })
+        if (!presigned.data) throw new Error('upload_prepare_failed')
+        return {
+          presignedUrl: presigned.data.presigned_url,
+          storageKey: presigned.data.storage_key,
+        }
+      },
+      put: async (target) => {
+        const response = await fetch(target.presignedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': cache.encoded.contentType },
+          body: cache.encoded.blob,
+          signal: attempt.signal,
+        })
+        if (!response.ok) throw new Error('upload_failed')
+      },
+      confirm: async (target) => {
+        const confirmed = await client.POST('/uploads/confirm', {
+          body: {
+            storage_key: target.storageKey,
+            width: cache.encoded.width,
+            height: cache.encoded.height,
+            file_size: cache.encoded.blob.size,
+          },
+          signal: attempt.signal,
+        })
+        if (!confirmed.data) throw new Error('upload_confirm_failed')
+        return confirmed.data.id
+      },
+    })
+
+    if (result.kind === 'stale') return
+    cache.target = result.target
+    if (result.kind === 'failed') {
+      markUploadFailed(attempt, result.stage)
+      return
+    }
+
+    setUploadedImage({ id: result.value })
+    setUploadStatus('done')
+    setUploadFailureStage(null)
+    setUploadError(null)
+    uploadCacheRef.current = null
+    finishUploadAttempt(attempt)
+  }
+
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-    const f = event.target.files?.[0] ?? null
-    if (!f) return
+    const nextFile = event.target.files?.[0] ?? null
+    if (!nextFile) return
+    const attempt = startUploadAttempt()
     aiRequestIdRef.current += 1
     reportRecordProductEvent('photo_selected')
-    setFile(f)
+    setFile(nextFile)
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
-    setFilePreviewUrl(URL.createObjectURL(f))
+    setFilePreviewUrl(URL.createObjectURL(nextFile))
+    uploadCacheRef.current = null
     setUploadStatus('preparing')
+    setUploadFailureStage(null)
     setUploadError(null)
     setUploadedImage(null)
     setAiStatus('idle')
@@ -256,36 +388,44 @@ export default function RecordPage() {
     setParentNote('')
 
     try {
-      const { blob, contentType, width, height } = await reencodeImage(f)
-      const client = getBrowserApiClient()
-      const presigned = await client.POST('/uploads/presigned-url', {
-        body: { file_name: f.name, content_type: contentType },
-      })
-      if (!presigned.data) throw new Error('upload_prepare_failed')
-      const { presigned_url, storage_key } = presigned.data
-
-      setUploadStatus('uploading')
-      const putRes = await fetch(presigned_url, {
-        method: 'PUT',
-        headers: { 'Content-Type': contentType },
-        body: blob,
-      })
-      if (!putRes.ok) {
-        throw new Error('upload_failed')
+      const encoded = await reencodeImage(nextFile)
+      if (!isCurrentUploadAttempt(attempt)) return
+      const cache: UploadCache = {
+        encoded,
+        fileName: nextFile.name,
+        target: null,
       }
-
-      setUploadStatus('confirming')
-      const confirmed = await client.POST('/uploads/confirm', {
-        body: { storage_key, width, height, file_size: blob.size },
-      })
-      if (!confirmed.data) throw new Error('upload_confirm_failed')
-
-      setUploadedImage({ id: confirmed.data.id, previewUrl: filePreviewUrl ?? '' })
-      setUploadStatus('done')
-    } catch (e: unknown) {
-      setUploadStatus('failed')
-      setUploadError(quietStateCopy.record.uploadFailed)
+      uploadCacheRef.current = cache
+      await runCachedUpload(cache, attempt, 'prepare')
+    } catch {
+      markUploadFailed(attempt, 'prepare')
     }
+  }
+
+  async function retryUpload() {
+    if (uploadActionInFlightRef.current || !file || !uploadFailureStage) return
+    const failedStage = uploadFailureStage
+    const attempt = startUploadAttempt()
+    setUploadFailureStage(null)
+    setUploadError(null)
+
+    let cache = uploadCacheRef.current
+    if (!cache) {
+      setUploadStatus('preparing')
+      try {
+        const encoded = await reencodeImage(file)
+        if (!isCurrentUploadAttempt(attempt)) return
+        cache = { encoded, fileName: file.name, target: null }
+        uploadCacheRef.current = cache
+      } catch {
+        markUploadFailed(attempt, 'prepare')
+        return
+      }
+    }
+
+    const retryStartStage = getUploadRetryStartStage(failedStage)
+    if (failedStage === 'put') cache.target = null
+    await runCachedUpload(cache, attempt, retryStartStage)
   }
 
   function resetPhotoInput(event: React.MouseEvent<HTMLInputElement>) {
@@ -375,6 +515,18 @@ export default function RecordPage() {
 
   function focusManualTitle() {
     titleInputRef.current?.focus()
+  }
+
+  function runFooterSecondaryAction() {
+    if (footerState.secondaryAction === 'retry-ai') {
+      requestAiGenerate()
+      return
+    }
+    if (footerState.secondaryAction === 'choose-photo') {
+      openPhotoPicker()
+      return
+    }
+    focusManualTitle()
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -617,7 +769,7 @@ export default function RecordPage() {
             aria-describedby="memory-photo-status"
           />
 
-          {uploadedImage ? (
+          {hasSelectedPhoto && uploadStatus !== 'failed' ? (
             <Button
               type="button"
               variant="outline"
@@ -626,7 +778,7 @@ export default function RecordPage() {
               onClick={openPhotoPicker}
               disabled={photoReplacementLocked}
             >
-              しゃしんを えらびなおす
+              {uploadedImage ? 'しゃしんを えらびなおす' : 'べつの しゃしんを えらぶ'}
             </Button>
           ) : null}
 
@@ -859,6 +1011,16 @@ export default function RecordPage() {
               >
                 {footerState.primaryLabel}
               </Button>
+            ) : footerState.primaryAction === 'retry-upload' ? (
+              <Button
+                type="button"
+                size="lg"
+                className="w-full"
+                onClick={retryUpload}
+                disabled={footerState.primaryDisabled}
+              >
+                {footerState.primaryLabel}
+              </Button>
             ) : footerState.primaryAction === 'manual' ? (
               <Button type="button" size="lg" className="w-full" onClick={focusManualTitle}>
                 {footerState.primaryLabel}
@@ -881,9 +1043,7 @@ export default function RecordPage() {
               variant="ghost"
               size="sm"
               className="mt-1 w-full"
-              onClick={
-                footerState.secondaryAction === 'retry-ai' ? requestAiGenerate : focusManualTitle
-              }
+              onClick={runFooterSecondaryAction}
             >
               {footerState.secondaryLabel}
             </Button>

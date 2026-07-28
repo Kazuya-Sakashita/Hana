@@ -35,7 +35,7 @@ async function generateAndUploadVariants(storageKey: string): Promise<void> {
 
   if (downloadError || !blob) {
     console.error('variant generation: original download failed', {
-      reason: downloadError?.message ?? 'no_data',
+      reason: downloadError ? 'storage_download_failed' : 'storage_download_empty',
     })
     return
   }
@@ -61,10 +61,14 @@ async function generateAndUploadVariants(storageKey: string): Promise<void> {
   ])
 
   if (thumbRes.error) {
-    console.error('variant upload (thumbnail) failed', { reason: thumbRes.error.message })
+    console.error('variant upload (thumbnail) failed', {
+      reason: 'variant_thumbnail_upload_failed',
+    })
   }
   if (previewRes.error) {
-    console.error('variant upload (preview) failed', { reason: previewRes.error.message })
+    console.error('variant upload (preview) failed', {
+      reason: 'variant_preview_upload_failed',
+    })
   }
 }
 
@@ -101,12 +105,22 @@ export async function POST(request: Request) {
       ])
     }
 
+    const existingImage = await prisma.image.findUnique({
+      where: { storageKey: input.storageKey },
+    })
+    if (existingImage) {
+      if (existingImage.userId !== user.id || existingImage.deletedAt) {
+        throw problems.notFound('画像が見つかりません')
+      }
+      return NextResponse.json(toImageResponse(existingImage), { status: 200 })
+    }
+
     // variant 生成 + upload (失敗してもユーザー体験を壊さないので sequential 待機)
     try {
       await generateAndUploadVariants(input.storageKey)
-    } catch (variantErr) {
+    } catch {
       console.error('variant generation crashed', {
-        reason: variantErr instanceof Error ? variantErr.message : 'unknown',
+        reason: 'variant_generation_failed',
       })
       // 続行: Image row は作成する
     }
@@ -125,14 +139,16 @@ export async function POST(request: Request) {
       return NextResponse.json(toImageResponse(image), { status: 201 })
     } catch (dbErr) {
       if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === 'P2002') {
-        // storage_key の unique 制約違反 → 同じ key を 2 回 confirm
-        throw problems.validation([
-          {
-            path: 'body.storage_key',
-            reason: 'already_confirmed',
-            message: 'この画像は既に登録済みです',
-          },
-        ])
+        const concurrentlyCreated = await prisma.image.findUnique({
+          where: { storageKey: input.storageKey },
+        })
+        if (
+          concurrentlyCreated &&
+          concurrentlyCreated.userId === user.id &&
+          !concurrentlyCreated.deletedAt
+        ) {
+          return NextResponse.json(toImageResponse(concurrentlyCreated), { status: 200 })
+        }
       }
       throw dbErr
     }

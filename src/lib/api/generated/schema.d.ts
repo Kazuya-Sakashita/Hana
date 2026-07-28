@@ -139,6 +139,9 @@ export interface paths {
          *     このエンドポイントは DB に書き込みを行わない。アップロード完了後に
          *     `POST /uploads/confirm` を呼ぶことで Image レコードが作成される。
          *
+         *     PUT の成否が不明な場合や PUT が失敗した場合は、このエンドポイントで新しい
+         *     signed URL と storage_key を発行し、同じ再エンコード済み画像を新しい URL へ送る。
+         *
          *     クライアントは PUT 前に **Canvas API 等で EXIF を削除** することが期待される (ADR-0009)。
          */
         post: operations["createPresignedUpload"];
@@ -162,6 +165,9 @@ export interface paths {
          * @description クライアントが presigned URL に PUT したあとに呼ぶ。
          *     サーバは `storage_key` のプレフィクスが現在のユーザーのものであることを検証し、
          *     Supabase Storage 上でオブジェクトの存在を確認した上で `images` テーブルに行を作成する。
+         *
+         *     同じユーザーが同じ `storage_key` を再送した場合は、既存の Image を返す冪等操作とする。
+         *     初回作成時は 201、既に確定済みの場合は 200 を返す。
          */
         post: operations["confirmUpload"];
         delete?: never;
@@ -1452,6 +1458,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description 既に確定済みの Image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Image"];
+                };
+            };
             /** @description 作成された Image */
             201: {
                 headers: {

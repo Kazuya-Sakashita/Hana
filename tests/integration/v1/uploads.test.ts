@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateStorageKey, storageKeyPrefixForUser } from '@/features/uploads/server/storage-key'
 
@@ -5,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   profileFindUnique: vi.fn(),
   profileCreate: vi.fn(),
+  imageFindUnique: vi.fn(),
   imageCreate: vi.fn(),
   createSignedUploadUrl: vi.fn(),
   storageDownload: vi.fn(),
@@ -40,7 +42,7 @@ vi.mock('@/features/uploads/server/variants', () => ({
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
     profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
-    image: { create: mocks.imageCreate },
+    image: { findUnique: mocks.imageFindUnique, create: mocks.imageCreate },
   },
 }))
 
@@ -62,6 +64,7 @@ const profileRow = {
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
   mocks.profileFindUnique.mockResolvedValue(profileRow)
+  mocks.imageFindUnique.mockResolvedValue(null)
 }
 
 function unauthed() {
@@ -205,6 +208,80 @@ describe('POST /v1/uploads/confirm', () => {
     mocks.storageUpload.mockResolvedValue({ data: { path: 'ok' }, error: null })
   }
 
+  it('returns the existing Image on an idempotent confirm retry', async () => {
+    authed()
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    mocks.imageFindUnique.mockResolvedValue({
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    })
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+        width: 800,
+        height: 600,
+        file_size: 10000,
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      content_type: 'image/jpeg',
+    })
+    expect(mocks.storageDownload).not.toHaveBeenCalled()
+    expect(mocks.imageCreate).not.toHaveBeenCalled()
+  })
+
+  it('converges on the existing Image when concurrent confirms race', async () => {
+    authed()
+    setupVariantMocks()
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    const existingImage = {
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    }
+    mocks.imageFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(existingImage)
+    mocks.imageCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('synthetic unique race', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    )
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+        width: 800,
+        height: 600,
+        file_size: 10000,
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ id: existingImage.id })
+    expect(mocks.imageFindUnique).toHaveBeenCalledTimes(2)
+  })
+
   it('returns 201 with Image shape (no storage_key leak)', async () => {
     authed()
     setupVariantMocks()
@@ -290,7 +367,7 @@ describe('POST /v1/uploads/confirm', () => {
     // download が落ちても Image row は作成される
     mocks.storageDownload.mockResolvedValue({
       data: null,
-      error: { message: 'boom' },
+      error: { message: 'sensitive external storage detail' },
     })
     const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
     mocks.imageCreate.mockResolvedValue({
@@ -318,6 +395,99 @@ describe('POST /v1/uploads/confirm', () => {
     )
     expect(res.status).toBe(201)
     expect(mocks.storageUpload).not.toHaveBeenCalled()
+    expect(errSpy).toHaveBeenCalledWith('variant generation: original download failed', {
+      reason: 'storage_download_failed',
+    })
+    expect(JSON.stringify(errSpy.mock.calls)).not.toContain('sensitive external storage detail')
+
+    errSpy.mockRestore()
+  })
+
+  it('logs only stable reasons when variant uploads fail', async () => {
+    authed()
+    setupVariantMocks()
+    mocks.storageUpload
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'sensitive thumbnail storage detail' },
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'sensitive preview storage detail' },
+      })
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    mocks.imageCreate.mockResolvedValue({
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+        width: 800,
+        height: 600,
+        file_size: 10000,
+      }),
+    )
+
+    expect(res.status).toBe(201)
+    expect(errSpy).toHaveBeenCalledWith('variant upload (thumbnail) failed', {
+      reason: 'variant_thumbnail_upload_failed',
+    })
+    expect(errSpy).toHaveBeenCalledWith('variant upload (preview) failed', {
+      reason: 'variant_preview_upload_failed',
+    })
+    const loggedCalls = JSON.stringify(errSpy.mock.calls)
+    expect(loggedCalls).not.toContain('sensitive thumbnail storage detail')
+    expect(loggedCalls).not.toContain('sensitive preview storage detail')
+
+    errSpy.mockRestore()
+  })
+
+  it('logs a stable reason when variant generation crashes', async () => {
+    authed()
+    setupVariantMocks()
+    mocks.thumbnailVariant.mockRejectedValue(new Error('sensitive image processor detail'))
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    mocks.imageCreate.mockResolvedValue({
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+        width: 800,
+        height: 600,
+        file_size: 10000,
+      }),
+    )
+
+    expect(res.status).toBe(201)
+    expect(errSpy).toHaveBeenCalledWith('variant generation crashed', {
+      reason: 'variant_generation_failed',
+    })
+    expect(JSON.stringify(errSpy.mock.calls)).not.toContain('sensitive image processor detail')
 
     errSpy.mockRestore()
   })
