@@ -284,6 +284,7 @@ export default function RecordPage() {
     canSubmit,
     submitting,
   })
+  const currentStepLabel = !uploadedImage ? '写真' : aiStatus !== 'done' ? '下書き' : '保存'
 
   const reportRecordProductEvent = useCallback((eventName: ProductEventName) => {
     if (reportedProductEventsRef.current.has(eventName)) return
@@ -1035,7 +1036,10 @@ export default function RecordPage() {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+          <p className="sr-only" role="status" aria-live="polite">
+            現在のステップ: {currentStepLabel}
+          </p>
+          <ol aria-label="記録の進行" className="grid grid-cols-3 gap-2 text-center text-[11px]">
             <StepPill
               active={!uploadedImage}
               done={!!uploadedImage}
@@ -1048,8 +1052,13 @@ export default function RecordPage() {
               label="下書き"
               icon={PenLine}
             />
-            <StepPill active={canSubmit} done={false} label="保存" icon={Check} />
-          </div>
+            <StepPill
+              active={!!uploadedImage && aiStatus === 'done'}
+              done={false}
+              label="保存"
+              icon={Check}
+            />
+          </ol>
 
           <PaperSlip data-testid="record-decision-cue">
             <p className="meta-label">{decisionCue.eyebrow}</p>
@@ -1601,7 +1610,8 @@ function StepPill({
   const iconTone = done || active ? 'primary' : 'muted'
 
   return (
-    <div
+    <li
+      aria-current={active ? 'step' : undefined}
       className={
         done
           ? 'border-leaf/30 bg-paper-slip text-leaf-deep inline-flex items-center justify-center gap-1 rounded-full border px-2 py-1'
@@ -1612,7 +1622,8 @@ function StepPill({
     >
       <QuietIcon icon={done ? Check : icon} tone={iconTone} size="sm" active={active || done} />
       <span>{label}</span>
-    </div>
+      {done ? <span className="sr-only"> 完了</span> : null}
+    </li>
   )
 }
 
