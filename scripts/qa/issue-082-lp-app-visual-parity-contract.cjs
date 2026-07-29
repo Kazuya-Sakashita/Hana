@@ -231,7 +231,7 @@ const screenMatrix = [
   },
   {
     id: 'album',
-    states: ['empty', 'featured-shelf', 'long-title-body', 'load-more-end'],
+    states: ['all-empty', 'month-empty', 'one-memory', 'long-title-body', 'load-more-end'],
     viewports: ['390x844', '430x932', '768x1024'],
   },
   {

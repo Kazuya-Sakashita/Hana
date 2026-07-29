@@ -73,7 +73,7 @@ LP の約束を傷つけやすい順に、実装 Issue を切る。
 | P0   | Memory Detail        | 写真と本文を主役にし、保存直後 notice と action band を控えめにする                      |
 | P1   | Sign-in / Onboarding | 汎用 card 感を減らし、LP の余韻を保つ入口にする。未確約の OAuth / Store 表現を増やさない |
 | P1   | Settings             | trust summary と詳細を分け、実装済み操作と future を曖昧にしない                         |
-| P2   | Album                | featured page と一覧を private shelf として見せ、多件数でも feed にしない                |
+| P2   | Album                | ISSUE-121 以降は月別一覧で各ページを1回だけ見せ、写真台紙と紙片で private shelf を保つ   |
 | P2   | Home                 | 既に近い。stats と CTA が dashboard 感を出しすぎないようにする                           |
 
 ## Follow-up Issue Split
@@ -113,7 +113,7 @@ LP の約束を傷つけやすい順に、実装 Issue を切る。
 | LP                              | hero、Before/After、product preview、trust / final CTA                              | 390x844、430x932、768x1024、1280x900 |
 | Home                            | empty、1 memory、5 memories、long child name                                        | 390x640、390x844、430x932、768x1024  |
 | Record                          | empty、photo selected、AI consent、generating、manual save ready、save ready、error | 390x640、390x844、430x932            |
-| Album                           | empty、featured + shelf、long title / body、load more / end                         | 390x844、430x932、768x1024           |
+| Album                           | all-empty、month-empty、1 memory、long title / body、load more / end                | 390x844、430x932、768x1024           |
 | Memory Detail                   | saved notice、normal、long body、additional photos                                  | 390x844、430x932                     |
 | Sign-in / Onboarding / Settings | auth entry、first-memory bridge、trust surface                                      | 390x844、430x932                     |
 

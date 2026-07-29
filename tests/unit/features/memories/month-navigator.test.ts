@@ -38,8 +38,8 @@ describe('MonthNavigator', () => {
     expect(html).toContain('aria-label="未来の月へは進めません"')
     expect(html).toContain('disabled=""')
     expect(html).not.toContain('href="/album?month=2026-08"')
-    expect(html).toContain('この月は静かな余白です')
-    expect(html).not.toContain('0件')
+    expect(html).toContain('この月のページ 0件')
+    expect(html).not.toContain('静かな余白')
   })
 
   it('moves focus to the month heading only when the selected month changes', () => {

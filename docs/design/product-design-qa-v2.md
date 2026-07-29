@@ -56,7 +56,7 @@ CI は artifact を上書きしない。screenshot / accessibility snapshot は�
 | radius taxonomy     | photo-inner 10-12px、photo-mat 14-16px、paper-slip 16-20px、sheet 20-24px の範囲に概ね収まる               | 任意の大きな角丸が増え、紙片ではなくぷっくりしたカード UI に見える         |
 | shallow separation  | 通常 surface は hairline と余白で分離し、強い影は sheet / toast / dialog に限定される                      | 通常 card や navigation が強い floating UI に見える                        |
 | one-decision record | `/record` は写真選択、下書き、保存確認が一度に迫らず、下部 CTA が親指圏に残る                              | AI、title、date、weather、save が同密度に見え、30 秒記録の判断負荷が上がる |
-| private shelf album | `/album` は多件数一覧を保ちつつ、1 枚を眺める featured page / large keepsake preview の余白がある          | 縦リストだけで、業務的な一覧または feed に見える                           |
+| private shelf album | `/album` は月別一覧で各ページを1回だけ見せ、写真台紙、紙片、余白で私的な保管感を保つ                       | featured と一覧で同じページを重複表示する、または業務的な一覧に見える      |
 | trust density       | Settings / AI consent は概要と詳細が分かれ、送るもの / 送らないもの / 保持説明を隠さない                   | 余白を優先して同意や data boundary が曖昧になる                            |
 
 ### Evidence Safety Additions
@@ -103,7 +103,7 @@ LP / 参照画像で強まった `photo mat + paper slip + sage pill + quiet ico
 | LP                              | hero、Before/After、product preview、trust / final CTA                              | 390x844、430x932、768x1024、1280x900 |
 | Home                            | empty、1 memory、5 memories、long child name                                        | 390x640、390x844、430x932、768x1024  |
 | Record                          | empty、photo selected、AI consent、generating、manual save ready、save ready、error | 390x640、390x844、430x932            |
-| Album                           | empty、featured + shelf、long title / body、load more / end                         | 390x844、430x932、768x1024           |
+| Album                           | all-empty、month-empty、1 memory、long title / body、load more / end                | 390x844、430x932、768x1024           |
 | Memory Detail                   | saved notice、normal、long body、additional photos                                  | 390x844、430x932                     |
 | Sign-in / Onboarding / Settings | auth entry、first-memory bridge、trust surface                                      | 390x844、430x932                     |
 

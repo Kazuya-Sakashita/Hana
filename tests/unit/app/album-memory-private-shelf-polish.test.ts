@@ -23,8 +23,9 @@ describe('ISSUE-081 Album / Memory Detail private shelf polish', () => {
     expect(albumListSource).toContain('data-testid="album-shelf-heading"')
     expect(albumListSource).toContain('data-testid="album-shelf-list"')
     expect(albumListSource).toContain('data-testid="album-shelf-item"')
-    expect(albumListSource).toContain('一冊ずつ静かに並びます。')
-    expect(albumListSource).toContain('QuietIcon icon={BookOpen} tone="muted"')
+    expect(albumListSource).toContain('この月のページ')
+    expect(albumListSource).not.toContain('一冊ずつ静かに並びます。')
+    expect(albumListSource).not.toContain('QuietIcon icon={BookOpen} tone="muted"')
     expect(albumListSource).not.toMatch(/いいね|ランキング|投稿|フィード|feed|ranking/i)
   })
 

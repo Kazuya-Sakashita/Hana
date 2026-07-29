@@ -1,8 +1,7 @@
 import { Suspense } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { BookOpen, Camera, ChevronRight } from 'lucide-react'
+import { Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AlbumList } from '@/features/memories/client/album-list'
 import { MonthNavigator } from '@/features/memories/components/month-navigator'
@@ -39,7 +38,10 @@ export default async function AlbumPage({ searchParams }: AlbumPageProps) {
   const dateRange = albumMonthRange(month)
   const recordedFrom = new Date(`${dateRange.recordedFrom}T00:00:00Z`)
   const recordedBefore = new Date(`${dateRange.recordedBefore}T00:00:00Z`)
-  const totalCount = await countMemories({ userId: user.id, recordedFrom, recordedBefore })
+  const [totalCount, allMemoryCount] = await Promise.all([
+    countMemories({ userId: user.id, recordedFrom, recordedBefore }),
+    countMemories({ userId: user.id }),
+  ])
 
   return (
     <main className="bg-canvas min-h-dvh px-6 pb-28 pt-10">
@@ -53,12 +55,14 @@ export default async function AlbumPage({ searchParams }: AlbumPageProps) {
                 しまったページを、静かに読み返せます。
               </p>
             </div>
-            <Button asChild size="sm" variant="outline" className="shrink-0">
-              <Link href="/record" prefetch={false}>
-                <Camera className="size-4" aria-hidden="true" />
-                写真から のこす
-              </Link>
-            </Button>
+            {allMemoryCount > 0 ? (
+              <Button asChild size="sm" variant="outline" className="shrink-0">
+                <Link href="/record" prefetch={false}>
+                  <Camera className="size-4" aria-hidden="true" />
+                  写真から のこす
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </header>
 
@@ -69,6 +73,7 @@ export default async function AlbumPage({ searchParams }: AlbumPageProps) {
             month={month}
             dateRange={dateRange}
             totalCount={totalCount}
+            hasAnyMemory={allMemoryCount > 0}
           />
         </Suspense>
       </div>
@@ -81,11 +86,13 @@ async function AlbumListBoundary({
   month,
   dateRange,
   totalCount,
+  hasAnyMemory,
 }: {
   userId: string
   month: string
   dateRange: MemoryDateRange
   totalCount: number
+  hasAnyMemory: boolean
 }) {
   const recordedFrom = new Date(`${dateRange.recordedFrom}T00:00:00Z`)
   const recordedBefore = new Date(`${dateRange.recordedBefore}T00:00:00Z`)
@@ -96,71 +103,22 @@ async function AlbumListBoundary({
     recordedBefore,
   })
   const last = items[items.length - 1]
-  const featured = items[0] ?? null
 
   return (
-    <div className="flex flex-col gap-8">
-      {featured ? <FeaturedAlbumPage item={featured} /> : null}
-      <AlbumList
-        month={month}
-        dateRange={dateRange}
-        initialData={{
-          data: items.map(({ coverThumbnailUrl, ...memory }) =>
-            toMemoryResponse(memory, { coverThumbnailUrl }),
-          ),
-          page: {
-            next_cursor: hasMore && last ? encodeCursor(last.id) : null,
-            total_count: totalCount,
-          },
-        }}
-      />
-    </div>
-  )
-}
-
-function FeaturedAlbumPage({
-  item,
-}: {
-  item: Awaited<ReturnType<typeof fetchMemoriesWithCovers>>['items'][number]
-}) {
-  return (
-    <section aria-labelledby="album-featured-page" data-testid="album-featured-page">
-      <Link
-        href={`/memory/${item.id}`}
-        className="photo-mat ease-organic block rounded-[var(--radius-sheet)] p-2 transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
-      >
-        {typeof item.coverThumbnailUrl === 'string' ? (
-          <Image
-            src={item.coverThumbnailUrl}
-            alt=""
-            width={360}
-            height={450}
-            sizes="(max-width: 480px) 88vw, 360px"
-            priority
-            className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
-          />
-        ) : (
-          <div
-            className="bg-paper-slip flex aspect-[4/5] w-full items-center justify-center rounded-[var(--radius-photo-inner)]"
-            aria-hidden="true"
-          >
-            <BookOpen className="text-sakura-deep size-10" />
-          </div>
-        )}
-        <div className="mt-4 flex items-center justify-between gap-3 px-1 pb-1">
-          <div className="min-w-0">
-            <p className="meta-label">この月の一ページ</p>
-            <h2
-              id="album-featured-page"
-              className="text-ink mt-1 line-clamp-2 break-words font-serif text-xl leading-7 [overflow-wrap:anywhere]"
-            >
-              {item.title}
-            </h2>
-          </div>
-          <ChevronRight className="text-ink-tertiary size-5 shrink-0" aria-hidden="true" />
-        </div>
-      </Link>
-    </section>
+    <AlbumList
+      month={month}
+      dateRange={dateRange}
+      hasAnyMemory={hasAnyMemory}
+      initialData={{
+        data: items.map(({ coverThumbnailUrl, ...memory }) =>
+          toMemoryResponse(memory, { coverThumbnailUrl }),
+        ),
+        page: {
+          next_cursor: hasMore && last ? encodeCursor(last.id) : null,
+          total_count: totalCount,
+        },
+      }}
+    />
   )
 }
 

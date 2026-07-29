@@ -22,22 +22,19 @@ const viewports = [
 
 function estimateAlbumLayout(width: number, memoryCount: number) {
   const contentWidth = Math.min(width - 48, 448)
-  const featuredWidth = contentWidth
   const listItemWidth = contentWidth
-  const hasFeatured = memoryCount > 0
   const shelfCount = memoryCount
 
-  return { contentWidth, featuredWidth, listItemWidth, hasFeatured, shelfCount }
+  return { contentWidth, listItemWidth, shelfCount }
 }
 
 describe('ISSUE-070 private shelf layout fixtures', () => {
-  it('keeps featured preview and list items inside compact and tablet widths', () => {
+  it('keeps list items inside compact and tablet widths without a duplicate featured preview', () => {
     for (const viewport of viewports) {
       for (const memoryCount of [0, 1, 51]) {
         const layout = estimateAlbumLayout(viewport.width, memoryCount)
 
         expect(layout.contentWidth, viewport.id).toBeGreaterThanOrEqual(342)
-        expect(layout.featuredWidth, viewport.id).toBeLessThanOrEqual(layout.contentWidth)
         expect(layout.listItemWidth, viewport.id).toBeLessThanOrEqual(layout.contentWidth)
         if (memoryCount === 1) expect(layout.shelfCount).toBe(1)
         if (memoryCount === 51) expect(layout.shelfCount).toBe(51)
@@ -50,14 +47,15 @@ describe('ISSUE-070 private shelf layout fixtures', () => {
     expect(memoryDetailSource).toContain('-mx-2 flex gap-3 overflow-x-auto')
     expect(albumListSource).toContain('flex min-w-0 flex-1')
     expect(albumListSource).toContain('break-words [overflow-wrap:anywhere]')
-    expect(albumPageSource).toContain('line-clamp-2 break-words')
+    expect(albumPageSource).not.toContain('overflow-x-auto')
+    expect(albumPageSource).not.toContain('data-testid="album-featured-page"')
   })
 
   it('keeps tap targets and focus surfaces for shelf interactions', () => {
-    expect(albumPageSource).toContain('focus-visible:ring-2')
     expect(albumListSource).toContain('focus-visible:ring-2')
     expect(albumListSource).toContain('QuietIconButton')
     expect(albumListSource).toContain('statusRef.current?.focus')
+    expect(albumListSource).toContain('itemLinkRefs.current.get(firstAddedItem.id)?.focus')
     expect(memoryDetailSource).toContain('tap-target absolute')
   })
 

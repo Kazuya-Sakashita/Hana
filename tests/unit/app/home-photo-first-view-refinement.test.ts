@@ -8,13 +8,13 @@ const issueSource = readFileSync(
 )
 
 describe('ISSUE-068 home photo-first refinement', () => {
-  it('makes photo mat the first-view object before explanatory support copy', () => {
+  it('keeps the photo mat in the first view after the primary record action', () => {
     const firstViewIndex = homeSource.indexOf('<FeaturedPhotoMat memory={featuredMemory} />')
     const primaryActionIndex = homeSource.indexOf('id="home-primary-action"')
 
     expect(firstViewIndex).toBeGreaterThan(-1)
     expect(primaryActionIndex).toBeGreaterThan(-1)
-    expect(firstViewIndex).toBeLessThan(primaryActionIndex)
+    expect(primaryActionIndex).toBeLessThan(firstViewIndex)
     expect(homeSource).toContain('function FeaturedPhotoMat')
     expect(homeSource).toContain('data-testid="home-first-view-photo-mat"')
     expect(homeSource).toContain('const featuredMemory = memories[0] ?? null')
@@ -25,15 +25,20 @@ describe('ISSUE-068 home photo-first refinement', () => {
     expect(homeSource).not.toContain('paper-surface overflow-hidden')
   })
 
-  it('keeps the 30-second record route in thumb reach while lowering stats and shelf content', () => {
+  it('keeps the 30-second record route in thumb reach before album summary and stats', () => {
     const firstViewSectionIndex = homeSource.indexOf('aria-labelledby="home-primary-action"')
     const ctaIndex = homeSource.indexOf('href="/record"', firstViewSectionIndex)
-    const shelfIndex = homeSource.indexOf('aria-labelledby="home-keepsake-pages"')
+    const latestMemoryIndex = homeSource.indexOf(
+      '<FeaturedPhotoMat memory={featuredMemory} />',
+      firstViewSectionIndex,
+    )
+    const albumSummaryIndex = homeSource.indexOf('<HomeAlbumSummary memoryCount={memoryCount} />')
     const statsIndex = homeSource.indexOf('HomeGentleStats')
 
     expect(firstViewSectionIndex).toBeGreaterThan(-1)
     expect(ctaIndex).toBeGreaterThan(firstViewSectionIndex)
-    expect(shelfIndex).toBeGreaterThan(ctaIndex)
+    expect(latestMemoryIndex).toBeGreaterThan(ctaIndex)
+    expect(albumSummaryIndex).toBeGreaterThan(ctaIndex)
     expect(statsIndex).toBeGreaterThan(ctaIndex)
     expect(homeSource).toContain('写真からページをつくる')
     expect(homeSource).toContain('はじめてのページをつくる')
@@ -48,7 +53,7 @@ describe('ISSUE-068 home photo-first refinement', () => {
     expect(homeSource).toContain('animate-pulse')
     expect(homeSource).toContain('[overflow-wrap:anywhere]')
     expect(homeSource).toContain('line-clamp-2')
-    expect(homeSource).toContain('break-words font-serif text-sm')
+    expect(homeSource).toContain('line-clamp-2 break-words font-serif text-base')
     expect(homeSource).not.toMatch(/今日まだ|記録していません|途切れ|ストリーク|streak/i)
   })
 
