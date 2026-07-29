@@ -18,7 +18,7 @@ export interface MemoryRow {
 }
 
 export interface MemoryWithImages extends MemoryRow {
-  images: Array<{ id: string; createdAt: Date }>
+  images: Array<{ id: string; createdAt: Date; memoryPosition?: number | null }>
 }
 
 function toDateOnly(date: Date): string {
@@ -36,8 +36,7 @@ export function toMemoryResponse(
   row: MemoryWithImages,
   options?: { coverThumbnailUrl: string | null },
 ): MemoryResponse {
-  // 画像は created_at 昇順 (= アップロード順 = 表示順) で並べる
-  const sorted = [...row.images].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+  const sorted = sortMemoryImages(row.images)
   const base: MemoryResponse = {
     id: row.id,
     child_id: row.childId,
@@ -55,4 +54,20 @@ export function toMemoryResponse(
     return { ...base, cover_thumbnail_url: options.coverThumbnailUrl }
   }
   return base
+}
+
+export function sortMemoryImages<T extends { createdAt: Date; memoryPosition?: number | null }>(
+  images: T[],
+): T[] {
+  return [...images].sort((a, b) => {
+    const aPosition = a.memoryPosition
+    const bPosition = b.memoryPosition
+    if (aPosition !== null && aPosition !== undefined) {
+      if (bPosition === null || bPosition === undefined) return -1
+      if (aPosition !== bPosition) return aPosition - bPosition
+    } else if (bPosition !== null && bPosition !== undefined) {
+      return 1
+    }
+    return a.createdAt.getTime() - b.createdAt.getTime()
+  })
 }

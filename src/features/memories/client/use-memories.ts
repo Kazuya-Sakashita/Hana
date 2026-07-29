@@ -63,8 +63,16 @@ async function fetchMemories({
   return data
 }
 
-async function createMemory(body: MemoryCreateRequest): Promise<Memory> {
-  const { data } = await getBrowserApiClient().POST('/memories', { body })
+export interface CreateMemoryInput {
+  body: MemoryCreateRequest
+  idempotencyKey: string
+}
+
+async function createMemory({ body, idempotencyKey }: CreateMemoryInput): Promise<Memory> {
+  const { data } = await getBrowserApiClient().POST('/memories', {
+    params: { header: { 'Idempotency-Key': idempotencyKey } },
+    body,
+  })
   if (!data) throw new Error('POST /memories returned empty response')
   return data
 }

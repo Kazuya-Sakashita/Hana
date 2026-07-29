@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -70,6 +71,8 @@ const OTHER_USER_ID = '11111111-2222-4333-8444-555555555555'
 const CHILD_ID = '4a2c89b6-1234-4d8e-9abc-fedcba987654'
 const MEMORY_ID = '7d6e5f4c-3b2a-4291-8765-0123456789ab'
 const IMAGE_ID = 'a1b2c3d4-1234-4d8e-9abc-fedcba987654'
+const IMAGE_ID_2 = 'b2c3d4e5-2345-4e9f-8bcd-fedcba987655'
+const IDEMPOTENCY_KEY = '123e4567-e89b-42d3-a456-426614174000'
 
 const supabaseUser = { id: USER_ID, email: 'parent@example.com' }
 const profileRow = {
@@ -83,6 +86,7 @@ const memoryRow = {
   id: MEMORY_ID,
   userId: USER_ID,
   childId: CHILD_ID,
+  idempotencyKey: IDEMPOTENCY_KEY,
   title: 'はじめての すなあそび',
   body: null,
   recordedAt: new Date('2026-05-23T00:00:00Z'),
@@ -96,6 +100,7 @@ const memoryRow = {
     {
       id: IMAGE_ID,
       createdAt: new Date('2026-05-23T10:00:00Z'),
+      memoryPosition: 0,
       storageKey: 'uploads/abc/202605/img.jpg',
     },
   ],
@@ -105,16 +110,29 @@ function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
   mocks.profileFindUnique.mockResolvedValue(profileRow)
   mocks.memoryCount.mockResolvedValue(0)
+  mocks.memoryFindFirst.mockResolvedValue(null)
 }
 
 function unauthed() {
   mocks.getUser.mockResolvedValue({ data: { user: null } })
 }
 
-function jsonRequest(path: string, method: string, body?: unknown) {
+function jsonRequest(
+  path: string,
+  method: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+) {
+  const requestHeaders: Record<string, string> = {
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
+    ...headers,
+  }
+  if (method === 'POST' && path === '/v1/memories' && !Object.hasOwn(headers, 'Idempotency-Key')) {
+    requestHeaders['Idempotency-Key'] = IDEMPOTENCY_KEY
+  }
   return new Request(`http://localhost:3000${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers: requestHeaders,
     body: body ? JSON.stringify(body) : undefined,
   })
 }
@@ -349,6 +367,23 @@ describe('POST /v1/memories', () => {
     expect(res.status).toBe(401)
   })
 
+  it('returns 422 when Idempotency-Key is missing', async () => {
+    authed()
+    const res = await LIST_POST(
+      jsonRequest('/v1/memories', 'POST', validBody, { 'Idempotency-Key': '' }),
+    )
+
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as {
+      errors: Array<{ path: string; reason: string }>
+    }
+    expect(body.errors).toContainEqual({
+      path: 'header.Idempotency-Key',
+      reason: 'required',
+      message: 'Idempotency-Key ヘッダーが必要です',
+    })
+  })
+
   it('returns 422 on invalid body', async () => {
     authed()
     const res = await LIST_POST(jsonRequest('/v1/memories', 'POST', { ...validBody, title: '' }))
@@ -412,6 +447,154 @@ describe('POST /v1/memories', () => {
     const body = (await res.json()) as { id: string; image_ids: string[] }
     expect(body.id).toBe(MEMORY_ID)
     expect(body.image_ids).toEqual([IMAGE_ID])
+    expect(mocks.txMemoryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ idempotencyKey: IDEMPOTENCY_KEY }),
+      }),
+    )
+    expect(mocks.txImageUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: IMAGE_ID,
+        userId: USER_ID,
+        memoryId: null,
+        deletedAt: null,
+      },
+      data: { memoryId: MEMORY_ID, memoryPosition: 0 },
+    })
+  })
+
+  it('rolls back with 422 when an image becomes linked during creation', async () => {
+    authed()
+    mocks.childFindFirst.mockResolvedValue({ id: CHILD_ID, userId: USER_ID })
+    mocks.imageFindMany.mockResolvedValue([{ id: IMAGE_ID, userId: USER_ID, memoryId: null }])
+    mocks.txMemoryCreate.mockResolvedValue({ id: MEMORY_ID })
+    mocks.txImageUpdateMany.mockResolvedValue({ count: 0 })
+
+    const res = await LIST_POST(jsonRequest('/v1/memories', 'POST', validBody))
+
+    expect(res.status).toBe(422)
+    expect(await res.json()).toMatchObject({
+      reason: 'validation_error',
+      errors: [{ path: 'body.image_ids', reason: 'already_linked' }],
+    })
+    expect(mocks.txMemoryFindUniqueOrThrow).not.toHaveBeenCalled()
+  })
+
+  it('rolls back the whole transaction when one of multiple images cannot be linked', async () => {
+    authed()
+    mocks.childFindFirst.mockResolvedValue({ id: CHILD_ID, userId: USER_ID })
+    mocks.imageFindMany.mockResolvedValue([
+      { id: IMAGE_ID, userId: USER_ID, memoryId: null },
+      { id: IMAGE_ID_2, userId: USER_ID, memoryId: null },
+    ])
+    mocks.txMemoryCreate.mockResolvedValue({ id: MEMORY_ID })
+    mocks.txImageUpdateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
+
+    const res = await LIST_POST(
+      jsonRequest('/v1/memories', 'POST', {
+        ...validBody,
+        image_ids: [IMAGE_ID, IMAGE_ID_2],
+      }),
+    )
+
+    expect(res.status).toBe(422)
+    expect(mocks.txImageUpdateMany).toHaveBeenCalledTimes(2)
+    expect(mocks.txMemoryFindUniqueOrThrow).not.toHaveBeenCalled()
+  })
+
+  it('returns the existing Memory for the same owner, key and content', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+
+    const res = await LIST_POST(jsonRequest('/v1/memories', 'POST', validBody))
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ id: MEMORY_ID, image_ids: [IMAGE_ID] })
+    expect(mocks.childFindFirst).not.toHaveBeenCalled()
+    expect(mocks.txMemoryCreate).not.toHaveBeenCalled()
+  })
+
+  it('compares multi-image retries using the persisted request display order', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue({
+      ...memoryRow,
+      images: [
+        {
+          id: IMAGE_ID_2,
+          createdAt: new Date('2026-05-23T09:00:00Z'),
+          memoryPosition: 1,
+          storageKey: 'uploads/abc/202605/img-2.jpg',
+        },
+        {
+          id: IMAGE_ID,
+          createdAt: new Date('2026-05-23T10:00:00Z'),
+          memoryPosition: 0,
+          storageKey: 'uploads/abc/202605/img.jpg',
+        },
+      ],
+    })
+
+    const res = await LIST_POST(
+      jsonRequest('/v1/memories', 'POST', {
+        ...validBody,
+        image_ids: [IMAGE_ID, IMAGE_ID_2],
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ image_ids: [IMAGE_ID, IMAGE_ID_2] })
+    expect(mocks.txMemoryCreate).not.toHaveBeenCalled()
+  })
+
+  it('returns stable 409 when the same key is reused with different content', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+
+    const res = await LIST_POST(
+      jsonRequest('/v1/memories', 'POST', { ...validBody, title: '別の合成タイトル' }),
+    )
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ reason: 'memory_idempotency_conflict' })
+    expect(mocks.txMemoryCreate).not.toHaveBeenCalled()
+  })
+
+  it('scopes an idempotency key to the current owner', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(null)
+    mocks.childFindFirst.mockResolvedValue({ id: CHILD_ID, userId: USER_ID })
+    mocks.imageFindMany.mockResolvedValue([{ id: IMAGE_ID, userId: USER_ID, memoryId: null }])
+    mocks.txMemoryCreate.mockResolvedValue({ id: MEMORY_ID })
+    mocks.txImageUpdateMany.mockResolvedValue({ count: 1 })
+    mocks.txMemoryFindUniqueOrThrow.mockResolvedValue(memoryRow)
+
+    const res = await LIST_POST(jsonRequest('/v1/memories', 'POST', validBody))
+
+    expect(res.status).toBe(201)
+    expect(mocks.memoryFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: USER_ID, idempotencyKey: IDEMPOTENCY_KEY },
+      }),
+    )
+  })
+
+  it('converges on an existing Memory when concurrent creates race', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(memoryRow)
+    mocks.childFindFirst.mockResolvedValue({ id: CHILD_ID, userId: USER_ID })
+    mocks.imageFindMany.mockResolvedValue([{ id: IMAGE_ID, userId: USER_ID, memoryId: null }])
+    mocks.txMemoryCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('synthetic idempotency race', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    )
+
+    const res = await LIST_POST(jsonRequest('/v1/memories', 'POST', validBody))
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ id: MEMORY_ID })
+    expect(mocks.memoryFindFirst).toHaveBeenCalledTimes(2)
   })
 })
 

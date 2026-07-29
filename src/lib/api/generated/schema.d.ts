@@ -232,6 +232,8 @@ export interface paths {
          *     - `child_id` は現在のユーザーが所有していること
          *     - `image_ids` は **各画像が現在のユーザーが所有** かつ **未紐付け** であること
          *     - 失敗時はトランザクションでロールバック
+         *     - `Idempotency-Key` はユーザー単位で扱い、同じキー・同じ内容の再送は既存の記録を返す
+         *     - 同じキーを異なる内容で再利用した場合は 409 `memory_idempotency_conflict`
          */
         post: operations["createMemory"];
         delete?: never;
@@ -1550,7 +1552,13 @@ export interface operations {
     createMemory: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /**
+                 * @description 記録作成操作を一意にするUUID。同じタブの保存再試行では同じ値を使う。
+                 *     APIレスポンスやログには出力しない。
+                 */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1560,6 +1568,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description 同じ冪等キー・同じ内容で既に作成済みの記録 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
             /** @description 作成された記録 */
             201: {
                 headers: {
@@ -1572,6 +1589,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
         };

@@ -49,8 +49,8 @@ describe('ISSUE-113 independent parent note', () => {
     )
   })
 
-  it('keeps the note through generation and clears it only with a replacement photo', () => {
-    expect(recordSource).toContain("setParentNote('')")
+  it('keeps the note through generation and a replacement photo', () => {
+    expect(recordSource).not.toContain("setParentNote('')")
     expect(recordSource).not.toMatch(/setTitle\(res\.data\.title\)[\s\S]{0,200}setParentNote/)
     expect(recordSource).not.toMatch(/setAiStatus\('failed'\)[\s\S]{0,200}setParentNote/)
   })

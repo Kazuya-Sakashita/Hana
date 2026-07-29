@@ -38,8 +38,11 @@ export const quietStateCopy = {
       'まだ 直せるところがあります。入力を たしかめて、もういちど ためしてください。',
     saveFailedTitle: 'ページを しまえませんでした',
     saveFailedDescription: '入力はそのままです。もういちど ためしてください。',
+    saveConflictDescription:
+      '前の保存操作と内容が変わっています。入力はそのまま、新しい保存としてもういちど試せます。',
     saveDoneTitle: 'ページを しまいました',
     saveDoneDescription: 'できたページを ひらきます。',
+    draftRestored: 'このタブに残っていた下書きを もどしました。',
     savedLandingEyebrow: '保存できました',
     savedLandingDescription: 'できたページを ひらきました。アルバムから また見返せます。',
     submitting: 'ページを しまっています…',
