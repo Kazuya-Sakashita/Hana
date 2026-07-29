@@ -85,9 +85,9 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toContain('quietStateCopy.record.saveFailedDescription')
     expect(recordSource).toMatch(/uploadStatus === 'failed'[\s\S]+role="alert"/)
     expect(recordSource).toMatch(/aiError \?[\s\S]+role="alert"/)
-    expect(recordSource).toMatch(/topMessage \?[\s\S]+role="alert"/)
-    expect(recordSource).toMatch(/fieldErrors\.title \?[\s\S]+role="alert"/)
-    expect(recordSource).toMatch(/fieldErrors\.imageIds \?[\s\S]+role="alert"/)
+    expect(recordSource).toMatch(/formErrorMessage \?[\s\S]+role="alert"/)
+    expect(recordSource).toMatch(/fieldErrors\.title \?[\s\S]+id="memory-title-error"/)
+    expect(recordSource).toMatch(/fieldErrors\.imageIds \?[\s\S]+id="memory-photo-error"/)
     expect(recordSource).not.toContain("router.push('/record')")
   })
 

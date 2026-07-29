@@ -160,6 +160,24 @@ describe('getRecordFooterState', () => {
     })
   })
 
+  it('keeps save actionable so an incomplete required field can be identified', () => {
+    expect(
+      getRecordFooterState({
+        ...base,
+        hasSelectedPhoto: true,
+        uploaded: true,
+        uploadStatus: 'done',
+        aiStatus: 'done',
+        hasTitle: true,
+        canSubmit: false,
+      }),
+    ).toMatchObject({
+      primaryAction: 'save',
+      primaryDisabled: false,
+      statusLabel: '日付とタイトルを確認してください',
+    })
+  })
+
   it('locks the primary action during save', () => {
     expect(
       getRecordFooterState({

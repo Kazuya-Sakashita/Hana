@@ -43,11 +43,11 @@ describe('ISSUE-115 AI timeout recovery', () => {
   })
 
   it('moves keyboard focus to the primary recovery action after timeout', () => {
-    expect(recordSource).toContain('const aiRecoveryButtonRef = useRef<HTMLButtonElement>(null)')
+    expect(recordSource).toContain('const primaryActionButtonRef = useRef<HTMLButtonElement>(null)')
     expect(recordSource).toMatch(
-      /if \(aiStatus !== 'failed' \|\| !aiTimedOut\) return[\s\S]+aiRecoveryButtonRef\.current\?\.focus\(\)/,
+      /if \(aiStatus !== 'failed' \|\| !aiTimedOut\) return[\s\S]+primaryActionButtonRef\.current\?\.focus\(\)/,
     )
-    expect(recordSource).toContain('ref={aiTimedOut ? aiRecoveryButtonRef : undefined}')
+    expect(recordSource).toContain('ref={primaryActionButtonRef}')
   })
 
   it('keeps inputs intact and keeps progress understandable without motion', () => {

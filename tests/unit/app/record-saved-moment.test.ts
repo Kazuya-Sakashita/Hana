@@ -59,8 +59,9 @@ describe('record saved moment and memory landing', () => {
   it('preserves failure recovery on record while updating the finish condition', () => {
     expect(recordSource).toContain('rollback()')
     expect(recordSource).toContain('setTopMessage(quietStateCopy.record.saveFailedDescription)')
-    expect(recordSource).toMatch(/fieldErrors\.title \?[\s\S]+role="alert"/)
-    expect(recordSource).toMatch(/fieldErrors\.imageIds \?[\s\S]+role="alert"/)
+    expect(recordSource).toMatch(/fieldErrors\.title \?[\s\S]+id="memory-title-error"/)
+    expect(recordSource).toMatch(/fieldErrors\.imageIds \?[\s\S]+id="memory-photo-error"/)
+    expect(recordSource).toMatch(/formErrorMessage \?[\s\S]+role="alert"/)
     expect(recordBottomSheetQaSource).toContain('`/memory/{id}?saved=1` 遷移')
     expect(recordBottomSheetQaSource).toContain('写真、登録した呼び名、月齢、日付、天気')
     expect(recordBottomSheetQaSource).not.toContain('写真、名前、月齢')

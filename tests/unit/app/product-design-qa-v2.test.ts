@@ -85,6 +85,7 @@ describe('ISSUE-064 Product Design QA v2', () => {
 
   it('covers compact, short-height, large-phone, and tablet DOM states', () => {
     expect(contract.viewports).toEqual([
+      { id: 'compact-narrow', width: 320, height: 700 },
       { id: 'compact-short', width: 390, height: 640 },
       { id: 'compact-tall', width: 390, height: 844 },
       { id: 'large-phone', width: 430, height: 932 },
