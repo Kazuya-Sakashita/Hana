@@ -63,7 +63,17 @@ export interface paths {
          *     クライアントは同意ダイアログ → 本エンドポイント → 生成 の順で呼ぶ。
          */
         post: operations["setAiConsent"];
-        delete?: never;
+        /**
+         * AI への画像送信の同意を撤回する
+         * @description 現在のユーザーの `profile.ai_consent_at` を `null` にする (idempotent)。
+         *     既に未同意でも 200 を返す。
+         *
+         *     撤回後の `POST /ai/generate` は 403 `ai_consent_required` を返す。
+         *     AIを使わない記録の作成・編集・閲覧と既存記録には影響しない。
+         *     本操作は過去のAI送信や既存記録を個別削除する手続きではない。
+         *     撤回前に開始したAI生成は完了する場合がある。
+         */
+        delete: operations["revokeAiConsent"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1264,6 +1274,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["AppUser"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    revokeAiConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 同意撤回後の AppUser */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "8f7e6d5c-4b3a-4291-8765-0123456789ab",
+                     *       "email": null,
+                     *       "display_name": null,
+                     *       "ai_consent_at": null,
+                     *       "created_at": "2026-05-14T09:30:00Z"
+                     *     }
+                     */
                     "application/json": components["schemas"]["AppUser"];
                 };
             };

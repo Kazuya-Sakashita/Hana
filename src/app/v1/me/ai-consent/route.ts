@@ -2,25 +2,58 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/server/auth/current-user'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { prisma } from '@/server/db/prisma'
+import type { AppUser } from '@/lib/supabase/types'
 
 export const dynamic = 'force-dynamic'
 
-// AI への画像送信に同意する (idempotent)。
-// 既に ai_consent_at が立っている場合は時刻を更新しない。
+function toAppUserResponse(user: AppUser) {
+  return {
+    id: user.id,
+    email: user.email,
+    display_name: user.displayName,
+    ai_consent_at: user.aiConsentAt,
+    created_at: user.createdAt,
+  }
+}
+
 export async function POST() {
+  try {
+    const user = await requireUser()
+    const profile = await prisma.$transaction(async (tx) => {
+      await tx.profile.updateMany({
+        where: { id: user.id, aiConsentAt: null },
+        data: { aiConsentAt: new Date() },
+      })
+      return tx.profile.findUniqueOrThrow({ where: { id: user.id } })
+    })
+    return NextResponse.json(
+      toAppUserResponse({
+        ...user,
+        displayName: profile.displayName,
+        aiConsentAt: profile.aiConsentAt?.toISOString() ?? null,
+        createdAt: profile.createdAt.toISOString(),
+      }),
+    )
+  } catch (e) {
+    return toProblemResponse(e)
+  }
+}
+
+export async function DELETE() {
   try {
     const user = await requireUser()
     const profile = await prisma.profile.update({
       where: { id: user.id },
-      data: user.aiConsentAt ? {} : { aiConsentAt: new Date() },
+      data: { aiConsentAt: null },
     })
-    return NextResponse.json({
-      id: profile.id,
-      email: user.email,
-      display_name: profile.displayName,
-      ai_consent_at: profile.aiConsentAt?.toISOString() ?? null,
-      created_at: profile.createdAt.toISOString(),
-    })
+    return NextResponse.json(
+      toAppUserResponse({
+        ...user,
+        displayName: profile.displayName,
+        aiConsentAt: null,
+        createdAt: profile.createdAt.toISOString(),
+      }),
+    )
   } catch (e) {
     return toProblemResponse(e)
   }

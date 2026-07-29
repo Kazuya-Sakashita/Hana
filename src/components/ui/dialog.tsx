@@ -93,6 +93,7 @@ export function AccessibleDialog({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
+      aria-busy={pending}
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       tabIndex={-1}

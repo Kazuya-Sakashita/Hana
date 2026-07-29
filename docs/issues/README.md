@@ -196,6 +196,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
+- `ISSUE-118` / `#253`: 実装 / privacy・legal review / merge 待ち。
 - `ISSUE-116` / `#251`: 実装 / review / merge 待ち。
 - `ISSUE-115` / `#250`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-114` / `#249`: 実装・専門レビュー完了 / merge 待ち。

@@ -31,6 +31,16 @@ export const settingsTrustCenterCopy = {
       'Anthropic の商用 API 条件と Hana のプライバシーレビューに沿って扱います。確認した範囲だけを表示します。',
     choiceLabel: 'AI を使わない選択',
     choiceValue: '記録画面で、AI を使わずに写真とことばだけで保存できます。',
+    revokeButton: 'AI 利用の同意を取り消す',
+    revokeDialogTitle: 'AI 利用の同意を 取り消しますか？',
+    revokeDialogDescription:
+      '取り消した後、新しくAIの下書きを作るには、もう一度同意が必要です。AIを使わずに記録を残すことは続けられます。この操作は、保存済みの記録や、過去にAIへ送信したデータの個別削除を行う手続きではありません。撤回前に開始したAI生成は完了する場合があります。',
+    revokeCancel: '同意を そのままにする',
+    revokeConfirm: '同意を 取り消す',
+    revokePending: '同意を 取り消しています…',
+    revokeDone: 'AI利用の同意を取り消しました。AIを使わずに、写真とことばの記録を続けられます。',
+    revokeFailed:
+      'AI利用の同意状態を確認できませんでした。通信が戻ったら再読み込みして確認するか、もう一度取り消してください。',
   },
   data: {
     eyebrow: 'データと削除',
