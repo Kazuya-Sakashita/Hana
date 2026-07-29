@@ -141,6 +141,12 @@
     font-feature-settings: 'palt' 1; /* 日本語のプロポーショナル詰め */
   }
 
+  [data-slot='input']:focus,
+  [data-slot='input']:focus-within {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
   /* 物語本文・heading は serif (Noto Serif JP) を使う */
   .font-serif {
     font-family: var(--font-serif);

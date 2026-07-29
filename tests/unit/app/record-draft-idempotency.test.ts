@@ -66,8 +66,10 @@ describe('ISSUE-116 record draft and create idempotency', () => {
     expect(recordSource).toContain("case 'memory_idempotency_conflict'")
     expect(recordSource).toContain('setIdempotencyKey(nextIdempotencyKey)')
     expect(recordSource).toContain('saveConflictDescription')
-    expect(recordSource).toContain('ref={saveButtonRef}')
-    expect(recordSource).toContain('window.setTimeout(() => saveButtonRef.current?.focus(), 0)')
+    expect(recordSource).toContain('ref={primaryActionButtonRef}')
+    expect(recordSource).toContain(
+      'window.setTimeout(() => primaryActionButtonRef.current?.focus(), 0)',
+    )
     const conflictSource = recordSource.slice(
       recordSource.indexOf("case 'memory_idempotency_conflict'"),
       recordSource.indexOf('default:', recordSource.indexOf("case 'memory_idempotency_conflict'")),

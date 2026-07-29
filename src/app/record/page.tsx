@@ -53,6 +53,7 @@ import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { optimisticAddMemoryToLists, optimisticReplaceMemoryInLists } from '@/lib/perf/optimistic'
 import { useToast } from '@/components/ui/toast'
+import { focusFirstFormError } from '@/lib/ui/form-error-focus'
 import { quietStateCopy, recordAiGeneratingCopy } from '@/lib/ui/quiet-state-copy'
 
 type Phase = 'loading' | 'no-child' | 'form' | 'error'
@@ -71,13 +72,50 @@ interface FieldErrors {
   general?: string
 }
 
+const recordFieldErrorCopy = {
+  titleRequired: 'タイトルを 入れてください。',
+  titleTooLong: 'タイトルは 100文字までで 入れてください。',
+  titleInvalid: 'タイトルを たしかめてください。',
+  bodyTooLong: 'ほんぶんは 1000文字までで 入れてください。',
+  bodyInvalid: 'ほんぶんを たしかめてください。',
+  recordedAtRequired: 'ひにちを 選んでください。',
+  recordedAtFuture: 'ひにちは、きょうまでの日を 選んでください。',
+  recordedAtInvalid: '有効な ひにちを 選んでください。',
+  imageIdsRequired: '写真を 1まい 選んでください。',
+  imageIdsReselect: '写真を もういちど 選んでください。',
+  imageIdsInvalid: '写真を たしかめてください。',
+} as const
+
 function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   const fields: FieldErrors = {}
   for (const err of problem.errors ?? []) {
-    if (err.path === 'body.title') fields.title = err.message
-    else if (err.path === 'body.body') fields.body = err.message
-    else if (err.path === 'body.recorded_at') fields.recordedAt = err.message
-    else if (err.path.startsWith('body.image_ids')) fields.imageIds = err.message
+    if (err.path === 'body.title') {
+      fields.title =
+        err.reason === 'required' || err.reason === 'too_short'
+          ? recordFieldErrorCopy.titleRequired
+          : err.reason === 'too_long'
+            ? recordFieldErrorCopy.titleTooLong
+            : recordFieldErrorCopy.titleInvalid
+    } else if (err.path === 'body.body') {
+      fields.body =
+        err.reason === 'too_long'
+          ? recordFieldErrorCopy.bodyTooLong
+          : recordFieldErrorCopy.bodyInvalid
+    } else if (err.path === 'body.recorded_at') {
+      fields.recordedAt =
+        err.reason === 'required'
+          ? recordFieldErrorCopy.recordedAtRequired
+          : err.reason === 'future_date'
+            ? recordFieldErrorCopy.recordedAtFuture
+            : recordFieldErrorCopy.recordedAtInvalid
+    } else if (err.path.startsWith('body.image_ids')) {
+      fields.imageIds =
+        err.reason === 'required' || err.reason === 'too_few'
+          ? recordFieldErrorCopy.imageIdsRequired
+          : err.reason === 'image_not_found' || err.reason === 'already_linked'
+            ? recordFieldErrorCopy.imageIdsReselect
+            : recordFieldErrorCopy.imageIdsInvalid
+    }
   }
   return fields
 }
@@ -170,9 +208,16 @@ export default function RecordPage() {
   const [topMessage, setTopMessage] = useState<string | null>(null)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const bodyInputRef = useRef<HTMLTextAreaElement>(null)
+  const recordedAtInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const aiRecoveryButtonRef = useRef<HTMLButtonElement>(null)
-  const saveButtonRef = useRef<HTMLButtonElement>(null)
+  const photoActionButtonRef = useRef<HTMLButtonElement>(null)
+  const secondaryEditsRef = useRef<HTMLDetailsElement>(null)
+  const recordErrorSummaryRef = useRef<HTMLDivElement>(null)
+  const errorFocusRequestedRef = useRef(false)
+  const saveInFlightRef = useRef(false)
+  const focusAfterUploadRef = useRef(false)
+  const primaryActionButtonRef = useRef<HTMLButtonElement>(null)
   const uploadAttemptIdRef = useRef(0)
   const uploadAbortControllerRef = useRef<AbortController | null>(null)
   const uploadActionInFlightRef = useRef(false)
@@ -205,6 +250,9 @@ export default function RecordPage() {
           : 'no-child'
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
+  const hasFieldErrors = Object.keys(fieldErrors).length > 0
+  const formErrorMessage =
+    topMessage ?? (hasFieldErrors ? quietStateCopy.record.validationFailed : null)
   const hasSelectedPhoto = (!!filePreviewUrl && !!file) || !!uploadedImage
   const photoReplacementLocked = submitting
   const storyPreview = body.trim()
@@ -220,6 +268,7 @@ export default function RecordPage() {
     uploaded: !!uploadedImage,
     aiStatus,
     canSubmit,
+    hasTitle: title.trim().length > 0,
     hasStory: storyPreview.length > 0,
   })
   const footerState = getRecordFooterState({
@@ -254,6 +303,7 @@ export default function RecordPage() {
   }, [])
 
   function onCancelClick() {
+    if (submitting) return
     if (hasUnsavedChanges) {
       setCancelDialogOpen(true)
     } else {
@@ -344,8 +394,14 @@ export default function RecordPage() {
 
   useEffect(() => {
     if (aiStatus !== 'failed' || !aiTimedOut) return
-    aiRecoveryButtonRef.current?.focus()
+    primaryActionButtonRef.current?.focus()
   }, [aiStatus, aiTimedOut])
+
+  useEffect(() => {
+    if (uploadStatus !== 'done' || !focusAfterUploadRef.current) return
+    focusAfterUploadRef.current = false
+    primaryActionButtonRef.current?.focus()
+  }, [uploadStatus])
 
   useEffect(() => {
     if (!filePreviewUrl) return
@@ -496,6 +552,8 @@ export default function RecordPage() {
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const nextFile = event.target.files?.[0] ?? null
     if (!nextFile) return
+    clearFieldError('imageIds')
+    focusAfterUploadRef.current = true
     const attempt = startUploadAttempt()
     cancelAiAttempt()
     setIdempotencyKey(createRecordIdempotencyKey())
@@ -531,6 +589,7 @@ export default function RecordPage() {
 
   async function retryUpload() {
     if (uploadActionInFlightRef.current || !file || !uploadFailureStage) return
+    focusAfterUploadRef.current = true
     const failedStage = uploadFailureStage
     const attempt = startUploadAttempt()
     setUploadFailureStage(null)
@@ -609,6 +668,16 @@ export default function RecordPage() {
       }
       setTitle(res.data.title)
       setBody(res.data.body)
+      setFieldErrors((current) => {
+        if (!current.title && !current.body) return current
+        const next = { ...current }
+        delete next.title
+        delete next.body
+        return next
+      })
+      setTopMessage((current) =>
+        current === quietStateCopy.record.validationFailed ? null : current,
+      )
       setHasAiGeneratedContent(true)
       setAiStatus('done')
       return
@@ -683,21 +752,61 @@ export default function RecordPage() {
     focusManualTitle()
   }
 
+  useEffect(() => {
+    if (!errorFocusRequestedRef.current) return
+    errorFocusRequestedRef.current = false
+    if (fieldErrors.body || fieldErrors.recordedAt) {
+      if (secondaryEditsRef.current) secondaryEditsRef.current.open = true
+    }
+    focusFirstFormError({
+      errors: fieldErrors,
+      fieldOrder: ['imageIds', 'title', 'body', 'recordedAt'],
+      fieldTargets: {
+        imageIds: photoActionButtonRef.current,
+        title: titleInputRef.current,
+        body: bodyInputRef.current,
+        recordedAt: recordedAtInputRef.current,
+      },
+      fallbackTarget: recordErrorSummaryRef.current,
+    })
+  }, [fieldErrors, topMessage])
+
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
+    if (topMessage === quietStateCopy.record.validationFailed) setTopMessage(null)
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (
-      !uploadedImage ||
-      !childId ||
-      !canSubmit ||
-      aiStatus === 'generating' ||
-      aiStatus === 'consent_pending'
-    )
+    if (saveInFlightRef.current) return
+    const trimmedTitle = title.trim()
+    if (!childId || aiStatus === 'generating' || aiStatus === 'consent_pending') return
+
+    const clientErrors: FieldErrors = {}
+    if (!uploadedImage) clientErrors.imageIds = '写真を 1まい 選んでください。'
+    if (!trimmedTitle) clientErrors.title = 'タイトルを 入れてください。'
+    if (!recordedAt) clientErrors.recordedAt = 'ひにちを 選んでください。'
+    else if (recordedAt > todayIso) {
+      clientErrors.recordedAt = 'ひにちは、きょうまでの日を 選んでください。'
+    }
+    if (Object.keys(clientErrors).length > 0) {
+      errorFocusRequestedRef.current = true
+      setFieldErrors(clientErrors)
+      setTopMessage(quietStateCopy.record.validationFailed)
       return
+    }
+    if (!uploadedImage) return
+
+    saveInFlightRef.current = true
     setSubmitting(true)
     setFieldErrors({})
     setTopMessage(null)
 
-    const trimmedTitle = title.trim()
     const requestBody: MemoryCreateRequest = {
       child_id: childId,
       title: trimmedTitle,
@@ -727,78 +836,76 @@ export default function RecordPage() {
       updated_at: now,
     }
 
-    await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
-    const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
-
     try {
-      const created = await createMemoryMutation.mutateAsync({
-        body: requestBody,
-        idempotencyKey,
-      })
-      optimisticReplaceMemoryInLists(queryClient, optimisticId, created)
-      recordDraftStore.clear()
-      showToast({
-        tone: 'success',
-        title: quietStateCopy.record.saveDoneTitle,
-        description: quietStateCopy.record.saveDoneDescription,
-      })
-      reportRecordProductEvent('memory_saved')
-      router.push(`/memory/${created.id}?saved=1`)
-      router.refresh()
-    } catch (e) {
-      rollback()
-      void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
-      if (isApiProblemError(e)) {
-        switch (e.reason) {
-          case 'validation_error':
-            {
+      await queryClient.cancelQueries({ queryKey: memoriesQueryKey })
+      const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
+
+      try {
+        const created = await createMemoryMutation.mutateAsync({
+          body: requestBody,
+          idempotencyKey,
+        })
+        optimisticReplaceMemoryInLists(queryClient, optimisticId, created)
+        recordDraftStore.clear()
+        showToast({
+          tone: 'success',
+          title: quietStateCopy.record.saveDoneTitle,
+          description: quietStateCopy.record.saveDoneDescription,
+        })
+        reportRecordProductEvent('memory_saved')
+        router.push(`/memory/${created.id}?saved=1`)
+        router.refresh()
+      } catch (e) {
+        rollback()
+        void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
+        if (isApiProblemError(e)) {
+          switch (e.reason) {
+            case 'validation_error': {
               const errors = extractFieldErrors(e.problem)
+              errorFocusRequestedRef.current = true
               setFieldErrors(errors)
               setTopMessage(quietStateCopy.record.validationFailed)
+              break
             }
-            showToast({
-              title: quietStateCopy.record.saveFailedTitle,
-              description: quietStateCopy.record.validationFailed,
-            })
-            break
-          case 'unauthorized':
-            router.push('/sign-in')
-            return
-          case 'memory_idempotency_conflict': {
-            const nextIdempotencyKey = createRecordIdempotencyKey()
-            setIdempotencyKey(nextIdempotencyKey)
-            setTopMessage(quietStateCopy.record.saveConflictDescription)
-            if (currentUserId) {
-              recordDraftStore.save(currentUserId, {
-                idempotencyKey: nextIdempotencyKey,
-                title,
-                body,
-                parentNote,
-                recordedAt,
-                weather,
-                imageId: uploadedImage.id,
-                aiGenerated: hasAiGeneratedContent,
-              })
+            case 'unauthorized':
+              router.push('/sign-in')
+              return
+            case 'memory_idempotency_conflict': {
+              const nextIdempotencyKey = createRecordIdempotencyKey()
+              setIdempotencyKey(nextIdempotencyKey)
+              setTopMessage(quietStateCopy.record.saveConflictDescription)
+              if (currentUserId) {
+                recordDraftStore.save(currentUserId, {
+                  idempotencyKey: nextIdempotencyKey,
+                  title,
+                  body,
+                  parentNote,
+                  recordedAt,
+                  weather,
+                  imageId: uploadedImage.id,
+                  aiGenerated: hasAiGeneratedContent,
+                })
+              }
+              setSubmitting(false)
+              window.setTimeout(() => primaryActionButtonRef.current?.focus(), 0)
+              return
             }
-            setSubmitting(false)
-            window.setTimeout(() => saveButtonRef.current?.focus(), 0)
-            return
+            default:
+              errorFocusRequestedRef.current = true
+              setTopMessage(quietStateCopy.record.saveFailedDescription)
           }
-          default:
-            setTopMessage(quietStateCopy.record.saveFailedDescription)
-            showToast({
-              title: quietStateCopy.record.saveFailedTitle,
-              description: quietStateCopy.record.saveFailedDescription,
-            })
+        } else {
+          errorFocusRequestedRef.current = true
+          setTopMessage(quietStateCopy.record.saveFailedDescription)
         }
-      } else {
-        setTopMessage(quietStateCopy.record.saveFailedDescription)
-        showToast({
-          title: quietStateCopy.record.saveFailedTitle,
-          description: quietStateCopy.record.saveFailedDescription,
-        })
+        setSubmitting(false)
       }
+    } catch {
       setSubmitting(false)
+      errorFocusRequestedRef.current = true
+      setTopMessage(quietStateCopy.record.saveFailedDescription)
+    } finally {
+      saveInFlightRef.current = false
     }
   }
 
@@ -852,7 +959,8 @@ export default function RecordPage() {
         type="button"
         onClick={onCancelClick}
         aria-label="やめて とじる"
-        className="bg-elevated text-ink-secondary ring-elevated ease-organic tap-target absolute left-4 top-4 z-20 flex items-center gap-1 rounded-full px-4 py-2 font-serif text-sm ring-1 transition-transform active:scale-[0.97]"
+        disabled={submitting}
+        className="bg-elevated text-ink-secondary ring-elevated ease-organic tap-target absolute left-4 top-4 z-20 flex items-center gap-1 rounded-full px-4 py-2 font-serif text-sm ring-1 transition-transform active:scale-[0.97] disabled:cursor-wait disabled:opacity-50"
       >
         <span aria-hidden="true">‹</span>
         やめる
@@ -899,6 +1007,7 @@ export default function RecordPage() {
 
       <form
         onSubmit={onSubmit}
+        noValidate
         data-testid="record-bottom-sheet"
         className="bg-elevated border-hairline shadow-lift sticky bottom-0 z-30 flex max-h-[68dvh] flex-col overflow-hidden rounded-t-[var(--radius-sheet)] border-t px-5 pt-5"
       >
@@ -914,12 +1023,15 @@ export default function RecordPage() {
             </p>
           ) : null}
 
-          {topMessage ? (
+          {formErrorMessage ? (
             <div
+              ref={recordErrorSummaryRef}
+              id="record-error-summary"
               role="alert"
+              tabIndex={-1}
               className="text-ink-secondary leading-narrative rounded-xl bg-warm px-4 py-3 text-sm"
             >
-              {topMessage}
+              {formErrorMessage}
             </div>
           ) : null}
 
@@ -944,6 +1056,15 @@ export default function RecordPage() {
             <p className="text-ink-secondary leading-narrative mt-2 text-sm">{decisionCue.body}</p>
           </PaperSlip>
 
+          <Label htmlFor="memory-photo" className="font-serif">
+            写真{' '}
+            <span aria-hidden="true" className="text-amber font-sans text-xs">
+              必須
+            </span>
+          </Label>
+          <span id="memory-photo-requirement" className="sr-only">
+            写真は必須です。
+          </span>
           <Input
             ref={fileInputRef}
             id="memory-photo"
@@ -954,17 +1075,30 @@ export default function RecordPage() {
             className="sr-only"
             tabIndex={-1}
             aria-label="しゃしんを えらぶ"
-            aria-describedby="memory-photo-status"
+            aria-required="true"
+            aria-invalid={fieldErrors.imageIds ? true : undefined}
+            aria-describedby={
+              fieldErrors.imageIds
+                ? 'memory-photo-requirement memory-photo-status memory-photo-error'
+                : 'memory-photo-requirement memory-photo-status'
+            }
           />
 
           {hasSelectedPhoto && uploadStatus !== 'failed' ? (
             <Button
+              ref={photoActionButtonRef}
               type="button"
               variant="outline"
               size="sm"
               className="w-full"
               onClick={openPhotoPicker}
               disabled={photoReplacementLocked}
+              aria-invalid={fieldErrors.imageIds ? true : undefined}
+              aria-describedby={
+                fieldErrors.imageIds
+                  ? 'memory-photo-requirement memory-photo-status memory-photo-error'
+                  : 'memory-photo-requirement memory-photo-status'
+              }
             >
               {uploadedImage ? 'しゃしんを えらびなおす' : 'べつの しゃしんを えらぶ'}
             </Button>
@@ -997,7 +1131,7 @@ export default function RecordPage() {
               </p>
             ) : null}
             {fieldErrors.imageIds ? (
-              <p role="alert" className="text-amber text-xs">
+              <p id="memory-photo-error" className="text-amber text-xs">
                 {fieldErrors.imageIds}
               </p>
             ) : null}
@@ -1058,19 +1192,28 @@ export default function RecordPage() {
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="memory-title" className="font-serif">
-                  タイトル
+                  タイトル{' '}
+                  <span aria-hidden="true" className="text-amber font-sans text-xs">
+                    必須
+                  </span>
                 </Label>
                 <Input
                   ref={titleInputRef}
                   id="memory-title"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value)
+                    clearFieldError('title')
+                  }}
                   disabled={aiStatus === 'generating'}
                   placeholder="はじめての すなあそび"
                   maxLength={100}
+                  required
+                  aria-invalid={fieldErrors.title ? true : undefined}
+                  aria-describedby={fieldErrors.title ? 'memory-title-error' : undefined}
                 />
                 {fieldErrors.title ? (
-                  <p role="alert" className="text-amber text-xs">
+                  <p id="memory-title-error" className="text-amber text-xs">
                     {fieldErrors.title}
                   </p>
                 ) : null}
@@ -1098,7 +1241,11 @@ export default function RecordPage() {
               )}
 
               <PaperSlip className="px-4 py-3">
-                <details data-testid="record-secondary-edits" className="group">
+                <details
+                  ref={secondaryEditsRef}
+                  data-testid="record-secondary-edits"
+                  className="group"
+                >
                   <summary className="tap-target text-ink-secondary flex cursor-pointer list-none items-center justify-between font-serif text-sm [&::-webkit-details-marker]:hidden">
                     ことば・日付を なおす
                     <span className="text-ink-tertiary text-xs group-open:hidden">ひらく</span>
@@ -1112,35 +1259,53 @@ export default function RecordPage() {
                         ほんぶん (任意)
                       </Label>
                       <Textarea
+                        ref={bodyInputRef}
                         id="memory-body"
                         value={body}
-                        onChange={(e) => setBody(e.target.value)}
+                        onChange={(e) => {
+                          setBody(e.target.value)
+                          clearFieldError('body')
+                        }}
                         disabled={aiStatus === 'generating'}
                         maxLength={1000}
                         rows={4}
                         placeholder="あの しゅんかんの こと、ひとこと だけでも。"
+                        aria-invalid={fieldErrors.body ? true : undefined}
+                        aria-describedby={fieldErrors.body ? 'memory-body-error' : undefined}
                       />
                       {fieldErrors.body ? (
-                        <p role="alert" className="text-amber text-xs">
+                        <p id="memory-body-error" className="text-amber text-xs">
                           {fieldErrors.body}
                         </p>
                       ) : null}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="memory-date" className="font-serif">
-                          ひにち
+                          ひにち{' '}
+                          <span aria-hidden="true" className="text-amber font-sans text-xs">
+                            必須
+                          </span>
                         </Label>
                         <Input
+                          ref={recordedAtInputRef}
                           id="memory-date"
                           type="date"
                           value={recordedAt}
-                          onChange={(e) => setRecordedAt(e.target.value)}
+                          onChange={(e) => {
+                            setRecordedAt(e.target.value)
+                            clearFieldError('recordedAt')
+                          }}
                           max={todayIso}
+                          required
+                          aria-invalid={fieldErrors.recordedAt ? true : undefined}
+                          aria-describedby={
+                            fieldErrors.recordedAt ? 'memory-date-error' : undefined
+                          }
                         />
                         {fieldErrors.recordedAt ? (
-                          <p role="alert" className="text-amber text-xs">
+                          <p id="memory-date-error" className="text-amber text-xs">
                             {fieldErrors.recordedAt}
                           </p>
                         ) : null}
@@ -1169,7 +1334,7 @@ export default function RecordPage() {
           data-testid="record-bottom-sheet-footer"
           className="bg-elevated border-hairline -mx-5 border-t px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3"
         >
-          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          <p id="record-footer-status" className="sr-only">
             {footerState.statusLabel}
           </p>
           <div
@@ -1181,10 +1346,11 @@ export default function RecordPage() {
           >
             {footerState.primaryAction === 'save' || footerState.primaryAction === 'saving' ? (
               <Button
-                ref={saveButtonRef}
+                ref={primaryActionButtonRef}
                 type="submit"
                 size="lg"
                 disabled={footerState.primaryDisabled}
+                aria-describedby="record-footer-status"
                 className="w-full"
               >
                 {footerState.primaryLabel}
@@ -1192,36 +1358,57 @@ export default function RecordPage() {
             ) : footerState.primaryAction === 'generate-ai' ||
               footerState.primaryAction === 'retry-ai' ? (
               <Button
-                ref={aiTimedOut ? aiRecoveryButtonRef : undefined}
+                ref={primaryActionButtonRef}
                 type="button"
                 size="lg"
                 className="w-full"
                 onClick={requestAiGenerate}
                 disabled={footerState.primaryDisabled}
+                aria-describedby="record-footer-status"
               >
                 {footerState.primaryLabel}
               </Button>
             ) : footerState.primaryAction === 'retry-upload' ? (
               <Button
+                ref={primaryActionButtonRef}
                 type="button"
                 size="lg"
                 className="w-full"
                 onClick={retryUpload}
                 disabled={footerState.primaryDisabled}
+                aria-describedby="record-footer-status"
               >
                 {footerState.primaryLabel}
               </Button>
             ) : footerState.primaryAction === 'manual' ? (
-              <Button type="button" size="lg" className="w-full" onClick={focusManualTitle}>
+              <Button
+                ref={primaryActionButtonRef}
+                type="button"
+                size="lg"
+                className="w-full"
+                onClick={focusManualTitle}
+                aria-describedby="record-footer-status"
+              >
                 {footerState.primaryLabel}
               </Button>
             ) : (
               <Button
+                ref={(node) => {
+                  primaryActionButtonRef.current = node
+                  if (footerState.primaryAction === 'choose-photo') {
+                    photoActionButtonRef.current = node
+                  }
+                }}
                 type="button"
                 size="lg"
                 className="w-full"
                 onClick={footerState.primaryAction === 'choose-photo' ? openPhotoPicker : undefined}
                 disabled={footerState.primaryDisabled}
+                aria-describedby={
+                  footerState.primaryAction === 'choose-photo'
+                    ? 'memory-photo-requirement record-footer-status'
+                    : 'record-footer-status'
+                }
               >
                 {footerState.primaryLabel}
               </Button>
@@ -1268,11 +1455,13 @@ function getRecordDecisionCue({
   uploaded,
   aiStatus,
   canSubmit,
+  hasTitle,
   hasStory,
 }: {
   uploaded: boolean
   aiStatus: AiStatus
   canSubmit: boolean
+  hasTitle: boolean
   hasStory: boolean
 }) {
   if (!uploaded) {
@@ -1299,6 +1488,12 @@ function getRecordDecisionCue({
       body: hasStory
         ? 'ことばを確認したら、このまま保存できます。'
         : 'タイトルがあれば、AIを使わずにこのまま保存できます。',
+    }
+  }
+  if (hasTitle) {
+    return {
+      eyebrow: '保存前の確認',
+      body: 'ひにちを確認してください。保存を押すと、直す場所へ移動します。',
     }
   }
   return {

@@ -143,7 +143,7 @@ export function getRecordFooterState({
       return {
         primaryAction: 'save',
         primaryLabel: '現在の内容を 残す',
-        primaryDisabled: !canSubmit,
+        primaryDisabled: false,
         secondaryAction: aiQuotaExceeded ? null : 'retry-ai',
         secondaryLabel: aiQuotaExceeded ? null : 'もういちど AI で 下書きする',
         statusLabel: aiQuotaExceeded
@@ -176,7 +176,7 @@ export function getRecordFooterState({
     return {
       primaryAction: 'save',
       primaryLabel: 'このまま 残す',
-      primaryDisabled: !canSubmit,
+      primaryDisabled: false,
       secondaryAction: canRetryCompletedAi ? 'retry-ai' : null,
       secondaryLabel: canRetryCompletedAi ? 'もういちど AI で 下書きする' : null,
       statusLabel: canSubmit
