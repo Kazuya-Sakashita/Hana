@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import { logStorageError } from '@/features/uploads/server/storage-error-log'
 
 // 画像 signed URL 生成の共通モジュール (ADR-0012 / ISSUE-031)。
 // - /v1/uploads/{imageId}/url (個別取得) と
@@ -61,15 +62,11 @@ export async function generateSignedImageUrl(
     signal?.throwIfAborted()
     if (fallback.data) return fallback.data.signedUrl
 
-    console.error('createSignedUrl failed (both variant and original)', {
-      reason: 'storage_sign_failed',
-    })
+    logStorageError('storage_sign_fallback_failed')
     return null
   }
 
   // size=original で失敗 → 救済不能
-  console.error('createSignedUrl failed', {
-    reason: 'storage_sign_failed',
-  })
+  logStorageError('storage_sign_failed')
   return null
 }

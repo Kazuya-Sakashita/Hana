@@ -24,6 +24,7 @@ import {
 } from '@/features/uploads/server/verify-uploaded-image'
 import { isApiProblemError } from '@/lib/api/error'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import { logStorageError } from '@/features/uploads/server/storage-error-log'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -74,14 +75,10 @@ async function generateAndUploadVariants(storageKey: string, original: Buffer): 
   ])
 
   if (thumbRes.error) {
-    console.error('variant upload (thumbnail) failed', {
-      reason: 'variant_thumbnail_upload_failed',
-    })
+    logStorageError('variant_thumbnail_upload_failed')
   }
   if (previewRes.error) {
-    console.error('variant upload (preview) failed', {
-      reason: 'variant_preview_upload_failed',
-    })
+    logStorageError('variant_preview_upload_failed')
   }
 }
 
@@ -131,9 +128,7 @@ async function prepareUploadedImage(
   try {
     await generateAndUploadVariants(storageKey, verified.buffer)
   } catch {
-    console.error('variant generation crashed', {
-      reason: 'variant_generation_failed',
-    })
+    logStorageError('variant_generation_failed')
   }
 
   return verified
