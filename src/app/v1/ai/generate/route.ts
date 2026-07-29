@@ -16,6 +16,8 @@ import {
 } from '@/features/ai/server/generate'
 import { checkMonthlyQuota, reserveMonthlyAiQuota } from '@/features/ai/server/quota'
 import { resizeForClaude } from '@/features/ai/server/resize'
+import { activeImageAccessWhere } from '@/features/uploads/server/active-image-access'
+import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { ApiProblemError } from '@/lib/api/error'
 
 export const dynamic = 'force-dynamic'
@@ -23,11 +25,23 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const BUCKET = 'images'
+const AI_VENDOR_DEADLINE_MS = 25_000
+const IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS = 30_000
 
 type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 interface ImageForAiPreparation {
   storageKey: string
+}
+
+function imageNotFoundProblem() {
+  return problems.validation([
+    {
+      path: 'body.image_ids',
+      reason: 'image_not_found',
+      message: '画像の一部が見つかりません',
+    },
+  ])
 }
 
 async function prepareImageInputForClaude(
@@ -83,17 +97,11 @@ export async function POST(request: Request) {
 
     // 5. image 所有権検証
     const images = await prisma.image.findMany({
-      where: { id: { in: input.imageIds }, deletedAt: null },
+      where: { id: { in: input.imageIds }, ...activeImageAccessWhere() },
       select: { id: true, userId: true, storageKey: true, contentType: true },
     })
     if (images.length !== input.imageIds.length) {
-      throw problems.validation([
-        {
-          path: 'body.image_ids',
-          reason: 'image_not_found',
-          message: '画像の一部が見つかりません',
-        },
-      ])
+      throw imageNotFoundProblem()
     }
     if (images.some((img) => img.userId !== user.id)) {
       throw problems.forbidden()
@@ -130,7 +138,6 @@ export async function POST(request: Request) {
       throw problems.aiConsentRequired()
     }
 
-    // 8. quota枠を原子的に予約してからClaudeへ
     const generationLog = await reserveMonthlyAiQuota({
       userId: user.id,
       childId: child.id,
@@ -139,17 +146,55 @@ export async function POST(request: Request) {
     })
     generationLogId = generationLog.id
 
-    const result = await generateAi(
-      {
-        childName: child.name,
-        ageMonths: age.months,
-        ageDays: age.days,
-        recordedAt: recordedAtIso,
-        weather: input.weather,
-        parentNote: input.parentNote,
-      },
-      imageInputs,
-    )
+    const vendorAbort = new AbortController()
+    const vendorDeadline = setTimeout(() => vendorAbort.abort(), AI_VENDOR_DEADLINE_MS)
+    let generationAttempt:
+      | { generationLogId: string; result: Awaited<ReturnType<typeof generateAi>> }
+      | { generationLogId: string; error: unknown }
+    try {
+      generationAttempt = await prisma.$transaction(
+        async (transaction) => {
+          await lockImageAccess(transaction, input.imageIds)
+          const latestImages = await transaction.image.findMany({
+            where: {
+              id: { in: input.imageIds },
+              ...activeImageAccessWhere(user.id),
+            },
+            select: { id: true },
+          })
+          if (latestImages.length !== input.imageIds.length) {
+            throw imageNotFoundProblem()
+          }
+
+          try {
+            vendorAbort.signal.throwIfAborted()
+            const result = await generateAi(
+              {
+                childName: child.name,
+                ageMonths: age.months,
+                ageDays: age.days,
+                recordedAt: recordedAtIso,
+                weather: input.weather,
+                parentNote: input.parentNote,
+              },
+              imageInputs,
+              { signal: vendorAbort.signal },
+            )
+            return { generationLogId: generationLog.id, result }
+          } catch (error) {
+            return { generationLogId: generationLog.id, error }
+          }
+        },
+        {
+          maxWait: 5_000,
+          timeout: IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS,
+        },
+      )
+    } finally {
+      clearTimeout(vendorDeadline)
+    }
+    if ('error' in generationAttempt) throw generationAttempt.error
+    const result = generationAttempt.result
 
     // 9. 成功ログ。生成本文自体は保管しない (PII)
     const log = await prisma.aiGeneration.update({
@@ -182,12 +227,7 @@ export async function POST(request: Request) {
 
     // 失敗ログ (quota チェック・所有権チェック等は除く)
     const isProblem = e instanceof ApiProblemError
-    const shouldLogFailure =
-      !!generationLogId &&
-      !(
-        isProblem &&
-        ['unauthorized', 'forbidden', 'not_found', 'validation_error'].includes(e.reason)
-      )
+    const shouldLogFailure = !!generationLogId
     if (shouldLogFailure && generationLogId) {
       try {
         await prisma.aiGeneration.update({

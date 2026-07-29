@@ -163,6 +163,7 @@ beforeEach(() => {
     async (
       callback: (transaction: {
         $executeRaw: typeof mocks.advisoryLock
+        image: { findMany: typeof mocks.imageFindMany }
         aiGeneration: {
           count: typeof mocks.aiGenerationCount
           create: typeof mocks.aiGenerationCreate
@@ -171,6 +172,7 @@ beforeEach(() => {
     ) =>
       callback({
         $executeRaw: mocks.advisoryLock,
+        image: { findMany: mocks.imageFindMany },
         aiGeneration: {
           count: mocks.aiGenerationCount,
           create: mocks.aiGenerationCreate,
@@ -179,7 +181,10 @@ beforeEach(() => {
   )
 })
 
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.clearAllMocks()
+})
 
 describe('POST /v1/ai/generate', () => {
   it('returns 401 when unauthenticated', async () => {
@@ -230,6 +235,15 @@ describe('POST /v1/ai/generate', () => {
     mocks.imageFindMany.mockResolvedValue([])
     const res = await POST(jsonRequest(validBody))
     expect(res.status).toBe(422)
+    expect(mocks.imageFindMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [IMAGE_ID] },
+        deletedAt: null,
+        OR: [{ memoryId: null }, { memory: { is: { deletedAt: null } } }],
+      },
+      select: { id: true, userId: true, storageKey: true, contentType: true },
+    })
+    expect(mocks.storageDownload).not.toHaveBeenCalled()
   })
 
   it('returns 422 for HEIC images (not supported by Claude)', async () => {
@@ -282,7 +296,15 @@ describe('POST /v1/ai/generate', () => {
         data: expect.objectContaining({ succeeded: true, errorReason: null }),
       }),
     )
-    expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
+    expect(mocks.advisoryLock).toHaveBeenCalledTimes(2)
+    expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), {
+      maxWait: 5_000,
+      timeout: 30_000,
+    })
+    expect(mocks.transaction).toHaveBeenCalledTimes(2)
+    expect(mocks.messagesCreate.mock.calls[0]?.[1]).toMatchObject({
+      signal: expect.any(AbortSignal),
+    })
   })
 
   it('stops before external AI submission when consent is revoked during image preparation', async () => {
@@ -302,6 +324,141 @@ describe('POST /v1/ai/generate', () => {
     expect(await res.json()).toMatchObject({ reason: 'ai_consent_required' })
     expect(mocks.messagesCreate).not.toHaveBeenCalled()
     expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
+  })
+
+  it('stops before external AI submission when an image is deleted during preparation', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValueOnce([imageRow]).mockResolvedValueOnce([])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+
+    const res = await POST(jsonRequest(validBody))
+
+    expect(res.status).toBe(422)
+    expect(await res.json()).toMatchObject({
+      reason: 'validation_error',
+      errors: [{ path: 'body.image_ids', reason: 'image_not_found' }],
+    })
+    expect(mocks.imageFindMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: { in: [IMAGE_ID] },
+        userId: USER_ID,
+        deletedAt: null,
+        OR: [{ memoryId: null }, { memory: { is: { userId: USER_ID, deletedAt: null } } }],
+      },
+      select: { id: true },
+    })
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+    expect(mocks.aiGenerationCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          succeeded: false,
+          errorReason: 'validation_error',
+        }),
+      }),
+    )
+  })
+
+  it('keeps the image lock transaction open until the external AI attempt finishes', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-lock-order' })
+
+    let resolveVendor: ((value: ReturnType<typeof syntheticClaudeJson>) => void) | undefined
+    mocks.messagesCreate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveVendor = (text) =>
+            resolve({
+              content: [{ type: 'text', text }],
+              usage: { input_tokens: 100, output_tokens: 50 },
+            })
+        }),
+    )
+    let transactionCompleted = false
+    mocks.transaction.mockImplementation(
+      async (
+        callback: (transaction: {
+          $executeRaw: typeof mocks.advisoryLock
+          image: { findMany: typeof mocks.imageFindMany }
+          aiGeneration: {
+            count: typeof mocks.aiGenerationCount
+            create: typeof mocks.aiGenerationCreate
+          }
+        }) => Promise<unknown>,
+        options?: { timeout?: number },
+      ) => {
+        const result = await callback({
+          $executeRaw: mocks.advisoryLock,
+          image: { findMany: mocks.imageFindMany },
+          aiGeneration: {
+            count: mocks.aiGenerationCount,
+            create: mocks.aiGenerationCreate,
+          },
+        })
+        if (options?.timeout === 30_000) transactionCompleted = true
+        return result
+      },
+    )
+
+    const responsePromise = POST(jsonRequest(validBody))
+    await vi.waitFor(() => expect(mocks.messagesCreate).toHaveBeenCalledTimes(1))
+
+    expect(mocks.advisoryLock).toHaveBeenCalledTimes(2)
+    expect(transactionCompleted).toBe(false)
+
+    resolveVendor?.(syntheticClaudeJson())
+    const response = await responsePromise
+
+    expect(response.status).toBe(200)
+    expect(transactionCompleted).toBe(true)
+  })
+
+  it('aborts the external AI request before the image lock transaction deadline', async () => {
+    vi.useFakeTimers()
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-deadline' })
+
+    let vendorSignal: AbortSignal | undefined
+    mocks.messagesCreate.mockImplementation(
+      (_payload: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise((_, reject) => {
+          vendorSignal = options?.signal
+          options?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }),
+    )
+
+    const responsePromise = POST(jsonRequest(validBody))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(mocks.messagesCreate).toHaveBeenCalledTimes(1)
+    expect(vendorSignal?.aborted).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(25_000)
+    const response = await responsePromise
+
+    expect(response.status).toBe(500)
+    expect(vendorSignal?.aborted).toBe(true)
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'gen-deadline' },
+        data: expect.objectContaining({ succeeded: false, errorReason: 'internal_error' }),
+      }),
+    )
   })
 
   it('starts download and resize for five images in parallel', async () => {

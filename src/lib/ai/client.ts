@@ -11,6 +11,7 @@ import Anthropic from '@anthropic-ai/sdk'
 //   - Vercel AI Gateway は ISSUE-023 (Vercel deploy) で別途検討
 
 const DEFAULT_MODEL = 'claude-haiku-4-5'
+const AI_CLIENT_TIMEOUT_MS = 25_000
 
 let cached: Anthropic | null = null
 
@@ -20,7 +21,11 @@ export function createAnthropicClient(): Anthropic {
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not set')
   }
-  cached = new Anthropic({ apiKey })
+  cached = new Anthropic({
+    apiKey,
+    maxRetries: 0,
+    timeout: AI_CLIENT_TIMEOUT_MS,
+  })
   return cached
 }
 

@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
   memoryCount: vi.fn(),
   memoryUpdate: vi.fn(),
   transaction: vi.fn(),
+  advisoryLock: vi.fn(),
   txMemoryCreate: vi.fn(),
+  txMemoryUpdateMany: vi.fn(),
+  txImageFindMany: vi.fn(),
   txImageUpdateMany: vi.fn(),
   txMemoryFindUniqueOrThrow: vi.fn(),
   createSignedUrl: vi.fn(),
@@ -45,16 +48,7 @@ vi.mock('@/server/db/prisma', () => ({
       count: mocks.memoryCount,
       update: mocks.memoryUpdate,
     },
-    $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        memory: {
-          create: mocks.txMemoryCreate,
-          findUniqueOrThrow: mocks.txMemoryFindUniqueOrThrow,
-        },
-        image: {
-          updateMany: mocks.txImageUpdateMany,
-        },
-      }),
+    $transaction: mocks.transaction,
   },
 }))
 
@@ -111,6 +105,21 @@ function authed() {
   mocks.profileFindUnique.mockResolvedValue(profileRow)
   mocks.memoryCount.mockResolvedValue(0)
   mocks.memoryFindFirst.mockResolvedValue(null)
+  mocks.advisoryLock.mockResolvedValue(1)
+  mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      $executeRaw: mocks.advisoryLock,
+      memory: {
+        create: mocks.txMemoryCreate,
+        updateMany: mocks.txMemoryUpdateMany,
+        findUniqueOrThrow: mocks.txMemoryFindUniqueOrThrow,
+      },
+      image: {
+        findMany: mocks.txImageFindMany,
+        updateMany: mocks.txImageUpdateMany,
+      },
+    }),
+  )
 }
 
 function unauthed() {
@@ -137,7 +146,10 @@ function jsonRequest(
   })
 }
 
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.clearAllMocks()
+})
 
 describe('GET /v1/memories', () => {
   it('returns 401 when unauthenticated', async () => {
@@ -664,15 +676,38 @@ describe('DELETE /v1/memories/{memoryId}', () => {
   it('returns 204 on success', async () => {
     authed()
     mocks.memoryFindFirst.mockResolvedValue(memoryRow)
-    mocks.memoryUpdate.mockResolvedValue({ ...memoryRow, deletedAt: new Date() })
+    mocks.txImageFindMany.mockResolvedValue([{ id: IMAGE_ID }])
+    mocks.txMemoryUpdateMany.mockResolvedValue({ count: 1 })
+    mocks.txImageUpdateMany.mockResolvedValue({ count: 1 })
     const res = await DETAIL_DELETE(
       jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
       ctx(MEMORY_ID),
     )
     expect(res.status).toBe(204)
-    expect(mocks.memoryUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
+    expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
+    expect(mocks.txMemoryUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: MEMORY_ID,
+        userId: USER_ID,
+        deletedAt: null,
+      },
+      data: { deletedAt: expect.any(Date) },
+    })
+    expect(mocks.txImageUpdateMany).toHaveBeenCalledWith({
+      where: {
+        memoryId: MEMORY_ID,
+        userId: USER_ID,
+        deletedAt: null,
+      },
+      data: { deletedAt: expect.any(Date) },
+    })
+    expect(mocks.txImageUpdateMany.mock.calls[0]?.[0].data.deletedAt).toBe(
+      mocks.txMemoryUpdateMany.mock.calls[0]?.[0].data.deletedAt,
     )
+    expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), {
+      maxWait: 5_000,
+      timeout: 35_000,
+    })
   })
 
   it('returns 403 for foreign memory', async () => {
@@ -683,5 +718,130 @@ describe('DELETE /v1/memories/{memoryId}', () => {
       ctx(MEMORY_ID),
     )
     expect(res.status).toBe(403)
+    expect(mocks.txMemoryUpdateMany).not.toHaveBeenCalled()
+    expect(mocks.txImageUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it('does not overwrite deletion timestamps when concurrent deletion already won', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+    mocks.txImageFindMany.mockResolvedValue([{ id: IMAGE_ID }])
+    mocks.txMemoryUpdateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
+    mocks.txImageUpdateMany.mockResolvedValue({ count: 1 })
+
+    const first = await DETAIL_DELETE(
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
+      ctx(MEMORY_ID),
+    )
+    const second = await DETAIL_DELETE(
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
+      ctx(MEMORY_ID),
+    )
+
+    expect(first.status).toBe(204)
+    expect(second.status).toBe(204)
+    expect(mocks.txImageUpdateMany).toHaveBeenCalledTimes(1)
+  })
+
+  it('sets the shared deletion timestamp only after acquiring image locks', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-29T00:00:00.000Z'))
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+    mocks.txImageFindMany.mockResolvedValue([{ id: IMAGE_ID }])
+    mocks.advisoryLock.mockImplementation(async () => {
+      vi.setSystemTime(new Date('2026-07-29T00:00:05.000Z'))
+      return 1
+    })
+    mocks.txMemoryUpdateMany.mockResolvedValue({ count: 1 })
+    mocks.txImageUpdateMany.mockResolvedValue({ count: 1 })
+
+    const response = await DETAIL_DELETE(
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
+      ctx(MEMORY_ID),
+    )
+
+    expect(response.status).toBe(204)
+    expect(mocks.txMemoryUpdateMany.mock.calls[0]?.[0].data.deletedAt).toEqual(
+      new Date('2026-07-29T00:00:05.000Z'),
+    )
+  })
+
+  it('does not lock or modify unrelated images when the memory has no active images', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+    mocks.txImageFindMany.mockResolvedValue([])
+    mocks.txMemoryUpdateMany.mockResolvedValue({ count: 1 })
+    mocks.txImageUpdateMany.mockResolvedValue({ count: 0 })
+
+    const response = await DETAIL_DELETE(
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
+      ctx(MEMORY_ID),
+    )
+
+    expect(response.status).toBe(204)
+    expect(mocks.advisoryLock).not.toHaveBeenCalled()
+    expect(mocks.txImageUpdateMany).toHaveBeenCalledWith({
+      where: {
+        memoryId: MEMORY_ID,
+        userId: USER_ID,
+        deletedAt: null,
+      },
+      data: { deletedAt: expect.any(Date) },
+    })
+  })
+
+  it('returns 500 and rolls back state in the transaction-behavior harness', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+    let memoryDeletedAt: Date | null = null
+    let imageDeletedAt: Date | null = null
+    mocks.transaction.mockImplementationOnce(
+      async (
+        fn: (transaction: {
+          $executeRaw: typeof mocks.advisoryLock
+          memory: { updateMany: typeof mocks.txMemoryUpdateMany }
+          image: {
+            findMany: typeof mocks.txImageFindMany
+            updateMany: typeof mocks.txImageUpdateMany
+          }
+        }) => Promise<unknown>,
+      ) => {
+        const snapshot = { memoryDeletedAt, imageDeletedAt }
+        try {
+          return await fn({
+            $executeRaw: mocks.advisoryLock,
+            memory: {
+              updateMany: vi.fn(async ({ data }: { data: { deletedAt: Date } }) => {
+                memoryDeletedAt = data.deletedAt
+                return { count: 1 }
+              }),
+            },
+            image: {
+              findMany: vi.fn(async () => [{ id: IMAGE_ID }]),
+              updateMany: vi.fn(async ({ data }: { data: { deletedAt: Date } }) => {
+                imageDeletedAt = data.deletedAt
+                throw new Error('synthetic image update failure')
+              }),
+            },
+          })
+        } catch (error) {
+          memoryDeletedAt = snapshot.memoryDeletedAt
+          imageDeletedAt = snapshot.imageDeletedAt
+          throw error
+        }
+      },
+    )
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await DETAIL_DELETE(
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
+      ctx(MEMORY_ID),
+    )
+
+    expect(response.status).toBe(500)
+    expect(memoryDeletedAt).toBeNull()
+    expect(imageDeletedAt).toBeNull()
+    errorSpy.mockRestore()
   })
 })

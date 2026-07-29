@@ -5,8 +5,12 @@ import { problems } from '@/server/api/problems'
 import { prisma } from '@/server/db/prisma'
 import { isUuid, parseMemoryUpdate, readJsonBody } from '@/features/memories/server/parse'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
+import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+const DELETE_TRANSACTION_TIMEOUT_MS = 35_000
 
 type Params = { params: Promise<{ memoryId: string }> }
 
@@ -79,10 +83,46 @@ export async function DELETE(_request: Request, { params }: Params) {
     const memory = await loadMemory(memoryId)
     if (memory.userId !== user.id) throw problems.forbidden()
 
-    await prisma.memory.update({
-      where: { id: memory.id },
-      data: { deletedAt: new Date() },
-    })
+    await prisma.$transaction(
+      async (transaction) => {
+        const activeImages = await transaction.image.findMany({
+          where: {
+            memoryId: memory.id,
+            userId: user.id,
+            deletedAt: null,
+          },
+          select: { id: true },
+        })
+        await lockImageAccess(
+          transaction,
+          activeImages.map((image) => image.id),
+        )
+
+        const deletedAt = new Date()
+        const deletedMemory = await transaction.memory.updateMany({
+          where: {
+            id: memory.id,
+            userId: user.id,
+            deletedAt: null,
+          },
+          data: { deletedAt },
+        })
+        if (deletedMemory.count === 0) return
+
+        await transaction.image.updateMany({
+          where: {
+            memoryId: memory.id,
+            userId: user.id,
+            deletedAt: null,
+          },
+          data: { deletedAt },
+        })
+      },
+      {
+        maxWait: 5_000,
+        timeout: DELETE_TRANSACTION_TIMEOUT_MS,
+      },
+    )
     return new Response(null, { status: 204 })
   } catch (e) {
     return toProblemResponse(e)

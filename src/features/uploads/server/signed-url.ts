@@ -41,29 +41,35 @@ export function deriveVariantKey(originalKey: string, size: ImageSize): string {
 export async function generateSignedImageUrl(
   storageKey: string,
   size: ImageSize,
+  options?: { signal?: AbortSignal },
 ): Promise<string | null> {
-  const supabase = createSupabaseAdminClient()
+  const signal = options?.signal
+  signal?.throwIfAborted()
+  const supabase = createSupabaseAdminClient({ signal })
   const key = deriveVariantKey(storageKey, size)
   const primary = await supabase.storage.from(BUCKET).createSignedUrl(key, SIGNED_URL_TTL_SECONDS)
+  signal?.throwIfAborted()
 
   if (primary.data) return primary.data.signedUrl
 
   // variant が存在しない (ISSUE-031 以前のデータ) → original にフォールバック
   if (size !== 'original') {
+    signal?.throwIfAborted()
     const fallback = await supabase.storage
       .from(BUCKET)
       .createSignedUrl(storageKey, SIGNED_URL_TTL_SECONDS)
+    signal?.throwIfAborted()
     if (fallback.data) return fallback.data.signedUrl
 
     console.error('createSignedUrl failed (both variant and original)', {
-      reason: fallback.error?.message ?? primary.error?.message ?? 'no_data',
+      reason: 'storage_sign_failed',
     })
     return null
   }
 
   // size=original で失敗 → 救済不能
   console.error('createSignedUrl failed', {
-    reason: primary.error?.message ?? 'no_data',
+    reason: 'storage_sign_failed',
   })
   return null
 }

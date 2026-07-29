@@ -33,6 +33,8 @@
     "qa:issue107:migration-status": "node scripts/qa/issue-107-staging-migration-status.cjs",
     "qa:issue109:privacy-mailbox": "node --permission --allow-fs-read=scripts/qa/issue-109-privacy-mailbox-attestation.cjs --allow-fs-read=scripts/qa/issue-103-prelaunch-traffic-attestation.cjs --allow-fs-read=package.json --allow-fs-read=docs/release/prelaunch-waitlist-readiness.md --allow-fs-read=docs/issues/ISSUE-109-privacy-mailbox-attestation.md --allow-fs-read=docs/issues/ISSUE-105-staging-preflight-go-hold.md --allow-fs-read=docs/issues/README.md --allow-fs-read=node_modules scripts/qa/issue-109-privacy-mailbox-attestation.cjs",
     "qa:issue110:staging-public": "node scripts/qa/issue-110-staging-public-qa-strict-runtime.cjs",
+    "qa:issue123:db-bootstrap": "node scripts/qa/issue-123-bootstrap-postgres.mjs",
+    "qa:issue123:image-boundary-db": "node scripts/qa/issue-123-image-access-concurrency.mjs",
     "qa:issue082:lp-app-visual-parity": "node scripts/qa/issue-082-lp-app-visual-parity-contract.cjs",
     "openapi:lint": "redocly lint docs/openapi/openapi.yaml && spectral lint --ruleset .spectral.yaml docs/openapi/openapi.yaml",
     "openapi:route-map": "node scripts/check-openapi-route-map.mjs",

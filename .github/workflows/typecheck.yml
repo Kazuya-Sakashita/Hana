@@ -10,6 +10,20 @@ jobs:
   pr-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hana_ci
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_APP_URL: http://localhost:3000
@@ -32,6 +46,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Bootstrap Supabase roles in local PostgreSQL
+        run: pnpm qa:issue123:db-bootstrap
+
+      - name: Apply database migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Verify image access concurrency boundary
+        run: ISSUE_123_DATABASE_QA=1 pnpm qa:issue123:image-boundary-db
 
       - name: Run PR gate
         run: pnpm pr:gate

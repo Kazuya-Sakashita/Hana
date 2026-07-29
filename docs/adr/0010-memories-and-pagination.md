@@ -65,17 +65,30 @@ cursor = base64url({"id": "7d6e5f4c-3b2a-4291-8765-0123456789ab"})
 - Offset ベース: 大規模化で遅い・items 挿入で重複/欠落
 - ID 文字列のみ: 並び順が `id` 順だと UX が崩れる
 
-### 4. DELETE /memories は **論理削除**、画像はそのまま残す
+### 4. DELETE /memories は Memory と Image metadata を同時に論理削除する
 
-- `memories.deleted_at` セットのみ。`images.memory_id` は変更しない
+> 2026-07-29 / ISSUE-123 で更新。Storage objectを保持しながら、削除後の再取得とAI再送信を遮断する。
+
+- `memories.deleted_at` と関連する `images.deleted_at` を同じtimestamp・同じtransactionでセットする
+- `images.memory_id` とprivate Storage objectは変更せず、30日間の物理削除猶予を維持する
+- 画像アクセス、AI送信、削除は同じ画像単位のtransaction advisory lockで順序を確定する
+- signed URL生成は8秒、lock transactionは10秒を上限とし、期限時はStorage requestをabortしてfallbackを開始せず、URLを返さない
+- AI vendor呼び出しは共通AbortSignalで25秒、lock transactionは30秒を上限とする
+- AI quota予約は画像の初期検証・AI同意再確認後、画像lock transactionの前に短い独立transactionでcommitする
+- quota予約後に画像lockを取得し、本人所有と親Memory未削除を再検証してからvendorへ送信する
+- Memory削除transactionは35秒を上限とし、最大30秒の画像利用transactionとの正常な競合を待機できるようにする
 - 30 日後の物理削除ジョブで `memories` 行も画像 (storage + DB) も一括削除する想定 (別 ISSUE)
-- 「やり直し」UX のため、30 日以内は復元 API で復活可能 (将来 ISSUE)
+- 将来復元する場合はMemoryと関連Imageの`deleted_at`を同じtransactionで解除する
 - 退会フロー (ISSUE-016) では Cascade で全部消える
 
 採用理由:
 
-- 親が誤って削除した場合の安全網
-- 画像を即削除しないことで、復元時に同じ画像が見える
+- 削除後の写真をsigned URLや外部AI経由で再利用できないことを優先する
+- Storage objectは即時物理削除しないため、30日間の復元可能性は維持できる
+- transaction advisory lockにより、削除commit後に新しいURL発行やAI送信が始まらない
+- 外部処理の期限をDB transactionより短くし、Vercelの60秒実行上限より前にlockを解放する
+- quota予約を先に確定することで、vendor成功後に画像lock transactionのcommitが失敗しても利用枠を失わない
+- quota予約と画像lock transactionを重ねず、同時AIリクエストでのconnection pool枯渇を避ける
 
 ### 5. `ai_generated` フィールドは boolean、ISSUE-009 では常に false
 
@@ -100,7 +113,9 @@ cursor = base64url({"id": "7d6e5f4c-3b2a-4291-8765-0123456789ab"})
 - **画像表示順**: `created_at` 昇順を使うため、後からアップロード順序を入れ替える API がない。必要なら `order_index` カラム追加 (別 ISSUE)
 - **GET /memories の N+1**: 各 memory の `images` を `include` で取るが、Prisma が一括 SQL に最適化するので問題なし
 - **cursor 不整合**: 並列で memory 追加されると cursor 位置がずれる (新規アイテムは次回 fetch で先頭に出る、cursor は古い位置を維持) — タイムライン UX としては受容
-- **論理削除と画像 storage**: 削除済み memory でも images.storage_key は残るため、Storage コスト → 別 ISSUE の cleanup ジョブで対応
+- **論理削除と画像 storage**: 削除済みImageのStorage objectは残るため、Storageコスト → 別 ISSUE のcleanup jobで対応
+- **画像利用中のDB transaction**: signed URL発行とAI vendor呼び出し中は画像単位lockとDB connectionを保持する。MVP負荷では削除境界を優先し、lease tableへの移行は同時実行数を計測して判断する
+- **AI quotaの保守的消費**: quota予約commit後からvendor送信前にprocess停止、画像削除、親Memory削除が起きた場合、未送信でも1回分を消費する。画像送信の安全境界、connection poolの健全性、過少計上防止を優先し、`in_progress`滞留の運用監視と将来の補償処理で扱う
 
 ## 関連
 
