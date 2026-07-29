@@ -1,0 +1,3 @@
+export const MAX_UPLOAD_FILE_SIZE = 10 * 1024 * 1024
+export const MAX_UPLOAD_DIMENSION = 10_000
+export const MAX_UPLOAD_PIXELS = 25_000_000

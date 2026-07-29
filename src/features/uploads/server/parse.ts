@@ -1,16 +1,14 @@
 import 'server-only'
 
 import { problems, type FieldError } from '@/server/api/problems'
+import { MAX_UPLOAD_DIMENSION, MAX_UPLOAD_FILE_SIZE } from '@/features/uploads/server/image-limits'
 import { ALLOWED_MIMES } from '@/features/uploads/server/storage-key'
 
 // /v1/uploads/* の body 検証。zod は不採用、インラインで判定。
-// 値の上限は OpenAPI と一致させる:
-//   - file_size: 10 MiB (= 10485760)
-//   - width/height: 10000 px
-//   - content_type: image/jpeg | image/png | image/webp | image/heic
+// 値の上限は OpenAPI と一致させる。
+// confirmのwidth / height / file_sizeは旧クライアント互換で受理するが使用しない。
+// 実体値の上限検証はverify-uploaded-image.tsで行う。
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024
-const MAX_DIMENSION = 10000
 const MAX_FILE_NAME = 255
 
 export interface PresignedUploadInput {
@@ -20,9 +18,6 @@ export interface PresignedUploadInput {
 
 export interface UploadConfirmInput {
   storageKey: string
-  width: number
-  height: number
-  fileSize: number
 }
 
 export async function readJsonBody(request: Request): Promise<unknown> {
@@ -70,7 +65,7 @@ export function parsePresignedUploadRequest(raw: unknown): PresignedUploadInput 
     errors.push({
       path: 'body.content_type',
       reason: 'unsupported_media_type',
-      message: 'JPEG / PNG / WebP / HEIC のみ対応しています',
+      message: 'JPEG / PNG / WebP のみ対応しています',
     })
   } else {
     contentType = body.content_type
@@ -98,63 +93,35 @@ export function parseUploadConfirmRequest(raw: unknown): UploadConfirmInput {
     storageKey = body.storage_key
   }
 
-  const width = parseDimension(body.width, 'body.width', errors)
-  const height = parseDimension(body.height, 'body.height', errors)
-  const fileSize = parseFileSize(body.file_size, errors)
+  if (body.width !== undefined) {
+    parseLegacyInteger(body.width, 'body.width', MAX_UPLOAD_DIMENSION, errors)
+  }
+  if (body.height !== undefined) {
+    parseLegacyInteger(body.height, 'body.height', MAX_UPLOAD_DIMENSION, errors)
+  }
+  if (body.file_size !== undefined) {
+    parseLegacyInteger(body.file_size, 'body.file_size', MAX_UPLOAD_FILE_SIZE, errors)
+  }
 
   if (errors.length) throw problems.validation(errors)
-  return {
-    storageKey,
-    width: width as number,
-    height: height as number,
-    fileSize: fileSize as number,
-  }
+  return { storageKey }
 }
 
-function parseDimension(value: unknown, path: string, errors: FieldError[]): number | null {
+function parseLegacyInteger(
+  value: unknown,
+  path: string,
+  maximum: number,
+  errors: FieldError[],
+): void {
   if (typeof value !== 'number' || !Number.isInteger(value)) {
     errors.push({ path, reason: 'invalid_type', message: '整数で指定してください' })
-    return null
+    return
   }
   if (value < 1) {
-    errors.push({ path, reason: 'too_small', message: '1 px 以上で指定してください' })
-    return null
+    errors.push({ path, reason: 'too_small', message: '1以上で指定してください' })
+    return
   }
-  if (value > MAX_DIMENSION) {
-    errors.push({
-      path,
-      reason: 'too_large',
-      message: `${MAX_DIMENSION} px 以下で指定してください`,
-    })
-    return null
+  if (value > maximum) {
+    errors.push({ path, reason: 'too_large', message: `${maximum}以下で指定してください` })
   }
-  return value
-}
-
-function parseFileSize(value: unknown, errors: FieldError[]): number | null {
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
-    errors.push({
-      path: 'body.file_size',
-      reason: 'invalid_type',
-      message: '整数で指定してください',
-    })
-    return null
-  }
-  if (value < 1) {
-    errors.push({
-      path: 'body.file_size',
-      reason: 'too_small',
-      message: '1 byte 以上で指定してください',
-    })
-    return null
-  }
-  if (value > MAX_FILE_SIZE) {
-    errors.push({
-      path: 'body.file_size',
-      reason: 'too_large',
-      message: '10 MiB を超えています',
-    })
-    return null
-  }
-  return value
 }

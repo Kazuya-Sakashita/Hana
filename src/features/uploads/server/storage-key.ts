@@ -16,7 +16,7 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/heic': 'heic',
 }
 
-export const ALLOWED_MIMES: ReadonlyArray<string> = Object.keys(EXT_BY_MIME)
+export const ALLOWED_MIMES: ReadonlyArray<string> = ['image/jpeg', 'image/png', 'image/webp']
 
 const STORAGE_KEY_PATTERN = /^uploads\/[0-9a-f]{16}\/\d{6}\/[0-9a-f-]{36}\.(jpg|png|webp|heic)$/
 
@@ -25,7 +25,7 @@ export function userIdHash(userId: string): string {
 }
 
 export function extensionForMime(mime: string): string | null {
-  return EXT_BY_MIME[mime] ?? null
+  return ALLOWED_MIMES.includes(mime) ? (EXT_BY_MIME[mime] ?? null) : null
 }
 
 export function mimeForExtension(ext: string): string | null {

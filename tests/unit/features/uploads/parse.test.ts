@@ -65,9 +65,6 @@ describe('parseUploadConfirmRequest', () => {
   it('parses a valid body', () => {
     expect(parseUploadConfirmRequest(valid)).toEqual({
       storageKey: valid.storage_key,
-      width: 1920,
-      height: 1080,
-      fileSize: 524288,
     })
   })
 
@@ -78,31 +75,20 @@ describe('parseUploadConfirmRequest', () => {
     )
   })
 
-  it('rejects non-integer dimensions', () => {
+  it('accepts omitted legacy measurement hints', () => {
+    expect(parseUploadConfirmRequest({ storage_key: valid.storage_key })).toEqual({
+      storageKey: valid.storage_key,
+    })
+  })
+
+  it('validates legacy hints when present without returning them', () => {
     expectValidationError(
-      () => parseUploadConfirmRequest({ ...valid, width: 1920.5 }),
+      () => parseUploadConfirmRequest({ ...valid, width: 'untrusted' }),
       'body.width',
     )
-  })
-
-  it('rejects too-small dimensions', () => {
-    expectValidationError(() => parseUploadConfirmRequest({ ...valid, height: 0 }), 'body.height')
-  })
-
-  it('rejects too-large dimensions', () => {
-    expectValidationError(() => parseUploadConfirmRequest({ ...valid, width: 99999 }), 'body.width')
-  })
-
-  it('rejects file_size over 10 MiB', () => {
+    expectValidationError(() => parseUploadConfirmRequest({ ...valid, height: -1 }), 'body.height')
     expectValidationError(
-      () => parseUploadConfirmRequest({ ...valid, file_size: 11 * 1024 * 1024 }),
-      'body.file_size',
-    )
-  })
-
-  it('rejects file_size below 1', () => {
-    expectValidationError(
-      () => parseUploadConfirmRequest({ ...valid, file_size: 0 }),
+      () => parseUploadConfirmRequest({ ...valid, file_size: Number.MAX_SAFE_INTEGER }),
       'body.file_size',
     )
   })

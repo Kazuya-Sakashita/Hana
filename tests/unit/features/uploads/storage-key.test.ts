@@ -34,11 +34,11 @@ describe('userIdHash', () => {
 })
 
 describe('extensionForMime / mimeForExtension', () => {
-  it('maps the 4 allowed mimes', () => {
+  it('maps the 3 direct-upload mimes', () => {
     expect(extensionForMime('image/jpeg')).toBe('jpg')
     expect(extensionForMime('image/png')).toBe('png')
     expect(extensionForMime('image/webp')).toBe('webp')
-    expect(extensionForMime('image/heic')).toBe('heic')
+    expect(extensionForMime('image/heic')).toBeNull()
   })
 
   it('returns null for unknown mime', () => {
@@ -52,8 +52,8 @@ describe('extensionForMime / mimeForExtension', () => {
     expect(mimeForExtension('exe')).toBeNull()
   })
 
-  it('ALLOWED_MIMES has 4 entries', () => {
-    expect(ALLOWED_MIMES).toHaveLength(4)
+  it('ALLOWED_MIMES has 3 entries', () => {
+    expect(ALLOWED_MIMES).toHaveLength(3)
   })
 })
 
@@ -78,11 +78,11 @@ describe('generateStorageKey', () => {
 
   it('uses extension matching the mime', () => {
     expect(generateStorageKey(USER_ID, 'image/png').endsWith('.png')).toBe(true)
-    expect(generateStorageKey(USER_ID, 'image/heic').endsWith('.heic')).toBe(true)
   })
 
   it('throws on unsupported mime', () => {
     expect(() => generateStorageKey(USER_ID, 'image/gif')).toThrow()
+    expect(() => generateStorageKey(USER_ID, 'image/heic')).toThrow()
   })
 
   it('generates a different uuid on each call', () => {

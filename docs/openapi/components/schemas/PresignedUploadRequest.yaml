@@ -15,6 +15,8 @@ properties:
     example: 'IMG_1234.jpg'
   content_type:
     type: string
-    enum: [image/jpeg, image/png, image/webp, image/heic]
-    description: MIME type。許可は 4 種のみ
+    enum: [image/jpeg, image/png, image/webp]
+    description: |
+      Storageへ直接送るMIME type。JPEG / PNG / WebPのみ。
+      HEICの元ファイルはクライアントでJPEGへ再エンコードしてから指定する。
     example: 'image/jpeg'

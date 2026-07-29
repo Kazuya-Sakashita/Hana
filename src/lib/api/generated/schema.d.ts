@@ -174,7 +174,20 @@ export interface paths {
          * アップロード完了を通知して Image レコードを作成
          * @description クライアントが presigned URL に PUT したあとに呼ぶ。
          *     サーバは `storage_key` のプレフィクスが現在のユーザーのものであることを検証し、
-         *     Supabase Storage 上でオブジェクトの存在を確認した上で `images` テーブルに行を作成する。
+         *     Supabase Storage 上の実体を上限付きstreamで取得する。magic bytes、MIME、
+         *     静止画であること、完全decode、向き補正後の寸法、10 MiB・25 MP上限を検証し、
+         *     実体から算出した値で `images` テーブルに行を作成する。
+         *
+         *     `width`、`height`、`file_size`は旧クライアントとの互換性のため受理するが、
+         *     OpenAPIどおりの形式だけを受理し、Imageの確定値には使用しない。欠落は `not_found`、破損は
+         *     `invalid_image_content`、MIME不一致は `content_type_mismatch`、上限超過は
+         *     `file_too_large`または`image_dimensions_too_large`、動画・animated画像は
+         *     `animated_image_not_supported`で拒否する。Storageの一時障害は
+         *     `storage_unavailable`で返す。
+         *
+         *     HEIC元ファイルはクライアントでJPEGへ再エンコードする。HEICの直接uploadは
+         *     実行環境のdecoderを固定できるまで発行せず、既存keyの確定要求は
+         *     `unsupported_media_type`で拒否する。
          *
          *     同じユーザーが同じ `storage_key` を再送した場合は、既存の Image を返す冪等操作とする。
          *     初回作成時は 201、既に確定済みの場合は 200 を返す。
@@ -654,11 +667,12 @@ export interface components {
              */
             file_name: string;
             /**
-             * @description MIME type。許可は 4 種のみ
+             * @description Storageへ直接送るMIME type。JPEG / PNG / WebPのみ。
+             *     HEICの元ファイルはクライアントでJPEGへ再エンコードしてから指定する。
              * @example image/jpeg
              * @enum {string}
              */
-            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic";
+            content_type: "image/jpeg" | "image/png" | "image/webp";
         };
         /**
          * @description signed URL 発行レスポンス。クライアントは `presigned_url` に
@@ -689,7 +703,7 @@ export interface components {
         };
         /**
          * @description アップロード完了通知。サーバはここで初めて `images` テーブルに行を作る。
-         *     Storage 上のオブジェクトの存在を確認した上で Image レコードを作成する。
+         *     Storage 上の実体を検証し、寸法とファイルサイズを実体から算出してImageレコードを作成する。
          */
         UploadConfirmRequest: {
             /**
@@ -700,20 +714,23 @@ export interface components {
              */
             storage_key: string;
             /**
-             * @description 画像の幅 (px)
+             * @deprecated
+             * @description 旧クライアント互換の申告値。サーバは使用せずStorage実体から算出する
              * @example 1920
              */
-            width: number;
+            width?: number;
             /**
-             * @description 画像の高さ (px)
+             * @deprecated
+             * @description 旧クライアント互換の申告値。サーバは使用せずStorage実体から算出する
              * @example 1080
              */
-            height: number;
+            height?: number;
             /**
-             * @description ファイルサイズ (byte)。10 MiB を上限とする
+             * @deprecated
+             * @description 旧クライアント互換の申告値。サーバは使用せずStorage実体から算出する
              * @example 524288
              */
-            file_size: number;
+            file_size?: number;
         };
         /**
          * @description 画像ダウンロード用の signed URL。
@@ -1157,6 +1174,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /** @description 依存サービスが一時的に利用できない。外部サービスのエラー本文や識別子は返さない。 */
+        ServiceUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /**
          * @description サーバ内部エラー。固定文言で返し、スタックトレース・SQL・テーブル名・例外メッセージ等
          *     の内部情報を漏らさない。詳細は instance（request_id）でサーバログを引いて調査する。
@@ -1491,10 +1517,7 @@ export interface operations {
             content: {
                 /**
                  * @example {
-                 *       "storage_key": "uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg",
-                 *       "width": 1920,
-                 *       "height": 1080,
-                 *       "file_size": 524288
+                 *       "storage_key": "uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg"
                  *     }
                  */
                 "application/json": components["schemas"]["UploadConfirmRequest"];
@@ -1524,6 +1547,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getImageDownloadUrl: {

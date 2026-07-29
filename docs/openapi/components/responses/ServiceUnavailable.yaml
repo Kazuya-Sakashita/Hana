@@ -1,0 +1,16 @@
+description: |
+  依存サービスが一時的に利用できない。外部サービスのエラー本文や識別子は返さない。
+content:
+  application/problem+json:
+    schema:
+      $ref: '../schemas/ProblemDetails.yaml'
+    examples:
+      storage_unavailable:
+        summary: Storage is temporarily unavailable
+        value:
+          type: 'https://hana.app/problems/storage-unavailable'
+          title: 'Service Unavailable'
+          status: 503
+          detail: '画像の確認処理を一時的に利用できません'
+          reason: 'storage_unavailable'
+          instance: 'req_01HXYZABCDEFG'
