@@ -121,6 +121,15 @@ export async function POST(request: Request) {
     const age = computeAge(child.birthdate, recordedAtDate)
     const recordedAtIso = recordedAtDate.toISOString().slice(0, 10)
 
+    // 準備中に撤回された場合、外部送信へ進む直前に止める。
+    const latestConsent = await prisma.profile.findUnique({
+      where: { id: user.id },
+      select: { aiConsentAt: true },
+    })
+    if (!latestConsent?.aiConsentAt) {
+      throw problems.aiConsentRequired()
+    }
+
     // 8. quota枠を原子的に予約してからClaudeへ
     const generationLog = await reserveMonthlyAiQuota({
       userId: user.id,

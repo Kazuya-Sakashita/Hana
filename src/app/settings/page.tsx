@@ -3,8 +3,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Clock3, Database, FileText, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { AccessibleDialog } from '@/components/ui/dialog'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppShell, PageHeader } from '@/components/product/app-shell'
 import { DataRow, StatePanel, TrustSection } from '@/components/product/surfaces'
 import { isApiProblemError } from '@/lib/api/error'
@@ -12,7 +14,12 @@ import { computeAge, formatAgeLabel } from '@/lib/age'
 import { imageUrlCache } from '@/lib/cache/image-url-cache'
 import { recordDraftStore } from '@/features/memories/client/record-draft-store'
 import { useChildrenQuery } from '@/features/children/client/use-children'
-import { useCurrentUserQuery } from '@/features/me/client/use-current-user'
+import {
+  currentUserQueryKey,
+  type CurrentUser,
+  useCurrentUserQuery,
+  useRevokeAiConsentMutation,
+} from '@/features/me/client/use-current-user'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 import { settingsTrustCenterCopy } from '@/lib/ui/settings-trust-center-copy'
 
@@ -20,8 +27,14 @@ export default function SettingsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [signingOut, setSigningOut] = useState(false)
+  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
+  const [revokeMessage, setRevokeMessage] = useState<string | null>(null)
+  const [revokeError, setRevokeError] = useState<string | null>(null)
+  const revokeStatusRef = useRef<HTMLParagraphElement>(null)
+  const revokeInFlightRef = useRef(false)
   const meQuery = useCurrentUserQuery()
   const childrenQuery = useChildrenQuery()
+  const revokeAiConsentMutation = useRevokeAiConsentMutation()
   const authError = meQuery.error ?? childrenQuery.error
   const isUnauthorized = isApiProblemError(authError) && authError.reason === 'unauthorized'
 
@@ -42,6 +55,32 @@ export default function SettingsPage() {
     imageUrlCache.clearAll()
     recordDraftStore.clear()
     router.push('/sign-in')
+  }
+
+  async function onRevokeAiConsent() {
+    if (revokeInFlightRef.current) return
+    revokeInFlightRef.current = true
+    setRevokeError(null)
+    try {
+      await revokeAiConsentMutation.mutateAsync()
+      showRevokeSuccess()
+    } catch {
+      const latestUser = queryClient.getQueryData<CurrentUser>(currentUserQueryKey)
+      if (latestUser?.ai_consent_at === null) {
+        showRevokeSuccess()
+        return
+      }
+      setRevokeError(settingsTrustCenterCopy.ai.revokeFailed)
+    } finally {
+      revokeInFlightRef.current = false
+    }
+  }
+
+  function showRevokeSuccess() {
+    setRevokeError(null)
+    setRevokeDialogOpen(false)
+    setRevokeMessage(settingsTrustCenterCopy.ai.revokeDone)
+    window.setTimeout(() => revokeStatusRef.current?.focus(), 0)
   }
 
   if (isUnauthorized || meQuery.isPending || childrenQuery.isPending) {
@@ -147,6 +186,32 @@ export default function SettingsPage() {
               label={settingsTrustCenterCopy.ai.handlingLabel}
               value={settingsTrustCenterCopy.ai.handlingValue}
             />
+            {me.ai_consent_at ? (
+              <div className="border-hairline mt-1 border-t pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setRevokeError(null)
+                    setRevokeMessage(null)
+                    setRevokeDialogOpen(true)
+                  }}
+                >
+                  {settingsTrustCenterCopy.ai.revokeButton}
+                </Button>
+              </div>
+            ) : null}
+            {revokeMessage ? (
+              <p
+                ref={revokeStatusRef}
+                role="status"
+                tabIndex={-1}
+                className="text-leaf leading-narrative text-sm outline-none"
+              >
+                {revokeMessage}
+              </p>
+            ) : null}
           </TrustSection>
         ) : null}
 
@@ -193,6 +258,65 @@ export default function SettingsPage() {
           </Button>
         </div>
       </section>
+
+      {revokeDialogOpen ? (
+        <AccessibleDialog
+          titleId="ai-consent-revoke-title"
+          descriptionId="ai-consent-revoke-description"
+          initialFocusId="ai-consent-revoke-cancel"
+          pending={revokeAiConsentMutation.isPending}
+          onClose={() => setRevokeDialogOpen(false)}
+        >
+          <Card className="w-full max-w-md">
+            <CardHeader className="items-center text-center">
+              <CardTitle id="ai-consent-revoke-title" className="font-serif text-xl">
+                {settingsTrustCenterCopy.ai.revokeDialogTitle}
+              </CardTitle>
+              <CardDescription
+                id="ai-consent-revoke-description"
+                className="leading-narrative mt-2"
+              >
+                {settingsTrustCenterCopy.ai.revokeDialogDescription}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {revokeError ? (
+                <p role="alert" className="text-amber leading-narrative text-sm">
+                  {revokeError}
+                </p>
+              ) : null}
+              <Button
+                id="ai-consent-revoke-cancel"
+                type="button"
+                size="lg"
+                onClick={() => {
+                  if (!revokeAiConsentMutation.isPending) setRevokeDialogOpen(false)
+                }}
+                aria-disabled={revokeAiConsentMutation.isPending}
+                className="aria-disabled:pointer-events-none aria-disabled:opacity-50 w-full"
+              >
+                {settingsTrustCenterCopy.ai.revokeCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="lg"
+                onClick={onRevokeAiConsent}
+                aria-disabled={revokeAiConsentMutation.isPending}
+                className="aria-disabled:pointer-events-none aria-disabled:opacity-50 w-full"
+              >
+                {revokeAiConsentMutation.isPending ? (
+                  <span role="status" aria-live="polite">
+                    {settingsTrustCenterCopy.ai.revokePending}
+                  </span>
+                ) : (
+                  settingsTrustCenterCopy.ai.revokeConfirm
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </AccessibleDialog>
+      ) : null}
     </AppShell>
   )
 }

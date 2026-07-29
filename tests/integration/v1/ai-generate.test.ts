@@ -285,6 +285,25 @@ describe('POST /v1/ai/generate', () => {
     expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
   })
 
+  it('stops before external AI submission when consent is revoked during image preparation', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
+    mocks.profileFindUnique
+      .mockResolvedValueOnce(profileConsented)
+      .mockResolvedValueOnce(profileNoConsent)
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+
+    const res = await POST(jsonRequest(validBody))
+
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ reason: 'ai_consent_required' })
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+    expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
+  })
+
   it('starts download and resize for five images in parallel', async () => {
     authedWithConsent()
     mocks.aiGenerationCount.mockResolvedValue(0)
