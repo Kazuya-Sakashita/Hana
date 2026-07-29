@@ -14,8 +14,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 let cached: SupabaseClient | null = null
 
-export function createSupabaseAdminClient(): SupabaseClient {
-  if (cached) return cached
+export function createSupabaseAdminClient(options?: { signal?: AbortSignal }): SupabaseClient {
+  if (!options?.signal && cached) return cached
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url) {
@@ -24,8 +24,17 @@ export function createSupabaseAdminClient(): SupabaseClient {
   if (!serviceRoleKey) {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set')
   }
-  cached = createClient(url, serviceRoleKey, {
+  const client = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    ...(options?.signal
+      ? {
+          global: {
+            fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+              fetch(input, { ...init, signal: options.signal }),
+          },
+        }
+      : {}),
   })
-  return cached
+  if (!options?.signal) cached = client
+  return client
 }

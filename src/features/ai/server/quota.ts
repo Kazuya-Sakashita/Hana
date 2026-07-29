@@ -1,5 +1,6 @@
 import 'server-only'
 
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/server/db/prisma'
 import { problems } from '@/server/api/problems'
 
@@ -50,27 +51,54 @@ export async function reserveMonthlyAiQuota({
   model: string
   promptVersion: string
 }): Promise<{ id: string }> {
-  const since = startOfUtcMonth()
-  return prisma.$transaction(async (transaction) => {
-    await transaction.$executeRaw`
-      SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))
-    `
-    const used = await transaction.aiGeneration.count({
-      where: { userId, countsTowardQuota: true, createdAt: { gte: since } },
-    })
-    if (used >= MONTHLY_QUOTA_FREE) throw problems.aiQuotaExceeded()
-
-    return transaction.aiGeneration.create({
-      data: {
+  return prisma.$transaction(
+    (transaction) =>
+      reserveMonthlyAiQuotaInTransaction(transaction, {
         userId,
         childId,
         model,
         promptVersion,
-        succeeded: false,
-        countsTowardQuota: true,
-        errorReason: 'in_progress',
-      },
-      select: { id: true },
-    })
+      }),
+    {
+      maxWait: 3_000,
+      timeout: 5_000,
+    },
+  )
+}
+
+export async function reserveMonthlyAiQuotaInTransaction(
+  transaction: Prisma.TransactionClient,
+  {
+    userId,
+    childId,
+    model,
+    promptVersion,
+  }: {
+    userId: string
+    childId: string
+    model: string
+    promptVersion: string
+  },
+): Promise<{ id: string }> {
+  const since = startOfUtcMonth()
+  await transaction.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))
+  `
+  const used = await transaction.aiGeneration.count({
+    where: { userId, countsTowardQuota: true, createdAt: { gte: since } },
+  })
+  if (used >= MONTHLY_QUOTA_FREE) throw problems.aiQuotaExceeded()
+
+  return transaction.aiGeneration.create({
+    data: {
+      userId,
+      childId,
+      model,
+      promptVersion,
+      succeeded: false,
+      countsTowardQuota: true,
+      errorReason: 'in_progress',
+    },
+    select: { id: true },
   })
 }

@@ -77,7 +77,7 @@ export function isMediaTypeSupportedByClaude(mime: string): mime is SupportedMed
 export async function generateAi(
   params: PromptParams,
   images: AiImageInput[],
-  options?: { client?: Anthropic; model?: string },
+  options?: { client?: Anthropic; model?: string; signal?: AbortSignal },
 ): Promise<AiGenerateResult> {
   const client = options?.client ?? createAnthropicClient()
   const model = options?.model ?? getAiModel()
@@ -88,39 +88,42 @@ export async function generateAi(
 
   for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt += 1) {
     try {
-      const response = await client.messages.create({
-        model,
-        max_tokens: 1024,
-        system: [
-          {
-            type: 'text',
-            text: SYSTEM_PROMPT,
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
-        messages: [
-          {
-            role: 'user',
-            content: [
-              ...images.map((img) => {
-                if (!isMediaTypeSupportedByClaude(img.mediaType)) {
-                  throw new Error(`Unsupported media type for Claude: ${img.mediaType}`)
-                }
-                return {
-                  type: 'image' as const,
-                  source: {
-                    type: 'base64' as const,
-                    media_type: img.mediaType,
-                    data: img.base64,
-                  },
-                }
-              }),
-              { type: 'text' as const, text: userPrompt },
-              ...(attempt > 1 ? [{ type: 'text' as const, text: RETRY_SAFETY_INSTRUCTION }] : []),
-            ],
-          },
-        ],
-      })
+      const response = await client.messages.create(
+        {
+          model,
+          max_tokens: 1024,
+          system: [
+            {
+              type: 'text',
+              text: SYSTEM_PROMPT,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                ...images.map((img) => {
+                  if (!isMediaTypeSupportedByClaude(img.mediaType)) {
+                    throw new Error(`Unsupported media type for Claude: ${img.mediaType}`)
+                  }
+                  return {
+                    type: 'image' as const,
+                    source: {
+                      type: 'base64' as const,
+                      media_type: img.mediaType,
+                      data: img.base64,
+                    },
+                  }
+                }),
+                { type: 'text' as const, text: userPrompt },
+                ...(attempt > 1 ? [{ type: 'text' as const, text: RETRY_SAFETY_INSTRUCTION }] : []),
+              ],
+            },
+          ],
+        },
+        options?.signal ? { signal: options.signal } : undefined,
+      )
 
       inputTokens += response.usage.input_tokens
       outputTokens += response.usage.output_tokens

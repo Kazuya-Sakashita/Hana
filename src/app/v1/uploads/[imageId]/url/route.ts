@@ -10,10 +10,35 @@ import {
   generateSignedImageUrl,
   type ImageSize,
 } from '@/features/uploads/server/signed-url'
+import { activeImageAccessWhere } from '@/features/uploads/server/active-image-access'
+import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 
 export const dynamic = 'force-dynamic'
 
 const RESPONSE_CACHE_MAX_AGE = 300 // 5 分 (ADR-0012)
+const SIGNED_URL_OPERATION_DEADLINE_MS = 8_000
+const IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS = 10_000
+
+async function generateSignedImageUrlBeforeDeadline(
+  storageKey: string,
+  size: ImageSize,
+): Promise<string | null> {
+  const abort = new AbortController()
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      generateSignedImageUrl(storageKey, size, { signal: abort.signal }),
+      new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => {
+          abort.abort()
+          reject(new Error('Signed URL operation deadline exceeded'))
+        }, SIGNED_URL_OPERATION_DEADLINE_MS)
+      }),
+    ])
+  } finally {
+    if (deadline) clearTimeout(deadline)
+  }
+}
 
 function parseSize(value: string | null): ImageSize {
   if (value === null || value === '') return 'original'
@@ -36,23 +61,36 @@ export async function GET(request: Request, { params }: Params) {
 
     const size = parseSize(new URL(request.url).searchParams.get('size'))
 
-    const image = await prisma.image.findFirst({
-      where: { id: imageId, deletedAt: null },
-      select: { id: true, userId: true, storageKey: true },
-    })
-    if (!image) {
-      throw problems.notFound('画像が見つかりません')
-    }
-    if (image.userId !== user.id) {
-      throw problems.forbidden()
-    }
+    const { signedUrl, expiresAt } = await prisma.$transaction(
+      async (transaction) => {
+        await lockImageAccess(transaction, [imageId])
+        const image = await transaction.image.findFirst({
+          where: { id: imageId, ...activeImageAccessWhere(user.id) },
+          select: { id: true, userId: true, storageKey: true },
+        })
+        if (!image) {
+          throw problems.notFound('画像が見つかりません')
+        }
+        if (image.userId !== user.id) {
+          throw problems.forbidden()
+        }
 
-    const signedUrl = await generateSignedImageUrl(image.storageKey, size)
-    if (!signedUrl) {
-      throw new Error('Storage signed URL failed')
-    }
+        const url = await generateSignedImageUrlBeforeDeadline(image.storageKey, size)
+        if (!url) {
+          throw new Error('Storage signed URL failed')
+        }
 
-    const expiresAt = new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString()
+        return {
+          signedUrl: url,
+          expiresAt: new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString(),
+        }
+      },
+      {
+        maxWait: 3_000,
+        timeout: IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS,
+      },
+    )
+
     return NextResponse.json(
       { url: signedUrl, expires_at: expiresAt },
       {

@@ -67,6 +67,12 @@ Current public / anonymous exceptions:
 
 - Storage は Supabase Storage private bucket。
 - public URL は使わない。upload / download は signed URL 経由。
+- Memory論理削除時は関連Image metadataも同じtimestamp・transactionで論理削除する。
+- signed URL発行とAI送信は画像単位のtransaction advisory lockを保持し、削除commit後の新規利用を遮断する。
+- signed URL生成は8秒、AI vendor呼び出しは共通AbortSignalで25秒を上限とし、DB lock transactionより短くする。
+- signed URL期限時はStorage requestをabortし、期限後にoriginal fallbackを開始しない。Storageの外部エラー文字列はログへ出さない。
+- AI quota予約は画像の初期検証・AI同意再確認後、画像lock transactionより前に独立確定する。
+- quota予約後に画像lockを取得し、本人所有・親Memory未削除を再検証してから外部送信する。
 - `storage_key` は `uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`。
 - normal API response は `storage_key` を返さない。UI は `image.id` から download URL を取得する。
 - upload signed URL は Supabase の既定 TTL。download signed URL は 30 分。
