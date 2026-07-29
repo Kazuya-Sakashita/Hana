@@ -39,13 +39,13 @@
 
 ## Status Snapshot
 
-2026-07-28 時点:
+2026-07-29 時点:
 
 | status        | count | notes                        |
 | ------------- | ----- | ---------------------------- |
 | `todo`        | 0     | なし                         |
 | `in_progress` | 0     | 並行実行枠は空き             |
-| `review`      | 5     | `ISSUE-106` から `ISSUE-110` |
+| `review`      | 17    | `ISSUE-106` から `ISSUE-122` |
 | `done`        | 106   | archive を参照               |
 | `blocked`     | 1     | `ISSUE-105`                  |
 
@@ -196,6 +196,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
+- `ISSUE-122` / `#268`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-121` / `#264`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-118` / `#253`: 実装・privacy / legal review承認済み / merge 待ち。
 - `ISSUE-116` / `#251`: 実装 / review / merge 待ち。

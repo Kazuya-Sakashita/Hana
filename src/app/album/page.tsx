@@ -9,6 +9,7 @@ import { getCurrentUser } from '@/server/auth/current-user'
 import { countMemories, fetchMemoriesWithCovers } from '@/features/memories/server/queries'
 import { encodeCursor } from '@/features/memories/server/parse'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
+import { signInPath } from '@/lib/auth/safe-redirect'
 import {
   albumMonthRange,
   currentAlbumMonth,
@@ -26,12 +27,13 @@ interface AlbumPageProps {
 }
 
 export default async function AlbumPage({ searchParams }: AlbumPageProps) {
-  const user = await getCurrentUser()
-  if (!user) redirect('/sign-in')
-  const params = await searchParams
+  const [user, params] = await Promise.all([getCurrentUser(), searchParams])
   const rawMonth = typeof params.month === 'string' ? params.month : undefined
   const currentMonth = currentAlbumMonth()
   const month = normalizeAlbumMonth(rawMonth, currentMonth)
+  if (!user) {
+    redirect(signInPath(rawMonth ? `/album?month=${encodeURIComponent(month)}` : '/album'))
+  }
   if (params.month !== undefined && rawMonth !== month) {
     redirect(`/album?month=${month}`)
   }

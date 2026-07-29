@@ -14,6 +14,7 @@ import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { useChildrenQuery, useCreateChildMutation } from '@/features/children/client/use-children'
 import { focusFirstFormError } from '@/lib/ui/form-error-focus'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
+import { signInPath } from '@/lib/auth/safe-redirect'
 
 type FieldErrors = Partial<Record<'name' | 'birthdate' | 'avatar_url', string>>
 type Phase = 'loading' | 'form' | 'already' | 'success' | 'error'
@@ -88,7 +89,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (isUnauthorized) {
-      router.push('/sign-in')
+      router.push(signInPath(`${window.location.pathname}${window.location.search}`))
     }
   }, [isUnauthorized, router])
 
@@ -172,7 +173,7 @@ export default function OnboardingPage() {
             setPhaseOverride('already')
             return
           case 'unauthorized':
-            router.push('/sign-in')
+            router.push(signInPath(`${window.location.pathname}${window.location.search}`))
             return
           default:
             errorFocusRequestedRef.current = true

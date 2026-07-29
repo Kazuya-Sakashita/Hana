@@ -20,6 +20,7 @@ import {
 } from '@/lib/perf/optimistic'
 import { useToast } from '@/components/ui/toast'
 import { deleteMemoryDescription, quietStateCopy } from '@/lib/ui/quiet-state-copy'
+import { signInPath } from '@/lib/auth/safe-redirect'
 
 // ISSUE-057: Detail actions are a quiet operation band below the story.
 
@@ -63,7 +64,7 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
       rollback()
       void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e) && e.reason === 'unauthorized') {
-        router.push('/sign-in')
+        router.push(signInPath(`${window.location.pathname}${window.location.search}`))
         return
       }
       showToast({
@@ -86,7 +87,7 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
       rollback()
       void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e) && e.reason === 'unauthorized') {
-        router.push('/sign-in')
+        router.push(signInPath(`${window.location.pathname}${window.location.search}`))
         return
       }
       showToast({
