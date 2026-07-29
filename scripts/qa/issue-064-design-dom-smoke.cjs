@@ -19,6 +19,7 @@ const targetSurfaces = [
 ]
 
 const viewportMatrix = [
+  { id: 'compact-narrow', width: 320, height: 700 },
   { id: 'compact-short', width: 390, height: 640 },
   { id: 'compact-tall', width: 390, height: 844 },
   { id: 'large-phone', width: 430, height: 932 },
@@ -158,6 +159,8 @@ async function assertHeadingOrder(page, target) {
         style.display !== 'none' &&
         style.visibility !== 'hidden' &&
         element.getAttribute('aria-hidden') !== 'true' &&
+        !element.classList.contains('sr-only') &&
+        !element.closest('.sr-only') &&
         !element.closest('[hidden], [aria-hidden="true"], [inert]')
       )
     }
@@ -198,6 +201,8 @@ async function assertTapTargets(page, target) {
           style.display !== 'none' &&
           style.visibility !== 'hidden' &&
           element.getAttribute('aria-hidden') !== 'true' &&
+          !element.classList.contains('sr-only') &&
+          !element.closest('.sr-only') &&
           !element.closest('[hidden], [aria-hidden="true"], [inert]')
         )
       })
@@ -207,11 +212,15 @@ async function assertTapTargets(page, target) {
       )
       .map((element, index) => {
         const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
         return {
           element_index: index,
           tag: element.tagName.toLowerCase(),
           role: element.getAttribute('role'),
           type: element.getAttribute('type'),
+          hasTapTargetClass: element.classList.contains('tap-target'),
+          minHeight: style.minHeight,
+          position: style.position,
           width: Math.round(rect.width),
           height: Math.round(rect.height),
         }
@@ -235,6 +244,8 @@ async function assertHorizontalOverflow(page, target) {
         style.display !== 'none' &&
         style.visibility !== 'hidden' &&
         element.getAttribute('aria-hidden') !== 'true' &&
+        !element.classList.contains('sr-only') &&
+        !element.closest('.sr-only') &&
         !element.closest('[hidden], [aria-hidden="true"], [inert]')
       )
     }
@@ -291,6 +302,8 @@ async function activeElementDescriptor(page) {
         style.display !== 'none' &&
         style.visibility !== 'hidden' &&
         candidate.getAttribute('aria-hidden') !== 'true' &&
+        !candidate.classList.contains('sr-only') &&
+        !candidate.closest('.sr-only') &&
         !candidate.closest('[hidden], [aria-hidden="true"], [inert]')
       )
     })
@@ -314,9 +327,14 @@ async function assertVisibleFocus(page, target) {
       if (!element || element === document.body) return null
       const computed = window.getComputedStyle(element)
       return {
+        matchesFocus: element.matches(':focus'),
+        matchesFocusWithin: element.matches(':focus-within'),
+        matchesFocusVisible: element.matches(':focus-visible'),
         outlineStyle: computed.outlineStyle,
         outlineWidth: computed.outlineWidth,
         boxShadow: computed.boxShadow,
+        borderColor: computed.borderColor,
+        borderWidth: computed.borderWidth,
       }
     })
     if (!style) continue
@@ -325,7 +343,9 @@ async function assertVisibleFocus(page, target) {
       (style.boxShadow && style.boxShadow !== 'none')
     visited.push(descriptor)
     if (!hasVisibleFocus) {
-      throw new Error(`${target.id}: focus is not visible ${JSON.stringify(descriptor)}`)
+      throw new Error(
+        `${target.id}: focus is not visible ${JSON.stringify({ ...descriptor, style })}`,
+      )
     }
   }
 
@@ -346,6 +366,8 @@ async function assertReducedMotion(page, target) {
           style.display !== 'none' &&
           style.visibility !== 'hidden' &&
           element.getAttribute('aria-hidden') !== 'true' &&
+          !element.classList.contains('sr-only') &&
+          !element.closest('.sr-only') &&
           !element.closest('[hidden], [aria-hidden="true"], [inert]')
         )
       })
@@ -393,7 +415,20 @@ async function assertPressureAndEvidenceCopy(page, target) {
 }
 
 async function assertLoadedTarget(page, target, response) {
-  await page.waitForLoadState('domcontentloaded')
+  await page.waitForLoadState('load')
+  await page.waitForFunction(
+    () => {
+      const probe = document.createElement('div')
+      probe.className = 'absolute tap-target'
+      document.body.appendChild(probe)
+      const style = window.getComputedStyle(probe)
+      const ready = style.position === 'absolute' && Number.parseFloat(style.minHeight) >= 44
+      probe.remove()
+      return ready
+    },
+    undefined,
+    { timeout: 10_000 },
+  )
   const contract = routeContracts[target.id]
   const status = response?.status() ?? null
   if (typeof status === 'number' && status >= 400) {

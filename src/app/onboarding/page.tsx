@@ -12,6 +12,7 @@ import { QuietIcon } from '@/components/product/icons'
 import { StatePanel } from '@/components/product/surfaces'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { useChildrenQuery, useCreateChildMutation } from '@/features/children/client/use-children'
+import { focusFirstFormError } from '@/lib/ui/form-error-focus'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 type FieldErrors = Partial<Record<'name' | 'birthdate' | 'avatar_url', string>>
@@ -21,6 +22,7 @@ type PhaseOverride = 'idle' | 'already' | 'success'
 const onboardingFieldErrorCopy = {
   name: '呼び名を 入れてください。',
   birthdate: 'うまれたひを 入れてください。',
+  birthdateFuture: 'うまれたひは、きょうまでの日を 選んでください。',
   avatar_url: '写真を たしかめてください。',
 } as const
 
@@ -54,6 +56,11 @@ export default function OnboardingPage() {
   const [birthdate, setBirthdate] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitMessage, setSubmitMessage] = useState<string | null>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const birthdateInputRef = useRef<HTMLInputElement>(null)
+  const onboardingErrorSummaryRef = useRef<HTMLDivElement>(null)
+  const errorFocusRequestedRef = useRef(false)
+  const submitInFlightRef = useRef(false)
   const successHeadingRef = useRef<HTMLHeadingElement>(null)
   const alreadyHeadingRef = useRef<HTMLHeadingElement>(null)
   const childrenQuery = useChildrenQuery()
@@ -61,8 +68,9 @@ export default function OnboardingPage() {
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const pending = createChildMutation.isPending
-  const canSubmit = name.trim().length > 0 && birthdate.length > 0 && !pending
   const hasFieldErrors = Object.keys(fieldErrors).length > 0
+  const formErrorMessage =
+    submitMessage ?? (hasFieldErrors ? quietStateCopy.onboarding.validationFailed : null)
   const fetchedChild = childrenQuery.data?.data[0] ?? null
   const displayedChild = existingChild ?? (fetchedChild ? { name: fetchedChild.name } : null)
   const isUnauthorized =
@@ -92,12 +100,49 @@ export default function OnboardingPage() {
     }
   }, [phase, phaseOverride])
 
+  useEffect(() => {
+    if (!errorFocusRequestedRef.current) return
+    errorFocusRequestedRef.current = false
+    focusFirstFormError({
+      errors: fieldErrors,
+      fieldOrder: ['name', 'birthdate'],
+      fieldTargets: {
+        name: nameInputRef.current,
+        birthdate: birthdateInputRef.current,
+      },
+      fallbackTarget: onboardingErrorSummaryRef.current,
+    })
+  }, [fieldErrors, submitMessage])
+
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitInFlightRef.current) return
     setFieldErrors({})
     setSubmitMessage(null)
 
     const trimmedName = name.trim()
+    const clientErrors: FieldErrors = {}
+    if (!trimmedName) clientErrors.name = onboardingFieldErrorCopy.name
+    if (!birthdate) clientErrors.birthdate = onboardingFieldErrorCopy.birthdate
+    else if (birthdate > todayIso) {
+      clientErrors.birthdate = onboardingFieldErrorCopy.birthdateFuture
+    }
+    if (Object.keys(clientErrors).length > 0) {
+      errorFocusRequestedRef.current = true
+      setFieldErrors(clientErrors)
+      return
+    }
+
+    submitInFlightRef.current = true
     try {
       await createChildMutation.mutateAsync({ name: trimmedName, birthdate, avatar_url: null })
       setExistingChild({ name: trimmedName })
@@ -109,8 +154,10 @@ export default function OnboardingPage() {
             {
               const nextFieldErrors = extractFieldErrors(e.problem)
               if (Object.keys(nextFieldErrors).length > 0) {
+                errorFocusRequestedRef.current = true
                 setFieldErrors(nextFieldErrors)
               } else {
+                errorFocusRequestedRef.current = true
                 setSubmitMessage(quietStateCopy.onboarding.validationFailed)
               }
             }
@@ -128,11 +175,15 @@ export default function OnboardingPage() {
             router.push('/sign-in')
             return
           default:
+            errorFocusRequestedRef.current = true
             setSubmitMessage(quietStateCopy.onboarding.saveFailed)
         }
       } else {
+        errorFocusRequestedRef.current = true
         setSubmitMessage(quietStateCopy.onboarding.networkFailed)
       }
+    } finally {
+      submitInFlightRef.current = false
     }
   }
 
@@ -308,37 +359,38 @@ export default function OnboardingPage() {
           </ul>
         </section>
 
-        {submitMessage ? (
+        {formErrorMessage ? (
           <div
-            role="alert"
-            className="text-ink-secondary mt-6 rounded-xl bg-warm px-4 py-3 text-sm leading-narrative"
-          >
-            {submitMessage}
-          </div>
-        ) : null}
-
-        {hasFieldErrors ? (
-          <div
+            ref={onboardingErrorSummaryRef}
             id="onboarding-validation-alert"
             role="alert"
+            tabIndex={-1}
             className="text-ink-secondary mt-6 rounded-xl bg-warm px-4 py-3 text-sm leading-narrative"
           >
-            {quietStateCopy.onboarding.validationFailed}
+            {formErrorMessage}
           </div>
         ) : null}
 
-        <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-6">
+        <form onSubmit={onSubmit} noValidate className="mt-7 flex flex-col gap-6">
           <div className="flex flex-col gap-2">
             <Label htmlFor="child-name" className="font-serif">
-              なまえ
+              呼び名{' '}
+              <span aria-hidden="true" className="text-amber font-sans text-xs">
+                必須
+              </span>
             </Label>
             <Input
+              ref={nameInputRef}
               id="child-name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+                clearFieldError('name')
+              }}
               placeholder="はな"
               maxLength={50}
               autoComplete="off"
+              required
               aria-invalid={fieldErrors.name ? true : undefined}
               aria-describedby={fieldErrors.name ? 'child-name-error' : undefined}
             />
@@ -351,14 +403,22 @@ export default function OnboardingPage() {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="child-birthdate" className="font-serif">
-              うまれたひ
+              うまれたひ{' '}
+              <span aria-hidden="true" className="text-amber font-sans text-xs">
+                必須
+              </span>
             </Label>
             <Input
+              ref={birthdateInputRef}
               id="child-birthdate"
               type="date"
               value={birthdate}
-              onChange={(e) => setBirthdate(e.target.value)}
+              onChange={(e) => {
+                setBirthdate(e.target.value)
+                clearFieldError('birthdate')
+              }}
               max={todayIso}
+              required
               aria-invalid={fieldErrors.birthdate ? true : undefined}
               aria-describedby={fieldErrors.birthdate ? 'child-birthdate-error' : undefined}
             />
@@ -369,7 +429,7 @@ export default function OnboardingPage() {
             ) : null}
           </div>
 
-          <Button type="submit" size="lg" disabled={!canSubmit} className="w-full">
+          <Button type="submit" size="lg" disabled={pending} className="w-full">
             {pending ? quietStateCopy.onboarding.pending : 'つづける'}
           </Button>
         </form>
