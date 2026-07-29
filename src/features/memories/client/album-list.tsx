@@ -20,6 +20,7 @@ import { isApiProblemError } from '@/lib/api/error'
 import { useToast } from '@/components/ui/toast'
 import { albumLoadMoreStatus, quietStateCopy } from '@/lib/ui/quiet-state-copy'
 import { formatAlbumMonth, type MemoryDateRange } from '@/features/memories/month'
+import { signInPath } from '@/lib/auth/safe-redirect'
 
 const ALBUM_LIMIT = 50
 
@@ -236,7 +237,7 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
       rollback()
       void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
       if (isApiProblemError(e) && e.reason === 'unauthorized') {
-        router.push('/sign-in')
+        router.push(signInPath(`${window.location.pathname}${window.location.search}`))
         return
       }
       showToast({

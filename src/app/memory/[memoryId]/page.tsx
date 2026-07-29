@@ -11,6 +11,7 @@ import { getCurrentUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
 import { fetchMemoryWithPreviews } from '@/features/memories/server/queries'
 import { ProductEventMarker } from '@/features/metrics/client/product-event-marker'
+import { signInPath } from '@/lib/auth/safe-redirect'
 import { quietStateCopy, recordSavedLandingTitle } from '@/lib/ui/quiet-state-copy'
 
 // ISSUE-057: Memory detail keepsake refresh.
@@ -24,10 +25,11 @@ interface PageProps {
 }
 
 export default async function MemoryDetailPage({ params, searchParams }: PageProps) {
-  const user = await getCurrentUser()
-  if (!user) redirect('/sign-in')
-
-  const [{ memoryId }, query] = await Promise.all([params, searchParams])
+  const [{ memoryId }, query, user] = await Promise.all([params, searchParams, getCurrentUser()])
+  if (!user) {
+    const savedQuery = query.saved === '1' ? '?saved=1' : ''
+    redirect(signInPath(`/memory/${encodeURIComponent(memoryId)}${savedQuery}`))
+  }
   const showSavedMoment = query.saved === '1'
 
   return (

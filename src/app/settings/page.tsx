@@ -22,6 +22,7 @@ import {
 } from '@/features/me/client/use-current-user'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 import { settingsTrustCenterCopy } from '@/lib/ui/settings-trust-center-copy'
+import { signInPath } from '@/lib/auth/safe-redirect'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -40,7 +41,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (isUnauthorized) {
-      router.push('/sign-in')
+      router.push(signInPath(`${window.location.pathname}${window.location.search}`))
     }
   }, [isUnauthorized, router])
 

@@ -53,6 +53,7 @@ import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { optimisticAddMemoryToLists, optimisticReplaceMemoryInLists } from '@/lib/perf/optimistic'
 import { useToast } from '@/components/ui/toast'
+import { signInPath } from '@/lib/auth/safe-redirect'
 import { focusFirstFormError } from '@/lib/ui/form-error-focus'
 import { quietStateCopy, recordAiGeneratingCopy } from '@/lib/ui/quiet-state-copy'
 
@@ -313,8 +314,7 @@ export default function RecordPage() {
 
   useEffect(() => {
     if (isUnauthorized) {
-      recordDraftStore.clear()
-      router.push('/sign-in')
+      router.push(signInPath(`${window.location.pathname}${window.location.search}`))
     }
   }, [isUnauthorized, router])
 
@@ -687,7 +687,7 @@ export default function RecordPage() {
     if (isApiProblemError(e)) {
       switch (e.reason) {
         case 'unauthorized':
-          router.push('/sign-in')
+          router.push(signInPath(`${window.location.pathname}${window.location.search}`))
           return
         case 'ai_consent_required':
           setAiStatus('consent_pending')
@@ -868,7 +868,7 @@ export default function RecordPage() {
               break
             }
             case 'unauthorized':
-              router.push('/sign-in')
+              router.push(signInPath(`${window.location.pathname}${window.location.search}`))
               return
             case 'memory_idempotency_conflict': {
               const nextIdempotencyKey = createRecordIdempotencyKey()

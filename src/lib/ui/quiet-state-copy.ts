@@ -8,6 +8,7 @@ export const quietStateCopy = {
   signIn: {
     pending: 'Google に つないでいます…',
     failed: 'サインインを はじめられませんでした。少しおいて、もういちど ためしてください。',
+    callbackFailed: 'サインインを 完了できませんでした。少しおいて、もういちど ためしてください。',
   },
   onboarding: {
     pending: 'ページを 用意しています…',

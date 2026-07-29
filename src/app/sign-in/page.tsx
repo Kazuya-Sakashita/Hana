@@ -1,12 +1,14 @@
 'use client'
 
 import { ImagePlus, PenLine, ShieldCheck } from 'lucide-react'
-import { useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import { FocusedShell } from '@/components/product/app-shell'
 import { QuietIcon } from '@/components/product/icons'
 import { StatePanel } from '@/components/product/surfaces'
 import { Button } from '@/components/ui/button'
+import { oauthCallbackUrl } from '@/lib/auth/safe-redirect'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 
 function GoogleGlyph() {
@@ -36,15 +38,24 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('reason') === 'oauth_callback_failed') {
+      const timeoutId = window.setTimeout(() => {
+        setError(quietStateCopy.signIn.callbackFailed)
+      }, 0)
+      return () => window.clearTimeout(timeoutId)
+    }
+  }, [])
+
   async function signInWithGoogle() {
     setError(null)
     setPending(true)
     const supabase = createSupabaseBrowserClient()
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
+    const next = new URLSearchParams(window.location.search).get('next')
     const { error: e } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${appUrl}/auth/callback`,
+        redirectTo: oauthCallbackUrl(process.env.NEXT_PUBLIC_APP_URL, next),
       },
     })
     if (e) {
@@ -121,6 +132,9 @@ export default function SignInPage() {
               {error}
             </p>
           ) : null}
+          <Button asChild variant="ghost" size="sm" className="w-full">
+            <Link href="/lp">Hanaについて</Link>
+          </Button>
         </div>
       </StatePanel>
     </FocusedShell>
