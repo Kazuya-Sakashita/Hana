@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   oauthCallbackUrl,
   publicAppOrigin,
@@ -46,6 +46,10 @@ describe('safeAuthReturnPath', () => {
 })
 
 describe('publicAppOrigin', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it.each([
     ['https://hana.example/app', 'https://hana.example'],
     ['http://localhost:3000/path', 'http://localhost:3000'],
@@ -54,7 +58,6 @@ describe('publicAppOrigin', () => {
   })
 
   it.each([
-    undefined,
     '',
     'not-a-url',
     'javascript:alert(1)',
@@ -62,6 +65,16 @@ describe('publicAppOrigin', () => {
     'https://user:secret@attacker.example',
   ])('falls back to the Hana origin for an unsafe app URL: %s', (input) => {
     expect(publicAppOrigin(input)).toBe('https://hana.app')
+  })
+
+  it('reads the configured public origin when no argument is provided', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000')
+    expect(publicAppOrigin()).toBe('http://localhost:3000')
+  })
+
+  it('uses the fail-safe origin when the public app environment is empty', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '')
+    expect(publicAppOrigin()).toBe('https://hana.app')
   })
 })
 
