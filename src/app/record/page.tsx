@@ -33,6 +33,10 @@ import {
   toAiParentNote,
 } from '@/features/memories/client/record-parent-note'
 import { runTimedAiRequest } from '@/features/memories/client/record-ai-request'
+import {
+  createRecordIdempotencyKey,
+  recordDraftStore,
+} from '@/features/memories/client/record-draft-store'
 import { getRecordFooterState } from '@/features/memories/client/record-footer-state'
 import {
   getUploadRetryStartStage,
@@ -137,6 +141,9 @@ export default function RecordPage() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const [idempotencyKey, setIdempotencyKey] = useState(createRecordIdempotencyKey)
+  const [draftInitialized, setDraftInitialized] = useState(false)
+  const [draftRestored, setDraftRestored] = useState(false)
   const [aiConsentAtOverride, setAiConsentAtOverride] = useState<string | null>(null)
 
   const [file, setFile] = useState<File | null>(null)
@@ -165,6 +172,7 @@ export default function RecordPage() {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const aiRecoveryButtonRef = useRef<HTMLButtonElement>(null)
+  const saveButtonRef = useRef<HTMLButtonElement>(null)
   const uploadAttemptIdRef = useRef(0)
   const uploadAbortControllerRef = useRef<AbortController | null>(null)
   const uploadActionInFlightRef = useRef(false)
@@ -181,6 +189,7 @@ export default function RecordPage() {
   const createMemoryMutation = useCreateMemoryMutation()
 
   const selectedChild = childrenQuery.data?.data[0] ?? null
+  const currentUserId = currentUserQuery.data?.id ?? null
   const childId = selectedChild?.id ?? null
   const childName = selectedChild?.name ?? ''
   const aiConsentAt = aiConsentAtOverride ?? currentUserQuery.data?.ai_consent_at ?? null
@@ -196,7 +205,7 @@ export default function RecordPage() {
           : 'no-child'
   const canSubmit =
     !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
-  const hasSelectedPhoto = !!filePreviewUrl && !!file
+  const hasSelectedPhoto = (!!filePreviewUrl && !!file) || !!uploadedImage
   const photoReplacementLocked = submitting
   const storyPreview = body.trim()
   const hasUnsavedChanges =
@@ -204,7 +213,9 @@ export default function RecordPage() {
     !!uploadedImage ||
     title.trim().length > 0 ||
     storyPreview.length > 0 ||
-    parentNote.trim().length > 0
+    parentNote.trim().length > 0 ||
+    weather.trim().length > 0 ||
+    recordedAt !== todayIso
   const decisionCue = getRecordDecisionCue({
     uploaded: !!uploadedImage,
     aiStatus,
@@ -252,9 +263,74 @@ export default function RecordPage() {
 
   useEffect(() => {
     if (isUnauthorized) {
+      recordDraftStore.clear()
       router.push('/sign-in')
     }
   }, [isUnauthorized, router])
+
+  useEffect(() => {
+    if (phase !== 'form' || draftInitialized || !currentUserId) return
+    const draft = recordDraftStore.load(currentUserId)
+    let cancelled = false
+    const restoreTimer = window.setTimeout(() => {
+      if (cancelled) return
+      if (draft) {
+        setIdempotencyKey(draft.idempotencyKey)
+        setTitle(draft.title)
+        setBody(draft.body)
+        setParentNote(draft.parentNote)
+        setRecordedAt(draft.recordedAt)
+        setWeather(draft.weather)
+        setUploadedImage(draft.imageId ? { id: draft.imageId } : null)
+        setUploadStatus(draft.imageId ? 'done' : 'idle')
+        setHasAiGeneratedContent(draft.aiGenerated)
+        setAiStatus(draft.aiGenerated ? 'done' : 'idle')
+        setDraftRestored(true)
+      }
+      setDraftInitialized(true)
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(restoreTimer)
+    }
+  }, [currentUserId, draftInitialized, phase])
+
+  useEffect(() => {
+    if (!draftInitialized || !currentUserId) return
+    const hasDraftContent =
+      !!uploadedImage ||
+      title.trim().length > 0 ||
+      body.trim().length > 0 ||
+      parentNote.trim().length > 0 ||
+      weather.trim().length > 0 ||
+      recordedAt !== todayIso
+    if (!hasDraftContent) {
+      recordDraftStore.clear()
+      return
+    }
+    recordDraftStore.save(currentUserId, {
+      idempotencyKey,
+      title,
+      body,
+      parentNote,
+      recordedAt,
+      weather,
+      imageId: uploadedImage?.id ?? null,
+      aiGenerated: hasAiGeneratedContent,
+    })
+  }, [
+    body,
+    currentUserId,
+    draftInitialized,
+    hasAiGeneratedContent,
+    idempotencyKey,
+    parentNote,
+    recordedAt,
+    title,
+    todayIso,
+    uploadedImage,
+    weather,
+  ])
 
   useEffect(() => {
     if (phase !== 'form') return
@@ -422,6 +498,8 @@ export default function RecordPage() {
     if (!nextFile) return
     const attempt = startUploadAttempt()
     cancelAiAttempt()
+    setIdempotencyKey(createRecordIdempotencyKey())
+    setDraftRestored(false)
     reportRecordProductEvent('photo_selected')
     setFile(nextFile)
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
@@ -435,9 +513,6 @@ export default function RecordPage() {
     setAiError(null)
     setAiTimedOut(false)
     setHasAiGeneratedContent(false)
-    setTitle('')
-    setBody('')
-    setParentNote('')
 
     try {
       const encoded = await reencodeImage(nextFile)
@@ -656,8 +731,12 @@ export default function RecordPage() {
     const rollback = optimisticAddMemoryToLists(queryClient, optimisticMemory)
 
     try {
-      const created = await createMemoryMutation.mutateAsync(requestBody)
+      const created = await createMemoryMutation.mutateAsync({
+        body: requestBody,
+        idempotencyKey,
+      })
       optimisticReplaceMemoryInLists(queryClient, optimisticId, created)
+      recordDraftStore.clear()
       showToast({
         tone: 'success',
         title: quietStateCopy.record.saveDoneTitle,
@@ -685,6 +764,26 @@ export default function RecordPage() {
           case 'unauthorized':
             router.push('/sign-in')
             return
+          case 'memory_idempotency_conflict': {
+            const nextIdempotencyKey = createRecordIdempotencyKey()
+            setIdempotencyKey(nextIdempotencyKey)
+            setTopMessage(quietStateCopy.record.saveConflictDescription)
+            if (currentUserId) {
+              recordDraftStore.save(currentUserId, {
+                idempotencyKey: nextIdempotencyKey,
+                title,
+                body,
+                parentNote,
+                recordedAt,
+                weather,
+                imageId: uploadedImage.id,
+                aiGenerated: hasAiGeneratedContent,
+              })
+            }
+            setSubmitting(false)
+            window.setTimeout(() => saveButtonRef.current?.focus(), 0)
+            return
+          }
           default:
             setTopMessage(quietStateCopy.record.saveFailedDescription)
             showToast({
@@ -787,8 +886,12 @@ export default function RecordPage() {
           <PhotoPlaceholder
             data-testid="record-photo-placeholder"
             icon={ImagePlus}
-            title="まずは 1まい"
-            description="うまく撮れた写真でなくても、残したい瞬間なら大丈夫です。"
+            title={uploadedImage ? 'アップロード済みの写真があります' : 'まずは 1まい'}
+            description={
+              uploadedImage
+                ? '再読み込み後はプレビューできません。このまま続けるか、写真を選び直せます。'
+                : 'うまく撮れた写真でなくても、残したい瞬間なら大丈夫です。'
+            }
             className="mt-6 min-h-[240px] flex-1"
           />
         )}
@@ -805,6 +908,12 @@ export default function RecordPage() {
           data-testid="record-bottom-sheet-body"
           className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 pt-4"
         >
+          {draftRestored ? (
+            <p role="status" className="text-leaf text-sm">
+              {quietStateCopy.record.draftRestored}
+            </p>
+          ) : null}
+
           {topMessage ? (
             <div
               role="alert"
@@ -1072,6 +1181,7 @@ export default function RecordPage() {
           >
             {footerState.primaryAction === 'save' || footerState.primaryAction === 'saving' ? (
               <Button
+                ref={saveButtonRef}
                 type="submit"
                 size="lg"
                 disabled={footerState.primaryDisabled}
@@ -1144,7 +1254,10 @@ export default function RecordPage() {
       {cancelDialogOpen ? (
         <CancelConfirmDialog
           onKeep={() => setCancelDialogOpen(false)}
-          onClose={() => router.push('/')}
+          onClose={() => {
+            recordDraftStore.clear()
+            router.push('/')
+          }}
         />
       ) : null}
     </RecordShell>
@@ -1319,10 +1432,10 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
           <CardTitle id="cancel-confirm-title" className="font-serif text-xl">
-            ほぞんせずに とじますか？
+            この下書きを 破棄しますか？
           </CardTitle>
           <CardDescription id="cancel-confirm-description" className="leading-narrative mt-2">
-            なおした ぶんは うしなわれます。
+            このタブに保存した下書きと、なおした内容を削除して閉じます。
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -1337,12 +1450,12 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="destructive"
             size="lg"
             onClick={onClose}
-            className="text-ink-tertiary w-full"
+            className="w-full"
           >
-            とじる
+            下書きを 破棄して閉じる
           </Button>
         </CardContent>
       </Card>

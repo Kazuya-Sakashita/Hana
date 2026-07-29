@@ -40,6 +40,8 @@ export const problems = {
     ),
   productEventConflict: () =>
     build('product_event_conflict', 'Conflict', 409, '同じイベントIDの内容が一致しません'),
+  memoryIdempotencyConflict: () =>
+    build('memory_idempotency_conflict', 'Conflict', 409, '同じ保存操作の内容が一致しません'),
   aiConsentRequired: () =>
     build('ai_consent_required', 'Forbidden', 403, 'AI への画像送信に同意が必要です'),
   aiQuotaExceeded: () =>

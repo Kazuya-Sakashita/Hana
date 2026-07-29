@@ -5,7 +5,7 @@ import { prisma } from '@/server/db/prisma'
 import { problems } from '@/server/api/problems'
 import { generateSignedImageUrl } from '@/features/uploads/server/signed-url'
 import { isUuid } from '@/features/memories/server/parse'
-import type { MemoryWithImages } from '@/features/memories/view-models/memory'
+import { sortMemoryImages, type MemoryWithImages } from '@/features/memories/view-models/memory'
 
 // ISSUE-026: memory list の取得 (BFF cover URL 付き) を Route Handler と
 // Server Component で共有するため、 ここに抽出。
@@ -64,7 +64,7 @@ export async function fetchMemoriesWithCovers(
     include: {
       images: {
         where: { deletedAt: null },
-        select: { id: true, createdAt: true, storageKey: true },
+        select: { id: true, createdAt: true, memoryPosition: true, storageKey: true },
       },
     },
   })
@@ -74,9 +74,7 @@ export async function fetchMemoriesWithCovers(
 
   const items = await Promise.all(
     page.map(async (m): Promise<MemoryListItem> => {
-      const sortedImages = [...m.images].sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-      )
+      const sortedImages = sortMemoryImages(m.images)
       const first = sortedImages[0]
       const coverThumbnailUrl = first
         ? await generateSignedImageUrl(first.storageKey, 'thumbnail')
@@ -139,16 +137,14 @@ export async function fetchMemoryWithPreviews(opts: {
     include: {
       images: {
         where: { deletedAt: null },
-        select: { id: true, createdAt: true, storageKey: true },
+        select: { id: true, createdAt: true, memoryPosition: true, storageKey: true },
       },
     },
   })
   if (!memory) return null
   if (memory.userId !== opts.userId) return null
 
-  const sortedImages = [...memory.images].sort(
-    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-  )
+  const sortedImages = sortMemoryImages(memory.images)
   const imagesWithPreviews = await Promise.all(
     sortedImages.map(async (img): Promise<MemoryDetailImage> => {
       const previewUrl = await generateSignedImageUrl(img.storageKey, 'preview')

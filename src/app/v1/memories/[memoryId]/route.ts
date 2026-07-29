@@ -17,7 +17,10 @@ async function loadMemory(memoryId: string) {
   const memory = await prisma.memory.findFirst({
     where: { id: memoryId, deletedAt: null },
     include: {
-      images: { where: { deletedAt: null }, select: { id: true, createdAt: true } },
+      images: {
+        where: { deletedAt: null },
+        select: { id: true, createdAt: true, memoryPosition: true },
+      },
     },
   })
   if (!memory) {
@@ -57,7 +60,10 @@ export async function PUT(request: Request, { params }: Params) {
         ...(patch.isFavorite !== undefined ? { isFavorite: patch.isFavorite } : {}),
       },
       include: {
-        images: { where: { deletedAt: null }, select: { id: true, createdAt: true } },
+        images: {
+          where: { deletedAt: null },
+          select: { id: true, createdAt: true, memoryPosition: true },
+        },
       },
     })
     return NextResponse.json(toMemoryResponse(updated))

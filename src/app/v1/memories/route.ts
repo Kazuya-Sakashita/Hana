@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { requireUser } from '@/server/auth/current-user'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
@@ -10,6 +11,10 @@ import {
   readJsonBody,
 } from '@/features/memories/server/parse'
 import { countMemories, fetchMemoriesWithCovers } from '@/features/memories/server/queries'
+import {
+  memoryMatchesCreateInput,
+  parseMemoryIdempotencyKey,
+} from '@/features/memories/server/idempotency'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
 
 export const dynamic = 'force-dynamic'
@@ -53,8 +58,27 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
+    const idempotencyKey = parseMemoryIdempotencyKey(request)
     const raw = await readJsonBody(request)
     const input = parseMemoryCreate(raw)
+
+    const findExisting = () =>
+      prisma.memory.findFirst({
+        where: { userId: user.id, idempotencyKey },
+        include: {
+          images: {
+            where: { deletedAt: null },
+            select: { id: true, createdAt: true, memoryPosition: true },
+          },
+        },
+      })
+    const existing = await findExisting()
+    if (existing) {
+      if (!memoryMatchesCreateInput(existing, input)) {
+        throw problems.memoryIdempotencyConflict()
+      }
+      return NextResponse.json(toMemoryResponse(existing), { status: 200 })
+    }
 
     // 1. child_id の所有権
     const child = await prisma.child.findFirst({
@@ -99,31 +123,59 @@ export async function POST(request: Request) {
     }
 
     // 3. トランザクションで memory 作成 + image 紐付け
-    const created = await prisma.$transaction(async (tx) => {
-      const memory = await tx.memory.create({
-        data: {
-          userId: user.id,
-          childId: input.childId,
-          title: input.title,
-          body: input.body,
-          recordedAt: input.recordedAt,
-          weather: input.weather,
-          aiGenerated: input.aiGenerated,
-        },
+    try {
+      const created = await prisma.$transaction(async (tx) => {
+        const memory = await tx.memory.create({
+          data: {
+            userId: user.id,
+            childId: input.childId,
+            idempotencyKey,
+            title: input.title,
+            body: input.body,
+            recordedAt: input.recordedAt,
+            weather: input.weather,
+            aiGenerated: input.aiGenerated,
+          },
+        })
+        for (const [memoryPosition, imageId] of input.imageIds.entries()) {
+          const linked = await tx.image.updateMany({
+            where: { id: imageId, userId: user.id, memoryId: null, deletedAt: null },
+            data: { memoryId: memory.id, memoryPosition },
+          })
+          if (linked.count !== 1) {
+            throw problems.validation([
+              {
+                path: 'body.image_ids',
+                reason: 'already_linked',
+                message: '既に別の記録に紐付いている画像があります',
+              },
+            ])
+          }
+        }
+        return tx.memory.findUniqueOrThrow({
+          where: { id: memory.id },
+          include: {
+            images: {
+              where: { deletedAt: null },
+              select: { id: true, createdAt: true, memoryPosition: true },
+            },
+          },
+        })
       })
-      await tx.image.updateMany({
-        where: { id: { in: input.imageIds }, userId: user.id, memoryId: null },
-        data: { memoryId: memory.id },
-      })
-      return tx.memory.findUniqueOrThrow({
-        where: { id: memory.id },
-        include: {
-          images: { where: { deletedAt: null }, select: { id: true, createdAt: true } },
-        },
-      })
-    })
 
-    return NextResponse.json(toMemoryResponse(created), { status: 201 })
+      return NextResponse.json(toMemoryResponse(created), { status: 201 })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const concurrentlyCreated = await findExisting()
+        if (concurrentlyCreated) {
+          if (!memoryMatchesCreateInput(concurrentlyCreated, input)) {
+            throw problems.memoryIdempotencyConflict()
+          }
+          return NextResponse.json(toMemoryResponse(concurrentlyCreated), { status: 200 })
+        }
+      }
+      throw error
+    }
   } catch (e) {
     return toProblemResponse(e)
   }

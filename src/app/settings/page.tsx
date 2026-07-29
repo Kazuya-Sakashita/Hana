@@ -10,6 +10,7 @@ import { DataRow, StatePanel, TrustSection } from '@/components/product/surfaces
 import { isApiProblemError } from '@/lib/api/error'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { imageUrlCache } from '@/lib/cache/image-url-cache'
+import { recordDraftStore } from '@/features/memories/client/record-draft-store'
 import { useChildrenQuery } from '@/features/children/client/use-children'
 import { useCurrentUserQuery } from '@/features/me/client/use-current-user'
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
@@ -39,6 +40,7 @@ export default function SettingsPage() {
     }
     queryClient.clear()
     imageUrlCache.clearAll()
+    recordDraftStore.clear()
     router.push('/sign-in')
   }
 
