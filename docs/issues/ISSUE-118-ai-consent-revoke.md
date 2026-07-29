@@ -52,7 +52,7 @@ requires_human_review:
 - [x] 未認証 / 同意済み / 未同意 / 再撤回のAPI結合テスト
 - [x] 撤回後の`ai_consent_required`回帰テスト
 - [x] Settings UI / focus / Escape / 読み上げ契約テスト
-- [ ] Privacy / Legal Human Review
+- [x] Privacy / Legal Human Review
 - [x] 専門サブエージェントレビュー（最大3 Round）
 - [x] `pnpm pr:gate`
 - [x] `git diff --check`
@@ -63,7 +63,8 @@ requires_human_review:
 - Round 2: Privacy/Legal UXとAPI Security/ReliabilityはGO。UX/A11yはpending遷移時のfocusをHOLD
 - Round 3: `aria-disabled`と多重送信guardでpending focusは解消。応答喪失後の再取得で撤回済みになった経路のfocusをHOLD
 - Round 3後: 最大回数に達したため追加レビューは行わず、再取得で撤回済みなら成功へ昇格してstatusへfocusする修正と再現DOMテストを追加
-- マージ条件: Privacy / Legal Human Review承認
+- Privacy / Legal Human Review: 2026-07-29に確認ダイアログ文言を人間承認済み
+- マージ条件: 充足済み
 
 ## 参考
 
