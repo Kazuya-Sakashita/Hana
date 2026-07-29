@@ -1,6 +1,7 @@
 import 'server-only'
 
 import sharp from 'sharp'
+import { MAX_UPLOAD_PIXELS } from '@/features/uploads/server/image-limits'
 
 // 画像 variant (thumbnail / preview) の事前生成 (ISSUE-031)。
 // アップロード時に Storage に保存し、 配信時は variant key の signed URL を返す。
@@ -22,7 +23,7 @@ export interface VariantBuffer {
  * 元画像が 320px 未満なら拡大しない (withoutEnlargement)。
  */
 export async function generateThumbnailVariant(original: Buffer): Promise<VariantBuffer> {
-  const buffer = await sharp(original)
+  const buffer = await sharp(original, { limitInputPixels: MAX_UPLOAD_PIXELS })
     .rotate()
     .resize(THUMBNAIL_WIDTH, null, { fit: 'inside', withoutEnlargement: true })
     .webp({ quality: THUMBNAIL_QUALITY })
@@ -34,7 +35,7 @@ export async function generateThumbnailVariant(original: Buffer): Promise<Varian
  * 1024px wide / WebP q80 のプレビューを生成する (詳細表示用)。
  */
 export async function generatePreviewVariant(original: Buffer): Promise<VariantBuffer> {
-  const buffer = await sharp(original)
+  const buffer = await sharp(original, { limitInputPixels: MAX_UPLOAD_PIXELS })
     .rotate()
     .resize(PREVIEW_WIDTH, null, { fit: 'inside', withoutEnlargement: true })
     .webp({ quality: PREVIEW_QUALITY })

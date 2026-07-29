@@ -310,7 +310,20 @@ paths:
       description: |
         クライアントが presigned URL に PUT したあとに呼ぶ。
         サーバは `storage_key` のプレフィクスが現在のユーザーのものであることを検証し、
-        Supabase Storage 上でオブジェクトの存在を確認した上で `images` テーブルに行を作成する。
+        Supabase Storage 上の実体を上限付きstreamで取得する。magic bytes、MIME、
+        静止画であること、完全decode、向き補正後の寸法、10 MiB・25 MP上限を検証し、
+        実体から算出した値で `images` テーブルに行を作成する。
+
+        `width`、`height`、`file_size`は旧クライアントとの互換性のため受理するが、
+        OpenAPIどおりの形式だけを受理し、Imageの確定値には使用しない。欠落は `not_found`、破損は
+        `invalid_image_content`、MIME不一致は `content_type_mismatch`、上限超過は
+        `file_too_large`または`image_dimensions_too_large`、動画・animated画像は
+        `animated_image_not_supported`で拒否する。Storageの一時障害は
+        `storage_unavailable`で返す。
+
+        HEIC元ファイルはクライアントでJPEGへ再エンコードする。HEICの直接uploadは
+        実行環境のdecoderを固定できるまで発行せず、既存keyの確定要求は
+        `unsupported_media_type`で拒否する。
 
         同じユーザーが同じ `storage_key` を再送した場合は、既存の Image を返す冪等操作とする。
         初回作成時は 201、既に確定済みの場合は 200 を返す。
@@ -323,9 +336,6 @@ paths:
               $ref: '#/components/schemas/UploadConfirmRequest'
             example:
               storage_key: 'uploads/8f7e6d5c4b3a4291/202605/a1b2c3d4-1234-4d8e-9abc-fedcba987654.jpg'
-              width: 1920
-              height: 1080
-              file_size: 524288
       responses:
         '200':
           description: 既に確定済みの Image
@@ -347,6 +357,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /uploads/{imageId}/url:
@@ -797,5 +809,7 @@ components:
       $ref: './components/responses/AiGenerateUnprocessableEntity.yaml'
     TooManyRequests:
       $ref: './components/responses/TooManyRequests.yaml'
+    ServiceUnavailable:
+      $ref: './components/responses/ServiceUnavailable.yaml'
     InternalServerError:
       $ref: './components/responses/InternalServerError.yaml'

@@ -16,35 +16,48 @@ import {
   generatePreviewVariant,
   generateThumbnailVariant,
 } from '@/features/uploads/server/variants'
+import {
+  assertUploadedImageSize,
+  readUploadedImageStream,
+  type VerifiedUploadedImage,
+  verifyUploadedImage,
+} from '@/features/uploads/server/verify-uploaded-image'
+import { isApiProblemError } from '@/lib/api/error'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 const BUCKET = 'images'
+const STORAGE_TIMEOUT_MS = 10_000
+const activeUploadPreparations = new Map<string, Promise<VerifiedUploadedImage>>()
+
+function isStorageNotFound(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const candidate = error as { status?: unknown; statusCode?: unknown }
+  return (
+    candidate.status === 404 ||
+    candidate.statusCode === '404' ||
+    candidate.statusCode === 'not_found'
+  )
+}
+
+function throwStorageProblem(error: unknown): never {
+  if (isStorageNotFound(error)) throw problems.notFound('画像が見つかりません')
+  throw problems.storageUnavailable()
+}
 
 /**
- * ISSUE-031: original を download → sharp で thumbnail/preview を生成 → Storage に upload。
+ * ISSUE-031: 検証済みoriginalからthumbnail/previewを生成 → Storage に upload。
  * 失敗時はサーバログに残して **無視** (Image row は作成して 200 を返す。 ユーザーの
  * 「アップロード成功」 体験を壊さない。 variant が無いと一覧で 404 → ❀ placeholder)。
  */
-async function generateAndUploadVariants(storageKey: string): Promise<void> {
-  const supabase = createSupabaseAdminClient()
-  const { data: blob, error: downloadError } = await supabase.storage
-    .from(BUCKET)
-    .download(storageKey)
-
-  if (downloadError || !blob) {
-    console.error('variant generation: original download failed', {
-      reason: downloadError ? 'storage_download_failed' : 'storage_download_empty',
-    })
-    return
-  }
-
-  const original = Buffer.from(await blob.arrayBuffer())
-  const [thumb, preview] = await Promise.all([
-    generateThumbnailVariant(original),
-    generatePreviewVariant(original),
-  ])
+async function generateAndUploadVariants(storageKey: string, original: Buffer): Promise<void> {
+  const supabase = createSupabaseAdminClient({
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+  })
+  const thumb = await generateThumbnailVariant(original)
+  const preview = await generatePreviewVariant(original)
 
   const thumbKey = deriveVariantKey(storageKey, 'thumbnail')
   const previewKey = deriveVariantKey(storageKey, 'preview')
@@ -69,6 +82,78 @@ async function generateAndUploadVariants(storageKey: string): Promise<void> {
     console.error('variant upload (preview) failed', {
       reason: 'variant_preview_upload_failed',
     })
+  }
+}
+
+async function prepareUploadedImage(
+  storageKey: string,
+  expectedContentType: string,
+): Promise<VerifiedUploadedImage> {
+  const storageSignal = AbortSignal.timeout(STORAGE_TIMEOUT_MS)
+  const supabase = createSupabaseAdminClient({ signal: storageSignal })
+  const storage = supabase.storage.from(BUCKET)
+  let infoResult: Awaited<ReturnType<typeof storage.info>>
+  try {
+    infoResult = await storage.info(storageKey)
+  } catch {
+    throw problems.storageUnavailable()
+  }
+  const { data: storageInfo, error: infoError } = infoResult
+  if (infoError) throwStorageProblem(infoError)
+  if (!storageInfo) throw problems.notFound('画像が見つかりません')
+  assertUploadedImageSize(storageInfo.size)
+
+  const downloadOriginal = () =>
+    storage.download(storageKey, {}, { signal: storageSignal }).asStream()
+  let downloadResult: Awaited<ReturnType<typeof downloadOriginal>>
+  try {
+    downloadResult = await downloadOriginal()
+  } catch {
+    throw problems.storageUnavailable()
+  }
+  const { data: originalStream, error: downloadError } = downloadResult
+  if (downloadError) throwStorageProblem(downloadError)
+  if (!originalStream) throw problems.notFound('画像が見つかりません')
+
+  let original: Buffer
+  try {
+    original = await readUploadedImageStream(originalStream, storageInfo.size)
+  } catch (error) {
+    if (isApiProblemError(error)) throw error
+    throw problems.storageUnavailable()
+  }
+  const verified = await verifyUploadedImage(
+    original,
+    storageInfo.contentType ?? '',
+    expectedContentType,
+  )
+
+  try {
+    await generateAndUploadVariants(storageKey, verified.buffer)
+  } catch {
+    console.error('variant generation crashed', {
+      reason: 'variant_generation_failed',
+    })
+  }
+
+  return verified
+}
+
+async function prepareUploadedImageOnce(
+  storageKey: string,
+  expectedContentType: string,
+): Promise<VerifiedUploadedImage> {
+  const active = activeUploadPreparations.get(storageKey)
+  if (active) return active
+
+  const preparation = prepareUploadedImage(storageKey, expectedContentType)
+  activeUploadPreparations.set(storageKey, preparation)
+  try {
+    return await preparation
+  } finally {
+    if (activeUploadPreparations.get(storageKey) === preparation) {
+      activeUploadPreparations.delete(storageKey)
+    }
   }
 }
 
@@ -115,25 +200,17 @@ export async function POST(request: Request) {
       return NextResponse.json(toImageResponse(existingImage), { status: 200 })
     }
 
-    // variant 生成 + upload (失敗してもユーザー体験を壊さないので sequential 待機)
-    try {
-      await generateAndUploadVariants(input.storageKey)
-    } catch {
-      console.error('variant generation crashed', {
-        reason: 'variant_generation_failed',
-      })
-      // 続行: Image row は作成する
-    }
+    const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
 
     try {
       const image = await prisma.image.create({
         data: {
           userId: user.id,
           storageKey: input.storageKey,
-          contentType,
-          width: input.width,
-          height: input.height,
-          fileSize: input.fileSize,
+          contentType: verified.contentType,
+          width: verified.width,
+          height: verified.height,
+          fileSize: verified.fileSize,
         },
       })
       return NextResponse.json(toImageResponse(image), { status: 201 })

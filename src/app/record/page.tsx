@@ -121,7 +121,7 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   return fields
 }
 
-type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic'
+type AllowedMime = 'image/jpeg' | 'image/png' | 'image/webp'
 
 interface EncodedPhoto {
   blob: Blob

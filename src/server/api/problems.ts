@@ -53,6 +53,13 @@ export const problems = {
       429,
       '短時間に送信が続いています。少し時間をおいてからお試しください',
     ),
+  storageUnavailable: () =>
+    build(
+      'storage_unavailable',
+      'Service Unavailable',
+      503,
+      '画像の確認処理を一時的に利用できません',
+    ),
   aiGenerationFailed: () =>
     build(
       'ai_generation_failed',

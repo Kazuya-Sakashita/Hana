@@ -67,6 +67,11 @@ Current public / anonymous exceptions:
 
 - Storage は Supabase Storage private bucket。
 - public URL は使わない。upload / download は signed URL 経由。
+- upload確定時はStorage実体を10秒期限・10 MiB上限付きstreamで取得する。
+- magic bytes、MIME、拡張子を照合し、静止画の完全decode後に向き補正済み寸法と実byte数を保存する。
+- upload確定時の画像上限は10 MiB、各辺10000 px、総画素25 MP。クライアント申告の寸法・file sizeは確定値に使用しない。
+- 同一`storage_key`の同時確定はprocess内single-flightで高負荷処理を集約し、別instance間はDB一意制約で収束させる。
+- HEIC元ファイルはクライアントでJPEGへ再エンコードする。HEICの直接signed uploadはdecoderを本番・CIで固定できるまで発行しない。
 - Memory論理削除時は関連Image metadataも同じtimestamp・transactionで論理削除する。
 - signed URL発行とAI送信は画像単位のtransaction advisory lockを保持し、削除commit後の新規利用を遮断する。
 - signed URL生成は8秒、AI vendor呼び出しは共通AbortSignalで25秒を上限とし、DB lock transactionより短くする。
