@@ -43,6 +43,8 @@ describe('ISSUE-079 BottomNav and action icon alignment', () => {
     expect(bottomNavSource).toContain(
       "const HIDDEN_PATHS = ['/sign-in', '/auth/callback', '/onboarding', '/record', '/privacy', '/lp']",
     )
+    expect(bottomNavSource).toContain('const MEMORY_EDIT_PATH = /^\\/memory\\/[^/]+\\/edit')
+    expect(bottomNavSource).toContain('MEMORY_EDIT_PATH.test(pathname)')
     expect(bottomNavSource).toContain('prefetch={false}')
     expect(bottomNavSource).toContain('prefetch={true}')
     expect(bottomNavSource).toContain('tap-target')

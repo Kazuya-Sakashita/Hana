@@ -1,10 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Heart, Trash2 } from 'lucide-react'
+import { Heart, PencilLine, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { QuietIconButton } from '@/components/product/icons'
+import { QuietIcon, QuietIconButton } from '@/components/product/icons'
 import { Button } from '@/components/ui/button'
 import { AccessibleDialog } from '@/components/ui/dialog'
 import { StatePanel } from '@/components/product/surfaces'
@@ -110,10 +111,19 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
               ページの操作
             </h2>
             <p id="memory-edit-note" className="text-ink-tertiary mt-2 text-xs leading-narrative">
-              この画面では、しるしと削除だけ操作できます。
+              ことばと天気を整えたり、しるしと削除を操作できます。
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
+            <Button asChild variant="outline" size="icon">
+              <Link
+                href={`/memory/${encodeURIComponent(memoryId)}/edit`}
+                aria-label="ことばと天気を なおす"
+                aria-describedby="memory-edit-note"
+              >
+                <QuietIcon icon={PencilLine} />
+              </Link>
+            </Button>
             <QuietIconButton
               icon={Heart}
               tone="favorite"

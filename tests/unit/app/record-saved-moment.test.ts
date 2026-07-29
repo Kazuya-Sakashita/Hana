@@ -37,14 +37,16 @@ describe('record saved moment and memory landing', () => {
   })
 
   it('shows a reduced-motion-safe saved notice on memory detail', () => {
-    expect(memoryDetailSource).toContain('searchParams: Promise<{ saved?: string | string[] }>')
+    expect(memoryDetailSource).toContain(
+      'searchParams: Promise<{ saved?: string | string[]; updated?: string | string[] }>',
+    )
     expect(memoryDetailSource).toContain("const showSavedMoment = query.saved === '1'")
     expect(memoryDetailSource).toContain('<SavedMemoryNotice />')
     expect(memoryDetailSource).toMatch(
-      /showSavedMoment \? \(\s*<SavedMemoryNotice \/>\s*\) : \(\s*<Link[\s\S]+absolute left-3 top-3/,
+      /showSavedMoment \? \(\s*<SavedMemoryNotice \/>\s*\) : showUpdatedMoment \? \(\s*<UpdatedMemoryNotice \/>\s*\) : \(\s*<Link[\s\S]+absolute left-3 top-3/,
     )
     expect(memoryDetailSource).toMatch(
-      /<SavedMemoryNotice \/>\s*\) : \([\s\S]+<Suspense fallback={<MemoryDetailSkeleton \/>}>/,
+      /<SavedMemoryNotice \/>\s*\) : showUpdatedMoment[\s\S]+<Suspense fallback={<MemoryDetailSkeleton \/>}>/,
     )
     expect(savedNoticeSource).toContain('アルバムへ')
     expect(memoryDetailSource).toContain('role="status"')

@@ -69,6 +69,15 @@ export const quietStateCopy = {
     deletePending: 'アルバムから はずしています…',
     deleteConfirmAction: 'けす',
   },
+  memoryEdit: {
+    validationFailed: '入力を たしかめてください。',
+    saveFailed: 'ページを なおせませんでした。入力はそのまま残っています。',
+    networkFailed: '通信できませんでした。入力はそのままです。少しおいて ためしてください。',
+    unavailable: 'このページは編集できません。アルバムから開き直してください。',
+    pending: 'ページを なおしています…',
+    updatedTitle: 'ページを 整えました',
+    updatedDescription: '整えた内容を、このページとアルバムに反映しました。',
+  },
 } as const
 
 export function recordAiGeneratingCopy(childName: string): string {

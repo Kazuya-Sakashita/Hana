@@ -13,6 +13,10 @@ const memoryDetailSource = readFileSync(
   new URL('../../../src/app/memory/[memoryId]/page.tsx', import.meta.url),
   'utf8',
 )
+const memoryEditPageSource = readFileSync(
+  new URL('../../../src/app/memory/[memoryId]/edit/page.tsx', import.meta.url),
+  'utf8',
+)
 const memoryActionsSource = readFileSync(
   new URL('../../../src/components/memory-actions.tsx', import.meta.url),
   'utf8',
@@ -104,6 +108,9 @@ describe('album and memory keepsake refresh', () => {
     expect(memoryDetailSource).toContain('leading-bookish')
     expect(memoryDetailSource).toContain('[overflow-wrap:anywhere]')
     expect(memoryDetailSource).toContain('MemoryActions')
+    expect(memoryDetailSource).toContain('ことばと天気を なおす')
+    expect(memoryDetailSource).toContain('href={`/memory/${encodeURIComponent(memory.id)}/edit`}')
+    expect(memoryEditPageSource).toContain('<Link href={detailPath} replace')
     expect(memoryDetailSource).toContain('tap-target absolute')
     expect(memoryDetailSource).toContain('data-testid="memory-saved-notice"')
     expect(memoryDetailSource).toContain('PaperSlip')
@@ -120,10 +127,11 @@ describe('album and memory keepsake refresh', () => {
       "label={isFavorite ? 'しるしを はずす' : 'しるしを つける'}",
     )
     expect(memoryActionsSource).toContain('label="このページを けす"')
+    expect(memoryActionsSource).toContain('aria-label="ことばと天気を なおす"')
+    expect(memoryActionsSource).toContain('href={`/memory/${encodeURIComponent(memoryId)}/edit`}')
     expect(memoryActionsSource).toContain('aria-pressed={isFavorite}')
     expect(memoryActionsSource).toContain('aria-describedby="memory-edit-note"')
-    expect(memoryActionsSource).not.toContain('label="なおす"')
-    expect(memoryActionsSource).toContain('しるしと削除だけ操作できます')
+    expect(memoryActionsSource).toContain('ことばと天気を整えたり、しるしと削除を操作できます')
     expect(memoryActionsSource).not.toContain('ことばの編集は、準備中です。')
     expect(memoryActionsSource).toContain('deleteMemoryDescription(childName)')
     expect(memoryActionsSource).toContain('StatePanel')

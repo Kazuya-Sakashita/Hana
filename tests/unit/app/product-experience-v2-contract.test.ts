@@ -73,7 +73,8 @@ describe('Product Experience V2 contract', () => {
     expect(onboardingSource).toContain('href="/record"')
     expect(onboardingSource).not.toContain('setTimeout')
     expect(homeSource).toContain('保存前に、ことばを整えられます。')
-    expect(memoryActionsSource).toContain('しるしと削除だけ操作できます')
+    expect(memoryActionsSource).toContain('ことばと天気を整えたり、しるしと削除を操作できます')
+    expect(memoryActionsSource).toContain('href={`/memory/${encodeURIComponent(memoryId)}/edit`}')
 
     expect(activeUi).not.toContain('あとで、ことばをなおせます')
     expect(activeUi).not.toContain('あとから いつでも かえられます')
