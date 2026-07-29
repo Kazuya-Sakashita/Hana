@@ -17,9 +17,9 @@ Hana のホームは、記録を急かす入口ではなく、写真 1 枚から
 | topic          | contract                                                                                                                                           |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Primary action | `/record` への CTA は明確に残し、写真 1 まいから AI 下書きまで 30 秒の低負担価値を伝える。ただし未記録日、連続記録、取り戻しを促す文言は出さない。 |
-| Album surface  | recent memories は public feed ではなく、`paper-surface` と `photo-mat` の album slip とする。                                                     |
+| Album surface  | 最新ページは1件だけ大きく見せ、全ページ数付きの単一導線からアルバムへつなぐ。横棚へ同じページを重複表示しない。                                    |
 | Empty state    | 0 件でも責めずに、ありのままの 1 まいから始められる文体にする。                                                                                    |
-| Stats          | streak ではなく、しまったページ、現在の月齢、一緒に過ごした日数として読む。                                                                        |
+| Stats          | streak ではなく、現在の月齢と一緒に過ごした日数として読む。ページ数はアルバム導線に集約する。                                                      |
 | Accessibility  | 44px tap target、visible focus、decorative thumbnail alt、AA/AAA token contrast を維持する。                                                       |
 
 ## Synthetic Screenshot QA 状態
@@ -27,8 +27,8 @@ Hana のホームは、記録を急かす入口ではなく、写真 1 枚から
 Synthetic screenshot QA では、次の状態を確認する:
 
 - 0 memories: first page CTA, no guilt copy, no feed-like list.
-- 1 memory: one album slip and album link.
-- 5 memories: horizontal private album shelf with stable 4:5 photo mats.
+- 1 memory: one featured memory and one album summary link without duplicate slips.
+- 5 memories: latest memory only, total page count, and no horizontal shelf.
 - Missing cover image: book icon placeholder only, no guessed image description.
 - Long child name: stats and avatar do not push controls out of the mobile viewport.
 - Viewports: 390x844, 430x932, 768x1024.

@@ -6,7 +6,7 @@ import { BookOpen, Camera, Heart } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
-import { QuietIcon, QuietIconButton } from '@/components/product/icons'
+import { QuietIconButton } from '@/components/product/icons'
 import { Button } from '@/components/ui/button'
 import {
   memoriesQueryKey,
@@ -27,15 +27,18 @@ export function AlbumList({
   initialData,
   month,
   dateRange,
+  hasAnyMemory,
 }: {
   initialData: MemoryListResponse
   month: string
   dateRange: MemoryDateRange
+  hasAnyMemory: boolean
 }) {
   const query = useInfiniteMemoriesQuery({ limit: ALBUM_LIMIT, dateRange, initialData })
   const items = query.data?.pages.flatMap((page) => page.data) ?? []
   const [loadMoreStatus, setLoadMoreStatus] = useState('')
   const statusRef = useRef<HTMLParagraphElement>(null)
+  const itemLinkRefs = useRef(new Map<string, HTMLAnchorElement>())
 
   async function onLoadMore() {
     const beforeCount = items.length
@@ -48,6 +51,7 @@ export function AlbumList({
     const pages = result.data?.pages ?? query.data?.pages ?? []
     const nextItems = pages.flatMap((page) => page.data)
     const addedCount = Math.max(nextItems.length - beforeCount, 0)
+    const firstAddedItem = nextItems[beforeCount]
     const lastPage = pages[pages.length - 1]
     const hasMore = !!lastPage?.page.next_cursor
     setLoadMoreStatus(albumLoadMoreStatus(addedCount, hasMore))
@@ -56,35 +60,42 @@ export function AlbumList({
       window.requestAnimationFrame(() => {
         statusRef.current?.focus({ preventScroll: true })
       })
+    } else if (firstAddedItem) {
+      window.requestAnimationFrame(() => {
+        itemLinkRefs.current.get(firstAddedItem.id)?.focus({ preventScroll: true })
+      })
     }
   }
 
+  function setItemLinkRef(memoryId: string, node: HTMLAnchorElement | null) {
+    if (node) {
+      itemLinkRefs.current.set(memoryId, node)
+      return
+    }
+    itemLinkRefs.current.delete(memoryId)
+  }
+
   if (items.length === 0) {
-    return <EmptyState monthLabel={formatAlbumMonth(month)} />
+    return <EmptyState monthLabel={formatAlbumMonth(month)} hasAnyMemory={hasAnyMemory} />
   }
 
   return (
     <section aria-labelledby="album-private-shelf" className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4" data-testid="album-shelf-heading">
+      <div data-testid="album-shelf-heading">
         <div className="min-w-0">
           <p className="meta-label">{formatAlbumMonth(month)}のページ</p>
           <h2 id="album-private-shelf" className="mt-1 font-serif text-lg">
-            しまってあるページ
+            この月のページ
           </h2>
-          <p className="text-ink-secondary mt-2 text-sm leading-narrative">
-            新しいページも、前のページも、一冊ずつ静かに並びます。
-          </p>
         </div>
-        <span
-          className="border-hairline bg-warm inline-flex size-11 shrink-0 items-center justify-center rounded-full border"
-          aria-hidden="true"
-        >
-          <QuietIcon icon={BookOpen} tone="muted" />
-        </span>
       </div>
       <ul className="flex flex-col gap-3" data-testid="album-shelf-list">
         {items.map((memory) => (
-          <AlbumListItem key={memory.id} memory={memory} />
+          <AlbumListItem
+            key={memory.id}
+            memory={memory}
+            linkRef={(node) => setItemLinkRef(memory.id, node)}
+          />
         ))}
       </ul>
 
@@ -123,9 +134,17 @@ export function AlbumList({
   )
 }
 
-function AlbumListItem({ memory }: { memory: Memory }) {
+function AlbumListItem({
+  memory,
+  linkRef,
+}: {
+  memory: Memory
+  linkRef: (node: HTMLAnchorElement | null) => void
+}) {
   const isOptimistic = memory.id.startsWith('optimistic-')
   const recordedAt = memory.recorded_at.replaceAll('-', '.')
+  const titleId = `album-memory-title-${memory.id}`
+  const dateId = `album-memory-date-${memory.id}`
 
   return (
     <li data-testid="album-shelf-item">
@@ -134,15 +153,27 @@ function AlbumListItem({ memory }: { memory: Memory }) {
           {isOptimistic ? (
             <div className="flex min-w-0 flex-1 gap-4 opacity-80">
               <Thumbnail url={memory.cover_thumbnail_url ?? null} />
-              <MemoryText memory={memory} recordedAt={recordedAt} />
+              <MemoryText
+                memory={memory}
+                recordedAt={recordedAt}
+                titleId={titleId}
+                dateId={dateId}
+              />
             </div>
           ) : (
             <Link
+              ref={linkRef}
               href={`/memory/${memory.id}`}
+              aria-labelledby={`${titleId} ${dateId}`}
               className="ease-organic flex min-w-0 flex-1 gap-4 rounded-[var(--radius-photo-mat)] transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
             >
               <Thumbnail url={memory.cover_thumbnail_url ?? null} />
-              <MemoryText memory={memory} recordedAt={recordedAt} />
+              <MemoryText
+                memory={memory}
+                recordedAt={recordedAt}
+                titleId={titleId}
+                dateId={dateId}
+              />
             </Link>
           )}
 
@@ -153,14 +184,26 @@ function AlbumListItem({ memory }: { memory: Memory }) {
   )
 }
 
-function MemoryText({ memory, recordedAt }: { memory: Memory; recordedAt: string }) {
+function MemoryText({
+  memory,
+  recordedAt,
+  titleId,
+  dateId,
+}: {
+  memory: Memory
+  recordedAt: string
+  titleId: string
+  dateId: string
+}) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5 break-words [overflow-wrap:anywhere]">
       <div className="meta-label">
-        {recordedAt}
-        {memory.weather ? ` ・ ${memory.weather}` : ''}
+        <span id={dateId}>{recordedAt}</span>
+        {memory.weather ? <span aria-hidden="true">{` ・ ${memory.weather}`}</span> : null}
       </div>
-      <h3 className="line-clamp-2 font-serif text-base leading-tight">{memory.title}</h3>
+      <h3 id={titleId} className="line-clamp-2 font-serif text-base leading-tight">
+        {memory.title}
+      </h3>
       {memory.body ? (
         <p className="text-ink-secondary line-clamp-1 text-sm leading-6">{memory.body}</p>
       ) : null}
@@ -209,7 +252,7 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
       disabled={disabled || updateMemoryMutation.isPending}
       aria-pressed={memory.is_favorite}
       icon={Heart}
-      label={memory.is_favorite ? 'しるしを はずす' : 'しるしを つける'}
+      label={`${memory.title} の しるし`}
       tone="favorite"
       active={memory.is_favorite}
       className="mt-1"
@@ -217,9 +260,10 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
   )
 }
 
-function EmptyState({ monthLabel }: { monthLabel: string }) {
+function EmptyState({ monthLabel, hasAnyMemory }: { monthLabel: string; hasAnyMemory: boolean }) {
   return (
     <section
+      aria-labelledby="album-empty-state-title"
       className="photo-mat rounded-[var(--radius-photo-mat)] px-5 py-8 text-center"
       data-testid="album-month-empty-state"
     >
@@ -230,20 +274,35 @@ function EmptyState({ monthLabel }: { monthLabel: string }) {
         <BookOpen className="text-sakura-deep size-6" />
       </div>
       <p className="meta-label mt-5">{monthLabel}</p>
-      <h2 className="mt-3 font-serif text-xl leading-snug">
-        この月のページは、
-        <br />
-        静かな余白です
-      </h2>
-      <p className="text-ink-secondary mx-auto mt-3 max-w-[18rem] text-sm leading-7">
-        残しておきたい日があったら、いつでもここにしまえます。
-      </p>
-      <Button asChild size="lg" className="mt-6 w-full">
-        <Link href="/record" prefetch={false}>
-          <Camera className="size-4" aria-hidden="true" />
-          写真から のこす
-        </Link>
-      </Button>
+      {hasAnyMemory ? (
+        <>
+          <h2 id="album-empty-state-title" className="mt-3 font-serif text-xl leading-snug">
+            この月は、
+            <br />
+            静かな余白です
+          </h2>
+          <p className="text-ink-secondary mx-auto mt-3 max-w-[18rem] text-sm leading-7">
+            月を移すと、これまでにしまったページを見返せます。
+          </p>
+        </>
+      ) : (
+        <>
+          <h2 id="album-empty-state-title" className="mt-3 font-serif text-xl leading-snug">
+            まだ、ページは
+            <br />
+            ありません
+          </h2>
+          <p className="text-ink-secondary mx-auto mt-3 max-w-[18rem] text-sm leading-7">
+            残しておきたい日があったら、最初の1まいをここにしまえます。
+          </p>
+          <Button asChild size="lg" className="mt-6 w-full">
+            <Link href="/record" prefetch={false}>
+              <Camera className="size-4" aria-hidden="true" />
+              最初のページをつくる
+            </Link>
+          </Button>
+        </>
+      )}
     </section>
   )
 }

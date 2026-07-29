@@ -95,6 +95,7 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
         initialData: response([memory()]),
         month: '2026-05',
         dateRange: MAY_RANGE,
+        hasAnyMemory: true,
       }),
     )
 
@@ -103,7 +104,14 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
     expect(html).toContain('album-shelf-item')
     expect(html).toContain('/memory/memory-featured')
     expect(html).toContain('aria-pressed="true"')
-    expect(html).toContain('aria-label="しるしを はずす"')
+    expect(html).toContain(
+      'aria-label="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ の しるし"',
+    )
+    expect(html).toContain(
+      'aria-labelledby="album-memory-title-memory-featured album-memory-date-memory-featured"',
+    )
+    expect(html).toContain('<span id="album-memory-date-memory-featured">2026.07.24</span>')
+    expect(html).toContain('<span aria-hidden="true"> ・ はれ</span>')
     expect(html).toContain('tap-target inline-flex size-11')
     expect(html).toContain('<h3')
     expect(html).toContain('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
@@ -115,6 +123,7 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
         initialData: response([memory({ id: 'memory-001', is_favorite: false })], 'cursor-next'),
         month: '2026-05',
         dateRange: MAY_RANGE,
+        hasAnyMemory: true,
       }),
     )
 
@@ -130,12 +139,31 @@ describe('ISSUE-070 AlbumList rendered smoke', () => {
         initialData: response([]),
         month: '2026-05',
         dateRange: MAY_RANGE,
+        hasAnyMemory: true,
       }),
     )
 
     expect(html).toContain('album-month-empty-state')
-    expect(html).toContain('この月のページは、')
+    expect(html).toContain('この月は、')
     expect(html).toContain('静かな余白です')
+    expect(html).toContain('月を移すと、これまでにしまったページを見返せます。')
+    expect(html).not.toContain('最初のページをつくる')
+    expect(html).not.toMatch(/未記録|連続|達成|失敗/)
+  })
+
+  it('renders one gentle first-record CTA when the album is globally empty', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlbumList, {
+        initialData: response([]),
+        month: '2026-05',
+        dateRange: MAY_RANGE,
+        hasAnyMemory: false,
+      }),
+    )
+
+    expect(html).toContain('まだ、ページは')
+    expect(html).toContain('最初のページをつくる')
+    expect(html.match(/href="\/record"/g)).toHaveLength(1)
     expect(html).not.toMatch(/未記録|連続|達成|失敗/)
   })
 })

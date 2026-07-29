@@ -143,6 +143,13 @@ describe('ISSUE-082 LP-App visual parity QA gate', () => {
     expect(contract.screen_matrix.find((target) => target.id === 'record')?.states).toContain(
       'ai-consent',
     )
+    expect(contract.screen_matrix.find((target) => target.id === 'album')?.states).toEqual([
+      'all-empty',
+      'month-empty',
+      'one-memory',
+      'long-title-body',
+      'load-more-end',
+    ])
 
     expect(contract.checks).toEqual(
       expect.arrayContaining([

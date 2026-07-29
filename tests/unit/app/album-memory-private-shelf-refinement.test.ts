@@ -22,14 +22,15 @@ const issueSource = readFileSync(
 )
 
 describe('ISSUE-070 album and memory private shelf refinement', () => {
-  it('adds a large featured page before the practical shelf list', () => {
-    expect(albumPageSource).toContain('function FeaturedAlbumPage')
-    expect(albumPageSource).toContain('data-testid="album-featured-page"')
-    expect(albumPageSource).toContain('この月の一ページ')
-    expect(albumPageSource).toContain('const featured = items[0] ?? null')
+  it('starts with the practical shelf list without duplicating the latest page', () => {
+    expect(albumPageSource).not.toContain('function FeaturedAlbumPage')
+    expect(albumPageSource).not.toContain('data-testid="album-featured-page"')
+    expect(albumPageSource).not.toContain('この月の一ページ')
+    expect(albumPageSource).not.toContain('const featured = items[0] ?? null')
     expect(albumPageSource).toContain('data: items.map')
     expect(albumPageSource).not.toContain('const [featured, ...shelfItems] = items')
-    expect(albumPageSource).toContain('aspect-[4/5] w-full')
+    expect(albumPageSource).toContain('<AlbumList')
+    expect(albumListSource).toContain('items.map((memory) =>')
   })
 
   it('keeps list pagination, load more, and favorite affordances intact', () => {

@@ -70,7 +70,7 @@ export function MonthNavigator({ month, currentMonth, totalCount }: MonthNavigat
             aria-live="polite"
             aria-atomic="true"
           >
-            {totalCount === 0 ? 'この月は静かな余白です' : `この月のページ ${totalCount}件`}
+            この月のページ {totalCount}件
           </p>
         </div>
 

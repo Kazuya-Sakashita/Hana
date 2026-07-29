@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { BookOpen, Camera, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { HomeGreeting } from '@/components/home-greeting'
+import { QuietIcon } from '@/components/product/icons'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
@@ -36,7 +37,7 @@ export default async function HomePage() {
             <HomeAvatar userId={user.id} />
           </Suspense>
         </header>
-        {/* Body: hero + carousel + stat */}
+        {/* Body: hero + album summary + stat */}
         <Suspense fallback={<HomeBodySkeleton />}>
           <HomeBody userId={user.id} />
         </Suspense>
@@ -78,23 +79,19 @@ async function HomeBody({ userId }: { userId: string }) {
       orderBy: { createdAt: 'asc' },
       select: { name: true, birthdate: true },
     }),
-    fetchMemoriesWithCovers({ userId, limit: 5 }),
+    fetchMemoriesWithCovers({ userId, limit: 1 }),
     prisma.memory.count({ where: { userId, deletedAt: null } }),
   ])
   if (!child) redirect('/onboarding')
 
   const memories = memoriesResult.items
   const featuredMemory = memories[0] ?? null
-  const shelfMemories = memories
-  const shelfTitle = memories.length === 1 ? 'アルバムのページ' : '最近のページたち'
   const ageLabel = formatAgeLabel(computeAge(child.birthdate, new Date()))
   const togetherDays = daysBetween(child.birthdate, new Date())
 
   return (
     <div className="space-y-10">
       <section aria-labelledby="home-primary-action" className="space-y-5">
-        <FeaturedPhotoMat memory={featuredMemory} />
-
         <div className="space-y-4">
           <div>
             <p className="meta-label">{featuredMemory ? 'おかえりなさい' : 'はじめのページ'}</p>
@@ -125,24 +122,23 @@ async function HomeBody({ userId }: { userId: string }) {
                 {featuredMemory ? '写真からページをつくる' : 'はじめてのページをつくる'}
               </Link>
             </Button>
-            {featuredMemory ? (
-              <Button asChild variant="outline" size="lg" className="w-full">
-                <Link href="/album" prefetch={true}>
-                  <BookOpen className="size-4" aria-hidden="true" />
-                  アルバムをひらく
-                </Link>
-              </Button>
-            ) : null}
           </div>
           <p className="text-ink-tertiary text-center text-xs leading-6">
             ひとことだけでも、静かに残せます。
           </p>
         </div>
+
+        <FeaturedPhotoMat memory={featuredMemory} />
       </section>
 
       {memories.length === 0 ? (
-        <section className="paper-surface rounded-[var(--radius-paper-slip)] px-5 py-5">
-          <p className="meta-label">小さな余白</p>
+        <section
+          aria-labelledby="home-empty-state"
+          className="paper-surface rounded-[var(--radius-paper-slip)] px-5 py-5"
+        >
+          <h2 id="home-empty-state" className="meta-label">
+            小さな余白
+          </h2>
           <p className="text-ink-secondary mt-3 text-sm leading-7">
             <span className="break-words [overflow-wrap:anywhere]">{child.name}</span>{' '}
             ちゃんとの1まいめを、ありのままの写真から。
@@ -150,95 +146,34 @@ async function HomeBody({ userId }: { userId: string }) {
         </section>
       ) : (
         <>
-          {shelfMemories.length > 0 ? (
-            <section aria-labelledby="home-keepsake-pages">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <p className="meta-label">アルバム</p>
-                  <h2 id="home-keepsake-pages" className="mt-1 font-serif text-lg">
-                    {shelfTitle}
-                  </h2>
-                  <p className="text-ink-tertiary mt-1 text-xs leading-5">
-                    大きく見たページも、ここからまた開けます。
-                  </p>
-                </div>
-                <Button asChild variant="ghost" size="sm" className="px-3">
-                  <Link href="/album" prefetch={true}>
-                    アルバムへ
-                    <ChevronRight className="size-4" aria-hidden="true" />
-                  </Link>
-                </Button>
-              </div>
-              <ul className="-mx-6 flex snap-x scroll-px-6 gap-3 overflow-x-auto px-6 py-2">
-                {shelfMemories.map((m, index) => {
-                  const url = m.coverThumbnailUrl
-                  return (
-                    <li key={m.id} className="w-[148px] shrink-0 snap-start">
-                      <Link
-                        href={`/memory/${m.id}`}
-                        className="paper-surface ease-organic block rounded-[var(--radius-paper-slip)] p-2 transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
-                      >
-                        {typeof url === 'string' ? (
-                          <div className="photo-mat rounded-[var(--radius-photo-mat)] p-1">
-                            <Image
-                              src={url}
-                              alt=""
-                              width={140}
-                              height={175}
-                              sizes="140px"
-                              className="aspect-[4/5] w-full rounded-[var(--radius-photo-inner)] object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div
-                            className="photo-mat flex aspect-[4/5] w-full items-center justify-center rounded-[var(--radius-photo-mat)]"
-                            aria-hidden="true"
-                          >
-                            <BookOpen className="text-sakura-deep size-7" />
-                          </div>
-                        )}
-                        <span
-                          className={`mt-3 inline-flex min-h-7 items-center rounded-full px-2.5 text-[11px] font-bold ${
-                            index === 0
-                              ? 'border-hairline text-leaf-deep border bg-warm'
-                              : 'text-transparent'
-                          }`}
-                          aria-hidden={index === 0 ? undefined : 'true'}
-                        >
-                          最近
-                        </span>
-                        <p className="text-ink mt-3 line-clamp-2 min-h-10 break-words font-serif text-sm leading-5 [overflow-wrap:anywhere]">
-                          {m.title}
-                        </p>
-                      </Link>
-                    </li>
-                  )
-                })}
-                <li className="w-[148px] shrink-0 snap-start">
-                  <Link
-                    href="/album"
-                    prefetch={true}
-                    className="photo-mat ease-organic flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-paper-slip)] px-4 text-center font-serif text-sm transition-transform active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
-                  >
-                    すべてのページを
-                    <span className="text-sakura-deep inline-flex items-center gap-1">
-                      ひらく
-                      <ChevronRight className="size-4" aria-hidden="true" />
-                    </span>
-                  </Link>
-                </li>
-              </ul>
-            </section>
-          ) : null}
-
-          <HomeGentleStats
-            memoryCount={memoryCount}
-            ageLabel={ageLabel}
-            togetherDays={togetherDays}
-          />
+          <HomeAlbumSummary memoryCount={memoryCount} />
+          <HomeGentleStats ageLabel={ageLabel} togetherDays={togetherDays} />
         </>
       )}
     </div>
+  )
+}
+
+function HomeAlbumSummary({ memoryCount }: { memoryCount: number }) {
+  return (
+    <section aria-labelledby="home-album-summary">
+      <Link
+        href="/album"
+        prefetch={true}
+        className="paper-surface ease-organic flex min-h-24 items-center justify-between gap-4 rounded-[var(--radius-paper-slip)] px-5 py-4 transition-transform active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-canvas"
+      >
+        <div className="min-w-0">
+          <p className="meta-label">アルバム</p>
+          <h2 id="home-album-summary" className="text-ink mt-1 font-serif text-lg leading-7">
+            {memoryCount}ページ、しまってあります
+          </h2>
+          <p className="text-ink-tertiary mt-1 text-xs leading-5">
+            月ごとに、これまでのページを見返せます。
+          </p>
+        </div>
+        <QuietIcon icon={ChevronRight} tone="primary" className="shrink-0" />
+      </Link>
+    </section>
   )
 }
 
@@ -299,22 +234,13 @@ function FeaturedPhotoMat({ memory }: { memory: MemoryListItem | null }) {
   )
 }
 
-function HomeGentleStats({
-  memoryCount,
-  ageLabel,
-  togetherDays,
-}: {
-  memoryCount: number
-  ageLabel: string
-  togetherDays: number
-}) {
+function HomeGentleStats({ ageLabel, togetherDays }: { ageLabel: string; togetherDays: number }) {
   return (
     <section aria-labelledby="home-gentle-stats">
       <h2 id="home-gentle-stats" className="meta-label mb-3">
         この場所の あゆみ
       </h2>
-      <dl className="grid grid-cols-3 gap-2">
-        <Stat number={String(memoryCount)} label="しまったページ" />
+      <dl className="grid grid-cols-2 gap-3">
         <Stat number={ageLabel.replace('生後 ', '')} label="いまの月齢" />
         <Stat number={String(togetherDays)} label="一緒に過ごした日数" unit="日" />
       </dl>
@@ -325,24 +251,20 @@ function HomeGentleStats({
 function HomeBodySkeleton() {
   return (
     <div className="space-y-10">
-      <div
-        className="photo-mat aspect-[4/3] w-full animate-pulse rounded-[var(--radius-sheet)]"
-        aria-hidden="true"
-      />
       <div className="space-y-3" aria-hidden="true">
         <div className="bg-warm h-5 w-24 animate-pulse rounded" />
         <div className="bg-warm h-8 w-44 animate-pulse rounded" />
         <div className="bg-warm h-12 w-full animate-pulse rounded-full" />
       </div>
+      <div
+        className="photo-mat aspect-[4/3] w-full animate-pulse rounded-[var(--radius-sheet)]"
+        aria-hidden="true"
+      />
       <section>
-        <div className="bg-warm mb-3 h-8 w-36 animate-pulse rounded" aria-hidden="true" />
-        <ul className="-mx-6 flex gap-3 px-6 py-2">
-          {[0, 1, 2].map((i) => (
-            <li key={i} className="w-[148px] shrink-0" aria-hidden="true">
-              <div className="bg-warm aspect-[4/5] w-full animate-pulse rounded-[var(--radius-paper-slip)]" />
-            </li>
-          ))}
-        </ul>
+        <div
+          className="bg-warm h-24 w-full animate-pulse rounded-[var(--radius-paper-slip)]"
+          aria-hidden="true"
+        />
       </section>
     </div>
   )

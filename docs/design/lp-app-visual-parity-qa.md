@@ -38,7 +38,7 @@ synthetic data のみで見る。
 | LP                              | hero、Before / After、product preview、trust / final CTA                            | 390x844、430x932、768x1024、1280x900 |
 | Home                            | empty、1 memory、5 memories、long child name                                        | 390x640、390x844、430x932、768x1024  |
 | Record                          | empty、photo selected、AI consent、generating、manual save ready、save ready、error | 390x640、390x844、430x932            |
-| Album                           | empty、featured + shelf、long title / body、load more / end                         | 390x844、430x932、768x1024           |
+| Album                           | all-empty、month-empty、1 memory、long title / body、load more / end                | 390x844、430x932、768x1024           |
 | Memory Detail                   | saved notice、normal、long body、additional photos                                  | 390x844、430x932                     |
 | Sign-in / Onboarding / Settings | auth entry、first-memory bridge、trust surface                                      | 390x844、430x932                     |
 

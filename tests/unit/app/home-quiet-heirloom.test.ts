@@ -49,7 +49,8 @@ function expectNoEvidenceLeaks() {
 describe('home Quiet Heirloom refresh', () => {
   it('keeps the record CTA clear without unrecorded-day pressure', () => {
     expect(homeSource).toContain('写真からページをつくる')
-    expect(homeSource).toContain('アルバムをひらく')
+    expect(homeSource).toContain('HomeAlbumSummary')
+    expect(homeSource).not.toContain('アルバムをひらく')
     expect(homeSource).toContain('写真1まいから、AIの下書きまで')
     expect(homeSource).toContain('保存前に、ことばを整えられます。')
     expect(homeSource).toContain('whitespace-nowrap')
@@ -64,20 +65,19 @@ describe('home Quiet Heirloom refresh', () => {
     expect(homeSource).not.toMatch(/今日まだ|記録していません|途切れ|ストリーク|streak/i)
   })
 
-  it('renders recent memories as private album slips instead of a feed', () => {
+  it('keeps the latest memory primary and summarizes the private album without a feed', () => {
     expect(homeSource).toContain('data-testid="home-first-view-photo-mat"')
     expect(homeSource).toContain('写真をしまう場所')
     expect(homeSource).toContain('aspect-[4/3]')
     expect(homeSource).toContain('priority')
-    expect(homeSource).toContain('shelfMemories')
     expect(homeSource).toContain('アルバム')
-    expect(homeSource).toContain('最近のページたち')
-    expect(homeSource).toContain('大きく見たページも、ここからまた開けます。')
-    expect(homeSource).toContain('最近')
+    expect(homeSource).toContain('HomeAlbumSummary')
+    expect(homeSource).toContain('{memoryCount}ページ、しまってあります')
+    expect(homeSource).toContain('月ごとに、これまでのページを見返せます。')
     expect(homeSource).toContain('paper-surface')
     expect(homeSource).toContain('photo-mat')
-    expect(homeSource).toContain('snap-x')
-    expect(homeSource).toContain('すべてのページを')
+    expect(homeSource).not.toContain('shelfMemories')
+    expect(homeSource).not.toContain('snap-x')
     expect(homeSource).not.toMatch(/いいね|ランキング|投稿|feed density/i)
   })
 
@@ -105,8 +105,7 @@ describe('home Quiet Heirloom refresh', () => {
     expect(homeSource).toContain('aria-hidden="true"')
     expect(homeSource).toContain('Button asChild')
     expect(homeSource).toContain('tap-target flex h-11 w-11')
-    expect(homeSource).toContain('scroll-px-6')
-    expect(homeSource).toContain('py-2')
+    expect(homeSource).toContain('min-h-24')
     expect(homeSource).toContain('focus-visible:ring-2')
     expect(homeSource).toContain('[overflow-wrap:anywhere]')
     expect(homeSource).toContain('min-h-28')
