@@ -51,12 +51,19 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
 
 interface Props {
   memoryId: string
+  initialUpdatedAt: string
   initialTitle: string
   initialBody: string | null
   initialWeather: string | null
 }
 
-export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWeather }: Props) {
+export function MemoryEditForm({
+  memoryId,
+  initialUpdatedAt,
+  initialTitle,
+  initialBody,
+  initialWeather,
+}: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const updateMemoryMutation = useUpdateMemoryMutation()
@@ -65,6 +72,7 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
   const [weather, setWeather] = useState(initialWeather ?? '')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitMessage, setSubmitMessage] = useState<string | null>(null)
+  const [hasConflict, setHasConflict] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const weatherRef = useRef<HTMLInputElement>(null)
@@ -98,6 +106,7 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
       return next
     })
     setSubmitMessage(null)
+    setHasConflict(false)
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -122,11 +131,11 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
 
     const nextBody = body.length === 0 ? null : body
     const nextWeather = weather.length === 0 ? null : weather
-    const patch: MemoryUpdateRequest = {}
+    const patch: MemoryUpdateRequest = { expected_updated_at: initialUpdatedAt }
     if (trimmedTitle !== initialTitle) patch.title = trimmedTitle
     if (nextBody !== normalizedInitialBody) patch.body = nextBody
     if (nextWeather !== normalizedInitialWeather) patch.weather = nextWeather
-    if (Object.keys(patch).length === 0) return
+    if (Object.keys(patch).length === 1) return
 
     submitInFlightRef.current = true
     try {
@@ -160,8 +169,11 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
         } else if (error.reason === 'not_found') {
           void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
           setSubmitMessage(quietStateCopy.memoryEdit.unavailable)
-        } else if (error.reason === 'forbidden') {
-          setSubmitMessage(quietStateCopy.memoryEdit.unavailable)
+        } else if (error.reason === 'memory_update_conflict') {
+          setHasConflict(true)
+          setSubmitMessage(
+            '別の画面で、この記録が更新されました。入力はそのままです。最新の内容を確認して、もう一度整えられます。',
+          )
         } else {
           setSubmitMessage(quietStateCopy.memoryEdit.saveFailed)
         }
@@ -199,6 +211,16 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
           >
             {summaryMessage}
           </div>
+        ) : null}
+        {hasConflict ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => router.refresh()}
+          >
+            最新の内容を確認する
+          </Button>
         ) : null}
 
         <div className="space-y-2">

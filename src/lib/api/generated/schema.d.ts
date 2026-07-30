@@ -286,6 +286,8 @@ export interface paths {
          * 記録更新
          * @description 現在のユーザーが所有する未削除の記録について、title / body / weather /
          *     is_favorite を部分更新する。送らないフィールドは変更されない。
+         *     `expected_updated_at` が現在の更新世代と一致する場合だけ更新し、
+         *     古い世代の場合は 409 `memory_update_conflict` を返す。
          *     不存在、削除済み、他ユーザー所有はいずれも同じ 404 `not_found` を返す。
          */
         put: operations["updateMemory"];
@@ -1004,10 +1006,17 @@ export interface components {
         };
         /**
          * @description 記録の更新リクエスト (PATCH 的な PUT)。指定したフィールドだけ更新。
+         *     `expected_updated_at` は編集開始時に取得した更新世代。現在値と一致する場合だけ更新する。
          *     `recorded_at` と `image_ids` と `child_id` は MVP では変更不可。
          *     (やり直したい場合は DELETE + 新規作成)
          */
         MemoryUpdateRequest: {
+            /**
+             * Format: date-time
+             * @description 編集開始時に取得した Memory.updated_at。楽観的排他の更新世代
+             * @example 2026-05-23T11:00:00Z
+             */
+            expected_updated_at: string;
             /** @example はじめての すなあそび */
             title?: string;
             /** @example すなを ぎゅっと にぎって、はじめての かんしょく。 */
@@ -1717,6 +1726,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
         };

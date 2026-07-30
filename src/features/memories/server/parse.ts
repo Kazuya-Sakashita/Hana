@@ -27,6 +27,7 @@ export interface MemoryCreateInput {
 }
 
 export interface MemoryUpdateInput {
+  expectedUpdatedAt: Date
   title?: string
   body?: string | null
   weather?: string | null
@@ -88,7 +89,12 @@ export function parseMemoryUpdate(raw: unknown): MemoryUpdateInput {
   }
   const body = raw as Record<string, unknown>
   const errors: FieldError[] = []
-  const patch: MemoryUpdateInput = {}
+  const expectedUpdatedAt = parseDateTime(
+    body.expected_updated_at,
+    'body.expected_updated_at',
+    errors,
+  )
+  const patch: Omit<MemoryUpdateInput, 'expectedUpdatedAt'> = {}
 
   if ('title' in body) {
     const title = parseStringRequired(body.title, 'body.title', 1, TITLE_MAX, errors)
@@ -113,7 +119,7 @@ export function parseMemoryUpdate(raw: unknown): MemoryUpdateInput {
   }
 
   if (errors.length) throw problems.validation(errors)
-  return patch
+  return { ...patch, expectedUpdatedAt: expectedUpdatedAt as Date }
 }
 
 export function parseListMemoriesQuery(url: URL): ListMemoriesQuery {
@@ -302,6 +308,22 @@ function parseDate(
   const today = new Date()
   if (date.getTime() > today.getTime() + 24 * 60 * 60 * 1000) {
     errors.push({ path, reason: 'future_date', message: '未来の日付は指定できません' })
+    return null
+  }
+  return date
+}
+
+function parseDateTime(value: unknown, path: string, errors: FieldError[]): Date | null {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)
+  ) {
+    errors.push({ path, reason: 'required', message: '更新世代が必要です' })
+    return null
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    errors.push({ path, reason: 'invalid_format', message: 'RFC3339 UTC 形式で指定してください' })
     return null
   }
   return date

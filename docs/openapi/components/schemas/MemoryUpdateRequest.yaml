@@ -1,9 +1,16 @@
 type: object
 description: |
   記録の更新リクエスト (PATCH 的な PUT)。指定したフィールドだけ更新。
+  `expected_updated_at` は編集開始時に取得した更新世代。現在値と一致する場合だけ更新する。
   `recorded_at` と `image_ids` と `child_id` は MVP では変更不可。
   (やり直したい場合は DELETE + 新規作成)
+required: [expected_updated_at]
 properties:
+  expected_updated_at:
+    type: string
+    format: date-time
+    description: 編集開始時に取得した Memory.updated_at。楽観的排他の更新世代
+    example: '2026-05-23T11:00:00Z'
   title:
     type: string
     minLength: 1

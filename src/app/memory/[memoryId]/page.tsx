@@ -166,6 +166,7 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
           memoryId={memory.id}
           childName={child?.name ?? ''}
           initialIsFavorite={memory.isFavorite}
+          initialUpdatedAt={memory.updatedAt.toISOString()}
         />
       </article>
     </>

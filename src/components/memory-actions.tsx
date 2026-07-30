@@ -29,17 +29,19 @@ interface Props {
   memoryId: string
   childName: string
   initialIsFavorite: boolean
+  initialUpdatedAt: string
 }
 
 type DialogState = { open: boolean; pending: boolean }
 
-export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props) {
+export function MemoryActions({ memoryId, childName, initialIsFavorite, initialUpdatedAt }: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const updateMemoryMutation = useUpdateMemoryMutation()
   const deleteMemoryMutation = useDeleteMemoryMutation()
   const { showToast } = useToast()
   const [isFavorite, setIsFavorite] = useState(initialIsFavorite)
+  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt)
   const [deleteDialog, setDeleteDialog] = useState<DialogState>({ open: false, pending: false })
 
   async function toggleFavorite() {
@@ -56,9 +58,10 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite }: Props)
     try {
       const updated = await updateMemoryMutation.mutateAsync({
         memoryId,
-        body: { is_favorite: next },
+        body: { expected_updated_at: updatedAt, is_favorite: next },
       })
       setIsFavorite(updated.is_favorite)
+      setUpdatedAt(updated.updated_at)
       router.refresh()
     } catch (e) {
       setIsFavorite(previous)

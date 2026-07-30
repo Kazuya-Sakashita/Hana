@@ -230,7 +230,7 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
     try {
       await updateMemoryMutation.mutateAsync({
         memoryId: memory.id,
-        body: { is_favorite: next },
+        body: { expected_updated_at: memory.updated_at, is_favorite: next },
       })
       router.refresh()
     } catch (e) {
