@@ -1671,7 +1671,7 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
             variant="destructive"
             size="lg"
             onClick={onClose}
-            className="w-full"
+            className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:bg-amber/90 hover:text-white active:bg-amber/90"
           >
             下書きを 破棄して閉じる
           </Button>
