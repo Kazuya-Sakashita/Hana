@@ -92,6 +92,7 @@ describe('ISSUE-126 memory edit form', () => {
           { client: queryClient },
           createElement(MemoryEditForm, {
             memoryId: MEMORY_ID,
+            initialUpdatedAt: '2026-07-30T00:00:00.000Z',
             initialTitle: '合成のタイトル',
             initialBody: '合成の本文',
             initialWeather: 'はれ',
@@ -165,6 +166,7 @@ describe('ISSUE-126 memory edit form', () => {
     expect(mocks.updateMemory).toHaveBeenCalledWith({
       memoryId: MEMORY_ID,
       body: {
+        expected_updated_at: '2026-07-30T00:00:00.000Z',
         title: '整えたタイトル',
         body: '整えた本文',
         weather: 'くもり',
@@ -213,7 +215,10 @@ describe('ISSUE-126 memory edit form', () => {
 
     expect(mocks.updateMemory).toHaveBeenCalledWith({
       memoryId: MEMORY_ID,
-      body: { weather: 'あめ' },
+      body: {
+        expected_updated_at: '2026-07-30T00:00:00.000Z',
+        weather: 'あめ',
+      },
     })
   })
 
@@ -244,7 +249,10 @@ describe('ISSUE-126 memory edit form', () => {
 
     expect(mocks.updateMemory).toHaveBeenCalledWith({
       memoryId: MEMORY_ID,
-      body: { title: '整えたタイトル' },
+      body: {
+        expected_updated_at: '2026-07-30T00:00:00.000Z',
+        title: '整えたタイトル',
+      },
     })
   })
 
@@ -283,9 +291,38 @@ describe('ISSUE-126 memory edit form', () => {
 
     expect(title.value).toBe('送信前の合成タイトル')
     expect(body.value).toBe('送信前の合成本文')
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('入力はそのままです')
+    const alert = document.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('保存できませんでした')
+    expect(alert?.textContent).toContain('入力はそのままです')
+    expect(alert?.className).toContain('border-2')
+    expect(alert?.querySelector('.bg-amber')).not.toBeNull()
+    expect(alert?.querySelector('.font-bold')?.textContent).toContain('保存できませんでした')
     expect(document.activeElement).toBe(document.querySelector('[role="alert"]'))
     expect(mocks.replace).not.toHaveBeenCalled()
+  })
+
+  it('keeps input on a conflict and offers a latest-content refresh', async () => {
+    mocks.updateMemory.mockRejectedValue(
+      new ApiProblemError({
+        type: 'https://hana.app/problems/memory-update-conflict',
+        title: 'Conflict',
+        status: 409,
+        reason: 'memory_update_conflict',
+      }),
+    )
+    await renderForm()
+
+    const title = document.querySelector('#memory-edit-title') as HTMLInputElement
+    await act(async () => setControlValue(title, '競合前の入力'))
+    await act(async () => findButton('この内容で なおす').click())
+
+    expect(title.value).toBe('競合前の入力')
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('入力はそのまま')
+    const refreshButton = findButton('最新の内容を確認する')
+    expect(refreshButton.className).toContain('bg-primary')
+    expect(refreshButton.querySelector('svg')).not.toBeNull()
+    await act(async () => refreshButton.click())
+    expect(mocks.refresh).toHaveBeenCalledOnce()
   })
 
   it('invalidates memory lists after a not-found update while keeping input', async () => {

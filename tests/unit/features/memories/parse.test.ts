@@ -119,22 +119,56 @@ describe('parseMemoryCreate', () => {
 })
 
 describe('parseMemoryUpdate', () => {
-  it('returns empty patch for empty body', () => {
-    expect(parseMemoryUpdate({})).toEqual({})
+  const expectedUpdatedAt = '2026-07-30T00:00:00.000Z'
+
+  it('requires an update generation', () => {
+    expectValidationError(() => parseMemoryUpdate({}), 'body.expected_updated_at')
+  })
+
+  it('rejects a malformed or nonexistent update generation', () => {
+    expectValidationError(
+      () => parseMemoryUpdate({ expected_updated_at: '2026-07-30T00:00:00+09:00' }),
+      'body.expected_updated_at',
+    )
+    expectValidationError(
+      () => parseMemoryUpdate({ expected_updated_at: '2026-02-30T00:00:00.000Z' }),
+      'body.expected_updated_at',
+    )
   })
 
   it('passes through individual fields', () => {
-    expect(parseMemoryUpdate({ title: 'なおした' })).toEqual({ title: 'なおした' })
-    expect(parseMemoryUpdate({ is_favorite: true })).toEqual({ isFavorite: true })
-    expect(parseMemoryUpdate({ body: null })).toEqual({ body: null })
+    const expected = new Date(expectedUpdatedAt)
+    expect(
+      parseMemoryUpdate({ expected_updated_at: expectedUpdatedAt, title: 'なおした' }),
+    ).toEqual({
+      expectedUpdatedAt: expected,
+      title: 'なおした',
+    })
+    expect(
+      parseMemoryUpdate({ expected_updated_at: expectedUpdatedAt, is_favorite: true }),
+    ).toEqual({ expectedUpdatedAt: expected, isFavorite: true })
+    expect(parseMemoryUpdate({ expected_updated_at: expectedUpdatedAt, body: null })).toEqual({
+      expectedUpdatedAt: expected,
+      body: null,
+    })
   })
 
   it('rejects non-boolean is_favorite', () => {
-    expectValidationError(() => parseMemoryUpdate({ is_favorite: 'yes' }), 'body.is_favorite')
+    expectValidationError(
+      () => parseMemoryUpdate({ expected_updated_at: expectedUpdatedAt, is_favorite: 'yes' }),
+      'body.is_favorite',
+    )
   })
 
   it('rejects title > 100', () => {
-    expectValidationError(() => parseMemoryUpdate({ title: 'あ'.repeat(101) }), 'body.title')
+    expectValidationError(
+      () =>
+        parseMemoryUpdate({
+          expected_updated_at: expectedUpdatedAt,
+          title: 'あ'.repeat(101),
+        }),
+      'body.title',
+    )
   })
 })
 

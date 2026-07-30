@@ -47,7 +47,9 @@ export default async function MemoryEditPage({ params }: PageProps) {
         </p>
 
         <MemoryEditForm
+          key={memory.updatedAt.toISOString()}
           memoryId={memory.id}
+          initialUpdatedAt={memory.updatedAt.toISOString()}
           initialTitle={memory.title}
           initialBody={memory.body}
           initialWeather={memory.weather}

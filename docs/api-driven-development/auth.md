@@ -98,7 +98,11 @@ Phase 2 で SQL trigger + FK + RLS をまとめて入れる。
 
 ## 5. API クライアントとの連携
 
-`createApiClient` の `resolveAuthToken` を Supabase session に接続する。
+Server Components からAPIを呼ぶ場合は、`createApiClient` の `resolveAuthToken` を
+Supabase session に接続する。Browser から同一originの `/v1` を呼ぶ場合は、
+`@supabase/ssr` のsession cookieだけを送る。CookieとBearer tokenを重ねると
+認証情報が二重になり、HTTP header size上限を超えるため、Browser clientでは
+`resolveAuthToken`を設定しない。
 
 ```ts
 // Server

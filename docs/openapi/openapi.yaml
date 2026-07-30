@@ -560,6 +560,8 @@ paths:
       description: |
         現在のユーザーが所有する未削除の記録について、title / body / weather /
         is_favorite を部分更新する。送らないフィールドは変更されない。
+        `expected_updated_at` が現在の更新世代と一致する場合だけ更新し、
+        古い世代の場合は 409 `memory_update_conflict` を返す。
         不存在、削除済み、他ユーザー所有はいずれも同じ 404 `not_found` を返す。
       tags: [memories]
       requestBody:
@@ -577,6 +579,8 @@ paths:
                 $ref: '#/components/schemas/Memory'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':

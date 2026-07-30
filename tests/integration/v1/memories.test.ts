@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   advisoryLock: vi.fn(),
   txMemoryCreate: vi.fn(),
   txMemoryUpdateMany: vi.fn(),
+  txMemoryFindFirst: vi.fn(),
   txImageFindMany: vi.fn(),
   txImageUpdateMany: vi.fn(),
   txMemoryFindUniqueOrThrow: vi.fn(),
@@ -131,6 +132,7 @@ function authed() {
       memory: {
         create: mocks.txMemoryCreate,
         updateMany: mocks.txMemoryUpdateMany,
+        findFirst: mocks.txMemoryFindFirst,
         findUniqueOrThrow: mocks.txMemoryFindUniqueOrThrow,
       },
       image: {
@@ -683,7 +685,10 @@ describe('PUT /v1/memories/{memoryId}', () => {
     mocks.txMemoryUpdateMany.mockResolvedValue({ count: 1 })
     mocks.txMemoryFindUniqueOrThrow.mockResolvedValue({ ...memoryRow, title: 'なおした' })
     const res = await DETAIL_PUT(
-      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', { title: 'なおした' }),
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', {
+        expected_updated_at: memoryRow.updatedAt.toISOString(),
+        title: 'なおした',
+      }),
       ctx(MEMORY_ID),
     )
     expect(res.status).toBe(200)
@@ -694,6 +699,7 @@ describe('PUT /v1/memories/{memoryId}', () => {
         id: MEMORY_ID,
         userId: USER_ID,
         deletedAt: null,
+        updatedAt: memoryRow.updatedAt,
       },
       data: { title: 'なおした' },
     })
@@ -703,12 +709,34 @@ describe('PUT /v1/memories/{memoryId}', () => {
     authed()
     mocks.memoryFindFirst.mockResolvedValue(memoryRow)
     mocks.txMemoryUpdateMany.mockResolvedValue({ count: 0 })
+    mocks.txMemoryFindFirst.mockResolvedValue(null)
     const res = await DETAIL_PUT(
-      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', { weather: 'くもり' }),
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', {
+        expected_updated_at: memoryRow.updatedAt.toISOString(),
+        weather: 'くもり',
+      }),
       ctx(MEMORY_ID),
     )
 
     expect(res.status).toBe(404)
+    expect(mocks.txMemoryFindUniqueOrThrow).not.toHaveBeenCalled()
+  })
+
+  it('returns stable 409 when the same field was updated from a newer generation', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+    mocks.txMemoryUpdateMany.mockResolvedValue({ count: 0 })
+    mocks.txMemoryFindFirst.mockResolvedValue({ id: MEMORY_ID })
+    const res = await DETAIL_PUT(
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', {
+        expected_updated_at: memoryRow.updatedAt.toISOString(),
+        title: '古い画面からの変更',
+      }),
+      ctx(MEMORY_ID),
+    )
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ reason: 'memory_update_conflict' })
     expect(mocks.txMemoryFindUniqueOrThrow).not.toHaveBeenCalled()
   })
 
@@ -722,6 +750,7 @@ describe('PUT /v1/memories/{memoryId}', () => {
       const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
       const res = await DETAIL_PUT(
         jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', {
+          expected_updated_at: memoryRow.updatedAt.toISOString(),
           title: '非公開の合成タイトル',
           body: '非公開の合成本文',
           weather: '合成の天気',

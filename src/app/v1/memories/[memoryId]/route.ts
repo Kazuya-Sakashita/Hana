@@ -59,6 +59,7 @@ export async function PUT(request: Request, { params }: Params) {
           id: memory.id,
           userId: user.id,
           deletedAt: null,
+          updatedAt: patch.expectedUpdatedAt,
         },
         data: {
           ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -67,7 +68,14 @@ export async function PUT(request: Request, { params }: Params) {
           ...(patch.isFavorite !== undefined ? { isFavorite: patch.isFavorite } : {}),
         },
       })
-      if (result.count === 0) throw problems.notFound('記録が見つかりません')
+      if (result.count === 0) {
+        const current = await transaction.memory.findFirst({
+          where: { id: memory.id, userId: user.id, deletedAt: null },
+          select: { id: true },
+        })
+        if (current) throw problems.memoryUpdateConflict()
+        throw problems.notFound('記録が見つかりません')
+      }
 
       return transaction.memory.findUniqueOrThrow({
         where: { id: memory.id },

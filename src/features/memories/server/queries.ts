@@ -122,6 +122,7 @@ export interface MemoryDetail extends MemoryWithImages {
 
 export interface EditableMemory {
   id: string
+  updatedAt: Date
   title: string
   body: string | null
   weather: string | null
@@ -141,6 +142,7 @@ export async function fetchEditableMemory(opts: {
     },
     select: {
       id: true,
+      updatedAt: true,
       title: true,
       body: true,
       weather: true,

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { CircleAlert, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -51,12 +52,19 @@ function extractFieldErrors(problem: ProblemDetails): FieldErrors {
 
 interface Props {
   memoryId: string
+  initialUpdatedAt: string
   initialTitle: string
   initialBody: string | null
   initialWeather: string | null
 }
 
-export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWeather }: Props) {
+export function MemoryEditForm({
+  memoryId,
+  initialUpdatedAt,
+  initialTitle,
+  initialBody,
+  initialWeather,
+}: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const updateMemoryMutation = useUpdateMemoryMutation()
@@ -65,6 +73,7 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
   const [weather, setWeather] = useState(initialWeather ?? '')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitMessage, setSubmitMessage] = useState<string | null>(null)
+  const [hasConflict, setHasConflict] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const weatherRef = useRef<HTMLInputElement>(null)
@@ -98,6 +107,7 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
       return next
     })
     setSubmitMessage(null)
+    setHasConflict(false)
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -122,11 +132,11 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
 
     const nextBody = body.length === 0 ? null : body
     const nextWeather = weather.length === 0 ? null : weather
-    const patch: MemoryUpdateRequest = {}
+    const patch: MemoryUpdateRequest = { expected_updated_at: initialUpdatedAt }
     if (trimmedTitle !== initialTitle) patch.title = trimmedTitle
     if (nextBody !== normalizedInitialBody) patch.body = nextBody
     if (nextWeather !== normalizedInitialWeather) patch.weather = nextWeather
-    if (Object.keys(patch).length === 0) return
+    if (Object.keys(patch).length === 1) return
 
     submitInFlightRef.current = true
     try {
@@ -160,8 +170,11 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
         } else if (error.reason === 'not_found') {
           void queryClient.invalidateQueries({ queryKey: memoriesQueryKey })
           setSubmitMessage(quietStateCopy.memoryEdit.unavailable)
-        } else if (error.reason === 'forbidden') {
-          setSubmitMessage(quietStateCopy.memoryEdit.unavailable)
+        } else if (error.reason === 'memory_update_conflict') {
+          setHasConflict(true)
+          setSubmitMessage(
+            '別の画面で、この記録が更新されました。入力はそのままです。最新の内容を確認して、もう一度整えられます。',
+          )
         } else {
           setSubmitMessage(quietStateCopy.memoryEdit.saveFailed)
         }
@@ -195,10 +208,31 @@ export function MemoryEditForm({ memoryId, initialTitle, initialBody, initialWea
             ref={errorSummaryRef}
             role="alert"
             tabIndex={-1}
-            className="border-amber/30 bg-paper-slip text-ink rounded-[var(--radius-paper-slip)] border px-4 py-3 text-sm leading-narrative outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="border-amber bg-amber/15 text-ink rounded-[var(--radius-paper-slip)] border-2 px-4 py-4 shadow-lift outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {summaryMessage}
+            <div className="flex items-start gap-3">
+              <span className="bg-amber flex size-8 shrink-0 items-center justify-center rounded-full text-white">
+                <CircleAlert aria-hidden="true" className="size-5" strokeWidth={2.5} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-amber text-base font-bold">
+                  {hasErrors ? '入力内容を確認してください' : '保存できませんでした'}
+                </p>
+                <p className="mt-1 text-sm leading-narrative">{summaryMessage}</p>
+              </div>
+            </div>
           </div>
+        ) : null}
+        {hasConflict ? (
+          <Button
+            type="button"
+            size="lg"
+            className="w-full font-semibold shadow-lift"
+            onClick={() => router.refresh()}
+          >
+            <RefreshCw aria-hidden="true" className="size-5" />
+            最新の内容を確認する
+          </Button>
         ) : null}
 
         <div className="space-y-2">

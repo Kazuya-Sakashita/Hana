@@ -224,14 +224,18 @@ function AlbumFavoriteButton({ memory, disabled }: { memory: Memory; disabled: b
     const rollback = optimisticUpdateMemoryInLists(queryClient, memory.id, (current) => ({
       ...current,
       is_favorite: next,
-      updated_at: new Date().toISOString(),
     }))
 
     try {
-      await updateMemoryMutation.mutateAsync({
+      const updated = await updateMemoryMutation.mutateAsync({
         memoryId: memory.id,
-        body: { is_favorite: next },
+        body: { expected_updated_at: memory.updated_at, is_favorite: next },
       })
+      optimisticUpdateMemoryInLists(queryClient, memory.id, (current) => ({
+        ...current,
+        is_favorite: updated.is_favorite,
+        updated_at: updated.updated_at,
+      }))
       router.refresh()
     } catch (e) {
       rollback()
