@@ -115,7 +115,7 @@ export async function DELETE(_request: Request, { params }: Params) {
           },
           data: { deletedAt },
         })
-        if (deletedMemory.count === 0) return
+        if (deletedMemory.count === 0) throw problems.notFound('記録が見つかりません')
 
         await transaction.image.updateMany({
           where: {
