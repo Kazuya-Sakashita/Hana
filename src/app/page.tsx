@@ -99,7 +99,9 @@ async function HomeBody({ userId }: { userId: string }) {
       <section aria-labelledby="home-primary-action" className="space-y-5">
         <div className="space-y-4">
           <div>
-            <p className="meta-label">{featuredMemory ? 'おかえりなさい' : 'はじめのページ'}</p>
+            <p className="meta-label break-words [overflow-wrap:anywhere]">
+              {child.name} ちゃんのアルバム
+            </p>
             <h1 id="home-primary-action" className="mt-3 font-serif text-2xl leading-snug">
               {featuredMemory ? (
                 <>
