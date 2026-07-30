@@ -71,6 +71,9 @@ export function MemoryActions({ memoryId, childName, initialIsFavorite, initialU
         router.push(signInPath(`${window.location.pathname}${window.location.search}`))
         return
       }
+      if (isApiProblemError(e) && e.reason === 'memory_update_conflict') {
+        router.refresh()
+      }
       showToast({
         title: quietStateCopy.memoryDetail.favoriteFailedTitle,
         description: quietStateCopy.memoryDetail.favoriteFailedDescription,

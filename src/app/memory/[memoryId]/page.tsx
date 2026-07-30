@@ -163,6 +163,7 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
         ) : null}
 
         <MemoryActions
+          key={memory.updatedAt.toISOString()}
           memoryId={memory.id}
           childName={child?.name ?? ''}
           initialIsFavorite={memory.isFavorite}

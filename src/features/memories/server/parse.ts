@@ -314,19 +314,28 @@ function parseDate(
 }
 
 function parseDateTime(value: unknown, path: string, errors: FieldError[]): Date | null {
+  if (value === undefined || value === null || value === '') {
+    errors.push({ path, reason: 'required', message: '更新世代が必要です' })
+    return null
+  }
   if (
     typeof value !== 'string' ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)
   ) {
-    errors.push({ path, reason: 'required', message: '更新世代が必要です' })
+    errors.push({ path, reason: 'invalid_format', message: 'RFC3339 UTC 形式で指定してください' })
     return null
   }
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime()) || date.toISOString() !== normalizeUtcDateTime(value)) {
     errors.push({ path, reason: 'invalid_format', message: 'RFC3339 UTC 形式で指定してください' })
     return null
   }
   return date
+}
+
+function normalizeUtcDateTime(value: string): string {
+  const [dateTime, fraction = ''] = value.slice(0, -1).split('.')
+  return `${dateTime}.${fraction.padEnd(3, '0')}Z`
 }
 
 function parseIsoDate(value: string): Date | null {

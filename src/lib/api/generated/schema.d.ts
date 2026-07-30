@@ -1015,7 +1015,7 @@ export interface components {
         MemoryUpdateRequest: {
             /**
              * Format: date-time
-             * @description 編集開始時に取得した Memory.updated_at。楽観的排他の更新世代
+             * @description 編集開始時に取得した Memory.updated_at。UTCのRFC3339形式で、楽観的排他の更新世代
              * @example 2026-05-23T11:00:00Z
              */
             expected_updated_at: string;

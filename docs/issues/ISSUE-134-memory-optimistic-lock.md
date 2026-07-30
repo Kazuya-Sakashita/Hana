@@ -31,13 +31,13 @@ created_at: 2026-07-30
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] 更新世代の送受信契約をOpenAPIで定義する
-- [ ] 世代が一致する所有者更新だけ成功する
-- [ ] 古い世代は安定reasonの409 ProblemDetailsを返す
-- [ ] 競合時も編集フォームの入力を保持する
-- [ ] 最新内容を確認して再編集できる復帰導線がある
-- [ ] 同一項目の同時更新を再現する統合テストがある
-- [ ] 記録本文などのPIIをログ・競合証跡へ残さない
+- [x] 更新世代の送受信契約をOpenAPIで定義する
+- [x] 世代が一致する所有者更新だけ成功する
+- [x] 古い世代は安定reasonの409 ProblemDetailsを返す
+- [x] 競合時も編集フォームの入力を保持する
+- [x] 最新内容を確認して再編集できる復帰導線がある
+- [x] 同一項目の同時更新を再現する統合テストがある
+- [x] 記録本文などのPIIをログ・競合証跡へ残さない
 
 ## セキュリティ・プライバシー考慮
 
@@ -46,3 +46,10 @@ created_at: 2026-07-30
 ## Review gates
 
 Product UX / Backend / Reliability レビュー、`pnpm pr:gate`、`git diff --check`。
+
+## 検証結果
+
+- `pnpm openapi:lint`（既存警告のみ）
+- `pnpm openapi:gen`
+- `pnpm pr:gate`（129 files / 1007 tests）
+- `git diff --check`

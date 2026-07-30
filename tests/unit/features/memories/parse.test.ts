@@ -125,6 +125,17 @@ describe('parseMemoryUpdate', () => {
     expectValidationError(() => parseMemoryUpdate({}), 'body.expected_updated_at')
   })
 
+  it('rejects a malformed or nonexistent update generation', () => {
+    expectValidationError(
+      () => parseMemoryUpdate({ expected_updated_at: '2026-07-30T00:00:00+09:00' }),
+      'body.expected_updated_at',
+    )
+    expectValidationError(
+      () => parseMemoryUpdate({ expected_updated_at: '2026-02-30T00:00:00.000Z' }),
+      'body.expected_updated_at',
+    )
+  })
+
   it('passes through individual fields', () => {
     const expected = new Date(expectedUpdatedAt)
     expect(
