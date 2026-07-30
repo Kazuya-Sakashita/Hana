@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { CircleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -207,9 +208,21 @@ export function MemoryEditForm({
             ref={errorSummaryRef}
             role="alert"
             tabIndex={-1}
-            className="border-amber/30 bg-paper-slip text-ink rounded-[var(--radius-paper-slip)] border px-4 py-3 text-sm leading-narrative outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="border-amber bg-amber/10 text-ink rounded-[var(--radius-paper-slip)] border-2 px-4 py-4 shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {summaryMessage}
+            <div className="flex items-start gap-3">
+              <CircleAlert
+                aria-hidden="true"
+                className="text-amber mt-0.5 size-5 shrink-0"
+                strokeWidth={2}
+              />
+              <div className="min-w-0">
+                <p className="font-semibold">
+                  {hasErrors ? '入力内容を確認してください' : '保存できませんでした'}
+                </p>
+                <p className="mt-1 text-sm leading-narrative">{summaryMessage}</p>
+              </div>
+            </div>
           </div>
         ) : null}
         {hasConflict ? (
