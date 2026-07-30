@@ -55,20 +55,31 @@ export async function PUT(request: Request, { params }: Params) {
     const raw = await readJsonBody(request)
     const patch = parseMemoryUpdate(raw)
 
-    const updated = await prisma.memory.update({
-      where: { id: memory.id },
-      data: {
-        ...(patch.title !== undefined ? { title: patch.title } : {}),
-        ...(patch.body !== undefined ? { body: patch.body } : {}),
-        ...(patch.weather !== undefined ? { weather: patch.weather } : {}),
-        ...(patch.isFavorite !== undefined ? { isFavorite: patch.isFavorite } : {}),
-      },
-      include: {
-        images: {
-          where: { deletedAt: null },
-          select: { id: true, createdAt: true, memoryPosition: true },
+    const updated = await prisma.$transaction(async (transaction) => {
+      const result = await transaction.memory.updateMany({
+        where: {
+          id: memory.id,
+          userId: user.id,
+          deletedAt: null,
         },
-      },
+        data: {
+          ...(patch.title !== undefined ? { title: patch.title } : {}),
+          ...(patch.body !== undefined ? { body: patch.body } : {}),
+          ...(patch.weather !== undefined ? { weather: patch.weather } : {}),
+          ...(patch.isFavorite !== undefined ? { isFavorite: patch.isFavorite } : {}),
+        },
+      })
+      if (result.count === 0) throw problems.notFound('記録が見つかりません')
+
+      return transaction.memory.findUniqueOrThrow({
+        where: { id: memory.id },
+        include: {
+          images: {
+            where: { deletedAt: null },
+            select: { id: true, createdAt: true, memoryPosition: true },
+          },
+        },
+      })
     })
     return NextResponse.json(toMemoryResponse(updated))
   } catch (e) {

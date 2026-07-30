@@ -9,10 +9,14 @@ import { cn } from '@/lib/utils'
 // Quiet Heirloom: Persistent bottom tab bar with 3 destinations + 中央記録ボタン
 // 表示しないページ (集中フロー / 認証画面)
 const HIDDEN_PATHS = ['/sign-in', '/auth/callback', '/onboarding', '/record', '/privacy', '/lp']
+const MEMORY_EDIT_PATH = /^\/memory\/[^/]+\/edit(?:\/|$)/
 
 function shouldHide(pathname: string | null): boolean {
   if (!pathname) return false
-  return HIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  return (
+    MEMORY_EDIT_PATH.test(pathname) ||
+    HIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  )
 }
 
 interface TabDef {

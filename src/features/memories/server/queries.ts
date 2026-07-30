@@ -120,6 +120,34 @@ export interface MemoryDetail extends MemoryWithImages {
   imagesWithPreviews: MemoryDetailImage[]
 }
 
+export interface EditableMemory {
+  id: string
+  title: string
+  body: string | null
+  weather: string | null
+}
+
+export async function fetchEditableMemory(opts: {
+  memoryId: string
+  userId: string
+}): Promise<EditableMemory | null> {
+  if (!isUuid(opts.memoryId)) return null
+
+  return prisma.memory.findFirst({
+    where: {
+      id: opts.memoryId,
+      userId: opts.userId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      weather: true,
+    },
+  })
+}
+
 /**
  * 単一の memory を取得し、 各画像の preview signed URL (1024px) を並列発行する。
  * - memoryId が不正 / 存在しない / 他ユーザー所有 のいずれも `null` を返す

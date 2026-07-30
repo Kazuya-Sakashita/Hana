@@ -2,10 +2,11 @@ import Image from 'next/image'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { CheckCircle2, ChevronLeft } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, PencilLine } from 'lucide-react'
 import { MemoryActions } from '@/components/memory-actions'
 import { QuietIcon } from '@/components/product/icons'
 import { PaperSlip } from '@/components/product/surfaces'
+import { Button } from '@/components/ui/button'
 import { computeAge, formatAgeLabel } from '@/lib/age'
 import { getCurrentUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
@@ -21,7 +22,7 @@ export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ memoryId: string }>
-  searchParams: Promise<{ saved?: string | string[] }>
+  searchParams: Promise<{ saved?: string | string[]; updated?: string | string[] }>
 }
 
 export default async function MemoryDetailPage({ params, searchParams }: PageProps) {
@@ -31,12 +32,15 @@ export default async function MemoryDetailPage({ params, searchParams }: PagePro
     redirect(signInPath(`/memory/${encodeURIComponent(memoryId)}${savedQuery}`))
   }
   const showSavedMoment = query.saved === '1'
+  const showUpdatedMoment = query.updated === '1'
 
   return (
     <main className="bg-canvas min-h-dvh px-4 pb-28 pt-4">
       <div className="relative mx-auto w-full max-w-md">
         {showSavedMoment ? (
           <SavedMemoryNotice />
+        ) : showUpdatedMoment ? (
+          <UpdatedMemoryNotice />
         ) : (
           <Link
             href="/album"
@@ -106,6 +110,14 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
             {memory.body}
           </p>
         ) : null}
+        <div className="mt-5">
+          <Button asChild variant="ghost" size="sm" className="-ml-4">
+            <Link href={`/memory/${encodeURIComponent(memory.id)}/edit`}>
+              <PencilLine aria-hidden="true" />
+              ことばと天気を なおす
+            </Link>
+          </Button>
+        </div>
 
         {additionalImages.length > 0 ? (
           <section aria-labelledby="memory-additional-photos" className="mt-8">
@@ -151,6 +163,37 @@ async function MemoryDetailContent({ memoryId, userId }: { memoryId: string; use
         />
       </article>
     </>
+  )
+}
+
+function UpdatedMemoryNotice() {
+  return (
+    <section aria-labelledby="memory-updated-title" className="mb-4 px-1 pt-1">
+      <Link
+        href="/album"
+        prefetch={true}
+        className="tap-target text-ink-secondary -ml-2 mb-3 inline-flex items-center gap-1 rounded-full px-2 py-1 font-serif text-sm"
+      >
+        <ChevronLeft className="size-4" aria-hidden="true" />
+        アルバムへ
+      </Link>
+      <PaperSlip
+        data-testid="memory-updated-notice"
+        role="status"
+        aria-live="polite"
+        className="text-ink-secondary flex items-start gap-3 px-4 py-3 text-left"
+      >
+        <QuietIcon icon={CheckCircle2} tone="primary" className="mt-0.5 shrink-0" />
+        <div>
+          <p id="memory-updated-title" className="text-ink font-serif text-lg">
+            {quietStateCopy.memoryEdit.updatedTitle}
+          </p>
+          <p className="text-ink-secondary leading-narrative mt-2 text-sm">
+            {quietStateCopy.memoryEdit.updatedDescription}
+          </p>
+        </div>
+      </PaperSlip>
+    </section>
   )
 }
 

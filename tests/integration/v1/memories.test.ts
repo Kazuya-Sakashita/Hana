@@ -649,7 +649,8 @@ describe('PUT /v1/memories/{memoryId}', () => {
   it('returns 200 with updated title only', async () => {
     authed()
     mocks.memoryFindFirst.mockResolvedValue(memoryRow)
-    mocks.memoryUpdate.mockResolvedValue({ ...memoryRow, title: 'なおした' })
+    mocks.txMemoryUpdateMany.mockResolvedValue({ count: 1 })
+    mocks.txMemoryFindUniqueOrThrow.mockResolvedValue({ ...memoryRow, title: 'なおした' })
     const res = await DETAIL_PUT(
       jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', { title: 'なおした' }),
       ctx(MEMORY_ID),
@@ -657,16 +658,51 @@ describe('PUT /v1/memories/{memoryId}', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as { title: string }
     expect(body.title).toBe('なおした')
+    expect(mocks.txMemoryUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: MEMORY_ID,
+        userId: USER_ID,
+        deletedAt: null,
+      },
+      data: { title: 'なおした' },
+    })
   })
 
-  it('returns 403 for foreign memory', async () => {
+  it('returns 404 without reading an updated row when deletion wins the race', async () => {
+    authed()
+    mocks.memoryFindFirst.mockResolvedValue(memoryRow)
+    mocks.txMemoryUpdateMany.mockResolvedValue({ count: 0 })
+    const res = await DETAIL_PUT(
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', { weather: 'くもり' }),
+      ctx(MEMORY_ID),
+    )
+
+    expect(res.status).toBe(404)
+    expect(mocks.txMemoryFindUniqueOrThrow).not.toHaveBeenCalled()
+  })
+
+  it('rejects a foreign update before writing and does not log private fields', async () => {
     authed()
     mocks.memoryFindFirst.mockResolvedValue({ ...memoryRow, userId: OTHER_USER_ID })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
     const res = await DETAIL_PUT(
-      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', { title: 'なおした' }),
+      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', {
+        title: '非公開の合成タイトル',
+        body: '非公開の合成本文',
+        weather: '合成の天気',
+      }),
       ctx(MEMORY_ID),
     )
     expect(res.status).toBe(403)
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(consoleError).not.toHaveBeenCalled()
+    expect(consoleWarn).not.toHaveBeenCalled()
+    expect(consoleInfo).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+    consoleWarn.mockRestore()
+    consoleInfo.mockRestore()
   })
 })
 
