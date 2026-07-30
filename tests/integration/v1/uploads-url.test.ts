@@ -360,7 +360,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     const res = await call(IMG_ID, 'preview')
     expect(res.status).toBe(500)
     expect(spy).toHaveBeenCalledWith('createSignedUrl failed (both variant and original)', {
-      reason: 'storage_sign_failed',
+      reason: 'storage_sign_fallback_failed',
     })
     expect(JSON.stringify(spy.mock.calls)).not.toContain('SENSITIVE_STORAGE_ERROR_SENTINEL')
 

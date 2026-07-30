@@ -4,6 +4,7 @@ import { toProblemResponse } from '@/server/api/problem-response'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { generateStorageKey } from '@/features/uploads/server/storage-key'
 import { parsePresignedUploadRequest, readJsonBody } from '@/features/uploads/server/parse'
+import { logStorageError } from '@/features/uploads/server/storage-error-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,10 +25,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storageKey)
 
     if (error || !data) {
-      // 詳細はサーバログのみ。クライアントには 500 (internal_server_error) を返す
-      console.error('createSignedUploadUrl failed', {
-        reason: error?.message ?? 'no_data',
-      })
+      logStorageError('signed_upload_failed')
       throw new Error('Storage signed upload URL failed')
     }
 

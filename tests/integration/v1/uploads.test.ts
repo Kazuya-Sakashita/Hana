@@ -186,8 +186,12 @@ describe('POST /v1/uploads/presigned-url', () => {
     authed()
     mocks.createSignedUploadUrl.mockResolvedValue({
       data: null,
-      error: { message: 'bucket not found' },
+      error: {
+        message:
+          'SENSITIVE_STORAGE_ERROR_SENTINEL https://example.test/private?token=secret uploads/private/key',
+      },
     })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const res = await PRESIGNED_POST(
       jsonRequest('/v1/uploads/presigned-url', {
         file_name: 'a.jpg',
@@ -197,6 +201,12 @@ describe('POST /v1/uploads/presigned-url', () => {
     expect(res.status).toBe(500)
     const body = (await res.json()) as { reason: string }
     expect(body.reason).toBe('internal_server_error')
+    expect(errSpy).toHaveBeenCalledWith('createSignedUploadUrl failed', {
+      reason: 'signed_upload_failed',
+    })
+    expect(JSON.stringify(errSpy.mock.calls)).not.toContain('SENSITIVE_STORAGE_ERROR_SENTINEL')
+    expect(JSON.stringify(errSpy.mock.calls)).not.toContain('uploads/private/key')
+    errSpy.mockRestore()
   })
 })
 
