@@ -4,7 +4,7 @@ import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, ImagePlus } from 'lucide-react'
+import { Check, ImagePlus, PenLine } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { QuietIcon } from '@/components/product/icons'
 import {
@@ -1574,8 +1574,9 @@ function AiConsentDialog({
             size="lg"
             onClick={onDecline}
             disabled={pending}
-            className="border-ink-secondary/60 bg-paper-slip w-full border-2 shadow-soft hover:border-ink-secondary"
+            className="border-ink bg-warm text-ink w-full border-2 shadow-lift hover:bg-photo-mat active:bg-photo-mat"
           >
+            <PenLine aria-hidden="true" />
             AI を つかわないで、自分で書く
           </Button>
           <p className="text-ink-tertiary text-center text-xs">

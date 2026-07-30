@@ -32,7 +32,8 @@ describe('record semantic steps', () => {
       "const draftComplete = aiStatus === 'done' || (aiStatus === 'idle' && canSubmit)",
     )
     expect(source).toContain('variant="outline"')
-    expect(source).toContain('border-ink-secondary/60 bg-paper-slip w-full border-2')
+    expect(source).toContain('border-ink bg-warm text-ink w-full border-2 shadow-lift')
+    expect(source).toContain('<PenLine aria-hidden="true" />')
     expect(source).toContain('AI を つかわないで、自分で書く')
   })
 })
