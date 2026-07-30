@@ -55,6 +55,7 @@ const imageRow = {
   id: IMG_ID,
   userId: USER_ID,
   storageKey: 'uploads/abc/202605/img.jpg',
+  metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
 }
 
 function authed() {
@@ -125,7 +126,7 @@ describe('GET /v1/uploads/[imageId]/url', () => {
         deletedAt: null,
         OR: [{ memoryId: null }, { memory: { is: { userId: USER_ID, deletedAt: null } } }],
       },
-      select: { id: true, userId: true, storageKey: true },
+      select: { id: true, userId: true, storageKey: true, metadataSanitizedAt: true },
     })
     expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
     expect(mocks.createSignedUrl).not.toHaveBeenCalled()
@@ -166,6 +167,31 @@ describe('GET /v1/uploads/[imageId]/url', () => {
       maxWait: 3_000,
       timeout: 10_000,
     })
+  })
+
+  it('returns 409 without signing an unsanitized original', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue({ ...imageRow, metadataSanitizedAt: null })
+
+    const res = await call(IMG_ID, 'original')
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ reason: 'image_sanitization_pending' })
+    expect(mocks.createSignedUrl).not.toHaveBeenCalled()
+  })
+
+  it('continues to sign a sanitized variant while the original is pending', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue({ ...imageRow, metadataSanitizedAt: null })
+    mocks.createSignedUrl.mockResolvedValue({
+      data: { signedUrl: 'https://example.com/signed-preview' },
+      error: null,
+    })
+
+    const res = await call(IMG_ID, 'preview')
+
+    expect(res.status).toBe(200)
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the image lock transaction open until signing finishes', async () => {

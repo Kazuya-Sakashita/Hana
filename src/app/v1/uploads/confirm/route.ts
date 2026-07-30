@@ -19,6 +19,7 @@ import {
 import {
   assertUploadedImageSize,
   readUploadedImageStream,
+  sanitizeUploadedImage,
   type VerifiedUploadedImage,
   verifyUploadedImage,
 } from '@/features/uploads/server/verify-uploaded-image'
@@ -124,14 +125,26 @@ async function prepareUploadedImage(
     storageInfo.contentType ?? '',
     expectedContentType,
   )
+  const sanitized = await sanitizeUploadedImage(verified)
+  let replaceResult: Awaited<ReturnType<typeof storage.update>>
+  try {
+    replaceResult = await storage.update(storageKey, sanitized.buffer, {
+      contentType: sanitized.contentType,
+      cacheControl: '300',
+      upsert: true,
+    })
+  } catch {
+    throw problems.storageUnavailable()
+  }
+  if (replaceResult.error) throwStorageProblem(replaceResult.error)
 
   try {
-    await generateAndUploadVariants(storageKey, verified.buffer)
+    await generateAndUploadVariants(storageKey, sanitized.buffer)
   } catch {
     logStorageError('variant_generation_failed')
   }
 
-  return verified
+  return sanitized
 }
 
 async function prepareUploadedImageOnce(
@@ -192,6 +205,20 @@ export async function POST(request: Request) {
       if (existingImage.userId !== user.id || existingImage.deletedAt) {
         throw problems.notFound('画像が見つかりません')
       }
+      if (existingImage.metadataSanitizedAt === null) {
+        const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
+        const repaired = await prisma.image.update({
+          where: { id: existingImage.id },
+          data: {
+            contentType: verified.contentType,
+            width: verified.width,
+            height: verified.height,
+            fileSize: verified.fileSize,
+            metadataSanitizedAt: new Date(),
+          },
+        })
+        return NextResponse.json(toImageResponse(repaired), { status: 200 })
+      }
       return NextResponse.json(toImageResponse(existingImage), { status: 200 })
     }
 
@@ -206,6 +233,7 @@ export async function POST(request: Request) {
           width: verified.width,
           height: verified.height,
           fileSize: verified.fileSize,
+          metadataSanitizedAt: new Date(),
         },
       })
       return NextResponse.json(toImageResponse(image), { status: 201 })

@@ -222,6 +222,10 @@ export interface paths {
          *     - `preview`: width=1024 / quality=80 (詳細表示用)
          *     - `original`: 変換なし (default)
          *
+         *     サーバー側のメタデータ除去が完了していない既存画像について、
+         *     `original` は 409 `image_sanitization_pending` とし signed URL を発行しない。
+         *     再エンコード済みの `thumbnail` / `preview` は引き続き取得できる。
+         *
          *     レスポンスには `Cache-Control: private, max-age=300` を設定 (ADR-0012)。
          *     クライアントは presigned URL の TTL 内であれば再取得を避けて良い。
          */
@@ -1595,6 +1599,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };

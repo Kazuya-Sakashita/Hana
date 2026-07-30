@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import sharp from 'sharp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MAX_UPLOAD_FILE_SIZE } from '@/features/uploads/server/image-limits'
 import { generateStorageKey, storageKeyPrefixForUser } from '@/features/uploads/server/storage-key'
@@ -10,13 +11,16 @@ const mocks = vi.hoisted(() => ({
   profileCreate: vi.fn(),
   imageFindUnique: vi.fn(),
   imageCreate: vi.fn(),
+  imageUpdate: vi.fn(),
   createAdminClient: vi.fn(),
   createSignedUploadUrl: vi.fn(),
   storageInfo: vi.fn(),
   storageDownload: vi.fn(),
   storageDownloadAsStream: vi.fn(),
   storageUpload: vi.fn(),
+  storageUpdate: vi.fn(),
   verifyUploadedImage: vi.fn(),
+  sanitizeUploadedImage: vi.fn(),
   thumbnailVariant: vi.fn(),
   previewVariant: vi.fn(),
 }))
@@ -40,6 +44,7 @@ vi.mock('@/lib/supabase/admin', () => ({
             return { asStream: mocks.storageDownloadAsStream }
           },
           upload: mocks.storageUpload,
+          update: mocks.storageUpdate,
         }),
       },
     }
@@ -55,12 +60,17 @@ vi.mock('@/features/uploads/server/variants', () => ({
 vi.mock('@/features/uploads/server/verify-uploaded-image', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/uploads/server/verify-uploaded-image')>()),
   verifyUploadedImage: mocks.verifyUploadedImage,
+  sanitizeUploadedImage: mocks.sanitizeUploadedImage,
 }))
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
     profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
-    image: { findUnique: mocks.imageFindUnique, create: mocks.imageCreate },
+    image: {
+      findUnique: mocks.imageFindUnique,
+      create: mocks.imageCreate,
+      update: mocks.imageUpdate,
+    },
   },
 }))
 
@@ -270,6 +280,14 @@ describe('POST /v1/uploads/confirm', () => {
       width: 800,
       height: 600,
       fileSize: 10000,
+      metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
+    })
+    mocks.sanitizeUploadedImage.mockResolvedValue({
+      buffer: verifiedBuffer,
+      contentType,
+      width: 800,
+      height: 600,
+      fileSize: verifiedBuffer.length,
     })
     mocks.thumbnailVariant.mockResolvedValue({
       buffer: Buffer.from('fake-thumb'),
@@ -280,6 +298,7 @@ describe('POST /v1/uploads/confirm', () => {
       contentType: 'image/webp',
     })
     mocks.storageUpload.mockResolvedValue({ data: { path: 'ok' }, error: null })
+    mocks.storageUpdate.mockResolvedValue({ data: { path: 'ok' }, error: null })
     return { storageBuffer, verifiedBuffer }
   }
 
@@ -295,6 +314,7 @@ describe('POST /v1/uploads/confirm', () => {
       width: 800,
       height: 600,
       fileSize: 10000,
+      metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
       createdAt: new Date('2026-05-23T10:00:00Z'),
       updatedAt: new Date('2026-05-23T10:00:00Z'),
       deletedAt: null,
@@ -411,6 +431,7 @@ describe('POST /v1/uploads/confirm', () => {
     expect(mocks.storageInfo).toHaveBeenCalledTimes(1)
     expect(mocks.storageDownload).toHaveBeenCalledTimes(1)
     expect(mocks.verifyUploadedImage).toHaveBeenCalledTimes(1)
+    expect(mocks.sanitizeUploadedImage).toHaveBeenCalledTimes(1)
     expect(mocks.thumbnailVariant).toHaveBeenCalledTimes(1)
     expect(mocks.previewVariant).toHaveBeenCalledTimes(1)
     expect(mocks.imageCreate).toHaveBeenCalledTimes(2)
@@ -418,7 +439,7 @@ describe('POST /v1/uploads/confirm', () => {
 
   it('returns 201 with Image shape (no storage_key leak)', async () => {
     authed()
-    setupVariantMocks('image/png')
+    const { verifiedBuffer } = setupVariantMocks('image/png')
     const ownKey = generateStorageKey(USER_ID, 'image/png')
     mocks.imageCreate.mockResolvedValue({
       id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
@@ -462,9 +483,46 @@ describe('POST /v1/uploads/confirm', () => {
         contentType: 'image/png',
         width: 800,
         height: 600,
-        fileSize: 10000,
+        fileSize: verifiedBuffer.length,
+        metadataSanitizedAt: expect.any(Date),
       },
     })
+  })
+
+  it('sanitizes and marks an existing unsanitized Image on confirm retry', async () => {
+    authed()
+    setupVariantMocks()
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    const existingImage = {
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      metadataSanitizedAt: null,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    }
+    mocks.imageFindUnique.mockResolvedValue(existingImage)
+    mocks.imageUpdate.mockImplementation(async ({ data }) => ({ ...existingImage, ...data }))
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(mocks.storageUpdate).toHaveBeenCalledTimes(1)
+    expect(mocks.imageUpdate).toHaveBeenCalledWith({
+      where: { id: existingImage.id },
+      data: expect.objectContaining({ metadataSanitizedAt: expect.any(Date) }),
+    })
+    expect(mocks.imageCreate).not.toHaveBeenCalled()
   })
 
   it('uploads _thumb.webp and _preview.webp variants (ISSUE-031)', async () => {
@@ -508,6 +566,18 @@ describe('POST /v1/uploads/confirm', () => {
       'image/jpeg',
       'image/jpeg',
     )
+    expect(mocks.sanitizeUploadedImage).toHaveBeenCalledWith(
+      expect.objectContaining({ buffer: verifiedBuffer }),
+    )
+    expect(mocks.storageUpdate).toHaveBeenCalledWith(
+      ownKey,
+      verifiedBuffer,
+      expect.objectContaining({
+        contentType: 'image/jpeg',
+        cacheControl: '300',
+        upsert: true,
+      }),
+    )
     expect(mocks.thumbnailVariant).toHaveBeenCalledWith(verifiedBuffer)
     expect(mocks.previewVariant).toHaveBeenCalledWith(verifiedBuffer)
     expect(mocks.thumbnailVariant).toHaveBeenCalledTimes(1)
@@ -516,11 +586,104 @@ describe('POST /v1/uploads/confirm', () => {
       mocks.previewVariant.mock.invocationCallOrder[0] as number,
     )
     expect(mocks.createAdminClient).toHaveBeenCalledTimes(2)
+    expect(mocks.storageUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.thumbnailVariant.mock.invocationCallOrder[0] as number,
+    )
 
     const uploadCalls = mocks.storageUpload.mock.calls.map((c) => c[0] as string)
     expect(uploadCalls).toHaveLength(2)
     expect(uploadCalls.some((k) => k.endsWith('_thumb.webp'))).toBe(true)
     expect(uploadCalls.some((k) => k.endsWith('_preview.webp'))).toBe(true)
+  })
+
+  it('does not create an Image when sanitized original replacement fails', async () => {
+    authed()
+    setupVariantMocks()
+    mocks.storageUpdate.mockResolvedValue({
+      data: null,
+      error: { status: 503, statusCode: '503', message: 'sensitive replacement detail' },
+    })
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+      }),
+    )
+
+    expect(res.status).toBe(503)
+    expect(await res.json()).toMatchObject({ reason: 'storage_unavailable' })
+    expect(mocks.imageCreate).not.toHaveBeenCalled()
+    expect(mocks.thumbnailVariant).not.toHaveBeenCalled()
+    expect(mocks.previewVariant).not.toHaveBeenCalled()
+  })
+
+  it('replaces the Storage original with metadata-free bytes before creating an Image', async () => {
+    authed()
+    const source = await sharp({
+      create: {
+        width: 6,
+        height: 4,
+        channels: 3,
+        background: { r: 120, g: 140, b: 160 },
+      },
+    })
+      .jpeg()
+      .withMetadata({
+        orientation: 6,
+        exif: {
+          IFD0: { Make: 'synthetic-camera' },
+          IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '1/1 2/1 3/1' },
+        },
+      })
+      .toBuffer()
+    const actual = await vi.importActual<
+      typeof import('@/features/uploads/server/verify-uploaded-image')
+    >('@/features/uploads/server/verify-uploaded-image')
+    mocks.storageInfo.mockResolvedValue({
+      data: { size: source.length, contentType: 'image/jpeg' },
+      error: null,
+    })
+    mocks.storageDownloadAsStream.mockResolvedValue({
+      data: streamFrom(source),
+      error: null,
+    })
+    mocks.verifyUploadedImage.mockImplementation(actual.verifyUploadedImage)
+    mocks.sanitizeUploadedImage.mockImplementation(actual.sanitizeUploadedImage)
+    mocks.thumbnailVariant.mockResolvedValue({
+      buffer: Buffer.from('fake-thumb'),
+      contentType: 'image/webp',
+    })
+    mocks.previewVariant.mockResolvedValue({
+      buffer: Buffer.from('fake-preview'),
+      contentType: 'image/webp',
+    })
+    mocks.storageUpdate.mockResolvedValue({ data: { path: 'ok' }, error: null })
+    mocks.storageUpload.mockResolvedValue({ data: { path: 'ok' }, error: null })
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    mocks.imageCreate.mockImplementation(async ({ data }) => ({
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      memoryId: null,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+      ...data,
+    }))
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+      }),
+    )
+
+    expect(res.status).toBe(201)
+    const storedOriginal = mocks.storageUpdate.mock.calls[0]?.[1] as Buffer
+    const storedMetadata = await sharp(storedOriginal).metadata()
+    expect(storedMetadata.width).toBe(4)
+    expect(storedMetadata.height).toBe(6)
+    expect(storedMetadata.exif).toBeUndefined()
+    expect(storedMetadata.orientation).toBeUndefined()
+    expect(storedOriginal).not.toEqual(source)
   })
 
   it('returns 404 without creating an Image when the Storage object is missing', async () => {

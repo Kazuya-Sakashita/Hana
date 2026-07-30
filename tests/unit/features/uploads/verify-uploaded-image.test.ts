@@ -7,6 +7,8 @@ import {
   assertUploadedImageSize,
   detectImageMime,
   readUploadedImageStream,
+  sanitizeUploadedImage,
+  sanitizedImagePolicy,
   verifyUploadedImage,
 } from '@/features/uploads/server/verify-uploaded-image'
 
@@ -260,5 +262,129 @@ describe('verifyUploadedImage', () => {
       verifyUploadedImage(apng, 'image/png', 'image/png'),
       'animated_image_not_supported',
     )
+  })
+})
+
+describe('sanitizeUploadedImage', () => {
+  it('does not re-encode an already metadata-free JPEG on retry', async () => {
+    const source = await sharp({
+      create: {
+        width: 4,
+        height: 6,
+        channels: 3,
+        background: { r: 120, g: 140, b: 160 },
+      },
+    })
+      .jpeg({ quality: 90 })
+      .toBuffer()
+    const verified = await verifyUploadedImage(source, 'image/jpeg', 'image/jpeg')
+
+    const first = await sanitizeUploadedImage(verified)
+    const second = await sanitizeUploadedImage(first)
+
+    expect(first.buffer).toEqual(source)
+    expect(second.buffer).toEqual(first.buffer)
+  })
+
+  it('removes a JPEG COM segment that Sharp metadata does not expose', async () => {
+    const source = await syntheticImage('jpeg')
+    const privateComment = Buffer.from('synthetic-device-and-location')
+    const commentSegment = Buffer.alloc(privateComment.length + 4)
+    commentSegment[0] = 0xff
+    commentSegment[1] = 0xfe
+    commentSegment.writeUInt16BE(privateComment.length + 2, 2)
+    privateComment.copy(commentSegment, 4)
+    const withComment = Buffer.concat([source.subarray(0, 2), commentSegment, source.subarray(2)])
+    const verified = await verifyUploadedImage(withComment, 'image/jpeg', 'image/jpeg')
+
+    const sanitized = await sanitizeUploadedImage(verified)
+
+    expect(sanitized.buffer).not.toEqual(withComment)
+    expect(sanitized.buffer.includes(privateComment)).toBe(false)
+  })
+
+  it('removes an untrusted JPEG APP0 payload instead of treating it as JFIF', async () => {
+    const source = await syntheticImage('jpeg')
+    const privatePayload = Buffer.from('PRIVATE synthetic-device GPS timestamp')
+    const app0Segment = Buffer.alloc(privatePayload.length + 4)
+    app0Segment[0] = 0xff
+    app0Segment[1] = 0xe0
+    app0Segment.writeUInt16BE(privatePayload.length + 2, 2)
+    privatePayload.copy(app0Segment, 4)
+    const withApp0 = Buffer.concat([source.subarray(0, 2), app0Segment, source.subarray(2)])
+    const verified = await verifyUploadedImage(withApp0, 'image/jpeg', 'image/jpeg')
+
+    const sanitized = await sanitizeUploadedImage(verified)
+
+    expect(sanitized.buffer).not.toEqual(withApp0)
+    expect(sanitized.buffer.includes(privatePayload)).toBe(false)
+  })
+
+  it.each([
+    ['jpeg', 'image/jpeg'],
+    ['png', 'image/png'],
+    ['webp', 'image/webp'],
+  ] as const)('re-encodes %s without embedded metadata', async (format, contentType) => {
+    const source = await sharp({
+      create: {
+        width: 6,
+        height: 4,
+        channels: 3,
+        background: { r: 120, g: 140, b: 160 },
+      },
+    })
+      [format]()
+      .withMetadata({
+        orientation: 6,
+        exif: {
+          IFD0: { Make: 'synthetic-camera' },
+          IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '1/1 2/1 3/1' },
+        },
+      })
+      .toBuffer()
+    const sourceMetadata = await sharp(source).metadata()
+    expect(sourceMetadata.exif).toBeDefined()
+    const verified = await verifyUploadedImage(source, contentType, contentType)
+
+    const sanitized = await sanitizeUploadedImage(verified)
+    const metadata = await sharp(sanitized.buffer).metadata()
+
+    expect(sanitized.contentType).toBe(contentType)
+    expect(sanitized.width).toBe(4)
+    expect(sanitized.height).toBe(6)
+    expect(sanitized.fileSize).toBe(sanitized.buffer.length)
+    expect(metadata.width).toBe(4)
+    expect(metadata.height).toBe(6)
+    expect(metadata.orientation).toBeUndefined()
+    expect(metadata.exif).toBeUndefined()
+    expect(metadata.xmp).toBeUndefined()
+    expect(metadata.iptc).toBeUndefined()
+  })
+
+  it('documents the original re-encoding quality and compression limits', () => {
+    expect(sanitizedImagePolicy).toEqual({
+      jpegQuality: 90,
+      webpQuality: 90,
+      pngCompressionLevel: 9,
+    })
+  })
+
+  it('rejects a sanitized buffer over the upload size limit', async () => {
+    const source = await sharp(await syntheticImage('png'))
+      .withMetadata()
+      .png()
+      .toBuffer()
+    const verified = {
+      buffer: source,
+      contentType: 'image/png' as const,
+      width: 4,
+      height: 3,
+      fileSize: 100,
+    }
+    const sharpToBuffer = vi.spyOn(sharp.prototype, 'toBuffer')
+    sharpToBuffer.mockResolvedValueOnce(Buffer.alloc(MAX_UPLOAD_FILE_SIZE + 1))
+
+    await expectValidationReason(sanitizeUploadedImage(verified), 'file_too_large')
+    sharpToBuffer.mockRestore()
   })
 })

@@ -6,6 +6,10 @@ import {
   MAX_UPLOAD_FILE_SIZE,
   MAX_UPLOAD_PIXELS,
 } from '@/features/uploads/server/image-limits'
+import {
+  sanitizeExistingImageBuffer,
+  sanitizedImagePolicy,
+} from '@/features/uploads/server/image-sanitizer'
 import { isApiProblemError } from '@/lib/api/error'
 import { problems } from '@/server/api/problems'
 
@@ -222,3 +226,34 @@ export async function verifyUploadedImage(
     throw validationProblem('invalid_image_content', '画像データを読み取れません')
   }
 }
+
+export async function sanitizeUploadedImage(
+  verified: VerifiedUploadedImage,
+): Promise<VerifiedUploadedImage> {
+  if (verified.contentType === 'image/heic') {
+    throw validationProblem(
+      'unsupported_media_type',
+      'HEICはJPEGへ再エンコードしてアップロードしてください',
+    )
+  }
+  let sanitized: Awaited<ReturnType<typeof sanitizeExistingImageBuffer>>
+  try {
+    sanitized = await sanitizeExistingImageBuffer(verified.buffer, verified.contentType)
+  } catch (error) {
+    if (error instanceof Error && error.message === 'sanitized_image_too_large') {
+      throw validationProblem('file_too_large', '画像は10 MiB以下にしてください')
+    }
+    throw validationProblem('invalid_image_content', '画像データを読み取れません')
+  }
+  assertUploadedImageSize(sanitized.buffer.length)
+
+  return {
+    ...verified,
+    buffer: sanitized.buffer,
+    width: sanitized.width,
+    height: sanitized.height,
+    fileSize: sanitized.buffer.length,
+  }
+}
+
+export { sanitizedImagePolicy }
