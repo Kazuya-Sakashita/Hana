@@ -14,6 +14,7 @@ import { computeAge, formatAgeLabel } from '@/lib/age'
 import { imageUrlCache } from '@/lib/cache/image-url-cache'
 import { recordDraftStore } from '@/features/memories/client/record-draft-store'
 import { useChildrenQuery } from '@/features/children/client/use-children'
+import { ChildProfileEditForm } from '@/features/children/client/child-profile-edit-form'
 import {
   currentUserQueryKey,
   type CurrentUser,
@@ -150,6 +151,7 @@ export default function SettingsPage() {
               {ageLabel ? (
                 <DataRow label={settingsTrustCenterCopy.current.ageLabel} value={ageLabel} />
               ) : null}
+              <ChildProfileEditForm child={child} />
             </>
           ) : (
             <DataRow
