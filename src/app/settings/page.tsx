@@ -23,11 +23,13 @@ import {
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 import { settingsTrustCenterCopy } from '@/lib/ui/settings-trust-center-copy'
 import { signInPath } from '@/lib/auth/safe-redirect'
+import { signOutAndClear } from '@/features/auth/client/sign-out'
 
 export default function SettingsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState<string | null>(null)
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
   const [revokeMessage, setRevokeMessage] = useState<string | null>(null)
   const [revokeError, setRevokeError] = useState<string | null>(null)
@@ -47,15 +49,20 @@ export default function SettingsPage() {
 
   async function onSignOut() {
     setSigningOut(true)
+    setSignOutError(null)
     try {
-      await fetch('/sign-out', { method: 'POST' })
+      await signOutAndClear({
+        clearQueryCache: () => queryClient.clear(),
+        clearImageCache: () => imageUrlCache.clearAll(),
+        clearRecordDraft: () => recordDraftStore.clear(),
+      })
+      router.push('/sign-in')
     } catch {
-      // ignore: even on failure, push to /sign-in
+      setSignOutError(
+        'サインアウトを完了できませんでした。設定はそのままです。通信が戻ったら、もう一度お試しください。',
+      )
+      setSigningOut(false)
     }
-    queryClient.clear()
-    imageUrlCache.clearAll()
-    recordDraftStore.clear()
-    router.push('/sign-in')
   }
 
   async function onRevokeAiConsent() {
@@ -248,6 +255,11 @@ export default function SettingsPage() {
         </TrustSection>
 
         <div className="pt-2">
+          {signOutError ? (
+            <p role="alert" className="text-amber mb-3 text-sm leading-narrative">
+              {signOutError}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
