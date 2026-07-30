@@ -226,6 +226,28 @@ describe('PUT /v1/children/{childId}', () => {
     expect(mocks.childUpdate).not.toHaveBeenCalled()
   })
 
+  it.each([
+    [{ name: '   ' }, 'body.name'],
+    [{ birthdate: '2026-02-31' }, 'body.birthdate'],
+    [{ birthdate: '2999-01-01' }, 'body.birthdate'],
+  ])('returns 422 without updating for invalid profile input', async (input, path) => {
+    authed()
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    const res = await PUT(
+      new Request('http://localhost/', {
+        method: 'PUT',
+        body: JSON.stringify(input),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      ctx(CHILD_ID),
+    )
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { reason: string; errors: Array<{ path: string }> }
+    expect(body.reason).toBe('validation_error')
+    expect(body.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path })]))
+    expect(mocks.childUpdate).not.toHaveBeenCalled()
+  })
+
   it('returns 200 with updated child when only name is changed', async () => {
     authed()
     mocks.childFindFirst.mockResolvedValue(childRow)

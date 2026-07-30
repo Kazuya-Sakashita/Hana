@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation'
 import { BookOpen, Home, ImagePlus, Settings, type LucideIcon } from 'lucide-react'
 import { QuietIcon } from '@/components/product/icons'
 import { cn } from '@/lib/utils'
+import { consumeHomeProfileRefresh } from '@/features/children/client/home-profile-refresh'
+import { hardNavigateTo } from '@/lib/browser-navigation'
 
 // Quiet Heirloom: Persistent bottom tab bar with 3 destinations + 中央記録ボタン
 // 表示しないページ (集中フロー / 認証画面)
@@ -90,6 +92,12 @@ function TabLink({ tab, pathname }: { tab: TabDef; pathname: string | null }) {
     <Link
       href={tab.href}
       prefetch={true}
+      onClick={(event) => {
+        if (tab.href === '/' && consumeHomeProfileRefresh()) {
+          event.preventDefault()
+          hardNavigateTo('/')
+        }
+      }}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'tap-target flex flex-col items-center justify-center gap-1 rounded-[var(--radius-paper-slip)] py-2 transition-colors',
