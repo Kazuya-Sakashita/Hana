@@ -31,12 +31,12 @@ Route Handler の status、Content-Type、成功 body、ProblemDetails が OpenA
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] status と Content-Type を OpenAPI 宣言へ照合する
-- [ ] 成功 JSON と ProblemDetails の必須 schema を検証する
-- [ ] 未宣言 status や必須項目欠落でテストが失敗する
-- [ ] 外部 DB、Supabase、Anthropic へ接続せず mock で完結する
-- [ ] 代表的な成功・認証・validation・not-found 応答を覆う
-- [ ] `pnpm pr:gate` へ組み込む
+- [x] status と Content-Type を OpenAPI 宣言へ照合する
+- [x] 成功 JSON と ProblemDetails の必須 schema を検証する
+- [x] 未宣言 status や必須項目欠落でテストが失敗する
+- [x] 外部 DB、Supabase、Anthropic へ接続せず mock で完結する
+- [x] 代表的な成功・認証・validation・not-found 応答を覆う
+- [x] `pnpm pr:gate` へ組み込む
 
 ## セキュリティ・プライバシー考慮
 
@@ -45,3 +45,10 @@ Route Handler の status、Content-Type、成功 body、ProblemDetails が OpenA
 ## Review gates
 
 Test Architecture / API Design / Reliability レビュー、`pnpm pr:gate`、`git diff --check`。
+
+## 検証結果
+
+- `pnpm openapi:response-contract`: 2 files / 24 tests
+- OpenAPI 3.1 の `format`、`enum`、`const`、`additionalProperties`をAjvで検証
+- 未宣言status、Content-Type、必須項目、UUID形式、enum、余分なpropertyのnegative testを確認
+- `pnpm test`に含めることで`pnpm pr:gate`から一度だけ実行

@@ -1,24 +1,18 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import type { AnySchema, ErrorObject } from 'ajv'
+import Ajv2020 from 'ajv/dist/2020.js'
+import addFormats from 'ajv-formats'
 import { parse as parseYaml } from 'yaml'
 
-type Schema = {
-  $ref?: string
-  type?: string | string[]
-  required?: string[]
-  properties?: Record<string, Schema>
-  items?: Schema
-  pattern?: string
-  minimum?: number
-  maximum?: number
-  minLength?: number
-  maxLength?: number
-}
+type Schema = Record<string, unknown>
 
 type Located<T> = { value: T; file: string }
 
 const rootFile = path.resolve(process.cwd(), 'docs/openapi/openapi.yaml')
 const documentCache = new Map<string, unknown>()
+const ajv = new Ajv2020({ allErrors: true, strict: false })
+addFormats(ajv)
 
 function loadDocument(file: string): unknown {
   const resolved = path.resolve(file)
@@ -61,65 +55,41 @@ function dereference<T extends { $ref?: string }>(located: Located<T>): Located<
   return current
 }
 
-function valueType(value: unknown): string {
-  if (value === null) return 'null'
-  if (Array.isArray(value)) return 'array'
-  if (Number.isInteger(value)) return 'integer'
-  return typeof value
+function resolveSchema(located: Located<unknown>, stack = new Set<string>()): unknown {
+  if (Array.isArray(located.value)) {
+    return located.value.map((value) => resolveSchema({ value, file: located.file }, stack))
+  }
+  if (!located.value || typeof located.value !== 'object') return located.value
+
+  const schema = located.value as Record<string, unknown>
+  if (typeof schema.$ref === 'string') {
+    const key = `${located.file}:${schema.$ref}`
+    if (stack.has(key)) throw new Error(`Circular OpenAPI reference: ${key}`)
+    const nextStack = new Set(stack).add(key)
+    const resolved = resolveRef<Schema>(schema.$ref, located.file)
+    const siblings = Object.fromEntries(Object.entries(schema).filter(([key]) => key !== '$ref'))
+    return {
+      ...(resolveSchema(resolved, nextStack) as Record<string, unknown>),
+      ...(resolveSchema({ value: siblings, file: located.file }, nextStack) as Record<
+        string,
+        unknown
+      >),
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [
+      key,
+      resolveSchema({ value, file: located.file }, stack),
+    ]),
+  )
 }
 
-function validateSchema(locatedSchema: Located<Schema>, value: unknown, pointer: string): string[] {
-  const { value: schema, file } = dereference(locatedSchema)
-  const errors: string[] = []
-  const allowedTypes = schema.type ? (Array.isArray(schema.type) ? schema.type : [schema.type]) : []
-  const actualType = valueType(value)
-
-  if (allowedTypes.length > 0 && !allowedTypes.includes(actualType)) {
-    return [`${pointer}: expected ${allowedTypes.join('|')}, received ${actualType}`]
-  }
-
-  if (actualType === 'object') {
-    const object = value as Record<string, unknown>
-    for (const required of schema.required ?? []) {
-      if (!(required in object)) errors.push(`${pointer}.${required}: required property missing`)
-    }
-    for (const [key, propertySchema] of Object.entries(schema.properties ?? {})) {
-      if (key in object) {
-        errors.push(
-          ...validateSchema({ value: propertySchema, file }, object[key], `${pointer}.${key}`),
-        )
-      }
-    }
-  }
-
-  if (actualType === 'array' && schema.items) {
-    for (const [index, item] of (value as unknown[]).entries()) {
-      errors.push(...validateSchema({ value: schema.items, file }, item, `${pointer}[${index}]`))
-    }
-  }
-
-  if (typeof value === 'string') {
-    if (schema.minLength !== undefined && value.length < schema.minLength) {
-      errors.push(`${pointer}: shorter than minLength ${schema.minLength}`)
-    }
-    if (schema.maxLength !== undefined && value.length > schema.maxLength) {
-      errors.push(`${pointer}: longer than maxLength ${schema.maxLength}`)
-    }
-    if (schema.pattern && !new RegExp(schema.pattern).test(value)) {
-      errors.push(`${pointer}: does not match pattern ${schema.pattern}`)
-    }
-  }
-
-  if (typeof value === 'number') {
-    if (schema.minimum !== undefined && value < schema.minimum) {
-      errors.push(`${pointer}: below minimum ${schema.minimum}`)
-    }
-    if (schema.maximum !== undefined && value > schema.maximum) {
-      errors.push(`${pointer}: above maximum ${schema.maximum}`)
-    }
-  }
-
-  return errors
+function formatSchemaErrors(errors: ErrorObject[]): string[] {
+  return errors.map((error) => {
+    const pointer = error.instancePath || '$'
+    return `${pointer}: ${error.message ?? error.keyword}`
+  })
 }
 
 export async function assertOpenApiResponse({
@@ -168,7 +138,11 @@ export async function assertOpenApiResponse({
   if (!media.schema) return
 
   const body = await response.clone().json()
-  const errors = validateSchema({ value: media.schema, file: locatedResponse.file }, body, '$')
+  const validate = ajv.compile(
+    resolveSchema({ value: media.schema, file: locatedResponse.file }) as AnySchema,
+  )
+  const valid = validate(body)
+  const errors = valid ? [] : formatSchemaErrors(validate.errors ?? [])
   if (contentType === 'application/problem+json' && body.status !== response.status) {
     errors.push(
       `$.status: expected HTTP status ${response.status}, received ${String(body.status)}`,

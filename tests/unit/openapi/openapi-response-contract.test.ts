@@ -23,7 +23,42 @@ describe('OpenAPI response contract failures', () => {
     const response = Response.json({}, { status: 200 })
     await expect(
       assertOpenApiResponse({ method: 'GET', route: '/children', response }),
-    ).rejects.toThrow('$.data: required property missing')
+    ).rejects.toThrow("must have required property 'data'")
+  })
+
+  it('rejects a success body with an invalid UUID format', async () => {
+    const response = Response.json({
+      data: [
+        {
+          id: 'not-a-uuid',
+          name: '合成の呼び名',
+          birthdate: '2026-01-13',
+          avatar_url: null,
+          created_at: '2026-05-23T01:30:00Z',
+          updated_at: '2026-05-23T01:30:00Z',
+        },
+      ],
+    })
+    await expect(
+      assertOpenApiResponse({ method: 'GET', route: '/children', response }),
+    ).rejects.toThrow('must match format "uuid"')
+  })
+
+  it('rejects enum violations', async () => {
+    const response = Response.json({ status: 'degraded' })
+    await expect(
+      assertOpenApiResponse({ method: 'GET', route: '/health', response }),
+    ).rejects.toThrow('must be equal to one of the allowed values')
+  })
+
+  it('rejects undeclared properties when the schema closes the object', async () => {
+    const response = Response.json(
+      { status: 'accepted', internal_id: 'synthetic' },
+      { status: 202 },
+    )
+    await expect(
+      assertOpenApiResponse({ method: 'POST', route: '/waitlist', response }),
+    ).rejects.toThrow('must NOT have additional properties')
   })
 
   it('rejects ProblemDetails whose status differs from HTTP status', async () => {
