@@ -60,6 +60,13 @@ export const problems = {
       503,
       '画像の確認処理を一時的に利用できません',
     ),
+  signOutFailed: () =>
+    build(
+      'sign_out_failed',
+      'Service Unavailable',
+      503,
+      'サインアウトを完了できませんでした。もう一度お試しください',
+    ),
   aiGenerationFailed: () =>
     build(
       'ai_generation_failed',

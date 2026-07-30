@@ -125,6 +125,8 @@ export interface paths {
          * 子どもプロフィール更新
          * @description 指定した子どもプロフィールを更新する。
          *     全フィールド省略可。送られたフィールドのみ更新 (PATCH 的な PUT)。
+         *     認証ユーザー本人が所有するプロフィールだけを更新できる。
+         *     `name` は前後の空白を除いた 1〜50 文字、`birthdate` は実在する未来でない日付とする。
          */
         put: operations["updateChild"];
         post?: never;
@@ -594,13 +596,13 @@ export interface components {
          */
         ChildUpdateRequest: {
             /**
-             * @description 表示名
+             * @description 前後の空白を除いた 1〜50 文字の呼び名。空白だけの値は不可
              * @example はると
              */
             name?: string;
             /**
              * Format: date
-             * @description 生年月日 (YYYY-MM-DD)
+             * @description 生年月日 (YYYY-MM-DD)。実在する未来でない日付
              * @example 2026-01-13
              */
             birthdate?: string;

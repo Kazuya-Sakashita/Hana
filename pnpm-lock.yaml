@@ -96,6 +96,12 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.1
         version: 6.0.1(vite@8.0.12(@types/node@25.7.0)(jiti@2.7.0)(yaml@2.9.0))
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3.0.1
+        version: 3.0.1(ajv@8.20.0)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -5749,6 +5755,10 @@ snapshots:
   ajv-formats@3.0.1(@redocly/ajv@8.18.1):
     optionalDependencies:
       ajv: '@redocly/ajv@8.18.1'
+
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
+      ajv: 8.20.0
 
   ajv@6.15.0:
     dependencies:
