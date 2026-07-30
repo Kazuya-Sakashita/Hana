@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { problems, type FieldError } from '@/server/api/problems'
+import { todayDateOnly } from '@/lib/date-only'
 
 // /v1/children の POST / PUT body をパースする。zod 等は導入せずインラインで検証。
 // validation_error の path は OpenAPI 規約に従い `body.<field>` を用いる。
@@ -124,7 +125,7 @@ function parseBirthdate(value: unknown, errors: FieldError[], required: boolean)
     return null
   }
   const date = new Date(`${value}T00:00:00Z`)
-  if (Number.isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
     errors.push({
       path: 'body.birthdate',
       reason: 'invalid_format',
@@ -132,8 +133,7 @@ function parseBirthdate(value: unknown, errors: FieldError[], required: boolean)
     })
     return null
   }
-  const today = new Date()
-  if (date.getTime() > today.getTime()) {
+  if (value > todayDateOnly()) {
     errors.push({
       path: 'body.birthdate',
       reason: 'future_date',

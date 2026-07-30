@@ -57,9 +57,8 @@ export const settingsTrustCenterCopy = {
   future: {
     eyebrow: '準備中',
     title: 'まだこの画面では操作できません',
-    description:
-      'プロフィール編集、export、退会、家族共有、Hana Plus は、操作できる状態になってから表示します。',
+    description: 'export、退会、家族共有、Hana Plus は、操作できる状態になってから表示します。',
     unavailable: '今は操作できません。',
-    items: ['プロフィール編集', 'export / 退会', '家族共有 / Hana Plus'] as const,
+    items: ['export / 退会', '家族共有 / Hana Plus'] as const,
   },
 } as const

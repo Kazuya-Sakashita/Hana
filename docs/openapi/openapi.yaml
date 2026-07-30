@@ -241,6 +241,8 @@ paths:
       description: |
         指定した子どもプロフィールを更新する。
         全フィールド省略可。送られたフィールドのみ更新 (PATCH 的な PUT)。
+        認証ユーザー本人が所有するプロフィールだけを更新できる。
+        `name` は前後の空白を除いた 1〜50 文字、`birthdate` は実在する未来でない日付とする。
       tags: [children]
       requestBody:
         required: true
