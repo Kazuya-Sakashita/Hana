@@ -1,22 +1,13 @@
 import { createApiClient } from '@/lib/api/client'
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 
 // Client Components / hooks 用の API クライアント。
-// resolveAuthToken は Supabase の localStorage ベース session から取得する。
+// 同一 origin の Supabase session cookie を使う。
+// Bearer token を重ねると認証情報が二重になり、header size 上限を超えるため追加しない。
 
 let cachedClient: ReturnType<typeof createApiClient> | null = null
 
 export function getBrowserApiClient() {
   if (cachedClient) return cachedClient
-  const supabase = createSupabaseBrowserClient()
-  cachedClient = createApiClient({
-    baseUrl: '/v1',
-    resolveAuthToken: async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      return session?.access_token ?? null
-    },
-  })
+  cachedClient = createApiClient({ baseUrl: '/v1' })
   return cachedClient
 }
