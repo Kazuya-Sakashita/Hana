@@ -4,7 +4,7 @@ import NextImage from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, ImagePlus, PenLine, type LucideIcon } from 'lucide-react'
+import { Check, ImagePlus, PenLine } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { QuietIcon } from '@/components/product/icons'
 import {
@@ -284,6 +284,12 @@ export default function RecordPage() {
     canSubmit,
     submitting,
   })
+  const draftComplete = aiStatus === 'done' || (aiStatus === 'idle' && canSubmit)
+  const currentStepLabel = !uploadedImage
+    ? '写真を選ぶ'
+    : draftComplete
+      ? '保存する'
+      : '下書きを整える'
 
   const reportRecordProductEvent = useCallback((eventName: ProductEventName) => {
     if (reportedProductEventsRef.current.has(eventName)) return
@@ -1035,21 +1041,31 @@ export default function RecordPage() {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-            <StepPill
-              active={!uploadedImage}
-              done={!!uploadedImage}
-              label="写真"
-              icon={ImagePlus}
-            />
-            <StepPill
-              active={!!uploadedImage && aiStatus !== 'done'}
-              done={aiStatus === 'done'}
-              label="下書き"
-              icon={PenLine}
-            />
-            <StepPill active={canSubmit} done={false} label="保存" icon={Check} />
-          </div>
+          <p className="sr-only" role="status" aria-live="polite">
+            現在のステップ: {currentStepLabel}
+          </p>
+          <section aria-labelledby="record-progress-title">
+            <h2 id="record-progress-title" className="meta-label mb-3">
+              記録の進み具合
+            </h2>
+            <ol aria-label="記録の進行" className="grid grid-cols-3 gap-3 text-left text-[11px]">
+              <RecordStep
+                number={1}
+                state={uploadedImage ? 'done' : 'current'}
+                label="写真を選ぶ"
+              />
+              <RecordStep
+                number={2}
+                state={!uploadedImage ? 'upcoming' : draftComplete ? 'done' : 'current'}
+                label="下書きを整える"
+              />
+              <RecordStep
+                number={3}
+                state={draftComplete ? 'current' : 'upcoming'}
+                label="保存する"
+              />
+            </ol>
+          </section>
 
           <PaperSlip data-testid="record-decision-cue">
             <p className="meta-label">{decisionCue.eyebrow}</p>
@@ -1417,11 +1433,16 @@ export default function RecordPage() {
           {footerState.secondaryAction ? (
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="mt-1 w-full"
+              variant={footerState.secondaryAction === 'manual' ? 'outline' : 'ghost'}
+              size={footerState.secondaryAction === 'manual' ? 'lg' : 'sm'}
+              className={
+                footerState.secondaryAction === 'manual'
+                  ? 'border-ink bg-warm text-ink mt-2 w-full border-2 shadow-lift hover:bg-photo-mat active:bg-photo-mat'
+                  : 'mt-1 w-full'
+              }
               onClick={runFooterSecondaryAction}
             >
+              {footerState.secondaryAction === 'manual' ? <PenLine aria-hidden="true" /> : null}
               {footerState.secondaryLabel}
             </Button>
           ) : null}
@@ -1554,13 +1575,14 @@ function AiConsentDialog({
           <Button
             id="ai-consent-decline"
             type="button"
-            variant="ghost"
+            variant="outline"
             size="lg"
             onClick={onDecline}
             disabled={pending}
-            className="w-full"
+            className="border-ink bg-warm text-ink w-full border-2 shadow-lift hover:bg-photo-mat active:bg-photo-mat"
           >
-            AI を つかわない
+            <PenLine aria-hidden="true" />
+            AI を つかわないで、自分で書く
           </Button>
           <p className="text-ink-tertiary text-center text-xs">
             くわしい データの あつかいは、せっていで 確認できます。
@@ -1587,32 +1609,38 @@ function RecordShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function StepPill({
-  active,
-  done,
+function RecordStep({
+  number,
+  state,
   label,
-  icon,
 }: {
-  active: boolean
-  done: boolean
+  number: number
+  state: 'done' | 'current' | 'upcoming'
   label: string
-  icon: LucideIcon
 }) {
-  const iconTone = done || active ? 'primary' : 'muted'
+  const status = state === 'done' ? '完了' : state === 'current' ? 'いまここ' : '未完了'
 
   return (
-    <div
-      className={
-        done
-          ? 'border-leaf/30 bg-paper-slip text-leaf-deep inline-flex items-center justify-center gap-1 rounded-full border px-2 py-1'
-          : active
-            ? 'border-leaf/35 bg-paper-slip text-leaf-deep inline-flex items-center justify-center gap-1 rounded-full border px-2 py-1 ring-1 ring-leaf/20'
-            : 'border-hairline bg-warm text-ink-tertiary inline-flex items-center justify-center gap-1 rounded-full border px-2 py-1'
-      }
+    <li
+      aria-current={state === 'current' ? 'step' : undefined}
+      className={`border-t-2 pt-2 ${
+        state === 'upcoming' ? 'border-hairline text-ink-tertiary' : 'border-leaf text-ink'
+      }`}
     >
-      <QuietIcon icon={done ? Check : icon} tone={iconTone} size="sm" active={active || done} />
-      <span>{label}</span>
-    </div>
+      <span className="flex items-center gap-1 font-medium">
+        {state === 'done' ? (
+          <QuietIcon icon={Check} tone="primary" size="sm" active />
+        ) : (
+          <span aria-hidden="true">{number}</span>
+        )}
+        {label}
+      </span>
+      <span
+        className={state === 'current' ? 'text-leaf-deep mt-1 block font-medium' : 'mt-1 block'}
+      >
+        {status}
+      </span>
+    </li>
   )
 }
 
@@ -1648,7 +1676,7 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
             variant="destructive"
             size="lg"
             onClick={onClose}
-            className="w-full"
+            className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:bg-amber/90 hover:text-white active:bg-amber/90"
           >
             下書きを 破棄して閉じる
           </Button>

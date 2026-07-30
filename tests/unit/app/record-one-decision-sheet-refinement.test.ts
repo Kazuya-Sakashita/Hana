@@ -19,7 +19,7 @@ const issueSource = readFileSync(
 
 describe('ISSUE-069 record one-decision sheet refinement', () => {
   it('renders the unselected photo state as a quiet camera placeholder', () => {
-    expect(recordSource).toContain('import { Check, ImagePlus, PenLine, type LucideIcon }')
+    expect(recordSource).toContain("import { Check, ImagePlus, PenLine } from 'lucide-react'")
     expect(recordSource).toContain('PhotoPlaceholder')
     expect(recordSource).toContain('data-testid="record-photo-placeholder"')
     expect(recordSource).toContain('icon={ImagePlus}')

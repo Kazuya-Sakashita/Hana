@@ -60,8 +60,9 @@ describe('ISSUE-078 record LP-App visual alignment', () => {
 
   it('keeps quiet icon language and avoids sakura as step active or primary CTA', () => {
     expect(recordSource).toContain('QuietIcon')
-    expect(recordSource).toContain('function StepPill')
-    expect(recordSource).toContain('border-leaf/35 bg-paper-slip text-leaf-deep')
+    expect(recordSource).toContain('function RecordStep')
+    expect(recordSource).toContain('border-leaf text-ink')
+    expect(recordSource).toContain('記録の進み具合')
     expect(recordSource).not.toContain('border-sakura/40 bg-paper-slip text-sakura-deep')
     expect(recordSource).not.toContain('focus-visible:border-sakura')
     expect(footerStateSource).toContain('AI を使わずに 書く')
