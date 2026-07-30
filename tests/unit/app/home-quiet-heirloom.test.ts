@@ -82,6 +82,7 @@ describe('home Quiet Heirloom refresh', () => {
   })
 
   it('keeps empty and stats states forgiving and non-competitive', () => {
+    expect(homeSource).toContain('{child.name} ちゃんのアルバム')
     expect(homeSource).toContain('最初の1まいを、')
     expect(homeSource).toContain('ここにしまえます')
     expect(homeSource).toContain('はじめてのページをつくる')
