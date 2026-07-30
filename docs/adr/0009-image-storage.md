@@ -79,7 +79,10 @@ orientation反映と再エンコードを行い、originalをmetadataなしの�
 - 再エンコードまたはoriginal置換に失敗した場合はImage行を作成しない
 - thumbnail / previewも置換後のsanitized originalから生成する
 - 再エンコード後にも10 MiB上限を適用する
-- 公開前に存在する合成QA画像は削除または再投入し、未処理originalを公開環境へ持ち込まない
+- `images.metadata_sanitized_at` がnullのoriginalにはsigned URLを発行しない
+- 既存の有効画像は、識別子を出力しないdry-runで件数確認後、明示的なapplyで冪等に再処理する
+- 展開順はDB migration → 新コード → signed URL TTL（30分）経過 → backfill applyとし、
+  既発行URLの有効期間が終わってから実ユーザー原画像を置換する
 
 ### 5. Signed URL TTL
 

@@ -66,13 +66,16 @@ export async function GET(request: Request, { params }: Params) {
         await lockImageAccess(transaction, [imageId])
         const image = await transaction.image.findFirst({
           where: { id: imageId, ...activeImageAccessWhere(user.id) },
-          select: { id: true, userId: true, storageKey: true },
+          select: { id: true, userId: true, storageKey: true, metadataSanitizedAt: true },
         })
         if (!image) {
           throw problems.notFound('画像が見つかりません')
         }
         if (image.userId !== user.id) {
           throw problems.forbidden()
+        }
+        if (size === 'original' && image.metadataSanitizedAt === null) {
+          throw problems.imageSanitizationPending()
         }
 
         const url = await generateSignedImageUrlBeforeDeadline(image.storageKey, size)

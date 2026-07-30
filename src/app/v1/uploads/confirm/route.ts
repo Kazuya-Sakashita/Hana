@@ -205,6 +205,20 @@ export async function POST(request: Request) {
       if (existingImage.userId !== user.id || existingImage.deletedAt) {
         throw problems.notFound('画像が見つかりません')
       }
+      if (existingImage.metadataSanitizedAt === null) {
+        const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
+        const repaired = await prisma.image.update({
+          where: { id: existingImage.id },
+          data: {
+            contentType: verified.contentType,
+            width: verified.width,
+            height: verified.height,
+            fileSize: verified.fileSize,
+            metadataSanitizedAt: new Date(),
+          },
+        })
+        return NextResponse.json(toImageResponse(repaired), { status: 200 })
+      }
       return NextResponse.json(toImageResponse(existingImage), { status: 200 })
     }
 
@@ -219,6 +233,7 @@ export async function POST(request: Request) {
           width: verified.width,
           height: verified.height,
           fileSize: verified.fileSize,
+          metadataSanitizedAt: new Date(),
         },
       })
       return NextResponse.json(toImageResponse(image), { status: 201 })

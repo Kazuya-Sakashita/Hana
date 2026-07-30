@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   profileCreate: vi.fn(),
   imageFindUnique: vi.fn(),
   imageCreate: vi.fn(),
+  imageUpdate: vi.fn(),
   createAdminClient: vi.fn(),
   createSignedUploadUrl: vi.fn(),
   storageInfo: vi.fn(),
@@ -65,7 +66,11 @@ vi.mock('@/features/uploads/server/verify-uploaded-image', async (importOriginal
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
     profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
-    image: { findUnique: mocks.imageFindUnique, create: mocks.imageCreate },
+    image: {
+      findUnique: mocks.imageFindUnique,
+      create: mocks.imageCreate,
+      update: mocks.imageUpdate,
+    },
   },
 }))
 
@@ -275,6 +280,7 @@ describe('POST /v1/uploads/confirm', () => {
       width: 800,
       height: 600,
       fileSize: 10000,
+      metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
     })
     mocks.sanitizeUploadedImage.mockResolvedValue({
       buffer: verifiedBuffer,
@@ -308,6 +314,7 @@ describe('POST /v1/uploads/confirm', () => {
       width: 800,
       height: 600,
       fileSize: 10000,
+      metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
       createdAt: new Date('2026-05-23T10:00:00Z'),
       updatedAt: new Date('2026-05-23T10:00:00Z'),
       deletedAt: null,
@@ -477,8 +484,45 @@ describe('POST /v1/uploads/confirm', () => {
         width: 800,
         height: 600,
         fileSize: verifiedBuffer.length,
+        metadataSanitizedAt: expect.any(Date),
       },
     })
+  })
+
+  it('sanitizes and marks an existing unsanitized Image on confirm retry', async () => {
+    authed()
+    setupVariantMocks()
+    const ownKey = generateStorageKey(USER_ID, 'image/jpeg')
+    const existingImage = {
+      id: 'a1b2c3d4-1234-4d8e-9abc-fedcba987654',
+      userId: USER_ID,
+      memoryId: null,
+      storageKey: ownKey,
+      contentType: 'image/jpeg',
+      width: 800,
+      height: 600,
+      fileSize: 10000,
+      metadataSanitizedAt: null,
+      createdAt: new Date('2026-05-23T10:00:00Z'),
+      updatedAt: new Date('2026-05-23T10:00:00Z'),
+      deletedAt: null,
+    }
+    mocks.imageFindUnique.mockResolvedValue(existingImage)
+    mocks.imageUpdate.mockImplementation(async ({ data }) => ({ ...existingImage, ...data }))
+
+    const res = await CONFIRM_POST(
+      jsonRequest('/v1/uploads/confirm', {
+        storage_key: ownKey,
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(mocks.storageUpdate).toHaveBeenCalledTimes(1)
+    expect(mocks.imageUpdate).toHaveBeenCalledWith({
+      where: { id: existingImage.id },
+      data: expect.objectContaining({ metadataSanitizedAt: expect.any(Date) }),
+    })
+    expect(mocks.imageCreate).not.toHaveBeenCalled()
   })
 
   it('uploads _thumb.webp and _preview.webp variants (ISSUE-031)', async () => {

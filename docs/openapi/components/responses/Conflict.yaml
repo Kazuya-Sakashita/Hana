@@ -32,3 +32,12 @@ content:
           detail: '同じ保存操作の内容が一致しません'
           reason: 'memory_idempotency_conflict'
           instance: 'req_01HXYZABCDEFG'
+      image_sanitization_pending:
+        summary: Original image metadata sanitization is pending
+        value:
+          type: 'https://hana.app/problems/image-sanitization-pending'
+          title: 'Conflict'
+          status: 409
+          detail: '原画像の安全確認を処理中です'
+          reason: 'image_sanitization_pending'
+          instance: 'req_01HXYZABCDEFG'

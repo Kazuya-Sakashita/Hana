@@ -6,6 +6,10 @@ import {
   MAX_UPLOAD_FILE_SIZE,
   MAX_UPLOAD_PIXELS,
 } from '@/features/uploads/server/image-limits'
+import {
+  sanitizeExistingImageBuffer,
+  sanitizedImagePolicy,
+} from '@/features/uploads/server/image-sanitizer'
 import { isApiProblemError } from '@/lib/api/error'
 import { problems } from '@/server/api/problems'
 
@@ -18,10 +22,6 @@ export interface VerifiedUploadedImage {
   height: number
   fileSize: number
 }
-
-const SANITIZED_JPEG_QUALITY = 90
-const SANITIZED_WEBP_QUALITY = 90
-const SANITIZED_PNG_COMPRESSION_LEVEL = 9
 
 const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs'])
 const AVIF_BRANDS = new Set(['avif', 'avis'])
@@ -230,35 +230,30 @@ export async function verifyUploadedImage(
 export async function sanitizeUploadedImage(
   verified: VerifiedUploadedImage,
 ): Promise<VerifiedUploadedImage> {
-  const pipeline = sharp(verified.buffer, {
-    failOn: 'warning',
-    limitInputPixels: MAX_UPLOAD_PIXELS,
-  }).rotate()
-
-  let buffer: Buffer
-  if (verified.contentType === 'image/jpeg') {
-    buffer = await pipeline.jpeg({ quality: SANITIZED_JPEG_QUALITY, mozjpeg: true }).toBuffer()
-  } else if (verified.contentType === 'image/png') {
-    buffer = await pipeline.png({ compressionLevel: SANITIZED_PNG_COMPRESSION_LEVEL }).toBuffer()
-  } else if (verified.contentType === 'image/webp') {
-    buffer = await pipeline.webp({ quality: SANITIZED_WEBP_QUALITY }).toBuffer()
-  } else {
+  if (verified.contentType === 'image/heic') {
     throw validationProblem(
       'unsupported_media_type',
       'HEICはJPEGへ再エンコードしてアップロードしてください',
     )
   }
-  assertUploadedImageSize(buffer.length)
+  let sanitized: Awaited<ReturnType<typeof sanitizeExistingImageBuffer>>
+  try {
+    sanitized = await sanitizeExistingImageBuffer(verified.buffer, verified.contentType)
+  } catch (error) {
+    if (error instanceof Error && error.message === 'sanitized_image_too_large') {
+      throw validationProblem('file_too_large', '画像は10 MiB以下にしてください')
+    }
+    throw validationProblem('invalid_image_content', '画像データを読み取れません')
+  }
+  assertUploadedImageSize(sanitized.buffer.length)
 
   return {
     ...verified,
-    buffer,
-    fileSize: buffer.length,
+    buffer: sanitized.buffer,
+    width: sanitized.width,
+    height: sanitized.height,
+    fileSize: sanitized.buffer.length,
   }
 }
 
-export const sanitizedImagePolicy = {
-  jpegQuality: SANITIZED_JPEG_QUALITY,
-  webpQuality: SANITIZED_WEBP_QUALITY,
-  pngCompressionLevel: SANITIZED_PNG_COMPRESSION_LEVEL,
-} as const
+export { sanitizedImagePolicy }

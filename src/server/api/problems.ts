@@ -49,6 +49,8 @@ export const problems = {
       409,
       '別の画面で記録が更新されました。最新の内容を確認してください',
     ),
+  imageSanitizationPending: () =>
+    build('image_sanitization_pending', 'Conflict', 409, '原画像の安全確認を処理中です'),
   aiConsentRequired: () =>
     build('ai_consent_required', 'Forbidden', 403, 'AI への画像送信に同意が必要です'),
   aiQuotaExceeded: () =>
