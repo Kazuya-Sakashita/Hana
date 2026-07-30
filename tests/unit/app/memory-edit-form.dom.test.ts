@@ -295,6 +295,8 @@ describe('ISSUE-126 memory edit form', () => {
     expect(alert?.textContent).toContain('保存できませんでした')
     expect(alert?.textContent).toContain('入力はそのままです')
     expect(alert?.className).toContain('border-2')
+    expect(alert?.querySelector('.bg-amber')).not.toBeNull()
+    expect(alert?.querySelector('.font-bold')?.textContent).toContain('保存できませんでした')
     expect(document.activeElement).toBe(document.querySelector('[role="alert"]'))
     expect(mocks.replace).not.toHaveBeenCalled()
   })

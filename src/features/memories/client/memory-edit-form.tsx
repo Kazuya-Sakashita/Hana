@@ -208,16 +208,14 @@ export function MemoryEditForm({
             ref={errorSummaryRef}
             role="alert"
             tabIndex={-1}
-            className="border-amber bg-amber/10 text-ink rounded-[var(--radius-paper-slip)] border-2 px-4 py-4 shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="border-amber bg-amber/15 text-ink rounded-[var(--radius-paper-slip)] border-2 px-4 py-4 shadow-lift outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <div className="flex items-start gap-3">
-              <CircleAlert
-                aria-hidden="true"
-                className="text-amber mt-0.5 size-5 shrink-0"
-                strokeWidth={2}
-              />
+              <span className="bg-amber flex size-8 shrink-0 items-center justify-center rounded-full text-white">
+                <CircleAlert aria-hidden="true" className="size-5" strokeWidth={2.5} />
+              </span>
               <div className="min-w-0">
-                <p className="font-semibold">
+                <p className="text-amber text-base font-bold">
                   {hasErrors ? '入力内容を確認してください' : '保存できませんでした'}
                 </p>
                 <p className="mt-1 text-sm leading-narrative">{summaryMessage}</p>
