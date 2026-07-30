@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -79,6 +80,7 @@ describe('GET /v1/children', () => {
     const res = await GET()
     expect(res.status).toBe(401)
     expect(res.headers.get('Content-Type')).toBe('application/problem+json')
+    await assertOpenApiResponse({ method: 'GET', route: '/children', response: res })
   })
 
   it('returns 200 with empty data when no children', async () => {
@@ -94,6 +96,7 @@ describe('GET /v1/children', () => {
     mocks.childFindMany.mockResolvedValue([childRow])
     const res = await GET()
     expect(res.status).toBe(200)
+    await assertOpenApiResponse({ method: 'GET', route: '/children', response: res })
     const body = (await res.json()) as { data: Array<Record<string, unknown>> }
     expect(body.data).toHaveLength(1)
     expect(body.data[0]).toMatchObject({
@@ -116,6 +119,7 @@ describe('POST /v1/children', () => {
     authed()
     const res = await POST(jsonRequest('POST', { name: '', birthdate: 'not-a-date' }))
     expect(res.status).toBe(422)
+    await assertOpenApiResponse({ method: 'POST', route: '/children', response: res })
     const body = (await res.json()) as { reason: string; errors: Array<{ path: string }> }
     expect(body.reason).toBe('validation_error')
     const paths = body.errors.map((e) => e.path)
@@ -179,6 +183,11 @@ describe('GET /v1/children/{childId}', () => {
     mocks.childFindFirst.mockResolvedValue(null)
     const res = await GET_BY_ID(new Request('http://localhost/'), ctx(CHILD_ID))
     expect(res.status).toBe(404)
+    await assertOpenApiResponse({
+      method: 'GET',
+      route: '/children/{childId}',
+      response: res,
+    })
   })
 
   it('returns 403 when child belongs to another user', async () => {
