@@ -100,6 +100,25 @@ const memoryRow = {
   ],
 }
 
+const hiddenMemoryCases = [
+  {
+    state: 'missing',
+    find: () => null,
+  },
+  {
+    state: 'deleted',
+    find: (query: { where?: { deletedAt?: null } }) =>
+      query.where?.deletedAt === null
+        ? null
+        : { ...memoryRow, deletedAt: new Date('2026-05-24T00:00:00Z') },
+  },
+  {
+    state: 'foreign',
+    find: (query: { where?: { userId?: string } }) =>
+      query.where?.userId === USER_ID ? null : { ...memoryRow, userId: OTHER_USER_ID },
+  },
+]
+
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
   mocks.profileFindUnique.mockResolvedValue(profileRow)
@@ -626,12 +645,24 @@ describe('GET /v1/memories/{memoryId}', () => {
     expect(res.status).toBe(404)
   })
 
-  it('returns 403 when memory belongs to another user', async () => {
-    authed()
-    mocks.memoryFindFirst.mockResolvedValue({ ...memoryRow, userId: OTHER_USER_ID })
-    const res = await DETAIL_GET(jsonRequest(`/v1/memories/${MEMORY_ID}`, 'GET'), ctx(MEMORY_ID))
-    expect(res.status).toBe(403)
-  })
+  it.each(hiddenMemoryCases)(
+    'uses the same 404 for a $state memory outside the owner and active scope',
+    async ({ find }) => {
+      authed()
+      mocks.memoryFindFirst.mockImplementation(find)
+      const res = await DETAIL_GET(jsonRequest(`/v1/memories/${MEMORY_ID}`, 'GET'), ctx(MEMORY_ID))
+      expect(res.status).toBe(404)
+      expect(await res.json()).toMatchObject({
+        reason: 'not_found',
+        detail: '記録が見つかりません',
+      })
+      expect(mocks.memoryFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: MEMORY_ID, userId: USER_ID, deletedAt: null },
+        }),
+      )
+    },
+  )
 
   it('returns 200 + Memory for owner', async () => {
     authed()
@@ -681,29 +712,36 @@ describe('PUT /v1/memories/{memoryId}', () => {
     expect(mocks.txMemoryFindUniqueOrThrow).not.toHaveBeenCalled()
   })
 
-  it('rejects a foreign update before writing and does not log private fields', async () => {
-    authed()
-    mocks.memoryFindFirst.mockResolvedValue({ ...memoryRow, userId: OTHER_USER_ID })
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
-    const res = await DETAIL_PUT(
-      jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', {
-        title: '非公開の合成タイトル',
-        body: '非公開の合成本文',
-        weather: '合成の天気',
-      }),
-      ctx(MEMORY_ID),
-    )
-    expect(res.status).toBe(403)
-    expect(mocks.transaction).not.toHaveBeenCalled()
-    expect(consoleError).not.toHaveBeenCalled()
-    expect(consoleWarn).not.toHaveBeenCalled()
-    expect(consoleInfo).not.toHaveBeenCalled()
-    consoleError.mockRestore()
-    consoleWarn.mockRestore()
-    consoleInfo.mockRestore()
-  })
+  it.each(hiddenMemoryCases)(
+    'returns the same 404 for a $state update without logging fields',
+    async ({ find }) => {
+      authed()
+      mocks.memoryFindFirst.mockImplementation(find)
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
+      const res = await DETAIL_PUT(
+        jsonRequest(`/v1/memories/${MEMORY_ID}`, 'PUT', {
+          title: '非公開の合成タイトル',
+          body: '非公開の合成本文',
+          weather: '合成の天気',
+        }),
+        ctx(MEMORY_ID),
+      )
+      expect(res.status).toBe(404)
+      expect(await res.json()).toMatchObject({
+        reason: 'not_found',
+        detail: '記録が見つかりません',
+      })
+      expect(mocks.transaction).not.toHaveBeenCalled()
+      expect(consoleError).not.toHaveBeenCalled()
+      expect(consoleWarn).not.toHaveBeenCalled()
+      expect(consoleInfo).not.toHaveBeenCalled()
+      consoleError.mockRestore()
+      consoleWarn.mockRestore()
+      consoleInfo.mockRestore()
+    },
+  )
 })
 
 describe('DELETE /v1/memories/{memoryId}', () => {
@@ -746,19 +784,23 @@ describe('DELETE /v1/memories/{memoryId}', () => {
     })
   })
 
-  it('returns 403 for foreign memory', async () => {
+  it.each(hiddenMemoryCases)('returns the same 404 for a $state memory', async ({ find }) => {
     authed()
-    mocks.memoryFindFirst.mockResolvedValue({ ...memoryRow, userId: OTHER_USER_ID })
+    mocks.memoryFindFirst.mockImplementation(find)
     const res = await DETAIL_DELETE(
       jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
       ctx(MEMORY_ID),
     )
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({
+      reason: 'not_found',
+      detail: '記録が見つかりません',
+    })
     expect(mocks.txMemoryUpdateMany).not.toHaveBeenCalled()
     expect(mocks.txImageUpdateMany).not.toHaveBeenCalled()
   })
 
-  it('does not overwrite deletion timestamps when concurrent deletion already won', async () => {
+  it('returns the common 404 when a concurrent deletion already won', async () => {
     authed()
     mocks.memoryFindFirst.mockResolvedValue(memoryRow)
     mocks.txImageFindMany.mockResolvedValue([{ id: IMAGE_ID }])
@@ -775,7 +817,11 @@ describe('DELETE /v1/memories/{memoryId}', () => {
     )
 
     expect(first.status).toBe(204)
-    expect(second.status).toBe(204)
+    expect(second.status).toBe(404)
+    expect(await second.json()).toMatchObject({
+      reason: 'not_found',
+      detail: '記録が見つかりません',
+    })
     expect(mocks.txImageUpdateMany).toHaveBeenCalledTimes(1)
   })
 
