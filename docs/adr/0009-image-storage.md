@@ -62,7 +62,7 @@ client                            server                              storage
 - confirm が呼ばれなかった場合、Storage 側にゴミファイルが残る
   - クリーンアップは将来 ISSUE で cron job 実装
 
-### 4. EXIF 削除はクライアント側で行う (MVP)
+### 4. EXIF 削除はクライアント側とconfirm時のサーバー側で行う
 
 CLAUDE.md §7 「アップロード時にサーバ側で EXIF を削除」と方針が異なるが、MVP では:
 
@@ -70,10 +70,16 @@ CLAUDE.md §7 「アップロード時にサーバ側で EXIF を削除」と方
 - サーバ側で削除するには Storage からダウンロード → 加工 → 再アップロードが必要で、Function の実行時間と帯域コストが膨らむ
 - 信頼境界としては「クライアントが正しく削除した前提」だが、Hana のユーザーは自身のため、悪意ある混入の動機が低い
 
-将来 (v1 以降) で必要なら:
+ISSUE-137以降は、クライアント処理を多層防御として残しつつ、confirm時にサーバー側でも
+orientation反映と再エンコードを行い、originalをmetadataなしの画像へ置換する。
 
-- サーバ側で Storage hook を使い、アップロード後に自動的に EXIF 削除する仕組みに切替
-- このときは本 ADR を Superseded にし、新 ADR を起こす
+- JPEG: quality 90 / mozjpeg
+- PNG: compression level 9
+- WebP: quality 90
+- 再エンコードまたはoriginal置換に失敗した場合はImage行を作成しない
+- thumbnail / previewも置換後のsanitized originalから生成する
+- 再エンコード後にも10 MiB上限を適用する
+- 公開前に存在する合成QA画像は削除または再投入し、未処理originalを公開環境へ持ち込まない
 
 ### 5. Signed URL TTL
 
@@ -148,8 +154,8 @@ CLAUDE.md §7 「アップロード時にサーバ側で EXIF を削除」と方
 
 - **Storage 側の orphan files**: confirm 未到達のアップロードファイルが Storage に残る。
   対策: 定期 cleanup ジョブ (将来 ISSUE)
-- **EXIF 削除のクライアント信頼**: 悪意あるユーザーが直 PUT で EXIF 付きの画像を上げる可能性。
-  対策: Phase 2 で Storage hook + sharp で自動削除
+- **再エンコードの帯域と実行時間**: confirm時にoriginalのdownloadと再uploadが必要。
+  対策: 10 MiB / 25 MP上限、Storage timeout、失敗時のImage未確定で制御する
 - **storage_key の偽造防止**: `isValidStorageKey` + `storageKeyBelongsToUser` で防ぐが、
   prefix 自体は user_id を SHA-256 で出しただけなので、user_id を知られると prefix も計算できる。
   ただし user_id は Bearer JWT の中にあり、外部に流出しない設計。

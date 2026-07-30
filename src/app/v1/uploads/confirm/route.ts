@@ -19,6 +19,7 @@ import {
 import {
   assertUploadedImageSize,
   readUploadedImageStream,
+  sanitizeUploadedImage,
   type VerifiedUploadedImage,
   verifyUploadedImage,
 } from '@/features/uploads/server/verify-uploaded-image'
@@ -124,14 +125,26 @@ async function prepareUploadedImage(
     storageInfo.contentType ?? '',
     expectedContentType,
   )
+  const sanitized = await sanitizeUploadedImage(verified)
+  let replaceResult: Awaited<ReturnType<typeof storage.update>>
+  try {
+    replaceResult = await storage.update(storageKey, sanitized.buffer, {
+      contentType: sanitized.contentType,
+      cacheControl: '300',
+      upsert: true,
+    })
+  } catch {
+    throw problems.storageUnavailable()
+  }
+  if (replaceResult.error) throwStorageProblem(replaceResult.error)
 
   try {
-    await generateAndUploadVariants(storageKey, verified.buffer)
+    await generateAndUploadVariants(storageKey, sanitized.buffer)
   } catch {
     logStorageError('variant_generation_failed')
   }
 
-  return verified
+  return sanitized
 }
 
 async function prepareUploadedImageOnce(
