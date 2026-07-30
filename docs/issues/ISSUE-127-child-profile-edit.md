@@ -49,6 +49,7 @@ Product UX / Privacy / Accessibility レビュー、`pnpm pr:gate`、`git diff -
 ## 検証結果
 
 - focused test: 40 passed
+- 記録の有無にかかわらず、ホーム上部へ最新の呼び名を表示する回帰テストを追加
 - ホーム表示回帰テスト: 保存後の初回ホーム遷移で最新データを再取得し、2回目以降は通常遷移することを確認
 - `pnpm pr:gate`: 124 files / 980 tests、契約 QA、production build 成功
 - JST 日付境界、保存後の Router Cache refresh、最新プロフィールでの編集開始を回帰テスト済み

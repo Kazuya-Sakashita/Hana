@@ -69,9 +69,10 @@ describe('parseChildCreate', () => {
   })
 
   it('rejects future birthdate', () => {
-    const future = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-29T15:30:00.000Z'))
     expectValidationError(
-      () => parseChildCreate({ name: 'はると', birthdate: future }),
+      () => parseChildCreate({ name: 'はると', birthdate: '2026-07-31' }),
       'body.birthdate',
     )
   })
