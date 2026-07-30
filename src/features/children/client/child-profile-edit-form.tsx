@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { isApiProblemError } from '@/lib/api/error'
 import { focusFirstFormError } from '@/lib/ui/form-error-focus'
 import { todayDateOnly } from '@/lib/date-only'
+import { markHomeProfileRefresh } from './home-profile-refresh'
 import { type Child, useUpdateChildMutation } from './use-children'
 
 type FieldErrors = Partial<Record<'name' | 'birthdate', string>>
@@ -77,6 +78,7 @@ export function ChildProfileEditForm({ child }: { child: Child }) {
       setBirthdate(updated.birthdate)
       setEditing(false)
       setSavedMessage(copy.saved)
+      markHomeProfileRefresh()
       router.refresh()
     } catch (error) {
       if (isApiProblemError(error) && error.reason === 'validation_error') {
