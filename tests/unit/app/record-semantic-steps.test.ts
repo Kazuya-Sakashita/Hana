@@ -35,6 +35,11 @@ describe('record semantic steps', () => {
     expect(source).toContain('border-ink bg-warm text-ink w-full border-2 shadow-lift')
     expect(source).toContain('<PenLine aria-hidden="true" />')
     expect(source).toContain('AI を つかわないで、自分で書く')
+    expect(source).toContain(
+      "variant={footerState.secondaryAction === 'manual' ? 'outline' : 'ghost'}",
+    )
+    expect(source).toContain("size={footerState.secondaryAction === 'manual' ? 'lg' : 'sm'}")
+    expect(source).toContain('border-ink bg-warm text-ink mt-2 w-full border-2 shadow-lift')
   })
 
   it('shows the destructive draft action before hover', () => {

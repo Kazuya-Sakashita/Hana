@@ -59,6 +59,15 @@ requires_human_review:
   - 通常状態から警告色の塗り、濃い枠、白文字、持ち上がった影を表示
   - 48px の高さと focus-visible 契約を維持
 
+### Round 4
+
+- 判定: REQUEST_CHANGES
+- 同意ダイアログではなく、画面下部の「AI を使わずに 書く」が ghost 表示のまま残っていた
+- 対応:
+  - footer の secondary action が manual の場合だけ、濃い枠、塗り背景、影、鉛筆アイコンを表示
+  - 48px の高さへ変更し、hover 前から操作可能と分かる表示に変更
+  - AI 再試行や写真再選択など、他の secondary action の視覚階層は維持
+
 ## セキュリティ・プライバシー考慮
 
 - live通知には入力内容や子どもの情報を含めない

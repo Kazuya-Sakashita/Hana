@@ -1433,11 +1433,16 @@ export default function RecordPage() {
           {footerState.secondaryAction ? (
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="mt-1 w-full"
+              variant={footerState.secondaryAction === 'manual' ? 'outline' : 'ghost'}
+              size={footerState.secondaryAction === 'manual' ? 'lg' : 'sm'}
+              className={
+                footerState.secondaryAction === 'manual'
+                  ? 'border-ink bg-warm text-ink mt-2 w-full border-2 shadow-lift hover:bg-photo-mat active:bg-photo-mat'
+                  : 'mt-1 w-full'
+              }
               onClick={runFooterSecondaryAction}
             >
+              {footerState.secondaryAction === 'manual' ? <PenLine aria-hidden="true" /> : null}
               {footerState.secondaryLabel}
             </Button>
           ) : null}
