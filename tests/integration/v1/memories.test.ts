@@ -626,11 +626,20 @@ describe('GET /v1/memories/{memoryId}', () => {
     expect(res.status).toBe(404)
   })
 
-  it('returns 403 when memory belongs to another user', async () => {
+  it('uses the same 404 for a memory outside the owner and active scope', async () => {
     authed()
-    mocks.memoryFindFirst.mockResolvedValue({ ...memoryRow, userId: OTHER_USER_ID })
+    mocks.memoryFindFirst.mockResolvedValue(null)
     const res = await DETAIL_GET(jsonRequest(`/v1/memories/${MEMORY_ID}`, 'GET'), ctx(MEMORY_ID))
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({
+      reason: 'not_found',
+      detail: '記録が見つかりません',
+    })
+    expect(mocks.memoryFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: MEMORY_ID, userId: USER_ID, deletedAt: null },
+      }),
+    )
   })
 
   it('returns 200 + Memory for owner', async () => {
@@ -681,9 +690,9 @@ describe('PUT /v1/memories/{memoryId}', () => {
     expect(mocks.txMemoryFindUniqueOrThrow).not.toHaveBeenCalled()
   })
 
-  it('rejects a foreign update before writing and does not log private fields', async () => {
+  it('returns the same 404 for a foreign, deleted, or missing update without logging fields', async () => {
     authed()
-    mocks.memoryFindFirst.mockResolvedValue({ ...memoryRow, userId: OTHER_USER_ID })
+    mocks.memoryFindFirst.mockResolvedValue(null)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -695,7 +704,11 @@ describe('PUT /v1/memories/{memoryId}', () => {
       }),
       ctx(MEMORY_ID),
     )
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({
+      reason: 'not_found',
+      detail: '記録が見つかりません',
+    })
     expect(mocks.transaction).not.toHaveBeenCalled()
     expect(consoleError).not.toHaveBeenCalled()
     expect(consoleWarn).not.toHaveBeenCalled()
@@ -746,14 +759,18 @@ describe('DELETE /v1/memories/{memoryId}', () => {
     })
   })
 
-  it('returns 403 for foreign memory', async () => {
+  it('returns the same 404 for a foreign, deleted, or missing memory', async () => {
     authed()
-    mocks.memoryFindFirst.mockResolvedValue({ ...memoryRow, userId: OTHER_USER_ID })
+    mocks.memoryFindFirst.mockResolvedValue(null)
     const res = await DETAIL_DELETE(
       jsonRequest(`/v1/memories/${MEMORY_ID}`, 'DELETE'),
       ctx(MEMORY_ID),
     )
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toMatchObject({
+      reason: 'not_found',
+      detail: '記録が見つかりません',
+    })
     expect(mocks.txMemoryUpdateMany).not.toHaveBeenCalled()
     expect(mocks.txImageUpdateMany).not.toHaveBeenCalled()
   })

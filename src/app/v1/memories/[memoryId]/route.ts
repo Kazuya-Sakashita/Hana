@@ -14,12 +14,12 @@ const DELETE_TRANSACTION_TIMEOUT_MS = 35_000
 
 type Params = { params: Promise<{ memoryId: string }> }
 
-async function loadMemory(memoryId: string) {
+async function loadMemory(memoryId: string, userId: string) {
   if (!isUuid(memoryId)) {
     throw problems.notFound('記録が見つかりません')
   }
   const memory = await prisma.memory.findFirst({
-    where: { id: memoryId, deletedAt: null },
+    where: { id: memoryId, userId, deletedAt: null },
     include: {
       images: {
         where: { deletedAt: null },
@@ -37,8 +37,7 @@ export async function GET(_request: Request, { params }: Params) {
   try {
     const user = await requireUser()
     const { memoryId } = await params
-    const memory = await loadMemory(memoryId)
-    if (memory.userId !== user.id) throw problems.forbidden()
+    const memory = await loadMemory(memoryId, user.id)
     return NextResponse.json(toMemoryResponse(memory))
   } catch (e) {
     return toProblemResponse(e)
@@ -49,8 +48,7 @@ export async function PUT(request: Request, { params }: Params) {
   try {
     const user = await requireUser()
     const { memoryId } = await params
-    const memory = await loadMemory(memoryId)
-    if (memory.userId !== user.id) throw problems.forbidden()
+    const memory = await loadMemory(memoryId, user.id)
 
     const raw = await readJsonBody(request)
     const patch = parseMemoryUpdate(raw)
@@ -91,8 +89,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   try {
     const user = await requireUser()
     const { memoryId } = await params
-    const memory = await loadMemory(memoryId)
-    if (memory.userId !== user.id) throw problems.forbidden()
+    const memory = await loadMemory(memoryId, user.id)
 
     await prisma.$transaction(
       async (transaction) => {

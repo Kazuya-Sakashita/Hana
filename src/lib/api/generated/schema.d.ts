@@ -277,18 +277,23 @@ export interface paths {
         };
         /**
          * 記録取得
-         * @description 指定した記録を返す。他人の記録は 403、存在しない場合は 404。
+         * @description 現在のユーザーが所有する未削除の記録だけを返す。
+         *     不存在、削除済み、他ユーザー所有はいずれも同じ 404 `not_found` を返し、
+         *     記録の存在を判別できないようにする。
          */
         get: operations["getMemory"];
         /**
          * 記録更新
-         * @description title / body / weather / is_favorite を部分更新する。送らないフィールドは変更されない。
+         * @description 現在のユーザーが所有する未削除の記録について、title / body / weather /
+         *     is_favorite を部分更新する。送らないフィールドは変更されない。
+         *     不存在、削除済み、他ユーザー所有はいずれも同じ 404 `not_found` を返す。
          */
         put: operations["updateMemory"];
         post?: never;
         /**
          * 記録削除 (論理削除)
-         * @description 記録を論理削除する (`deleted_at` セット)。
+         * @description 現在のユーザーが所有する未削除の記録を論理削除する (`deleted_at` セット)。
+         *     不存在、削除済み、他ユーザー所有はいずれも同じ 404 `not_found` を返す。
          *     通常の取得・一覧からは表示されなくなる。
          *     紐付く画像は **そのまま残る** (画像の Storage 削除は退会フロー / cleanup ジョブで)。
          *     復元は、レビュー済みの UI / API / サポートフローが揃うまで提供しない。
@@ -1681,7 +1686,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
@@ -1712,7 +1716,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
@@ -1738,7 +1741,6 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
