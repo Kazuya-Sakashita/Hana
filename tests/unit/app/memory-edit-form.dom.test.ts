@@ -318,7 +318,10 @@ describe('ISSUE-126 memory edit form', () => {
 
     expect(title.value).toBe('競合前の入力')
     expect(document.querySelector('[role="alert"]')?.textContent).toContain('入力はそのまま')
-    await act(async () => findButton('最新の内容を確認する').click())
+    const refreshButton = findButton('最新の内容を確認する')
+    expect(refreshButton.className).toContain('bg-primary')
+    expect(refreshButton.querySelector('svg')).not.toBeNull()
+    await act(async () => refreshButton.click())
     expect(mocks.refresh).toHaveBeenCalledOnce()
   })
 

@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { CircleAlert, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -226,10 +226,11 @@ export function MemoryEditForm({
         {hasConflict ? (
           <Button
             type="button"
-            variant="outline"
-            className="w-full"
+            size="lg"
+            className="w-full font-semibold shadow-lift"
             onClick={() => router.refresh()}
           >
+            <RefreshCw aria-hidden="true" className="size-5" />
             最新の内容を確認する
           </Button>
         ) : null}
