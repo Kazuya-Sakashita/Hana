@@ -1,11 +1,13 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { isApiProblemError } from '@/lib/api/error'
 import { focusFirstFormError } from '@/lib/ui/form-error-focus'
+import { todayDateOnly } from '@/lib/date-only'
 import { type Child, useUpdateChildMutation } from './use-children'
 
 type FieldErrors = Partial<Record<'name' | 'birthdate', string>>
@@ -20,6 +22,7 @@ const copy = {
 } as const
 
 export function ChildProfileEditForm({ child }: { child: Child }) {
+  const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(child.name)
   const [birthdate, setBirthdate] = useState(child.birthdate)
@@ -31,7 +34,7 @@ export function ChildProfileEditForm({ child }: { child: Child }) {
   const errorRef = useRef<HTMLParagraphElement>(null)
   const submittingRef = useRef(false)
   const updateChild = useUpdateChildMutation()
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const todayIso = todayDateOnly()
 
   function reset() {
     setName(child.name)
@@ -74,6 +77,7 @@ export function ChildProfileEditForm({ child }: { child: Child }) {
       setBirthdate(updated.birthdate)
       setEditing(false)
       setSavedMessage(copy.saved)
+      router.refresh()
     } catch (error) {
       if (isApiProblemError(error) && error.reason === 'validation_error') {
         const nextErrors: FieldErrors = {}
@@ -112,6 +116,10 @@ export function ChildProfileEditForm({ child }: { child: Child }) {
           className="w-full"
           onClick={() => {
             setSavedMessage(null)
+            setName(child.name)
+            setBirthdate(child.birthdate)
+            setFieldErrors({})
+            setMessage(null)
             setEditing(true)
           }}
         >

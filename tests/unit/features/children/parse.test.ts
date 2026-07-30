@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblemError } from '@/lib/api/error'
 import { isUuid, parseChildCreate, parseChildUpdate } from '@/features/children/server/parse'
+
+afterEach(() => vi.useRealTimers())
 
 function expectValidationError(fn: () => void, expectedPath: string) {
   try {
@@ -72,6 +74,13 @@ describe('parseChildCreate', () => {
       () => parseChildCreate({ name: 'はると', birthdate: future }),
       'body.birthdate',
     )
+  })
+
+  it('accepts the current Hana calendar day after JST midnight', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-29T15:30:00.000Z'))
+    const out = parseChildCreate({ name: '合成の呼び名', birthdate: '2026-07-30' })
+    expect(out.birthdate.toISOString().slice(0, 10)).toBe('2026-07-30')
   })
 })
 

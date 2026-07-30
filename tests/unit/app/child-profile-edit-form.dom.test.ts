@@ -6,8 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblemError } from '@/lib/api/error'
 
 const mocks = vi.hoisted(() => ({
+  refresh: vi.fn(),
   updateChild: vi.fn(),
   pending: false,
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: mocks.refresh }),
 }))
 
 vi.mock('@/features/children/client/use-children', () => ({
@@ -111,6 +116,7 @@ describe('ISSUE-127 child profile edit form', () => {
       childId: child.id,
       body: { name: '更新後の呼び名', birthdate: '2025-12-01' },
     })
+    expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(document.querySelector('[role="status"]')?.textContent).toContain('変更しました')
   })
 
