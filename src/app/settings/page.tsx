@@ -24,7 +24,7 @@ import {
 import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 import { settingsTrustCenterCopy } from '@/lib/ui/settings-trust-center-copy'
 import { signInPath } from '@/lib/auth/safe-redirect'
-import { signOutAndClear } from '@/features/auth/client/sign-out'
+import { clearLocalSessionState, signOutAndClear } from '@/features/auth/client/sign-out'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -53,9 +53,12 @@ export default function SettingsPage() {
     setSignOutError(null)
     try {
       await signOutAndClear({
-        clearQueryCache: () => queryClient.clear(),
-        clearImageCache: () => imageUrlCache.clearAll(),
-        clearRecordDraft: () => recordDraftStore.clear(),
+        clearLocalState: () =>
+          clearLocalSessionState([
+            () => queryClient.clear(),
+            () => imageUrlCache.clearAll(),
+            () => recordDraftStore.clear(),
+          ]),
       })
       router.push('/sign-in')
     } catch {
