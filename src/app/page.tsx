@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -15,6 +16,10 @@ import { fetchMemoriesWithCovers, type MemoryListItem } from '@/features/memorie
 // Auth shell and streamed body stay separate so the first paint remains light.
 
 export const dynamic = 'force-dynamic'
+export const metadata: Metadata = {
+  title: 'ホーム | Hana',
+  description: 'Hana のホーム',
+}
 
 function daysBetween(from: Date, to: Date): number {
   const dayMs = 24 * 60 * 60 * 1000

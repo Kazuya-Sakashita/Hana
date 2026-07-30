@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Camera } from 'lucide-react'
@@ -16,6 +17,11 @@ import {
   normalizeAlbumMonth,
   type MemoryDateRange,
 } from '@/features/memories/month'
+
+export const metadata: Metadata = {
+  title: 'アルバム | Hana',
+  description: 'Hana のアルバム',
+}
 
 // ISSUE-057: Album keepsake refresh.
 // Keep SSR first page + Suspense while changing only the visual hierarchy.

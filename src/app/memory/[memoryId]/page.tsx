@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
@@ -14,6 +15,11 @@ import { fetchMemoryWithPreviews } from '@/features/memories/server/queries'
 import { ProductEventMarker } from '@/features/metrics/client/product-event-marker'
 import { signInPath } from '@/lib/auth/safe-redirect'
 import { quietStateCopy, recordSavedLandingTitle } from '@/lib/ui/quiet-state-copy'
+
+export const metadata: Metadata = {
+  title: '記録のページ | Hana',
+  description: 'Hana に保存した記録のページ',
+}
 
 // ISSUE-057: Memory detail keepsake refresh.
 // Keep auth and ownership boundaries intact while making photo and story primary.
