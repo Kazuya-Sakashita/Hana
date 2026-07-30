@@ -78,6 +78,30 @@ describe('ISSUE-127 child profile edit form', () => {
     expect(findButton('呼び名と うまれたひを なおす')).toBeTruthy()
   })
 
+  it('uses the latest profile values when editing is opened again', async () => {
+    await act(async () => findButton('変更せず もどる').click())
+    await act(async () =>
+      root.render(
+        createElement(ChildProfileEditForm, {
+          child: {
+            ...child,
+            name: '再取得後の呼び名',
+            birthdate: '2025-12-24',
+            updated_at: '2026-07-30T00:00:00.000Z',
+          },
+        }),
+      ),
+    )
+    await act(async () => findButton('呼び名と うまれたひを なおす').click())
+
+    expect((document.querySelector('#settings-child-name') as HTMLInputElement).value).toBe(
+      '再取得後の呼び名',
+    )
+    expect((document.querySelector('#settings-child-birthdate') as HTMLInputElement).value).toBe(
+      '2025-12-24',
+    )
+  })
+
   it('rejects a blank name and future birthdate before calling the API', async () => {
     await act(async () => {
       setInputValue(document.querySelector('#settings-child-name') as HTMLInputElement, '   ')

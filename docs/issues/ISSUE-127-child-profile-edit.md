@@ -48,6 +48,6 @@ Product UX / Privacy / Accessibility レビュー、`pnpm pr:gate`、`git diff -
 
 ## 検証結果
 
-- focused test: 39 passed
-- `pnpm pr:gate`: 123 files / 978 tests、契約 QA、production build 成功
+- focused test: 40 passed
+- `pnpm pr:gate`: 123 files / 979 tests、契約 QA、production build 成功
 - JST 日付境界、保存後の Router Cache refresh、最新プロフィールでの編集開始を回帰テスト済み
