@@ -124,7 +124,7 @@ function parseBirthdate(value: unknown, errors: FieldError[], required: boolean)
     return null
   }
   const date = new Date(`${value}T00:00:00Z`)
-  if (Number.isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
     errors.push({
       path: 'body.birthdate',
       reason: 'invalid_format',
