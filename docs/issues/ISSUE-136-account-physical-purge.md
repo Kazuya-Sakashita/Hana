@@ -1,0 +1,53 @@
+---
+id: ISSUE-136
+title: 退会30日後にDB・Storage・Authを物理削除する
+priority: P0
+status: in_progress
+size: M
+created_at: 2026-07-31
+github_issue: 295
+release_gate: mvp_quality
+blocked_by:
+  - ISSUE-135
+requires_human_review:
+  - privacy
+  - security
+  - operations
+---
+
+# ISSUE-136: 退会30日後にDB・Storage・Authを物理削除する
+
+## 目的 (Why)
+
+退会済み利用者の子どもデータを、規定の猶予期間後にStorageを含めて完全削除する。
+
+## スコープ (What)
+
+- 期限到達対象の安全な選択
+- original・thumbnail・previewの削除
+- DBとAuth userの削除
+- 冪等、部分失敗再試行、dry-run
+
+## 実装契約
+
+- 削除段階を`storage → auth → database`の一方向で永続化し、成功済み段階から再開する
+- leaseにはランダムなfencing tokenを使い、古いworkerは次段階へ進めない
+- Storage削除成功後かつAuth hard delete前にAI生成ログの`user_id`と`child_id`をnullにし、匿名集計だけを保持する
+- 完了時にAccountDeletionRequestを削除し、user IDとreceipt hashを保持しない
+- 所有prefixをページング列挙し、Image行がある全variantに加えて未confirm orphanも削除する
+- ISSUE-141は退会していない利用者を含む通常時の期限切れorphan清掃を扱う
+- 10回失敗は`failed`へ終端し、件数監視後に人間が原因確認して再投入する
+
+## 受け入れ条件 (Acceptance Criteria)
+
+- [x] 猶予期間前のアカウントを削除しない
+- [x] 本人所有の全画像variantを漏れなく対象にする
+- [x] Storage失敗時にDB/Authを先行削除しない
+- [x] 同じ対象への再実行が安全である
+- [x] 他ユーザーを誤削除できない統合テストがある
+- [x] 件数だけのredacted dry-runを提供する
+- [ ] 実Storage相当のsmokeと運用runbookがある
+
+## Blocked by
+
+- ISSUE-135

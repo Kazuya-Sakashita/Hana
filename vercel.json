@@ -3,6 +3,10 @@
     {
       "path": "/internal/account-deletion-revocations",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/internal/account-deletion-purges",
+      "schedule": "17 * * * *"
     }
   ]
 }

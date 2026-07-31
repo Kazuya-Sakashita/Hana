@@ -138,6 +138,7 @@ export async function POST(request: Request) {
             requestedAt: now,
             accessBlockedAt: now,
             purgeAfter,
+            nextPurgeAttemptAt: purgeAfter,
           },
         })
       })
