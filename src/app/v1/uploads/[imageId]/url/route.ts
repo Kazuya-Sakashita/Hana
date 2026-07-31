@@ -48,6 +48,14 @@ function parseSize(value: string | null): ImageSize {
   ])
 }
 
+function parseContext(value: string | null): 'record-draft' | null {
+  if (value === null || value === '') return null
+  if (value === 'record-draft') return value
+  throw problems.validation([
+    { path: 'query.context', reason: 'invalid', message: '無効な利用文脈です' },
+  ])
+}
+
 type Params = { params: Promise<{ imageId: string }> }
 
 export async function GET(request: Request, { params }: Params) {
@@ -59,13 +67,24 @@ export async function GET(request: Request, { params }: Params) {
       throw problems.notFound('画像が見つかりません')
     }
 
-    const size = parseSize(new URL(request.url).searchParams.get('size'))
+    const searchParams = new URL(request.url).searchParams
+    const size = parseSize(searchParams.get('size'))
+    const context = parseContext(searchParams.get('context'))
 
     const { signedUrl, expiresAt } = await prisma.$transaction(
       async (transaction) => {
         await lockImageAccess(transaction, [imageId])
         const image = await transaction.image.findFirst({
-          where: { id: imageId, ...activeImageAccessWhere(user.id) },
+          where:
+            context === 'record-draft'
+              ? {
+                  id: imageId,
+                  userId: user.id,
+                  deletedAt: null,
+                  memoryId: null,
+                  metadataSanitizedAt: { not: null },
+                }
+              : { id: imageId, ...activeImageAccessWhere(user.id) },
           select: { id: true, userId: true, storageKey: true, metadataSanitizedAt: true },
         })
         if (!image) {

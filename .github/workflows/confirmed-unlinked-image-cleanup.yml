@@ -1,0 +1,27 @@
+name: Confirmed unlinked image cleanup
+
+on:
+  schedule:
+    - cron: '3,18,33,48 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: confirmed-unlinked-image-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Invoke protected cleanup endpoint
+        env:
+          HANA_APP_URL: ${{ secrets.HANA_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$HANA_APP_URL"
+          test -n "$CRON_SECRET"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$HANA_APP_URL/internal/confirmed-unlinked-image-cleanups"

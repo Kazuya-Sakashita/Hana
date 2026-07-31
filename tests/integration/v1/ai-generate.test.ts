@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   advisoryLock: vi.fn(),
   transaction: vi.fn(),
   storageDownload: vi.fn(),
+  adminSignals: [] as AbortSignal[],
   resizeForClaude: vi.fn(),
   messagesCreate: vi.fn(),
 }))
@@ -24,9 +25,12 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({
-  createSupabaseAdminClient: () => ({
-    storage: { from: () => ({ download: mocks.storageDownload }) },
-  }),
+  createSupabaseAdminClient: ({ signal }: { signal: AbortSignal }) => {
+    mocks.adminSignals.push(signal)
+    return {
+      storage: { from: () => ({ download: mocks.storageDownload }) },
+    }
+  },
 }))
 
 vi.mock('@/lib/ai/client', () => ({
@@ -154,6 +158,7 @@ function mockResizeIdentity() {
 }
 
 beforeEach(() => {
+  mocks.adminSignals.length = 0
   mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-default' })
   mocks.aiGenerationUpdate.mockImplementation(async ({ where }: { where: { id: string } }) => ({
     id: where.id,
@@ -238,8 +243,10 @@ describe('POST /v1/ai/generate', () => {
     expect(mocks.imageFindMany).toHaveBeenCalledWith({
       where: {
         id: { in: [IMAGE_ID] },
+        userId: USER_ID,
         deletedAt: null,
-        OR: [{ memoryId: null }, { memory: { is: { deletedAt: null } } }],
+        memoryId: null,
+        metadataSanitizedAt: { not: null },
       },
       select: { id: true, userId: true, storageKey: true, contentType: true },
     })
@@ -307,6 +314,26 @@ describe('POST /v1/ai/generate', () => {
     })
   })
 
+  it('downloads and sends images in request order even when the database returns another order', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    const requestedIds = IMAGE_IDS.slice(0, 2)
+    const rows = makeImageRows(requestedIds)
+    mocks.imageFindMany.mockResolvedValue([rows[1], rows[0]])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+    mockClaudeSuccess(syntheticClaudeJson())
+
+    const response = await POST(jsonRequest({ ...validBody, image_ids: requestedIds }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.storageDownload.mock.calls.map(([key]) => key)).toEqual([
+      rows[0]?.storageKey,
+      rows[1]?.storageKey,
+    ])
+  })
+
   it('stops before external AI submission when consent is revoked during image preparation', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
     mocks.profileFindUnique
@@ -346,7 +373,8 @@ describe('POST /v1/ai/generate', () => {
         id: { in: [IMAGE_ID] },
         userId: USER_ID,
         deletedAt: null,
-        OR: [{ memoryId: null }, { memory: { is: { userId: USER_ID, deletedAt: null } } }],
+        memoryId: null,
+        metadataSanitizedAt: { not: null },
       },
       select: { id: true },
     })
@@ -421,7 +449,7 @@ describe('POST /v1/ai/generate', () => {
     expect(transactionCompleted).toBe(true)
   })
 
-  it('aborts the external AI request before the image lock transaction deadline', async () => {
+  it('aborts all external image and AI work within the twelve second product deadline', async () => {
     vi.useFakeTimers()
     authedWithConsent()
     mocks.aiGenerationCount.mockResolvedValue(0)
@@ -448,7 +476,7 @@ describe('POST /v1/ai/generate', () => {
     expect(mocks.messagesCreate).toHaveBeenCalledTimes(1)
     expect(vendorSignal?.aborted).toBe(false)
 
-    await vi.advanceTimersByTimeAsync(25_000)
+    await vi.advanceTimersByTimeAsync(12_000)
     const response = await responsePromise
 
     expect(response.status).toBe(500)
@@ -461,7 +489,48 @@ describe('POST /v1/ai/generate', () => {
     )
   })
 
-  it('starts download and resize for five images in parallel', async () => {
+  it('counts five-image preparation time toward the twelve second product deadline', async () => {
+    vi.useFakeTimers()
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue(makeImageRows(IMAGE_IDS))
+    mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-five-image-deadline' })
+    mockResizeIdentity()
+
+    const blob = {
+      arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer,
+    }
+    mocks.storageDownload.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ data: blob, error: null }), 3_000)),
+    )
+
+    let vendorSignal: AbortSignal | undefined
+    mocks.messagesCreate.mockImplementation(
+      (_payload: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise((_, reject) => {
+          vendorSignal = options?.signal
+          options?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }),
+    )
+
+    const responsePromise = POST(jsonRequest({ ...validBody, image_ids: IMAGE_IDS }))
+    await vi.advanceTimersByTimeAsync(9_000)
+
+    expect(mocks.storageDownload).toHaveBeenCalledTimes(5)
+    expect(mocks.messagesCreate).toHaveBeenCalledTimes(1)
+    expect(vendorSignal?.aborted).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    const response = await responsePromise
+
+    expect(response.status).toBe(500)
+    expect(vendorSignal?.aborted).toBe(true)
+  })
+
+  it('prepares five images with concurrency two and preserves all inputs', async () => {
     authedWithConsent()
     mocks.aiGenerationCount.mockResolvedValue(0)
     mocks.childFindFirst.mockResolvedValue(childRow)
@@ -472,43 +541,22 @@ describe('POST /v1/ai/generate', () => {
     const blob = {
       arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer,
     }
-    const downloadResolvers: Array<(value: { data: typeof blob; error: null }) => void> = []
-    const resizeResolvers: Array<() => void> = []
-    mocks.storageDownload.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          downloadResolvers.push(resolve)
-        }),
-    )
-    mocks.resizeForClaude.mockImplementation(
-      (buf: Buffer) =>
-        new Promise((resolve) => {
-          resizeResolvers.push(() => resolve({ buffer: buf, mediaType: 'image/jpeg' as const }))
-        }),
-    )
-
-    const resPromise = POST(jsonRequest({ ...validBody, image_ids: IMAGE_IDS }))
-
-    await vi.waitFor(() => {
-      expect(mocks.storageDownload).toHaveBeenCalledTimes(5)
+    let activePreparations = 0
+    let maxActivePreparations = 0
+    mocks.storageDownload.mockImplementation(async () => {
+      activePreparations += 1
+      maxActivePreparations = Math.max(maxActivePreparations, activePreparations)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activePreparations -= 1
+      return { data: blob, error: null }
     })
-    expect(mocks.resizeForClaude).not.toHaveBeenCalled()
+    mockResizeIdentity()
 
-    for (const resolve of downloadResolvers) {
-      resolve({ data: blob, error: null })
-    }
-
-    await vi.waitFor(() => {
-      expect(mocks.resizeForClaude).toHaveBeenCalledTimes(5)
-    })
-    expect(mocks.messagesCreate).not.toHaveBeenCalled()
-
-    for (const resolve of resizeResolvers) {
-      resolve()
-    }
-
-    const res = await resPromise
+    const res = await POST(jsonRequest({ ...validBody, image_ids: IMAGE_IDS }))
     expect(res.status).toBe(200)
+    expect(maxActivePreparations).toBe(2)
+    expect(mocks.storageDownload).toHaveBeenCalledTimes(5)
+    expect(mocks.resizeForClaude).toHaveBeenCalledTimes(5)
   })
 
   it('returns 500 and skips Claude when one image download fails', async () => {
@@ -533,6 +581,38 @@ describe('POST /v1/ai/generate', () => {
     expect(body.reason).toBe('ai_generation_failed')
     expect(mocks.messagesCreate).not.toHaveBeenCalled()
     expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
+  })
+
+  it('aborts an in-flight sibling and does not start queued images after preparation fails', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue(makeImageRows(IMAGE_IDS.slice(0, 3)))
+    mockResizeIdentity()
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    mocks.storageDownload.mockImplementation(async (storageKey: string) => {
+      const signal = mocks.adminSignals.at(-1)!
+      if (storageKey.endsWith('001')) {
+        return { data: null, error: { message: 'synthetic failure' } }
+      }
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
+          once: true,
+        })
+      })
+    })
+
+    const response = await POST(jsonRequest({ ...validBody, image_ids: IMAGE_IDS.slice(0, 3) }))
+
+    expect(response.status).toBe(500)
+    expect(mocks.storageDownload).toHaveBeenCalledTimes(2)
+    expect(mocks.adminSignals).toHaveLength(2)
+    expect(mocks.adminSignals[1]?.aborted).toBe(true)
+    expect(mocks.resizeForClaude).not.toHaveBeenCalled()
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+    expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
+    errorLog.mockRestore()
   })
 
   it('returns 500 ai_generation_failed when Claude returns invalid JSON', async () => {
