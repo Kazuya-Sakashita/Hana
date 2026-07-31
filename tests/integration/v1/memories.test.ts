@@ -97,6 +97,7 @@ const memoryRow = {
       createdAt: new Date('2026-05-23T10:00:00Z'),
       memoryPosition: 0,
       storageKey: 'uploads/abc/202605/img.jpg',
+      metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
     },
   ],
 }
@@ -225,6 +226,7 @@ describe('GET /v1/memories', () => {
           id: '00000000-0000-4000-8000-000000000030',
           createdAt: new Date('2026-05-22T10:00:00Z'),
           storageKey: 'uploads/abc/202605/img-older.jpg',
+          metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
         },
       ],
     }
@@ -298,6 +300,31 @@ describe('GET /v1/memories', () => {
     }
     expect(body.data[0]?.cover_thumbnail_url).toBeNull()
 
+    spy.mockRestore()
+  })
+
+  it('does not use an unsanitized original as the list fallback', async () => {
+    authed()
+    mocks.memoryFindMany.mockResolvedValue([
+      {
+        ...memoryRow,
+        images: [{ ...memoryRow.images[0], metadataSanitizedAt: null }],
+      },
+    ])
+    mocks.createSignedUrl.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'variant missing' },
+    })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await LIST_GET(jsonRequest('/v1/memories?limit=20', 'GET'))
+    const body = (await response.json()) as {
+      data: Array<{ cover_thumbnail_url: string | null }>
+    }
+
+    expect(response.status).toBe(200)
+    expect(body.data[0]?.cover_thumbnail_url).toBeNull()
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
     spy.mockRestore()
   })
 

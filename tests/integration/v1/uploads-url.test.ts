@@ -194,6 +194,22 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
   })
 
+  it('does not fall back to an unsanitized original when a variant is missing', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue({ ...imageRow, metadataSanitizedAt: null })
+    mocks.createSignedUrl.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'variant missing' },
+    })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await call(IMG_ID, 'preview')
+
+    expect(response.status).toBe(500)
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
+    spy.mockRestore()
+  })
+
   it('keeps the image lock transaction open until signing finishes', async () => {
     authed()
     mocks.imageFindFirst.mockResolvedValue(imageRow)
