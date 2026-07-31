@@ -9,7 +9,7 @@ on:
 jobs:
   pr-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -34,6 +34,7 @@ jobs:
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/hana_ci
       ANTHROPIC_API_KEY: ci-dummy-anthropic-key
       AI_MODEL: claude-haiku-4-5
+      HANA_SYNTHETIC_E2E: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -58,3 +59,23 @@ jobs:
 
       - name: Run PR gate
         run: pnpm pr:gate
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build authenticated browser fixture target
+        run: pnpm e2e:build
+
+      - name: Run authenticated golden path
+        run: pnpm e2e
+
+      - name: Upload synthetic failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-140-synthetic-browser-failure
+          path: |
+            test-results/issue-140/**/test-failed-*.png
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
