@@ -76,6 +76,10 @@ requires_human_review:
 
 - 2026-08-01: 5枚上限、6枚目の説明、入力保持、1枚目の表紙表示を人間が確認し、問題なし
 
+### Accessibility確認
+
+- 2026-08-01: キーボードで2枚目を上へ移動し、表紙表示と移動後のフォーカス維持を人間が確認し、問題なし
+
 ## 自動検証・専門レビュー
 
 - `pnpm pr:gate`: PASS（140 files / 1099 tests、lint、typecheck、buildを含む）
