@@ -54,11 +54,17 @@ export const settingsTrustCenterCopy = {
     evidenceValue:
       'サポートやレビュー用の証跡に、実写真・実名・メール・生年月日・画像URL・presigned URL・保存先のキー・prompt・AI生成本文は残しません。',
   },
+  accountDeletion: {
+    eyebrow: '退会について',
+    title: 'Hanaを使わなくなるとき',
+    description: '退会すると、すべての端末からHanaを使えなくなり、写真と記録を開けなくなります。',
+    button: '退会の手続きを確認する',
+  },
   future: {
     eyebrow: '準備中',
     title: 'まだこの画面では操作できません',
-    description: 'export、退会、家族共有、Hana Plus は、操作できる状態になってから表示します。',
+    description: 'export、家族共有、Hana Plus は、操作できる状態になってから表示します。',
     unavailable: '今は操作できません。',
-    items: ['export / 退会', '家族共有 / Hana Plus'] as const,
+    items: ['export', '家族共有 / Hana Plus'] as const,
   },
 } as const

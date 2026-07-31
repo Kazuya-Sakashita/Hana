@@ -1,0 +1,8 @@
+type: object
+additionalProperties: false
+required: [confirmation]
+properties:
+  confirmation:
+    type: string
+    enum: [退会する]
+    description: 不可逆操作を理解したことを示す完全一致の確認文言

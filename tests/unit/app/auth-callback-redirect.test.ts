@@ -2,14 +2,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
+  getUser: vi.fn(),
+  signOut: vi.fn(),
+  deletionRequestFindUnique: vi.fn(),
+  profileUpsert: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: vi.fn(async () => ({
     auth: {
       exchangeCodeForSession: mocks.exchangeCodeForSession,
+      getUser: mocks.getUser,
+      signOut: mocks.signOut,
     },
   })),
+}))
+
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: () => undefined,
+  }),
+}))
+
+vi.mock('@/server/db/prisma', () => ({
+  prisma: {
+    accountDeletionRequest: { findUnique: mocks.deletionRequestFindUnique },
+    profile: { upsert: mocks.profileUpsert },
+  },
 }))
 
 import { GET } from '@/app/auth/callback/route'
@@ -19,6 +38,11 @@ describe('OAuth callback redirect', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://hana.example')
     mocks.exchangeCodeForSession.mockReset()
     mocks.exchangeCodeForSession.mockResolvedValue({ error: null })
+    mocks.getUser.mockResolvedValue({
+      data: { user: { id: '8f7e6d5c-4b3a-4291-8765-0123456789ab' } },
+    })
+    mocks.deletionRequestFindUnique.mockResolvedValue(null)
+    mocks.profileUpsert.mockResolvedValue({})
   })
 
   afterEach(() => {

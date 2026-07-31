@@ -1,0 +1,15 @@
+type: object
+additionalProperties: false
+required: [status, requested_at, purge_after]
+properties:
+  status:
+    type: string
+    enum: [accepted]
+  requested_at:
+    type: string
+    format: date-time
+    description: 最初に退会を受け付けた時刻
+  purge_after:
+    type: string
+    format: date-time
+    description: 物理削除処理の対象になる時刻（受付から30日後）

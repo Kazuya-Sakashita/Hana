@@ -34,7 +34,8 @@ export interface paths {
         /**
          * 現在のユーザーを取得
          * @description Supabase Auth セッションから現在のユーザー (AppUser) を返す。
-         *     profile レコードが無い場合はサーバ側で lazy に作成する。
+         *     profileはOAuth callbackで明示的に作成する。profileが無い場合や
+         *     `access_blocked_at`が設定済みの場合、通常APIはユーザーを返さない。
          */
         get: operations["getCurrentUser"];
         put?: never;
@@ -74,6 +75,82 @@ export interface paths {
          *     撤回前に開始したAI生成は完了する場合がある。
          */
         delete: operations["revokeAiConsent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/account-deletion-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 退会用のGoogle再認証を開始する
+         * @description 現在のactive userに対して、5分間・一回限り有効な退会intentを作成し、
+         *     Google OAuth再認証URLを返す。intentのraw tokenはHttpOnly cookieだけに保持し、
+         *     DB、レスポンス、URL、ログへ出さない。
+         *
+         *     OAuth callbackで再認証後のSupabase user idがintent作成者と一致した場合だけ、
+         *     intentをverifiedにする。email一致やtoken refreshだけではverifiedにしない。
+         */
+        post: operations["createAccountDeletionIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/account-deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 退会を受け付け、通常アクセスを即時停止する
+         * @description 同一userでverifiedとなった未使用・期限内の退会intentと、
+         *     完全一致の確認文言を検証して退会を受け付ける。
+         *
+         *     DB transactionでprofileのaccess block、退会受付、purge期限、
+         *     子ども・記録・画像の論理削除、AI同意解除、Auth無効化jobを同時に確定する。
+         *     commit後はlease・backoff・上限付きworkerがSupabase Auth無効化を再試行する。
+         *     provider障害や既に削除済みの応答があってもDB access blockを戻さない。
+         *
+         *     通常画面・APIからのアクセスは受付直後に停止する。
+         *     受付前に発行済みの画像signed URLは最大30分で失効する。
+         *     同じ利用者からの重複要求は最初のrequested_at / purge_afterを返す。
+         */
+        post: operations["requestAccountDeletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/account-deletion/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 退会受付結果を確認する
+         * @description 退会再認証時に発行したHttpOnly receipt cookieを使い、応答喪失後の受付結果を確認する。
+         *     raw receiptはDB、レスポンス、URL、ログへ出さない。一致する受付がない場合は404を返す。
+         */
+        get: operations["getAccountDeletionStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1100,6 +1177,39 @@ export interface components {
              */
             tags: string[];
         };
+        AccountDeletionIntentResponse: {
+            /**
+             * Format: uri
+             * @description Google OAuth再認証へ遷移するための短寿命URL。ログへ保存しない。
+             */
+            authorization_url: string;
+            /**
+             * Format: date-time
+             * @description intentの有効期限（UTC、作成から5分）
+             */
+            expires_at: string;
+        };
+        AccountDeletionRequest: {
+            /**
+             * @description 不可逆操作を理解したことを示す完全一致の確認文言
+             * @enum {string}
+             */
+            confirmation: "退会する";
+        };
+        AccountDeletionResponse: {
+            /** @enum {string} */
+            status: "accepted";
+            /**
+             * Format: date-time
+             * @description 最初に退会を受け付けた時刻
+             */
+            requested_at: string;
+            /**
+             * Format: date-time
+             * @description 物理削除処理の対象になる時刻（受付から30日後）
+             */
+            purge_after: string;
+        };
     };
     responses: {
         /**
@@ -1355,6 +1465,86 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    createAccountDeletionIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 再認証intentを作成 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDeletionIntentResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    requestAccountDeletion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 退会受付の再送を識別するUUID */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeletionRequest"];
+            };
+        };
+        responses: {
+            /** @description 退会受付済み。重複要求も同じ状態を返す */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDeletionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getAccountDeletionStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 退会受付済み */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDeletionResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
     };

@@ -76,6 +76,22 @@ export const problems = {
       503,
       'サインアウトを完了できませんでした。もう一度お試しください',
     ),
+  authProviderUnavailable: () =>
+    build(
+      'auth_provider_unavailable',
+      'Service Unavailable',
+      503,
+      '本人確認を開始できませんでした。少し時間をおいてお試しください',
+    ),
+  accountDeletionReauthenticationRequired: () =>
+    build(
+      'account_deletion_reauthentication_required',
+      'Forbidden',
+      403,
+      '退会前にGoogleで本人確認を行ってください',
+    ),
+  accountDeletionAlreadyProcessing: () =>
+    build('account_deletion_already_processing', 'Conflict', 409, '退会の受付状態を確認しています'),
   aiGenerationFailed: () =>
     build(
       'ai_generation_failed',
