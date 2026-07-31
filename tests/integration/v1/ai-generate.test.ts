@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   profileFindUnique: vi.fn(),
   profileCreate: vi.fn(),
+  profileUpdate: vi.fn(),
   childFindFirst: vi.fn(),
   imageFindMany: vi.fn(),
   aiGenerationCount: vi.fn(),
@@ -56,6 +57,7 @@ vi.mock('@/server/db/prisma', () => ({
 }))
 
 import { POST } from '@/app/v1/ai/generate/route'
+import { DELETE as REVOKE_CONSENT } from '@/app/v1/me/ai-consent/route'
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const OTHER_USER_ID = '11111111-2222-4333-8444-555555555555'
@@ -164,6 +166,7 @@ beforeEach(() => {
       callback: (transaction: {
         $executeRaw: typeof mocks.advisoryLock
         image: { findMany: typeof mocks.imageFindMany }
+        profile: { findUnique: typeof mocks.profileFindUnique }
         aiGeneration: {
           count: typeof mocks.aiGenerationCount
           create: typeof mocks.aiGenerationCreate
@@ -173,6 +176,7 @@ beforeEach(() => {
       callback({
         $executeRaw: mocks.advisoryLock,
         image: { findMany: mocks.imageFindMany },
+        profile: { findUnique: mocks.profileFindUnique },
         aiGeneration: {
           count: mocks.aiGenerationCount,
           create: mocks.aiGenerationCreate,
@@ -296,7 +300,7 @@ describe('POST /v1/ai/generate', () => {
         data: expect.objectContaining({ succeeded: true, errorReason: null }),
       }),
     )
-    expect(mocks.advisoryLock).toHaveBeenCalledTimes(2)
+    expect(mocks.advisoryLock).toHaveBeenCalledTimes(3)
     expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), {
       maxWait: 5_000,
       timeout: 30_000,
@@ -324,6 +328,26 @@ describe('POST /v1/ai/generate', () => {
     expect(await res.json()).toMatchObject({ reason: 'ai_consent_required' })
     expect(mocks.messagesCreate).not.toHaveBeenCalled()
     expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
+  })
+
+  it('rechecks consent under the shared lock immediately before vendor submission', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
+    mocks.profileFindUnique
+      .mockResolvedValueOnce(profileConsented)
+      .mockResolvedValueOnce(profileConsented)
+      .mockResolvedValueOnce(profileNoConsent)
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+
+    const res = await POST(jsonRequest(validBody))
+
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ reason: 'ai_consent_required' })
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+    expect(mocks.aiGenerationCreate).toHaveBeenCalledOnce()
   })
 
   it('stops before external AI submission when an image is deleted during preparation', async () => {
@@ -388,6 +412,7 @@ describe('POST /v1/ai/generate', () => {
         callback: (transaction: {
           $executeRaw: typeof mocks.advisoryLock
           image: { findMany: typeof mocks.imageFindMany }
+          profile: { findUnique: typeof mocks.profileFindUnique }
           aiGeneration: {
             count: typeof mocks.aiGenerationCount
             create: typeof mocks.aiGenerationCreate
@@ -398,6 +423,7 @@ describe('POST /v1/ai/generate', () => {
         const result = await callback({
           $executeRaw: mocks.advisoryLock,
           image: { findMany: mocks.imageFindMany },
+          profile: { findUnique: mocks.profileFindUnique },
           aiGeneration: {
             count: mocks.aiGenerationCount,
             create: mocks.aiGenerationCreate,
@@ -411,7 +437,7 @@ describe('POST /v1/ai/generate', () => {
     const responsePromise = POST(jsonRequest(validBody))
     await vi.waitFor(() => expect(mocks.messagesCreate).toHaveBeenCalledTimes(1))
 
-    expect(mocks.advisoryLock).toHaveBeenCalledTimes(2)
+    expect(mocks.advisoryLock).toHaveBeenCalledTimes(3)
     expect(transactionCompleted).toBe(false)
 
     resolveVendor?.(syntheticClaudeJson())
@@ -419,6 +445,102 @@ describe('POST /v1/ai/generate', () => {
 
     expect(response.status).toBe(200)
     expect(transactionCompleted).toBe(true)
+  })
+
+  it('does not commit revocation until an already-started vendor attempt finishes', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mocks.profileUpdate.mockResolvedValue({ ...profileNoConsent })
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+
+    let resolveVendor: ((value: unknown) => void) | undefined
+    mocks.messagesCreate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveVendor = resolve
+        }),
+    )
+
+    let consentLocked = false
+    const consentWaiters: Array<() => void> = []
+    mocks.transaction.mockImplementation(
+      async (callback: (transaction: never) => Promise<unknown>) => {
+        let releaseConsent: (() => void) | undefined
+        const transaction = {
+          $executeRaw: async (_strings: TemplateStringsArray, value: unknown) => {
+            if (typeof value === 'string' && value.startsWith('hana:ai-consent:')) {
+              if (consentLocked) await new Promise<void>((resolve) => consentWaiters.push(resolve))
+              consentLocked = true
+              releaseConsent = () => {
+                consentLocked = false
+                consentWaiters.shift()?.()
+              }
+            }
+            return 1
+          },
+          profile: { findUnique: mocks.profileFindUnique, update: mocks.profileUpdate },
+          image: { findMany: mocks.imageFindMany },
+          aiGeneration: {
+            count: mocks.aiGenerationCount,
+            create: mocks.aiGenerationCreate,
+          },
+        }
+        try {
+          return await callback(transaction as never)
+        } finally {
+          releaseConsent?.()
+        }
+      },
+    )
+
+    const generationResponse = POST(jsonRequest(validBody))
+    await vi.waitFor(() => expect(mocks.messagesCreate).toHaveBeenCalledOnce())
+
+    const revokeResponse = REVOKE_CONSENT()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.profileUpdate).not.toHaveBeenCalled()
+
+    resolveVendor?.({
+      content: [{ type: 'text', text: syntheticClaudeJson() }],
+      usage: { input_tokens: 100, output_tokens: 50 },
+    })
+
+    expect((await generationResponse).status).toBe(200)
+    expect((await revokeResponse).status).toBe(200)
+    expect(mocks.profileUpdate).toHaveBeenCalledWith({
+      where: { id: USER_ID },
+      data: { aiConsentAt: null },
+    })
+  })
+
+  it('does not count a reserved generation when revocation wins before vendor send', async () => {
+    authedWithConsent()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.imageFindMany.mockResolvedValue([imageRow])
+    mocks.profileFindUnique
+      .mockResolvedValueOnce(profileConsented)
+      .mockResolvedValueOnce({ aiConsentAt: new Date('2026-05-23T00:00:00Z') })
+      .mockResolvedValueOnce({ aiConsentAt: null })
+    mockStorageReturnsImage()
+    mockResizeIdentity()
+
+    const response = await POST(jsonRequest(validBody))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ reason: 'ai_consent_required' })
+    expect(mocks.messagesCreate).not.toHaveBeenCalled()
+    expect(mocks.aiGenerationUpdate).toHaveBeenCalledWith({
+      where: { id: 'gen-default' },
+      data: expect.objectContaining({
+        succeeded: false,
+        countsTowardQuota: false,
+        errorReason: 'ai_consent_required',
+      }),
+    })
   })
 
   it('aborts the external AI request before the image lock transaction deadline', async () => {

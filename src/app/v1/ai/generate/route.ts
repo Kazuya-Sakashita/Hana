@@ -19,6 +19,7 @@ import { resizeForClaude } from '@/features/ai/server/resize'
 import { activeImageAccessWhere } from '@/features/uploads/server/active-image-access'
 import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { ApiProblemError } from '@/lib/api/error'
+import { lockAiConsent } from '@/features/ai/server/consent-lock'
 
 export const dynamic = 'force-dynamic'
 // Claude API は haiku でも 5〜15 秒かかることがある
@@ -154,6 +155,14 @@ export async function POST(request: Request) {
     try {
       generationAttempt = await prisma.$transaction(
         async (transaction) => {
+          await lockAiConsent(transaction, user.id)
+          const serializedConsent = await transaction.profile.findUnique({
+            where: { id: user.id },
+            select: { aiConsentAt: true },
+          })
+          if (!serializedConsent?.aiConsentAt) {
+            throw problems.aiConsentRequired()
+          }
           await lockImageAccess(transaction, input.imageIds)
           const latestImages = await transaction.image.findMany({
             where: {
@@ -245,6 +254,9 @@ export async function POST(request: Request) {
                 ? 'retry_failed'
                 : null,
             errorReason: isProblem ? e.reason : 'internal_error',
+            ...(isProblem && e.reason === 'ai_consent_required'
+              ? { countsTowardQuota: false }
+              : {}),
           },
         })
       } catch {
