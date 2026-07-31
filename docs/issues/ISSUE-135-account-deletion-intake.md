@@ -2,7 +2,7 @@
 id: ISSUE-135
 title: 退会受付で全セッションとデータアクセスを即時停止する
 priority: P0
-status: review
+status: done
 size: L
 created_at: 2026-07-31
 github_issue: 294
