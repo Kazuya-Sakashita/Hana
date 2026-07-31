@@ -72,6 +72,10 @@ requires_human_review:
 - Accessibility: キーボードだけで順序変更・削除でき、読み上げで枚数・位置・状態を確認する
 - Privacy: 下書き、ログ、cleanup対象と48時間猶予が画像データを漏らさないことを確認する
 
+### Product確認
+
+- 2026-08-01: 5枚上限、6枚目の説明、入力保持、1枚目の表紙表示を人間が確認し、問題なし
+
 ## 自動検証・専門レビュー
 
 - `pnpm pr:gate`: PASS（140 files / 1099 tests、lint、typecheck、buildを含む）
