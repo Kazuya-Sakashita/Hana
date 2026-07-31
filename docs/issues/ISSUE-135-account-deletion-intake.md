@@ -62,7 +62,7 @@ requires_human_review:
 - [x] 退会済みsubjectのProfileを再作成しない
 - [x] 別Googleアカウント、期限切れ、使用済みintentでは退会できない
 - [x] 既発行signed URLの最大30分残余アクセスについてPrivacy / Legal判断を記録する
-- [ ] Privacy / Security / Legalレビューを通す
+- [x] Privacy / Security / Legalレビューを通す
 
 ## 決定済みポリシー
 
@@ -72,7 +72,7 @@ requires_human_review:
 
 - 採用: 新規URL発行と通常APIを即時停止し、既発行URLはTTL満了（最大30分）までの残余アクセスとして扱う
 - 不採用: 退会受付時のStorage object隔離（移動失敗・再試行・DB整合性の複雑性が増えるため）
-- マージ前HOLD: 上記の画面文言と残余アクセス契約についてPrivacy / Legal確認を得る
+- 承認: 2026-07-31にプロダクトオーナーがA方針と画面文言を承認し、Privacy / Legalのマージ前HOLDを解除した
 
 ## Blocked by
 
