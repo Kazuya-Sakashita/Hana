@@ -54,7 +54,9 @@ describe('settings trust center', () => {
     expect(settingsTrustCenterCopy.data.description).toContain('復元機能は今は提供していません')
     expect(settingsTrustCenterCopy.data.memoryDeleteValue).toContain('この画面では約束しません')
     expect(settingsTrustCenterCopy.future.unavailable).toBe('今は操作できません。')
-    expect(settingsTrustCenterCopy.future.items).toContain('export / 退会')
+    expect(settingsTrustCenterCopy.future.items).toContain('export')
+    expect(settingsTrustCenterCopy.future.items.join(' ')).not.toContain('退会')
+    expect(settingsTrustCenterCopy.accountDeletion.button).toBe('退会の手続きを確認する')
 
     expect(copySource).not.toMatch(/zero data retention/i)
     expect(copySource).not.toContain('完全に削除されます')

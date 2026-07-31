@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-// Supabase / Prisma を vi.mock で差し替える。
-// ISSUE-017: upsert を捨て findUnique + 必要なら create に変えたので、 mock も両方提供。
-
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   findUnique: vi.fn(),
-  create: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -21,7 +17,6 @@ vi.mock('@/server/db/prisma', () => ({
   prisma: {
     profile: {
       findUnique: mocks.findUnique,
-      create: mocks.create,
     },
   },
 }))
@@ -44,6 +39,7 @@ const profileRow = {
   id: USER_ID,
   displayName: null,
   aiConsentAt: null,
+  accessBlockedAt: null,
   createdAt: new Date('2026-05-14T09:30:00Z'),
   updatedAt: new Date('2026-05-14T09:30:00Z'),
 }
@@ -53,7 +49,6 @@ describe('getCurrentUser', () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } })
     expect(await getCurrentUser()).toBeNull()
     expect(mocks.findUnique).not.toHaveBeenCalled()
-    expect(mocks.create).not.toHaveBeenCalled()
   })
 
   it('hot path: existing profile uses findUnique only (no create)', async () => {
@@ -62,7 +57,6 @@ describe('getCurrentUser', () => {
 
     const user = await getCurrentUser()
     expect(mocks.findUnique).toHaveBeenCalledWith({ where: { id: USER_ID } })
-    expect(mocks.create).not.toHaveBeenCalled()
     expect(user).toEqual({
       id: USER_ID,
       email: 'parent@example.com',
@@ -72,15 +66,23 @@ describe('getCurrentUser', () => {
     })
   })
 
-  it('cold path: missing profile triggers create (first sign-in)', async () => {
+  it('does not recreate a missing profile from a normal API request', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
     mocks.findUnique.mockResolvedValue(null)
-    mocks.create.mockResolvedValue(profileRow)
 
     const user = await getCurrentUser()
     expect(mocks.findUnique).toHaveBeenCalledWith({ where: { id: USER_ID } })
-    expect(mocks.create).toHaveBeenCalledWith({ data: { id: USER_ID } })
-    expect(user?.id).toBe(USER_ID)
+    expect(user).toBeNull()
+  })
+
+  it('returns null when account access is blocked even with a valid Auth session', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
+    mocks.findUnique.mockResolvedValue({
+      ...profileRow,
+      accessBlockedAt: new Date('2026-07-31T00:00:00Z'),
+    })
+
+    expect(await getCurrentUser()).toBeNull()
   })
 
   it('serializes aiConsentAt when present', async () => {

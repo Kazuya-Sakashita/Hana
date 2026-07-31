@@ -75,7 +75,8 @@ paths:
       summary: 現在のユーザーを取得
       description: |
         Supabase Auth セッションから現在のユーザー (AppUser) を返す。
-        profile レコードが無い場合はサーバ側で lazy に作成する。
+        profileはOAuth callbackで明示的に作成する。profileが無い場合や
+        `access_blocked_at`が設定済みの場合、通常APIはユーザーを返さない。
       tags: [meta]
       responses:
         '200':
@@ -143,6 +144,105 @@ paths:
                 created_at: '2026-05-14T09:30:00Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /me/account-deletion-intents:
+    post:
+      operationId: createAccountDeletionIntent
+      summary: 退会用のGoogle再認証を開始する
+      description: |
+        現在のactive userに対して、5分間・一回限り有効な退会intentを作成し、
+        Google OAuth再認証URLを返す。intentのraw tokenはHttpOnly cookieだけに保持し、
+        DB、レスポンス、URL、ログへ出さない。
+
+        OAuth callbackで再認証後のSupabase user idがintent作成者と一致した場合だけ、
+        intentをverifiedにする。email一致やtoken refreshだけではverifiedにしない。
+      tags: [meta]
+      responses:
+        '201':
+          description: 再認証intentを作成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletionIntentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /me/account-deletion:
+    post:
+      operationId: requestAccountDeletion
+      summary: 退会を受け付け、通常アクセスを即時停止する
+      description: |
+        同一userでverifiedとなった未使用・期限内の退会intentと、
+        完全一致の確認文言を検証して退会を受け付ける。
+
+        DB transactionでprofileのaccess block、退会受付、purge期限、
+        子ども・記録・画像の論理削除、AI同意解除、Auth無効化jobを同時に確定する。
+        commit後はlease・backoff・上限付きworkerがSupabase Auth無効化を再試行する。
+        provider障害や既に削除済みの応答があってもDB access blockを戻さない。
+
+        通常画面・APIからのアクセスは受付直後に停止する。
+        受付前に発行済みの画像signed URLは最大30分で失効する。
+        同じ利用者からの重複要求は最初のrequested_at / purge_afterを返す。
+      tags: [meta]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 退会受付の再送を識別するUUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountDeletionRequest'
+      responses:
+        '202':
+          description: 退会受付済み。重複要求も同じ状態を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /me/account-deletion/status:
+    get:
+      operationId: getAccountDeletionStatus
+      summary: 退会受付結果を確認する
+      description: |
+        退会再認証時に発行したHttpOnly receipt cookieを使い、応答喪失後の受付結果を確認する。
+        raw receiptはDB、レスポンス、URL、ログへ出さない。一致する受付がない場合は404を返す。
+      tags: [meta]
+      security: []
+      responses:
+        '200':
+          description: 退会受付済み
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /children:
@@ -798,6 +898,12 @@ components:
       $ref: './components/schemas/AiGenerateRequest.yaml'
     AiGenerateResponse:
       $ref: './components/schemas/AiGenerateResponse.yaml'
+    AccountDeletionIntentResponse:
+      $ref: './components/schemas/AccountDeletionIntentResponse.yaml'
+    AccountDeletionRequest:
+      $ref: './components/schemas/AccountDeletionRequest.yaml'
+    AccountDeletionResponse:
+      $ref: './components/schemas/AccountDeletionResponse.yaml'
   parameters:
     Limit:
       $ref: './components/parameters/Limit.yaml'

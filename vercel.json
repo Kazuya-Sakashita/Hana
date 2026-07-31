@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/internal/account-deletion-revocations",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

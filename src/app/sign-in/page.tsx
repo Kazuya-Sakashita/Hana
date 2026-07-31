@@ -39,9 +39,18 @@ export default function SignInPage() {
   const [pending, setPending] = useState(false)
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('reason') === 'oauth_callback_failed') {
+    const reason = new URLSearchParams(window.location.search).get('reason')
+    if (reason === 'oauth_callback_failed') {
       const timeoutId = window.setTimeout(() => {
         setError(quietStateCopy.signIn.callbackFailed)
+      }, 0)
+      return () => window.clearTimeout(timeoutId)
+    }
+    if (reason === 'account_deletion_reauthentication_failed') {
+      const timeoutId = window.setTimeout(() => {
+        setError(
+          '退会の本人確認を完了できませんでした。退会は受け付けていません。続ける場合は、元のGoogleアカウントでサインインし、設定からやり直してください。',
+        )
       }, 0)
       return () => window.clearTimeout(timeoutId)
     }
