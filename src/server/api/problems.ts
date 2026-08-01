@@ -51,6 +51,8 @@ export const problems = {
     ),
   imageSanitizationPending: () =>
     build('image_sanitization_pending', 'Conflict', 409, '原画像の安全確認を処理中です'),
+  imageAlreadyLinked: () =>
+    build('image_already_linked', 'Conflict', 409, 'この画像は記録に保存されています'),
   aiConsentRequired: () =>
     build('ai_consent_required', 'Forbidden', 403, 'AI への画像送信に同意が必要です'),
   aiConsentUpdateBusy: () =>

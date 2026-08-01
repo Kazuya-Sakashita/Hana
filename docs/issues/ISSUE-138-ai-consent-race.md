@@ -49,10 +49,11 @@ requires_human_review:
 
 ## 検証結果
 
-- `pnpm vitest run tests/integration/v1/me.test.ts tests/integration/v1/ai-generate.test.ts tests/unit/features/ai/consent-lock.test.ts`: 29 tests passed
-- `pnpm typecheck`: passed
-- `pnpm lint`: passed
-- ローカルPostgreSQL 16 + `pnpm qa:issue138:consent-boundary-db`: passed
+- `pnpm pr:gate`: PASS（141 files / 1104 tests、lint、typecheck、buildを含む）
+- `pnpm vitest run tests/integration/v1/me.test.ts tests/integration/v1/ai-generate.test.ts tests/unit/features/ai/consent-lock.test.ts`: 32 tests passed
+- ローカルPostgreSQL 16 + `pnpm qa:issue138:consent-boundary-db`: PASS（合成データのみ、`.env.local`無効化）
+- ISSUE-143統合後も、最大5枚・12秒deadline・画像lockとAI同意lockを両立することを確認
+- Security / Reliability specialist review: APPROVE
 
 ## Blocked by
 

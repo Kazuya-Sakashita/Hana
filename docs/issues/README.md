@@ -196,6 +196,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
+- `ISSUE-138` / `#297`: 最新main統合・自動検証・専門レビュー完了 / Privacy・AI Safety・Backend確認待ち。
 - `ISSUE-122` / `#268`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-121` / `#264`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-118` / `#253`: 実装・privacy / legal review承認済み / merge 待ち。
@@ -231,6 +232,7 @@ Codex-ready と判断する条件:
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
 - public surface warmth completed: `ISSUE-084`, `ISSUE-085`, `ISSUE-086`
 - prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`
+- recording completed: `ISSUE-143`
 
 ---
 

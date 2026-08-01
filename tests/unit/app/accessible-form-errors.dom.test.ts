@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
   createChild: vi.fn(),
   createMemory: vi.fn(),
   browserPost: vi.fn(),
+  browserDelete: vi.fn(),
+  createObjectUrl: vi.fn(),
+  revokeObjectUrl: vi.fn(),
+  aiConsentAt: null as string | null,
 }))
 
 vi.mock('next/navigation', () => ({
@@ -35,7 +39,7 @@ vi.mock('@/features/me/client/use-current-user', () => ({
       id: '11111111-1111-4111-8111-111111111111',
       email: null,
       display_name: null,
-      ai_consent_at: null,
+      ai_consent_at: mocks.aiConsentAt,
       created_at: '2026-07-29T00:00:00.000Z',
     },
     isPending: false,
@@ -66,7 +70,7 @@ vi.mock('@/components/ui/toast', () => ({
 }))
 
 vi.mock('@/lib/api/browser-client', () => ({
-  getBrowserApiClient: () => ({ POST: mocks.browserPost }),
+  getBrowserApiClient: () => ({ POST: mocks.browserPost, DELETE: mocks.browserDelete }),
 }))
 
 import OnboardingPage from '@/app/onboarding/page'
@@ -75,6 +79,7 @@ import RecordPage from '@/app/record/page'
 const OWNER_ID = '11111111-1111-4111-8111-111111111111'
 const IDEMPOTENCY_KEY = '22222222-2222-4222-8222-222222222222'
 const IMAGE_ID = '33333333-3333-4333-8333-333333333333'
+const IMAGE_ID_2 = '77777777-7777-4777-8777-777777777777'
 
 function syntheticCreatedMemory(id = '66666666-6666-4666-8666-666666666666') {
   return {
@@ -128,14 +133,16 @@ function deferred<T>() {
   return { promise, reject, resolve }
 }
 
-function installImageUploadMocks() {
+function installImageUploadMocks(confirmIds: readonly string[] = [IMAGE_ID_2]) {
   const NativeUrl = URL
   class SyntheticUrl extends NativeUrl {
-    static override createObjectURL() {
-      return 'blob:synthetic-photo'
+    static override createObjectURL(value: Blob | MediaSource) {
+      return mocks.createObjectUrl(value)
     }
 
-    static override revokeObjectURL() {}
+    static override revokeObjectURL(value: string) {
+      mocks.revokeObjectUrl(value)
+    }
   }
   class SyntheticImage {
     onload: (() => void) | null = null
@@ -158,16 +165,29 @@ function installImageUploadMocks() {
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback, type) => {
     callback(new Blob(['synthetic'], { type: type ?? 'image/jpeg' }))
   })
-  mocks.browserPost.mockImplementation(async (path: string) => {
+  mocks.browserPost.mockImplementation(async (path: string, options?: Record<string, unknown>) => {
     if (path === '/uploads/presigned-url') {
+      const body = options?.body as { file_name?: string } | undefined
+      const match = /^synthetic-(\d+)\.jpg$/.exec(body?.file_name ?? '')
+      const index = match ? Number(match[1]) : 0
       return {
         data: {
           presigned_url: 'https://example.invalid/synthetic-upload',
-          storage_key: 'redacted-fixture-key',
+          storage_key: `redacted-fixture-key-${index}`,
         },
       }
     }
-    if (path === '/uploads/confirm') return { data: { id: IMAGE_ID } }
+    if (path === '/uploads/confirm') {
+      const body = options?.body as { storage_key?: string } | undefined
+      const match = /-(\d+)$/.exec(body?.storage_key ?? '')
+      const index = match ? Number(match[1]) : 0
+      return { data: { id: confirmIds[index] ?? confirmIds[0] ?? IMAGE_ID_2 } }
+    }
+    if (path === '/ai/generate') {
+      return {
+        data: { generation_id: 'synthetic', title: '合成AIタイトル', body: '合成AI本文', tags: [] },
+      }
+    }
     throw new Error('unexpected synthetic API call')
   })
   return fetchMock
@@ -185,9 +205,16 @@ describe('ISSUE-119 form error DOM behavior', () => {
     mocks.createChild.mockReset()
     mocks.createMemory.mockReset()
     mocks.browserPost.mockReset()
+    mocks.browserDelete.mockReset()
+    mocks.browserDelete.mockResolvedValue({})
+    mocks.createObjectUrl.mockReset()
+    let objectUrlIndex = 0
+    mocks.createObjectUrl.mockImplementation(() => `blob:synthetic-photo-${++objectUrlIndex}`)
+    mocks.revokeObjectUrl.mockReset()
     mocks.push.mockReset()
     mocks.refresh.mockReset()
     mocks.showToast.mockReset()
+    mocks.aiConsentAt = null
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -242,8 +269,9 @@ describe('ISSUE-119 form error DOM behavior', () => {
       parentNote: '',
       recordedAt: '2026-07-28',
       weather: '',
-      imageId: IMAGE_ID,
+      imageIds: [IMAGE_ID],
       aiGenerated: false,
+      aiDraftNeedsReview: false,
     })
     await act(async () => {
       root.render(
@@ -252,6 +280,34 @@ describe('ISSUE-119 form error DOM behavior', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 5))
     })
     await vi.waitFor(() => expect(findButton('このまま 残す').disabled).toBe(false))
+  }
+
+  async function renderEmptyRecord() {
+    mocks.useChildrenQuery.mockReturnValue({
+      data: {
+        data: [
+          {
+            id: '55555555-5555-4555-8555-555555555555',
+            name: 'テスト',
+            birthdate: '2025-04-01',
+            avatar_url: null,
+            created_at: '2026-07-29T00:00:00.000Z',
+            updated_at: '2026-07-29T00:00:00.000Z',
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    await act(async () => {
+      root.render(
+        createElement(QueryClientProvider, { client: queryClient }, createElement(RecordPage)),
+      )
+      await new Promise((resolve) => window.setTimeout(resolve, 5))
+    })
+    await vi.waitFor(() => expect(findButton('しゃしんを えらぶ').disabled).toBe(false))
   }
 
   it('suppresses repeated onboarding submission and keeps values on a field error', async () => {
@@ -348,7 +404,7 @@ describe('ISSUE-119 form error DOM behavior', () => {
     })
 
     await vi.waitFor(() => expect(document.querySelector('#memory-photo-error')).toBeNull())
-    expect(findButton('しゃしんを えらびなおす').getAttribute('aria-invalid')).toBeNull()
+    expect(findButton('しゃしんを 追加する').getAttribute('aria-invalid')).toBeNull()
     expect(document.querySelector<HTMLInputElement>('#memory-title')?.value).toBe(
       '保持する合成タイトル',
     )
@@ -482,5 +538,121 @@ describe('ISSUE-119 form error DOM behavior', () => {
 
     pending.resolve(syntheticCreatedMemory())
     await vi.waitFor(() => expect(mocks.push).toHaveBeenCalledTimes(1))
+  })
+
+  it('deletes a confirmed photo and releases its preview object URL', async () => {
+    installImageUploadMocks()
+    await renderEmptyRecord()
+    const fileInput = document.querySelector<HTMLInputElement>('#memory-photo')
+    if (!fileInput) throw new Error('photo input not found')
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: [new File(['synthetic'], 'synthetic.jpg', { type: 'image/jpeg' })],
+    })
+
+    await act(async () => {
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const remove = await vi.waitFor(() => {
+      const button = document.querySelector<HTMLButtonElement>('button[aria-label="写真1を削除"]')
+      if (!button || button.disabled) throw new Error('remove button is not ready')
+      return button
+    })
+    const previewUrl = mocks.createObjectUrl.mock.results[0]?.value
+
+    await act(async () => {
+      remove.click()
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('button[aria-label="写真1を削除"]')).toBeNull(),
+    )
+    expect(mocks.browserDelete).toHaveBeenCalledWith('/uploads/{imageId}', {
+      params: { path: { imageId: IMAGE_ID_2 } },
+    })
+    expect(mocks.revokeObjectUrl).toHaveBeenCalledWith(previewUrl)
+  })
+
+  it('keeps the first five photos and sends the reordered IDs to AI and save', async () => {
+    const imageIds = [
+      '10000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000002',
+      '10000000-0000-4000-8000-000000000003',
+      '10000000-0000-4000-8000-000000000004',
+      '10000000-0000-4000-8000-000000000005',
+    ]
+    mocks.aiConsentAt = '2026-07-29T00:00:00.000Z'
+    installImageUploadMocks(imageIds)
+    mocks.createMemory.mockImplementation(async ({ body }: { body: { image_ids: string[] } }) => ({
+      ...syntheticCreatedMemory(),
+      title: '合成AIタイトル',
+      body: '合成AI本文',
+      image_ids: body.image_ids,
+    }))
+    await renderEmptyRecord()
+    const fileInput = document.querySelector<HTMLInputElement>('#memory-photo')
+    if (!fileInput) throw new Error('photo input not found')
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: Array.from(
+        { length: 6 },
+        (_, index) => new File(['synthetic'], `synthetic-${index}.jpg`, { type: 'image/jpeg' }),
+      ),
+    })
+
+    await act(async () => {
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() =>
+      expect(document.querySelectorAll('ol[aria-label*="写真"] > li')).toHaveLength(5),
+    )
+    await vi.waitFor(() => expect(findButton('しゃしんは 5まい 選んでいます').disabled).toBe(true))
+    expect(document.body.textContent).toContain(
+      '写真は5枚までです。6枚目は追加されませんでした。選んだ5枚はそのままです。',
+    )
+
+    const moveSecondUp = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="写真2を上へ移動"]',
+    )
+    if (!moveSecondUp) throw new Error('move button not found')
+    act(() => moveSecondUp.click())
+    const expectedOrder = [imageIds[1]!, imageIds[0]!, ...imageIds.slice(2)]
+
+    await act(async () => {
+      findButton('AI で 下書きする').click()
+      await Promise.resolve()
+    })
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLInputElement>('#memory-title')?.value).toBe(
+        '合成AIタイトル',
+      ),
+    )
+    const aiCall = mocks.browserPost.mock.calls.find(([path]) => path === '/ai/generate')
+    expect(aiCall?.[1]).toMatchObject({ body: { image_ids: expectedOrder } })
+
+    const moveCoverDown = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="写真1を下へ移動"]',
+    )
+    if (!moveCoverDown) throw new Error('move cover button not found')
+    act(() => moveCoverDown.click())
+
+    expect(document.querySelector<HTMLInputElement>('#memory-title')?.value).toBe('合成AIタイトル')
+    expect(document.body.textContent).toContain('写真を変える前のAI下書きです')
+    expect(mocks.createMemory).not.toHaveBeenCalled()
+
+    act(() => findButton('内容を確認して 保存へ進む').click())
+
+    await act(async () => {
+      findButton('このまま 残す').click()
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(mocks.createMemory).toHaveBeenCalledOnce())
+    expect(mocks.createMemory.mock.calls[0]?.[0]).toMatchObject({
+      body: { image_ids: imageIds },
+    })
   })
 })
