@@ -231,6 +231,7 @@ Codex-ready と判断する条件:
 - lp-app design parity completed: `ISSUE-076`, `ISSUE-077`, `ISSUE-078`, `ISSUE-079`, `ISSUE-080`, `ISSUE-081`, `ISSUE-082`
 - public surface warmth completed: `ISSUE-084`, `ISSUE-085`, `ISSUE-086`
 - prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`
+- recording completed: `ISSUE-143`
 
 ---
 

@@ -20,6 +20,7 @@ export type RecordFooterPrimaryAction =
   | 'generate-ai'
   | 'generating-ai'
   | 'retry-ai'
+  | 'confirm-ai-draft'
   | 'manual'
   | 'save'
   | 'saving'
@@ -28,7 +29,7 @@ export interface RecordFooterState {
   primaryAction: RecordFooterPrimaryAction
   primaryLabel: string
   primaryDisabled: boolean
-  secondaryAction: 'manual' | 'retry-ai' | 'choose-photo' | null
+  secondaryAction: 'manual' | 'retry-ai' | 'choose-photo' | 'confirm-ai-draft' | null
   secondaryLabel: string | null
   statusLabel: string
 }
@@ -41,6 +42,7 @@ export function getRecordFooterState({
   aiStatus,
   aiTimedOut,
   aiQuotaExceeded,
+  aiDraftNeedsReview,
   hasTitle,
   canSubmit,
   submitting,
@@ -52,6 +54,7 @@ export function getRecordFooterState({
   aiStatus: RecordAiStatus
   aiTimedOut: boolean
   aiQuotaExceeded: boolean
+  aiDraftNeedsReview?: boolean
   hasTitle: boolean
   canSubmit: boolean
   submitting: boolean
@@ -125,6 +128,27 @@ export function getRecordFooterState({
       secondaryAction: null,
       secondaryLabel: null,
       statusLabel: 'AIを使うか確認しています',
+    }
+  }
+
+  if (aiDraftNeedsReview) {
+    if (aiQuotaExceeded) {
+      return {
+        primaryAction: 'confirm-ai-draft',
+        primaryLabel: '内容を確認して 保存へ進む',
+        primaryDisabled: false,
+        secondaryAction: null,
+        secondaryLabel: null,
+        statusLabel: '写真を変える前のAI下書きです。内容の確認が必要です',
+      }
+    }
+    return {
+      primaryAction: 'generate-ai',
+      primaryLabel: 'AI で 下書きを 作り直す',
+      primaryDisabled: false,
+      secondaryAction: 'confirm-ai-draft',
+      secondaryLabel: '内容を確認して 保存へ進む',
+      statusLabel: '写真を変える前のAI下書きです。作り直すか、内容を確認してください',
     }
   }
 
