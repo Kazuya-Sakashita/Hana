@@ -2,7 +2,7 @@
 id: ISSUE-138
 title: AI同意撤回後の外部送信を競合なく遮断する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-31
 github_issue: 297
@@ -59,7 +59,7 @@ requires_human_review:
 
 - [x] Privacy: 撤回確定後は新しい外部送信を開始せず、先に始まった1件は完了後に撤回が確定する契約を承認（2026-08-01）
 - [x] AI Safety: 進行中送信を完了後に撤回する文言・挙動を承認（2026-08-01）
-- [ ] Backend: 40秒transaction / 60秒RouteとISSUE-139への引継ぎを確認
+- [x] Backend: 40秒transaction / 60秒RouteとISSUE-139への引継ぎを承認（2026-08-01）
 
 ## Blocked by
 
