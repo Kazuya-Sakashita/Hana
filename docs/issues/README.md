@@ -191,12 +191,12 @@ Codex-ready と判断する条件:
 ## Blocked Or Needs Human Decision
 
 - `ISSUE-105` / `#234`: staging hosting target と運用確認待ち。公開前 traffic は HOLD。
+- `ISSUE-136` / `#295`: 専用staging環境が未作成。実ユーザー環境を使わず、合成Storage smokeとmergeをHOLD。
 
 ---
 
 ## Review Queue
 
-- `ISSUE-136` / `#295`: 実装・自動検証完了 / Privacy・Security・Operations確認と合成staging smoke待ち。
 - `ISSUE-122` / `#268`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-121` / `#264`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-118` / `#253`: 実装・privacy / legal review承認済み / merge 待ち。

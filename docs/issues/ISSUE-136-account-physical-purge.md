@@ -2,13 +2,15 @@
 id: ISSUE-136
 title: 退会30日後にDB・Storage・Authを物理削除する
 priority: P0
-status: review
+status: blocked
 size: M
 created_at: 2026-07-31
 github_issue: 295
 release_gate: mvp_quality
 blocked_by:
   - ISSUE-135
+external_blockers:
+  - dedicated_staging_environment
 requires_human_review:
   - privacy
   - security
@@ -60,11 +62,13 @@ requires_human_review:
 
 ## Human HOLD
 
-- Privacy / Security / Operationsによる削除順序、30日保持、failed再投入手順の承認
-- staging migration適用後、合成テストアカウント限定でStorage smokeを実施
+- Privacy / Security / Operationsによる削除順序、30日保持、failed再投入手順は承認済み
+- 専用staging環境の作成とmigration適用後、合成テストアカウント限定でStorage smokeを実施
+- 実ユーザーを含む環境と、stagingだと証明できない`.env.local`ではsmokeを実行しない
 
 ## Human gate
 
 - 2026-08-01: 退会受付直後にアクセスを停止し、30日未満では物理削除せず、30日経過後だけを対象にする保持方針を人間が承認
 - 2026-08-01: Storage全写真の削除と残存確認、AIログ匿名化、Auth削除、DB削除の順に進め、Storage失敗時は後続を停止する方針を人間が承認
 - 2026-08-01: 一時失敗をbackoff付きで再試行し、10回失敗で自動停止して、人間が安全条件を再確認した対象1件だけを再投入する運用方針を人間が承認
+- 2026-08-01: 専用staging環境が未作成であることを人間が確認。実ユーザー環境を使用せず、staging作成までsmokeとmergeをHOLD
