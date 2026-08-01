@@ -80,8 +80,11 @@ function unauthed() {
   mocks.getUser.mockResolvedValue({ data: { user: null } })
 }
 
-async function call(imageId: string, size?: string) {
-  const query = size ? `?size=${size}` : ''
+async function call(imageId: string, size?: string, context?: string) {
+  const params = new URLSearchParams()
+  if (size) params.set('size', size)
+  if (context) params.set('context', context)
+  const query = params.size > 0 ? `?${params.toString()}` : ''
   const request = new Request(`http://localhost:3000/v1/uploads/${imageId}/url${query}`)
   return GET(request, { params: Promise.resolve({ imageId }) })
 }
@@ -146,6 +149,50 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     const res = await call(IMG_ID, 'huge')
     expect(res.status).toBe(422)
   })
+
+  it('returns 422 for invalid context value', async () => {
+    authed()
+    const res = await call(IMG_ID, undefined, 'unknown')
+    expect(res.status).toBe(422)
+    expect(mocks.imageFindFirst).not.toHaveBeenCalled()
+  })
+
+  it('requires an owned sanitized unlinked image for record-draft context', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue(imageRow)
+    mocks.createSignedUrl.mockResolvedValue({
+      data: { signedUrl: 'https://example.com/signed-draft' },
+      error: null,
+    })
+
+    const res = await call(IMG_ID, 'thumbnail', 'record-draft')
+
+    expect(res.status).toBe(200)
+    expect(mocks.imageFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: IMG_ID,
+        userId: USER_ID,
+        deletedAt: null,
+        memoryId: null,
+        metadataSanitizedAt: { not: null },
+      },
+      select: { id: true, userId: true, storageKey: true, metadataSanitizedAt: true },
+    })
+  })
+
+  it.each(['linked', 'unsanitized', 'foreign', 'missing'])(
+    'returns indistinguishable 404 for %s image in record-draft context',
+    async () => {
+      authed()
+      mocks.imageFindFirst.mockResolvedValue(null)
+
+      const res = await call(IMG_ID, 'thumbnail', 'record-draft')
+
+      expect(res.status).toBe(404)
+      expect(await res.json()).toMatchObject({ reason: 'not_found' })
+      expect(mocks.createSignedUrl).not.toHaveBeenCalled()
+    },
+  )
 
   it('returns 200 with original key when size is omitted', async () => {
     authed()

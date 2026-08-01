@@ -16,6 +16,7 @@ import {
   parseMemoryIdempotencyKey,
 } from '@/features/memories/server/idempotency'
 import { toMemoryResponse } from '@/features/memories/view-models/memory'
+import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,39 +93,45 @@ export async function POST(request: Request) {
       throw problems.forbidden()
     }
 
-    // 2. image_ids の所有権 & 未紐付け検証
-    const images = await prisma.image.findMany({
-      where: { id: { in: input.imageIds }, deletedAt: null },
-      select: { id: true, userId: true, memoryId: true },
-    })
-    if (images.length !== input.imageIds.length) {
-      throw problems.validation([
-        {
-          path: 'body.image_ids',
-          reason: 'image_not_found',
-          message: '指定した画像の一部が見つかりません',
-        },
-      ])
-    }
-    const foreignImage = images.find((img) => img.userId !== user.id)
-    if (foreignImage) {
-      // 他人の画像 — 403 として情報を絞る
-      throw problems.forbidden()
-    }
-    const alreadyLinked = images.find((img) => img.memoryId !== null)
-    if (alreadyLinked) {
-      throw problems.validation([
-        {
-          path: 'body.image_ids',
-          reason: 'already_linked',
-          message: '既に別の記録に紐付いている画像があります',
-        },
-      ])
-    }
-
-    // 3. トランザクションで memory 作成 + image 紐付け
+    // 2. 全画像を同じ順序のロック境界で再検証し、memory 作成と一体で紐付ける
     try {
       const created = await prisma.$transaction(async (tx) => {
+        await lockImageAccess(tx, input.imageIds)
+        const images = await tx.image.findMany({
+          where: { id: { in: input.imageIds }, deletedAt: null },
+          select: { id: true, userId: true, memoryId: true },
+        })
+        const imageById = new Map(images.map((image) => [image.id, image]))
+        const missingErrors = input.imageIds.flatMap((imageId, index) =>
+          imageById.has(imageId)
+            ? []
+            : [
+                {
+                  path: `body.image_ids[${index}]`,
+                  reason: 'image_not_found',
+                  message: '指定した画像が見つかりません',
+                },
+              ],
+        )
+        if (missingErrors.length > 0) {
+          throw problems.validation(missingErrors)
+        }
+        if (images.some((image) => image.userId !== user.id)) throw problems.forbidden()
+        const linkedErrors = input.imageIds.flatMap((imageId, index) =>
+          imageById.get(imageId)?.memoryId
+            ? [
+                {
+                  path: `body.image_ids[${index}]`,
+                  reason: 'already_linked',
+                  message: '既に別の記録に紐付いている画像です',
+                },
+              ]
+            : [],
+        )
+        if (linkedErrors.length > 0) {
+          throw problems.validation(linkedErrors)
+        }
+
         const memory = await tx.memory.create({
           data: {
             userId: user.id,

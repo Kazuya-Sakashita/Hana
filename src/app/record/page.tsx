@@ -37,6 +37,21 @@ import {
   createRecordIdempotencyKey,
   recordDraftStore,
 } from '@/features/memories/client/record-draft-store'
+import {
+  beginRecordPhotoAttempt,
+  confirmRecordPhotoAttempt,
+  createAsyncLimiter,
+  createRecordPhotoItem,
+  failRecordPhotoAttempt,
+  getOrderedConfirmedImageIds,
+  getRecordPhotoAggregate,
+  moveRecordPhoto,
+  removeRecordPhoto,
+  updateRecordPhoto,
+  RECORD_PHOTO_MAX,
+  type RecordPhotoItem,
+  type RecordPhotoStatus,
+} from '@/features/memories/client/record-photo-state'
 import { getRecordFooterState } from '@/features/memories/client/record-footer-state'
 import {
   getUploadRetryStartStage,
@@ -56,14 +71,10 @@ import { useToast } from '@/components/ui/toast'
 import { signInPath } from '@/lib/auth/safe-redirect'
 import { focusFirstFormError } from '@/lib/ui/form-error-focus'
 import { quietStateCopy, recordAiGeneratingCopy } from '@/lib/ui/quiet-state-copy'
+import { RecordPhotoList } from '@/features/memories/components/record-photo-list'
 
 type Phase = 'loading' | 'no-child' | 'form' | 'error'
-type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'confirming' | 'done' | 'failed'
 type AiStatus = 'idle' | 'consent_pending' | 'generating' | 'done' | 'failed'
-
-interface UploadedImage {
-  id: string
-}
 
 interface FieldErrors {
   title?: string
@@ -86,6 +97,9 @@ const recordFieldErrorCopy = {
   imageIdsReselect: '写真を もういちど 選んでください。',
   imageIdsInvalid: '写真を たしかめてください。',
 } as const
+
+const PHOTO_LIMIT_MESSAGE =
+  '写真は5枚までです。6枚目は追加されませんでした。選んだ5枚はそのままです。'
 
 function extractFieldErrors(problem: ProblemDetails): FieldErrors {
   const fields: FieldErrors = {}
@@ -137,8 +151,25 @@ interface UploadCache {
 }
 
 interface ActiveUploadAttempt {
+  clientId: string
   id: number
   signal: AbortSignal
+}
+
+type PhotoRemovalStatus = 'idle' | 'deleting' | 'failed'
+
+interface RecordPhoto extends RecordPhotoItem {
+  file: File | null
+  previewUrl: string | null
+  previewIsObjectUrl: boolean
+  removalStatus: PhotoRemovalStatus
+}
+
+interface UploadRuntime {
+  attemptId: number
+  controller: AbortController | null
+  inFlight: boolean
+  cache: UploadCache | null
 }
 
 interface ActiveAiAttempt {
@@ -175,6 +206,46 @@ async function reencodeImage(file: File): Promise<EncodedPhoto> {
   }
 }
 
+function revokePhotoPreview(photo: RecordPhoto) {
+  if (photo.previewIsObjectUrl && photo.previewUrl) URL.revokeObjectURL(photo.previewUrl)
+}
+
+function sameOrderedValues(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function invalidImageIndexes(problem: ProblemDetails, photoCount: number): number[] {
+  const indexes = new Set<number>()
+  for (const error of problem.errors ?? []) {
+    if (error.reason !== 'image_not_found' && error.reason !== 'already_linked') continue
+    const match = /^body\.image_ids\[(\d+)\]$/.exec(error.path)
+    if (match) indexes.add(Number(match[1]))
+    else if (error.path === 'body.image_ids' && photoCount === 1) indexes.add(0)
+  }
+  return [...indexes].filter((index) => index >= 0 && index < photoCount)
+}
+
+function getAggregateUploadStatus(photos: readonly RecordPhoto[]) {
+  if (photos.length === 0) return 'idle' as const
+  if (photos.some((photo) => photo.status === 'failed' || photo.removalStatus === 'failed')) {
+    return 'failed' as const
+  }
+  if (photos.every((photo) => photo.status === 'confirmed')) return 'done' as const
+  if (photos.some((photo) => photo.status === 'confirming' || photo.removalStatus === 'deleting')) {
+    return 'confirming' as const
+  }
+  if (photos.some((photo) => photo.status === 'uploading')) return 'uploading' as const
+  return 'preparing' as const
+}
+
+function toPhotoListStatus(photo: RecordPhoto) {
+  if (photo.removalStatus === 'failed') return 'failed' as const
+  if (photo.removalStatus === 'deleting') return 'confirming' as const
+  if (photo.status === 'selected') return 'idle' as const
+  if (photo.status === 'confirmed') return 'done' as const
+  return photo.status
+}
+
 export default function RecordPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -183,20 +254,19 @@ export default function RecordPage() {
   const [idempotencyKey, setIdempotencyKey] = useState(createRecordIdempotencyKey)
   const [draftInitialized, setDraftInitialized] = useState(false)
   const [draftRestored, setDraftRestored] = useState(false)
+  const draftValidationStartedRef = useRef(false)
   const [aiConsentAtOverride, setAiConsentAtOverride] = useState<string | null>(null)
 
-  const [file, setFile] = useState<File | null>(null)
-  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [uploadFailureStage, setUploadFailureStage] = useState<UploadFailureStage | null>(null)
-  const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null)
+  const [photos, setPhotos] = useState<RecordPhoto[]>([])
+  const [photoAnnouncement, setPhotoAnnouncement] = useState('')
+  const [photoSelectionMessage, setPhotoSelectionMessage] = useState<string | null>(null)
 
   const [aiStatus, setAiStatus] = useState<AiStatus>('idle')
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiTimedOut, setAiTimedOut] = useState(false)
   const [aiQuotaExceeded, setAiQuotaExceeded] = useState(false)
   const [hasAiGeneratedContent, setHasAiGeneratedContent] = useState(false)
+  const [aiDraftNeedsReview, setAiDraftNeedsReview] = useState(false)
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -208,6 +278,7 @@ export default function RecordPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [topMessage, setTopMessage] = useState<string | null>(null)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const bodyInputRef = useRef<HTMLTextAreaElement>(null)
   const recordedAtInputRef = useRef<HTMLInputElement>(null)
@@ -219,10 +290,9 @@ export default function RecordPage() {
   const saveInFlightRef = useRef(false)
   const focusAfterUploadRef = useRef(false)
   const primaryActionButtonRef = useRef<HTMLButtonElement>(null)
-  const uploadAttemptIdRef = useRef(0)
-  const uploadAbortControllerRef = useRef<AbortController | null>(null)
-  const uploadActionInFlightRef = useRef(false)
-  const uploadCacheRef = useRef<UploadCache | null>(null)
+  const photosRef = useRef<RecordPhoto[]>([])
+  const uploadRuntimeRef = useRef(new Map<string, UploadRuntime>())
+  const limitUploadRef = useRef(createAsyncLimiter(2))
   const aiRequestIdRef = useRef(0)
   const aiAbortControllerRef = useRef<AbortController | null>(null)
   const aiActionInFlightRef = useRef(false)
@@ -249,24 +319,36 @@ export default function RecordPage() {
         : selectedChild
           ? 'form'
           : 'no-child'
+  const photoAggregate = getRecordPhotoAggregate(photos)
+  const primaryPhoto = photos[0] ?? null
+  const confirmedImageIds = getOrderedConfirmedImageIds(photos)
+  const allPhotosConfirmed = confirmedImageIds !== null
+  const firstFailedPhoto = photos.find(
+    (photo) => photo.status === 'failed' || photo.removalStatus === 'failed',
+  )
+  const uploadStatus = getAggregateUploadStatus(photos)
+  const uploadFailureStage = firstFailedPhoto?.failureStage ?? null
   const canSubmit =
-    !!uploadedImage && title.trim().length > 0 && recordedAt.length > 0 && !submitting
+    allPhotosConfirmed &&
+    !aiDraftNeedsReview &&
+    title.trim().length > 0 &&
+    recordedAt.length > 0 &&
+    !submitting
   const hasFieldErrors = Object.keys(fieldErrors).length > 0
   const formErrorMessage =
     topMessage ?? (hasFieldErrors ? quietStateCopy.record.validationFailed : null)
-  const hasSelectedPhoto = (!!filePreviewUrl && !!file) || !!uploadedImage
+  const hasSelectedPhoto = photos.length > 0
   const photoReplacementLocked = submitting
   const storyPreview = body.trim()
   const hasUnsavedChanges =
     hasSelectedPhoto ||
-    !!uploadedImage ||
     title.trim().length > 0 ||
     storyPreview.length > 0 ||
     parentNote.trim().length > 0 ||
     weather.trim().length > 0 ||
     recordedAt !== todayIso
   const decisionCue = getRecordDecisionCue({
-    uploaded: !!uploadedImage,
+    uploaded: allPhotosConfirmed,
     aiStatus,
     canSubmit,
     hasTitle: title.trim().length > 0,
@@ -274,18 +356,19 @@ export default function RecordPage() {
   })
   const footerState = getRecordFooterState({
     hasSelectedPhoto,
-    uploaded: !!uploadedImage,
+    uploaded: allPhotosConfirmed,
     uploadStatus,
     uploadFailureStage,
     aiStatus,
     aiTimedOut,
     aiQuotaExceeded,
+    aiDraftNeedsReview,
     hasTitle: title.trim().length > 0,
     canSubmit,
     submitting,
   })
   const draftComplete = aiStatus === 'done' || (aiStatus === 'idle' && canSubmit)
-  const currentStepLabel = !uploadedImage
+  const currentStepLabel = !allPhotosConfirmed
     ? '写真を選ぶ'
     : draftComplete
       ? '保存する'
@@ -318,6 +401,26 @@ export default function RecordPage() {
     }
   }
 
+  async function discardDraftAndClose() {
+    if (discarding) return
+    setDiscarding(true)
+    for (const runtime of uploadRuntimeRef.current.values()) runtime.controller?.abort()
+    const confirmedIds = photosRef.current.flatMap((photo) =>
+      photo.imageId ? [photo.imageId] : [],
+    )
+    recordDraftStore.clear()
+    const client = getBrowserApiClient()
+    await Promise.allSettled(
+      confirmedIds.map((imageId) =>
+        limitUploadRef.current(() =>
+          client.DELETE('/uploads/{imageId}', { params: { path: { imageId } } }).then(() => {}),
+        ),
+      ),
+    )
+    for (const photo of photosRef.current) revokePhotoPreview(photo)
+    router.push('/')
+  }
+
   useEffect(() => {
     if (isUnauthorized) {
       router.push(signInPath(`${window.location.pathname}${window.location.search}`))
@@ -337,9 +440,19 @@ export default function RecordPage() {
         setParentNote(draft.parentNote)
         setRecordedAt(draft.recordedAt)
         setWeather(draft.weather)
-        setUploadedImage(draft.imageId ? { id: draft.imageId } : null)
-        setUploadStatus(draft.imageId ? 'done' : 'idle')
+        setPhotos(
+          draft.imageIds.map((imageId) => ({
+            ...createRecordPhotoItem(`restored-${imageId}`),
+            imageId,
+            status: 'confirmed',
+            file: null,
+            previewUrl: null,
+            previewIsObjectUrl: false,
+            removalStatus: 'idle',
+          })),
+        )
         setHasAiGeneratedContent(draft.aiGenerated)
+        setAiDraftNeedsReview(draft.aiDraftNeedsReview)
         setAiStatus(draft.aiGenerated ? 'done' : 'idle')
         setDraftRestored(true)
       }
@@ -354,7 +467,7 @@ export default function RecordPage() {
   useEffect(() => {
     if (!draftInitialized || !currentUserId) return
     const hasDraftContent =
-      !!uploadedImage ||
+      photos.some((photo) => photo.imageId !== null) ||
       title.trim().length > 0 ||
       body.trim().length > 0 ||
       parentNote.trim().length > 0 ||
@@ -371,22 +484,84 @@ export default function RecordPage() {
       parentNote,
       recordedAt,
       weather,
-      imageId: uploadedImage?.id ?? null,
+      imageIds: photos
+        .filter((photo) => photo.status === 'confirmed' && photo.imageId !== null)
+        .map((photo) => photo.imageId as string),
       aiGenerated: hasAiGeneratedContent,
+      aiDraftNeedsReview,
     })
   }, [
     body,
     currentUserId,
     draftInitialized,
     hasAiGeneratedContent,
+    aiDraftNeedsReview,
     idempotencyKey,
     parentNote,
     recordedAt,
     title,
     todayIso,
-    uploadedImage,
+    photos,
     weather,
   ])
+
+  useEffect(() => {
+    if (!draftRestored || draftValidationStartedRef.current) return
+    const restored = photosRef.current.filter(
+      (photo) => photo.clientId.startsWith('restored-') && photo.imageId,
+    )
+    if (restored.length === 0) return
+    draftValidationStartedRef.current = true
+    let cancelled = false
+    const client = getBrowserApiClient()
+    void Promise.all(
+      restored.map(async (photo) => {
+        try {
+          const response = await client.GET('/uploads/{imageId}/url', {
+            params: {
+              path: { imageId: photo.imageId! },
+              query: { size: 'thumbnail', context: 'record-draft' },
+            },
+          })
+          return response.data?.url
+            ? { clientId: photo.clientId, kind: 'valid' as const, url: response.data.url }
+            : { clientId: photo.clientId, kind: 'unavailable' as const }
+        } catch (error) {
+          if (isApiProblemError(error) && error.reason === 'unauthorized') {
+            router.push(signInPath(`${window.location.pathname}${window.location.search}`))
+          }
+          return isApiProblemError(error) && error.reason === 'not_found'
+            ? { clientId: photo.clientId, kind: 'invalid' as const }
+            : { clientId: photo.clientId, kind: 'unavailable' as const }
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return
+      const invalid = new Set(
+        results.filter((result) => result.kind === 'invalid').map((result) => result.clientId),
+      )
+      const previewByClientId = new Map(
+        results.flatMap((result) =>
+          result.kind === 'valid' ? [[result.clientId, result.url] as const] : [],
+        ),
+      )
+      commitPhotos((current) =>
+        current
+          .filter((photo) => !invalid.has(photo.clientId))
+          .map((photo) => {
+            const previewUrl = previewByClientId.get(photo.clientId)
+            return previewUrl ? { ...photo, previewUrl, previewIsObjectUrl: false } : photo
+          }),
+      )
+      if (invalid.size > 0) {
+        if (hasAiGeneratedContent) setAiDraftNeedsReview(true)
+        setPhotoAnnouncement('使えなくなった写真を下書きから外しました。ほかの入力はそのままです。')
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [draftRestored, hasAiGeneratedContent, router])
 
   useEffect(() => {
     if (phase !== 'form') return
@@ -404,42 +579,78 @@ export default function RecordPage() {
   }, [aiStatus, aiTimedOut])
 
   useEffect(() => {
-    if (uploadStatus !== 'done' || !focusAfterUploadRef.current) return
+    if (!allPhotosConfirmed || !focusAfterUploadRef.current) return
     focusAfterUploadRef.current = false
     primaryActionButtonRef.current?.focus()
-  }, [uploadStatus])
+  }, [allPhotosConfirmed])
 
   useEffect(() => {
-    if (!filePreviewUrl) return
-    return () => URL.revokeObjectURL(filePreviewUrl)
-  }, [filePreviewUrl])
+    photosRef.current = photos
+  }, [photos])
 
   useEffect(() => {
+    const uploadRuntimes = uploadRuntimeRef.current
     return () => {
-      uploadAbortControllerRef.current?.abort()
+      for (const runtime of uploadRuntimes.values()) runtime.controller?.abort()
+      for (const photo of photosRef.current) revokePhotoPreview(photo)
       aiRequestIdRef.current += 1
       aiAbortControllerRef.current?.abort()
       aiActionInFlightRef.current = false
     }
   }, [])
 
-  function startUploadAttempt(): ActiveUploadAttempt {
-    const id = uploadAttemptIdRef.current + 1
-    uploadAttemptIdRef.current = id
-    uploadAbortControllerRef.current?.abort()
+  function commitPhotos(update: (current: RecordPhoto[]) => RecordPhoto[]) {
+    const next = update(photosRef.current)
+    photosRef.current = next
+    setPhotos(next)
+  }
+
+  function getUploadRuntime(clientId: string): UploadRuntime {
+    const current = uploadRuntimeRef.current.get(clientId)
+    if (current) return current
+    const created: UploadRuntime = {
+      attemptId: 0,
+      controller: null,
+      inFlight: false,
+      cache: null,
+    }
+    uploadRuntimeRef.current.set(clientId, created)
+    return created
+  }
+
+  function startUploadAttempt(clientId: string): ActiveUploadAttempt | null {
+    const currentPhoto = photosRef.current.find((photo) => photo.clientId === clientId)
+    if (!currentPhoto) return null
+    const runtime = getUploadRuntime(clientId)
+    if (runtime.inFlight) return null
+    runtime.controller?.abort()
     const controller = new AbortController()
-    uploadAbortControllerRef.current = controller
-    uploadActionInFlightRef.current = true
-    return { id, signal: controller.signal }
+    const started = beginRecordPhotoAttempt(currentPhoto)
+    runtime.attemptId = started.attempt
+    runtime.controller = controller
+    runtime.inFlight = true
+    commitPhotos((current) =>
+      updateRecordPhoto(current, clientId, (photo) =>
+        photo.attempt >= started.attempt ? photo : { ...photo, ...started },
+      ),
+    )
+    return { clientId, id: started.attempt, signal: controller.signal }
   }
 
   function isCurrentUploadAttempt(attempt: ActiveUploadAttempt): boolean {
-    return uploadAttemptIdRef.current === attempt.id && !attempt.signal.aborted
+    const runtime = uploadRuntimeRef.current.get(attempt.clientId)
+    const photo = photosRef.current.find((current) => current.clientId === attempt.clientId)
+    return (
+      runtime?.attemptId === attempt.id && photo?.attempt === attempt.id && !attempt.signal.aborted
+    )
   }
 
   function finishUploadAttempt(attempt: ActiveUploadAttempt) {
     if (!isCurrentUploadAttempt(attempt)) return
-    uploadActionInFlightRef.current = false
+    const runtime = uploadRuntimeRef.current.get(attempt.clientId)
+    if (!runtime) return
+    runtime.inFlight = false
+    runtime.controller = null
   }
 
   function startAiAttempt(): ActiveAiAttempt | null {
@@ -480,13 +691,20 @@ export default function RecordPage() {
 
   function markUploadFailed(attempt: ActiveUploadAttempt, stage: UploadFailureStage) {
     if (!isCurrentUploadAttempt(attempt)) return
-    setUploadFailureStage(stage)
-    setUploadStatus('failed')
-    setUploadError(getUploadFailureMessage(stage))
+    commitPhotos((current) =>
+      updateRecordPhoto(current, attempt.clientId, (photo) => ({
+        ...failRecordPhotoAttempt(photo, attempt.id, stage),
+        removalStatus: 'idle',
+      })),
+    )
+    setPhotoAnnouncement(
+      `${photoPositionLabel(attempt.clientId)}を送れませんでした。${getUploadFailureMessage(stage)}`,
+    )
     finishUploadAttempt(attempt)
   }
 
   async function runCachedUpload(
+    clientId: string,
     cache: UploadCache,
     attempt: ActiveUploadAttempt,
     startStage: UploadFailureStage,
@@ -498,9 +716,20 @@ export default function RecordPage() {
       isCurrent: () => isCurrentUploadAttempt(attempt),
       onStageChange: (stage) => {
         if (!isCurrentUploadAttempt(attempt)) return
-        setUploadStatus(
-          stage === 'prepare' ? 'preparing' : stage === 'put' ? 'uploading' : 'confirming',
+        const status: RecordPhotoStatus =
+          stage === 'prepare' ? 'preparing' : stage === 'put' ? 'uploading' : 'confirming'
+        commitPhotos((current) =>
+          updateRecordPhoto(current, clientId, (photo) =>
+            photo.attempt === attempt.id ? { ...photo, status } : photo,
+          ),
         )
+        const action =
+          status === 'preparing'
+            ? 'を準備しています。'
+            : status === 'uploading'
+              ? 'を送っています。'
+              : 'の保存を確認しています。'
+        setPhotoAnnouncement(`${photoPositionLabel(clientId)}${action}`)
       },
       prepare: async () => {
         const presigned = await client.POST('/uploads/presigned-url', {
@@ -547,77 +776,179 @@ export default function RecordPage() {
       return
     }
 
-    setUploadedImage({ id: result.value })
-    setUploadStatus('done')
-    setUploadFailureStage(null)
-    setUploadError(null)
-    uploadCacheRef.current = null
+    commitPhotos((current) =>
+      updateRecordPhoto(current, clientId, (photo) => ({
+        ...confirmRecordPhotoAttempt(photo, attempt.id, result.value),
+        removalStatus: 'idle',
+      })),
+    )
+    const runtime = uploadRuntimeRef.current.get(clientId)
+    if (runtime) runtime.cache = null
+    setPhotoAnnouncement(`${photoPositionLabel(clientId)}を追加できました。`)
     finishUploadAttempt(attempt)
   }
 
-  async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-    const nextFile = event.target.files?.[0] ?? null
-    if (!nextFile) return
-    clearFieldError('imageIds')
-    focusAfterUploadRef.current = true
-    const attempt = startUploadAttempt()
+  function invalidateAiAfterPhotoChange() {
     cancelAiAttempt()
-    setIdempotencyKey(createRecordIdempotencyKey())
-    setDraftRestored(false)
-    reportRecordProductEvent('photo_selected')
-    setFile(nextFile)
-    if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
-    setFilePreviewUrl(URL.createObjectURL(nextFile))
-    uploadCacheRef.current = null
-    setUploadStatus('preparing')
-    setUploadFailureStage(null)
-    setUploadError(null)
-    setUploadedImage(null)
     setAiStatus('idle')
     setAiError(null)
     setAiTimedOut(false)
-    setHasAiGeneratedContent(false)
+    if (hasAiGeneratedContent) setAiDraftNeedsReview(true)
+  }
 
-    try {
-      const encoded = await reencodeImage(nextFile)
+  function photoPositionLabel(clientId: string) {
+    const index = photosRef.current.findIndex((photo) => photo.clientId === clientId)
+    return index < 0 ? '写真' : `写真${index + 1}／${photosRef.current.length}`
+  }
+
+  async function uploadPhoto(clientId: string, retryStage: UploadFailureStage = 'prepare') {
+    const photo = photosRef.current.find((current) => current.clientId === clientId)
+    if (!photo?.file) return
+    const runtime = getUploadRuntime(clientId)
+    const attempt = startUploadAttempt(clientId)
+    if (!attempt) return
+    await limitUploadRef.current(async () => {
       if (!isCurrentUploadAttempt(attempt)) return
-      const cache: UploadCache = {
-        encoded,
-        fileName: nextFile.name,
-        target: null,
+      let cache = runtime.cache
+      if (!cache) {
+        try {
+          const encoded = await reencodeImage(photo.file as File)
+          if (!isCurrentUploadAttempt(attempt)) return
+          cache = { encoded, fileName: photo.file!.name, target: null }
+          runtime.cache = cache
+        } catch {
+          markUploadFailed(attempt, 'prepare')
+          return
+        }
       }
-      uploadCacheRef.current = cache
-      await runCachedUpload(cache, attempt, 'prepare')
-    } catch {
-      markUploadFailed(attempt, 'prepare')
+      const retryStartStage = getUploadRetryStartStage(retryStage)
+      if (retryStage === 'put') cache.target = null
+      await runCachedUpload(clientId, cache, attempt, retryStartStage)
+    })
+  }
+
+  function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? [])
+    if (selectedFiles.length === 0) return
+    const available = Math.max(0, RECORD_PHOTO_MAX - photosRef.current.length)
+    const acceptedFiles = selectedFiles.slice(0, available)
+    if (acceptedFiles.length === 0) {
+      setPhotoSelectionMessage(PHOTO_LIMIT_MESSAGE)
+      setPhotoAnnouncement(PHOTO_LIMIT_MESSAGE)
+      return
+    }
+    clearFieldError('imageIds')
+    focusAfterUploadRef.current = true
+    invalidateAiAfterPhotoChange()
+    setIdempotencyKey(createRecordIdempotencyKey())
+    setDraftRestored(false)
+    reportRecordProductEvent('photo_selected')
+    const added: RecordPhoto[] = acceptedFiles.map((nextFile) => ({
+      ...createRecordPhotoItem(),
+      file: nextFile,
+      previewUrl: URL.createObjectURL(nextFile),
+      previewIsObjectUrl: true,
+      removalStatus: 'idle',
+    }))
+    commitPhotos((current) => [...current, ...added])
+    for (const photo of added) void uploadPhoto(photo.clientId)
+    if (selectedFiles.length > acceptedFiles.length) {
+      setPhotoSelectionMessage(PHOTO_LIMIT_MESSAGE)
+      setPhotoAnnouncement(PHOTO_LIMIT_MESSAGE)
+    } else {
+      setPhotoSelectionMessage(null)
+      setPhotoAnnouncement(`${added.length}枚の写真を追加しました。`)
     }
   }
 
-  async function retryUpload() {
-    if (uploadActionInFlightRef.current || !file || !uploadFailureStage) return
+  function retryUpload(clientId = firstFailedPhoto?.clientId) {
+    if (!clientId) return
+    const photo = photosRef.current.find((current) => current.clientId === clientId)
+    if (!photo) return
+    if (photo.removalStatus === 'failed') {
+      void removeSelectedPhoto(clientId)
+      return
+    }
+    if (!photo.failureStage) return
     focusAfterUploadRef.current = true
-    const failedStage = uploadFailureStage
-    const attempt = startUploadAttempt()
-    setUploadFailureStage(null)
-    setUploadError(null)
+    void uploadPhoto(clientId, photo.failureStage)
+  }
 
-    let cache = uploadCacheRef.current
-    if (!cache) {
-      setUploadStatus('preparing')
-      try {
-        const encoded = await reencodeImage(file)
-        if (!isCurrentUploadAttempt(attempt)) return
-        cache = { encoded, fileName: file.name, target: null }
-        uploadCacheRef.current = cache
-      } catch {
-        markUploadFailed(attempt, 'prepare')
-        return
-      }
+  function moveSelectedPhoto(clientId: string, direction: 'up' | 'down') {
+    commitPhotos((current) => moveRecordPhoto(current, clientId, direction))
+    setIdempotencyKey(createRecordIdempotencyKey())
+    setDraftRestored(false)
+    invalidateAiAfterPhotoChange()
+  }
+
+  async function removeSelectedPhoto(clientId: string) {
+    const photo = photosRef.current.find((current) => current.clientId === clientId)
+    if (!photo || photo.removalStatus === 'deleting') return
+    const runtime = uploadRuntimeRef.current.get(clientId)
+    const removingLabel = photoPositionLabel(clientId)
+    runtime?.controller?.abort()
+    if (!photo.imageId) {
+      uploadRuntimeRef.current.delete(clientId)
+      revokePhotoPreview(photo)
+      commitPhotos((current) => removeRecordPhoto(current, clientId))
+      setPhotoSelectionMessage(null)
+      setPhotoAnnouncement(
+        `${removingLabel}を削除しました。残り${photosRef.current.length}枚です。`,
+      )
+      setIdempotencyKey(createRecordIdempotencyKey())
+      invalidateAiAfterPhotoChange()
+      return
     }
 
-    const retryStartStage = getUploadRetryStartStage(failedStage)
-    if (failedStage === 'put') cache.target = null
-    await runCachedUpload(cache, attempt, retryStartStage)
+    commitPhotos((current) =>
+      updateRecordPhoto(current, clientId, (currentPhoto) => ({
+        ...currentPhoto,
+        status: 'confirming',
+        removalStatus: 'deleting',
+      })),
+    )
+    try {
+      const client = getBrowserApiClient()
+      await client.DELETE('/uploads/{imageId}', {
+        params: { path: { imageId: photo.imageId } },
+      })
+      revokePhotoPreview(photo)
+      uploadRuntimeRef.current.delete(clientId)
+      commitPhotos((current) => removeRecordPhoto(current, clientId))
+      setPhotoSelectionMessage(null)
+      setPhotoAnnouncement(
+        `${removingLabel}を削除しました。残り${photosRef.current.length}枚です。`,
+      )
+      setIdempotencyKey(createRecordIdempotencyKey())
+      invalidateAiAfterPhotoChange()
+    } catch (error) {
+      if (
+        isApiProblemError(error) &&
+        (error.reason === 'image_already_linked' || error.reason === 'not_found')
+      ) {
+        revokePhotoPreview(photo)
+        uploadRuntimeRef.current.delete(clientId)
+        commitPhotos((current) => removeRecordPhoto(current, clientId))
+        setPhotoSelectionMessage(null)
+        setPhotoAnnouncement(
+          error.reason === 'not_found'
+            ? `${removingLabel}はすでに削除されていました。下書きから外しました。`
+            : `${removingLabel}は別の記録で使われています。下書きから外しました。`,
+        )
+        setIdempotencyKey(createRecordIdempotencyKey())
+        invalidateAiAfterPhotoChange()
+        return
+      }
+      commitPhotos((current) =>
+        updateRecordPhoto(current, clientId, (currentPhoto) => ({
+          ...currentPhoto,
+          status: 'failed',
+          failureStage: 'confirm',
+          removalStatus: 'failed',
+        })),
+      )
+      setPhotoAnnouncement(`${removingLabel}を削除できませんでした。もういちど削除できます。`)
+    }
   }
 
   function resetPhotoInput(event: React.MouseEvent<HTMLInputElement>) {
@@ -629,7 +960,8 @@ export default function RecordPage() {
   }
 
   async function callAiGenerate({ consentConfirmed }: { consentConfirmed: boolean }) {
-    if (!uploadedImage || !childId) return
+    const imageIds = getOrderedConfirmedImageIds(photosRef.current)
+    if (!imageIds || !childId) return
     if (!consentConfirmed) {
       setAiStatus('consent_pending')
       return
@@ -647,7 +979,7 @@ export default function RecordPage() {
         client.POST('/ai/generate', {
           body: {
             child_id: childId,
-            image_ids: [uploadedImage.id],
+            image_ids: imageIds,
             recorded_at: recordedAt || null,
             weather: weather.trim() === '' ? null : weather,
             parent_note: toAiParentNote(parentNote),
@@ -656,6 +988,11 @@ export default function RecordPage() {
         }),
     })
     if (result.kind === 'stale') return
+    const currentImageIds = getOrderedConfirmedImageIds(photosRef.current)
+    if (!currentImageIds || !sameOrderedValues(currentImageIds, imageIds)) {
+      finishAiAttempt(attempt)
+      return
+    }
     finishAiAttempt(attempt)
 
     if (result.kind === 'timeout') {
@@ -685,6 +1022,7 @@ export default function RecordPage() {
         current === quietStateCopy.record.validationFailed ? null : current,
       )
       setHasAiGeneratedContent(true)
+      setAiDraftNeedsReview(false)
       setAiStatus('done')
       return
     }
@@ -721,6 +1059,13 @@ export default function RecordPage() {
     void callAiGenerate({ consentConfirmed: aiConsentAt !== null })
   }
 
+  function confirmStaleAiDraft() {
+    setAiDraftNeedsReview(false)
+    setAiStatus('done')
+    setAiError(null)
+    setAiTimedOut(false)
+  }
+
   async function acceptAiConsent() {
     try {
       const user = await setAiConsentMutation.mutateAsync()
@@ -753,6 +1098,10 @@ export default function RecordPage() {
     }
     if (footerState.secondaryAction === 'choose-photo') {
       openPhotoPicker()
+      return
+    }
+    if (footerState.secondaryAction === 'confirm-ai-draft') {
+      confirmStaleAiDraft()
       return
     }
     focusManualTitle()
@@ -791,10 +1140,19 @@ export default function RecordPage() {
     event.preventDefault()
     if (saveInFlightRef.current) return
     const trimmedTitle = title.trim()
+    const orderedImageIds = getOrderedConfirmedImageIds(photosRef.current)
     if (!childId || aiStatus === 'generating' || aiStatus === 'consent_pending') return
 
     const clientErrors: FieldErrors = {}
-    if (!uploadedImage) clientErrors.imageIds = '写真を 1まい 選んでください。'
+    if (!orderedImageIds) {
+      clientErrors.imageIds =
+        photosRef.current.length === 0
+          ? '写真を 1まい 選んでください。'
+          : 'すべての写真の準備が終わるまで、お待ちください。'
+    }
+    if (aiDraftNeedsReview) {
+      clientErrors.general = '写真を変える前のAI下書きです。内容を確認してから保存してください。'
+    }
     if (!trimmedTitle) clientErrors.title = 'タイトルを 入れてください。'
     if (!recordedAt) clientErrors.recordedAt = 'ひにちを 選んでください。'
     else if (recordedAt > todayIso) {
@@ -806,7 +1164,7 @@ export default function RecordPage() {
       setTopMessage(quietStateCopy.record.validationFailed)
       return
     }
-    if (!uploadedImage) return
+    if (!orderedImageIds) return
 
     saveInFlightRef.current = true
     setSubmitting(true)
@@ -819,7 +1177,7 @@ export default function RecordPage() {
       body: body.trim() === '' ? null : body,
       recorded_at: recordedAt,
       weather: weather.trim() === '' ? null : weather,
-      image_ids: [uploadedImage.id],
+      image_ids: orderedImageIds,
       ai_generated: hasAiGeneratedContent,
     }
     const now = new Date().toISOString()
@@ -868,6 +1226,20 @@ export default function RecordPage() {
           switch (e.reason) {
             case 'validation_error': {
               const errors = extractFieldErrors(e.problem)
+              const invalidIndexes = new Set(
+                invalidImageIndexes(e.problem, photosRef.current.length),
+              )
+              if (invalidIndexes.size > 0) {
+                const invalidPhotos = photosRef.current.filter((_, index) =>
+                  invalidIndexes.has(index),
+                )
+                for (const photo of invalidPhotos) {
+                  revokePhotoPreview(photo)
+                  uploadRuntimeRef.current.delete(photo.clientId)
+                }
+                commitPhotos((current) => current.filter((_, index) => !invalidIndexes.has(index)))
+                invalidateAiAfterPhotoChange()
+              }
               errorFocusRequestedRef.current = true
               setFieldErrors(errors)
               setTopMessage(quietStateCopy.record.validationFailed)
@@ -888,8 +1260,9 @@ export default function RecordPage() {
                   parentNote,
                   recordedAt,
                   weather,
-                  imageId: uploadedImage.id,
+                  imageIds: orderedImageIds,
                   aiGenerated: hasAiGeneratedContent,
+                  aiDraftNeedsReview,
                 })
               }
               setSubmitting(false)
@@ -977,18 +1350,18 @@ export default function RecordPage() {
           きょうの {childName} ちゃんを のこす
         </h1>
         <p className="text-ink-secondary leading-narrative mt-2 text-sm">
-          しゃしんを 1まい えらんで、ことばを そえます。
+          しゃしんを 1〜5まい えらんで、ことばを そえます。
         </p>
 
-        {filePreviewUrl && file ? (
+        {primaryPhoto?.previewUrl ? (
           <PhotoMat
             data-testid="record-photo-mat-selected"
             className="mt-6 flex min-h-[240px] flex-1 items-center justify-center overflow-hidden"
           >
             <PhotoInner className="h-full max-h-[46dvh] w-full overflow-hidden">
               <NextImage
-                src={filePreviewUrl}
-                alt="えらんだ しゃしん"
+                src={primaryPhoto.previewUrl}
+                alt="記録の表紙になる 1まい目のしゃしん"
                 width={720}
                 height={900}
                 unoptimized
@@ -1000,10 +1373,12 @@ export default function RecordPage() {
           <PhotoPlaceholder
             data-testid="record-photo-placeholder"
             icon={ImagePlus}
-            title={uploadedImage ? 'アップロード済みの写真があります' : 'まずは 1まい'}
+            title={
+              photoAggregate.count > 0 ? `${photoAggregate.count}まい 選んでいます` : 'まずは 1まい'
+            }
             description={
-              uploadedImage
-                ? '再読み込み後はプレビューできません。このまま続けるか、写真を選び直せます。'
+              photoAggregate.count > 0
+                ? '1まい目が表紙になります。再読み込み後の写真は、このまま続けられます。'
                 : 'うまく撮れた写真でなくても、残したい瞬間なら大丈夫です。'
             }
             className="mt-6 min-h-[240px] flex-1"
@@ -1051,12 +1426,12 @@ export default function RecordPage() {
             <ol aria-label="記録の進行" className="grid grid-cols-3 gap-3 text-left text-[11px]">
               <RecordStep
                 number={1}
-                state={uploadedImage ? 'done' : 'current'}
+                state={allPhotosConfirmed ? 'done' : 'current'}
                 label="写真を選ぶ"
               />
               <RecordStep
                 number={2}
-                state={!uploadedImage ? 'upcoming' : draftComplete ? 'done' : 'current'}
+                state={!allPhotosConfirmed ? 'upcoming' : draftComplete ? 'done' : 'current'}
                 label="下書きを整える"
               />
               <RecordStep
@@ -1078,13 +1453,14 @@ export default function RecordPage() {
               必須
             </span>
           </Label>
-          <span id="memory-photo-requirement" className="sr-only">
-            写真は必須です。
+          <span id="memory-photo-requirement" className="text-ink-tertiary text-xs">
+            1〜5まい。上から順に記録へ並び、1まい目が表紙になります。
           </span>
           <Input
             ref={fileInputRef}
             id="memory-photo"
             type="file"
+            multiple
             accept="image/jpeg,image/png,image/webp,image/heic"
             onClick={resetPhotoInput}
             onChange={onFileSelected}
@@ -1100,7 +1476,7 @@ export default function RecordPage() {
             }
           />
 
-          {hasSelectedPhoto && uploadStatus !== 'failed' ? (
+          {hasSelectedPhoto ? (
             <Button
               ref={photoActionButtonRef}
               type="button"
@@ -1108,7 +1484,7 @@ export default function RecordPage() {
               size="sm"
               className="w-full"
               onClick={openPhotoPicker}
-              disabled={photoReplacementLocked}
+              disabled={photoReplacementLocked || (!photoAggregate.canAdd && !fieldErrors.imageIds)}
               aria-invalid={fieldErrors.imageIds ? true : undefined}
               aria-describedby={
                 fieldErrors.imageIds
@@ -1116,44 +1492,69 @@ export default function RecordPage() {
                   : 'memory-photo-requirement memory-photo-status'
               }
             >
-              {uploadedImage ? 'しゃしんを えらびなおす' : 'べつの しゃしんを えらぶ'}
+              {fieldErrors.imageIds
+                ? 'しゃしんを えらびなおす'
+                : photoAggregate.canAdd
+                  ? 'しゃしんを 追加する'
+                  : 'しゃしんは 5まい 選んでいます'}
             </Button>
           ) : null}
 
           <div id="memory-photo-status" className="min-h-4">
-            {uploadStatus === 'preparing' ? (
-              <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
-                {quietStateCopy.record.uploadPreparing}
-              </p>
-            ) : null}
-            {uploadStatus === 'uploading' ? (
-              <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
-                {quietStateCopy.record.uploadUploading}
-              </p>
-            ) : null}
-            {uploadStatus === 'confirming' ? (
-              <p role="status" aria-live="polite" className="text-ink-tertiary text-xs">
-                {quietStateCopy.record.uploadConfirming}
-              </p>
-            ) : null}
-            {uploadStatus === 'done' ? (
-              <p role="status" aria-live="polite" className="text-leaf text-xs">
-                {quietStateCopy.record.uploadDone}
-              </p>
-            ) : null}
-            {uploadStatus === 'failed' && uploadError ? (
-              <p role="alert" className="text-amber text-xs">
-                {uploadError}
-              </p>
-            ) : null}
             {fieldErrors.imageIds ? (
               <p id="memory-photo-error" className="text-amber text-xs">
                 {fieldErrors.imageIds}
               </p>
             ) : null}
+            {photoSelectionMessage ? (
+              <p className="text-ink-secondary mt-1 text-xs">{photoSelectionMessage}</p>
+            ) : null}
           </div>
 
-          {uploadedImage ? (
+          <RecordPhotoList
+            items={photos.map((photo) => ({
+              clientId: photo.clientId,
+              status: toPhotoListStatus(photo),
+              statusText:
+                photo.removalStatus === 'deleting'
+                  ? '写真を削除しています'
+                  : photo.removalStatus === 'failed'
+                    ? '写真を削除できませんでした。入力した内容はそのままです。'
+                    : photo.status === 'failed'
+                      ? getUploadFailureMessage(photo.failureStage ?? 'prepare')
+                      : undefined,
+              retryLabel: photo.removalStatus === 'failed' ? '削除をもういちど' : undefined,
+              removeDisabled: photo.removalStatus === 'deleting',
+              preview: photo.previewUrl ? (
+                <NextImage
+                  src={photo.previewUrl}
+                  alt=""
+                  width={160}
+                  height={160}
+                  unoptimized
+                  className="h-full w-full object-cover"
+                />
+              ) : undefined,
+            }))}
+            onMove={moveSelectedPhoto}
+            onRemove={(clientId) => void removeSelectedPhoto(clientId)}
+            onRetry={retryUpload}
+            onAnnounce={setPhotoAnnouncement}
+            statusAnnouncement={photoAnnouncement}
+            emptyFocusRef={photoActionButtonRef}
+            disabled={submitting}
+          />
+
+          {aiDraftNeedsReview ? (
+            <PaperSlip data-testid="record-stale-ai-draft" className="border-amber border">
+              <p className="font-serif text-sm text-ink">写真を変える前のAI下書きです</p>
+              <p className="text-ink-secondary leading-narrative mt-1 text-xs">
+                ことばは消していません。AIで作り直すか、内容を確認して保存へ進んでください。
+              </p>
+            </PaperSlip>
+          ) : null}
+
+          {allPhotosConfirmed ? (
             <>
               <PaperSlip data-testid="record-ai-decision" aria-busy={aiStatus === 'generating'}>
                 <p className="text-ink-secondary font-serif text-sm">
@@ -1371,6 +1772,17 @@ export default function RecordPage() {
               >
                 {footerState.primaryLabel}
               </Button>
+            ) : footerState.primaryAction === 'confirm-ai-draft' ? (
+              <Button
+                ref={primaryActionButtonRef}
+                type="button"
+                size="lg"
+                className="w-full"
+                onClick={confirmStaleAiDraft}
+                aria-describedby="record-footer-status"
+              >
+                {footerState.primaryLabel}
+              </Button>
             ) : footerState.primaryAction === 'generate-ai' ||
               footerState.primaryAction === 'retry-ai' ? (
               <Button
@@ -1390,7 +1802,7 @@ export default function RecordPage() {
                 type="button"
                 size="lg"
                 className="w-full"
-                onClick={retryUpload}
+                onClick={() => retryUpload()}
                 disabled={footerState.primaryDisabled}
                 aria-describedby="record-footer-status"
               >
@@ -1422,11 +1834,15 @@ export default function RecordPage() {
                 disabled={footerState.primaryDisabled}
                 aria-describedby={
                   footerState.primaryAction === 'choose-photo'
-                    ? 'memory-photo-requirement record-footer-status'
+                    ? fieldErrors.imageIds
+                      ? 'memory-photo-requirement memory-photo-error record-footer-status'
+                      : 'memory-photo-requirement record-footer-status'
                     : 'record-footer-status'
                 }
               >
-                {footerState.primaryLabel}
+                {footerState.primaryAction === 'choose-photo' && fieldErrors.imageIds
+                  ? 'しゃしんを えらびなおす'
+                  : footerState.primaryLabel}
               </Button>
             )}
           </div>
@@ -1462,10 +1878,8 @@ export default function RecordPage() {
       {cancelDialogOpen ? (
         <CancelConfirmDialog
           onKeep={() => setCancelDialogOpen(false)}
-          onClose={() => {
-            recordDraftStore.clear()
-            router.push('/')
-          }}
+          onClose={() => void discardDraftAndClose()}
+          pending={discarding}
         />
       ) : null}
     </RecordShell>
@@ -1644,12 +2058,21 @@ function RecordStep({
   )
 }
 
-function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose: () => void }) {
+function CancelConfirmDialog({
+  onKeep,
+  onClose,
+  pending,
+}: {
+  onKeep: () => void
+  onClose: () => void
+  pending: boolean
+}) {
   return (
     <AccessibleDialog
       titleId="cancel-confirm-title"
       descriptionId="cancel-confirm-description"
       initialFocusId="cancel-confirm-keep"
+      pending={pending}
       onClose={onKeep}
     >
       <Card className="w-full max-w-md">
@@ -1667,6 +2090,7 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
             type="button"
             size="lg"
             onClick={onKeep}
+            disabled={pending}
             className="w-full"
           >
             もうすこし なおす
@@ -1676,9 +2100,10 @@ function CancelConfirmDialog({ onKeep, onClose }: { onKeep: () => void; onClose:
             variant="destructive"
             size="lg"
             onClick={onClose}
+            disabled={pending}
             className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:bg-amber/90 hover:text-white active:bg-amber/90"
           >
-            下書きを 破棄して閉じる
+            {pending ? '写真を整理して閉じています…' : '下書きを 破棄して閉じる'}
           </Button>
         </CardContent>
       </Card>

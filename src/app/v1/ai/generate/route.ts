@@ -16,7 +16,6 @@ import {
 } from '@/features/ai/server/generate'
 import { checkMonthlyQuota, reserveMonthlyAiQuota } from '@/features/ai/server/quota'
 import { resizeForClaude } from '@/features/ai/server/resize'
-import { activeImageAccessWhere } from '@/features/uploads/server/active-image-access'
 import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { ApiProblemError } from '@/lib/api/error'
 
@@ -25,10 +24,10 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const BUCKET = 'images'
-const AI_VENDOR_DEADLINE_MS = 25_000
+const AI_TOTAL_EXTERNAL_WORK_DEADLINE_MS = 12_000
+const AI_IMAGE_DOWNLOAD_TIMEOUT_MS = 8_000
+const AI_IMAGE_PREPARATION_CONCURRENCY = 2
 const IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS = 30_000
-
-type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 interface ImageForAiPreparation {
   storageKey: string
@@ -45,19 +44,27 @@ function imageNotFoundProblem() {
 }
 
 async function prepareImageInputForClaude(
-  supabase: SupabaseAdminClient,
   img: ImageForAiPreparation,
+  preparationSignal: AbortSignal,
 ): Promise<AiImageInput> {
+  const signal = AbortSignal.any([
+    preparationSignal,
+    AbortSignal.timeout(AI_IMAGE_DOWNLOAD_TIMEOUT_MS),
+  ])
+  const supabase = createSupabaseAdminClient({ signal })
   const { data, error } = await supabase.storage.from(BUCKET).download(img.storageKey)
+  if (signal.aborted) throw new Error('image fetch aborted')
   if (error || !data) {
     console.error('storage.download failed', { reason: error ? 'storage_error' : 'no_data' })
     throw new Error('image fetch failed')
   }
 
   const arrayBuffer = await data.arrayBuffer()
+  if (signal.aborted) throw new Error('image fetch aborted')
   const originalBuffer = Buffer.from(arrayBuffer)
   // 元画像は Storage にフル品質で残し、Claude に渡すコピーだけを縮める (ADR-0011 §11)
   const resized = await resizeForClaude(originalBuffer)
+  if (signal.aborted) throw new Error('image fetch aborted')
 
   return {
     mediaType: resized.mediaType,
@@ -65,8 +72,44 @@ async function prepareImageInputForClaude(
   }
 }
 
+async function prepareImageInputsForClaude(
+  images: readonly ImageForAiPreparation[],
+  requestDeadlineSignal: AbortSignal,
+): Promise<AiImageInput[]> {
+  const prepared = new Array<AiImageInput>(images.length)
+  const preparationController = new AbortController()
+  const preparationSignal = AbortSignal.any([preparationController.signal, requestDeadlineSignal])
+  let nextIndex = 0
+  let firstError: unknown
+  const worker = async () => {
+    while (!preparationSignal.aborted && nextIndex < images.length) {
+      const index = nextIndex
+      nextIndex += 1
+      try {
+        prepared[index] = await prepareImageInputForClaude(images[index]!, preparationSignal)
+      } catch (error) {
+        if (!firstError) firstError = error
+        preparationController.abort()
+      }
+    }
+  }
+  const workers = Array.from(
+    { length: Math.min(AI_IMAGE_PREPARATION_CONCURRENCY, images.length) },
+    () => worker(),
+  )
+  await Promise.allSettled(workers)
+  if (firstError) throw firstError
+  return prepared
+}
+
 export async function POST(request: Request) {
   const startTime = Date.now()
+  const externalWorkDeadlineController = new AbortController()
+  const externalWorkDeadline = setTimeout(
+    () => externalWorkDeadlineController.abort(),
+    AI_TOTAL_EXTERNAL_WORK_DEADLINE_MS,
+  )
+  const externalWorkDeadlineSignal = externalWorkDeadlineController.signal
   let generationLogId: string | undefined
 
   try {
@@ -97,16 +140,25 @@ export async function POST(request: Request) {
 
     // 5. image 所有権検証
     const images = await prisma.image.findMany({
-      where: { id: { in: input.imageIds }, ...activeImageAccessWhere() },
+      where: {
+        id: { in: input.imageIds },
+        userId: user.id,
+        deletedAt: null,
+        memoryId: null,
+        metadataSanitizedAt: { not: null },
+      },
       select: { id: true, userId: true, storageKey: true, contentType: true },
     })
     if (images.length !== input.imageIds.length) {
       throw imageNotFoundProblem()
     }
-    if (images.some((img) => img.userId !== user.id)) {
-      throw problems.forbidden()
-    }
-    const unsupported = images.find((img) => !isMediaTypeSupportedByClaude(img.contentType))
+    const imagesById = new Map(images.map((image) => [image.id, image]))
+    const orderedImages = input.imageIds.flatMap((imageId) => {
+      const image = imagesById.get(imageId)
+      return image ? [image] : []
+    })
+    if (orderedImages.length !== input.imageIds.length) throw imageNotFoundProblem()
+    const unsupported = orderedImages.find((img) => !isMediaTypeSupportedByClaude(img.contentType))
     if (unsupported) {
       // HEIC 等は Claude 非対応。クライアントには明示エラーを返す
       throw problems.validation([
@@ -119,10 +171,7 @@ export async function POST(request: Request) {
     }
 
     // 6. Storage から画像取得 → resize (Claude 5MB 制約) → base64
-    const supabase = createSupabaseAdminClient()
-    const imageInputs = await Promise.all(
-      images.map((img) => prepareImageInputForClaude(supabase, img)),
-    )
+    const imageInputs = await prepareImageInputsForClaude(orderedImages, externalWorkDeadlineSignal)
 
     // 7. 月齢計算 (送信は month/day のみ。birthdate そのものは送らない・CLAUDE.md §7 PII)
     const recordedAtDate = input.recordedAt ?? new Date()
@@ -146,53 +195,50 @@ export async function POST(request: Request) {
     })
     generationLogId = generationLog.id
 
-    const vendorAbort = new AbortController()
-    const vendorDeadline = setTimeout(() => vendorAbort.abort(), AI_VENDOR_DEADLINE_MS)
     let generationAttempt:
       | { generationLogId: string; result: Awaited<ReturnType<typeof generateAi>> }
       | { generationLogId: string; error: unknown }
-    try {
-      generationAttempt = await prisma.$transaction(
-        async (transaction) => {
-          await lockImageAccess(transaction, input.imageIds)
-          const latestImages = await transaction.image.findMany({
-            where: {
-              id: { in: input.imageIds },
-              ...activeImageAccessWhere(user.id),
-            },
-            select: { id: true },
-          })
-          if (latestImages.length !== input.imageIds.length) {
-            throw imageNotFoundProblem()
-          }
+    generationAttempt = await prisma.$transaction(
+      async (transaction) => {
+        await lockImageAccess(transaction, input.imageIds)
+        const latestImages = await transaction.image.findMany({
+          where: {
+            id: { in: input.imageIds },
+            userId: user.id,
+            deletedAt: null,
+            memoryId: null,
+            metadataSanitizedAt: { not: null },
+          },
+          select: { id: true },
+        })
+        if (latestImages.length !== input.imageIds.length) {
+          throw imageNotFoundProblem()
+        }
 
-          try {
-            vendorAbort.signal.throwIfAborted()
-            const result = await generateAi(
-              {
-                childName: child.name,
-                ageMonths: age.months,
-                ageDays: age.days,
-                recordedAt: recordedAtIso,
-                weather: input.weather,
-                parentNote: input.parentNote,
-              },
-              imageInputs,
-              { signal: vendorAbort.signal },
-            )
-            return { generationLogId: generationLog.id, result }
-          } catch (error) {
-            return { generationLogId: generationLog.id, error }
-          }
-        },
-        {
-          maxWait: 5_000,
-          timeout: IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS,
-        },
-      )
-    } finally {
-      clearTimeout(vendorDeadline)
-    }
+        try {
+          externalWorkDeadlineSignal.throwIfAborted()
+          const result = await generateAi(
+            {
+              childName: child.name,
+              ageMonths: age.months,
+              ageDays: age.days,
+              recordedAt: recordedAtIso,
+              weather: input.weather,
+              parentNote: input.parentNote,
+            },
+            imageInputs,
+            { signal: externalWorkDeadlineSignal },
+          )
+          return { generationLogId: generationLog.id, result }
+        } catch (error) {
+          return { generationLogId: generationLog.id, error }
+        }
+      },
+      {
+        maxWait: 5_000,
+        timeout: IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS,
+      },
+    )
     if ('error' in generationAttempt) throw generationAttempt.error
     const result = generationAttempt.result
 
@@ -257,5 +303,7 @@ export async function POST(request: Request) {
       return toProblemResponse(problems.aiGenerationFailed())
     }
     return toProblemResponse(e)
+  } finally {
+    clearTimeout(externalWorkDeadline)
   }
 }
