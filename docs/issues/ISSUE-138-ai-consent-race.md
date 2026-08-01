@@ -27,7 +27,15 @@ requires_human_review:
 - 送信直前の同意再検証
 - 撤回と生成開始の並行テスト
 
-## 実装契約
+## 現行契約（ISSUE-139で置換）
+
+- 撤回とprocessing claimは同じuser単位advisory lockで直列化する
+- 撤回が先にcommitした場合、生成はclaim時の同意世代再検証で停止する
+- claimが先の場合もvendor通信中はlockを保持せず、撤回を待たせず確定する
+- 撤回後に完了した生成結果はfinalizeで保存・返却せず`discarded`へ遷移する
+- vendor未送信の`reserved`失敗はquotaへ加算せず、claim済み`processing`は結果破棄時も加算する
+
+## ISSUE-138当時の契約（履歴・現在は適用しない）
 
 - AI生成のvendor送信区間と同意撤回は、同じuser単位advisory lockで直列化する
 - 撤回が先にcommitした場合、生成はlock取得後の同意再検証で停止する
@@ -35,7 +43,7 @@ requires_human_review:
 - 同意更新transactionは生成側の最大30秒より長い40秒を許容し、待機上限超過は固定reason `ai_consent_update_busy` を返す
 - 同意再検証でvendor未送信のまま停止した生成予約はquotaへ加算しない
 - 本Issueの撤回境界は明示的な同意更新APIを対象とする。退会は画像アクセスlockで生成と直列化し、ISSUE-139でlock順を再設計する
-- ISSUE-139で外部通信をtransaction外へ分離する際も、この順序契約を維持する
+- ISSUE-139で外部通信をtransaction外へ分離する際の引継ぎ元とする
 
 ## 受け入れ条件 (Acceptance Criteria)
 
@@ -47,7 +55,7 @@ requires_human_review:
 - [x] 撤回と生成開始の並行統合テストがある
 - [x] 写真、呼び名、prompt、生成本文をログへ出さない
 
-## 検証結果
+## ISSUE-138当時の検証結果
 
 - `pnpm pr:gate`: PASS（141 files / 1104 tests、lint、typecheck、buildを含む）
 - `pnpm vitest run tests/integration/v1/me.test.ts tests/integration/v1/ai-generate.test.ts tests/unit/features/ai/consent-lock.test.ts`: 32 tests passed
@@ -55,7 +63,7 @@ requires_human_review:
 - ISSUE-143統合後も、最大5枚・12秒deadline・画像lockとAI同意lockを両立することを確認
 - Security / Reliability specialist review: APPROVE
 
-## 人間レビュー
+## ISSUE-138当時の人間レビュー（ISSUE-139の新契約承認とは別）
 
 - [x] Privacy: 撤回確定後は新しい外部送信を開始せず、先に始まった1件は完了後に撤回が確定する契約を承認（2026-08-01）
 - [x] AI Safety: 進行中送信を完了後に撤回する文言・挙動を承認（2026-08-01）
