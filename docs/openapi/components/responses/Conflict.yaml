@@ -41,3 +41,12 @@ content:
           detail: '原画像の安全確認を処理中です'
           reason: 'image_sanitization_pending'
           instance: 'req_01HXYZABCDEFG'
+      image_already_linked:
+        summary: Image is already linked to a memory
+        value:
+          type: 'https://hana.app/problems/image-already-linked'
+          title: 'Conflict'
+          status: 409
+          detail: 'この画像は記録に保存されています'
+          reason: 'image_already_linked'
+          instance: 'req_01HXYZABCDEFG'

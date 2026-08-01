@@ -16,19 +16,22 @@ import {
 } from '@/features/ai/server/generate'
 import { checkMonthlyQuota, reserveMonthlyAiQuota } from '@/features/ai/server/quota'
 import { resizeForClaude } from '@/features/ai/server/resize'
-import { activeImageAccessWhere } from '@/features/uploads/server/active-image-access'
-import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { ApiProblemError } from '@/lib/api/error'
+import {
+  claimAiGeneration,
+  failAiGeneration,
+  finalizeAiGeneration,
+} from '@/features/ai/server/generation-lifecycle'
 
 export const dynamic = 'force-dynamic'
 // Claude API は haiku でも 5〜15 秒かかることがある
 export const maxDuration = 60
 
 const BUCKET = 'images'
-const AI_VENDOR_DEADLINE_MS = 25_000
-const IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS = 30_000
-
-type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
+const AI_TOTAL_EXTERNAL_WORK_DEADLINE_MS = 12_000
+const AI_IMAGE_DOWNLOAD_TIMEOUT_MS = 8_000
+const AI_IMAGE_PREPARATION_CONCURRENCY = 2
+const AI_STATE_TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 5_000 } as const
 
 interface ImageForAiPreparation {
   storageKey: string
@@ -44,20 +47,36 @@ function imageNotFoundProblem() {
   ])
 }
 
+function generationBoundaryProblem(
+  reason: 'ai_consent_required' | 'image_not_found' | 'child_not_found',
+) {
+  if (reason === 'ai_consent_required') return problems.aiConsentRequired()
+  if (reason === 'image_not_found') return imageNotFoundProblem()
+  return problems.notFound('指定した子どもが見つかりません')
+}
+
 async function prepareImageInputForClaude(
-  supabase: SupabaseAdminClient,
   img: ImageForAiPreparation,
+  preparationSignal: AbortSignal,
 ): Promise<AiImageInput> {
+  const signal = AbortSignal.any([
+    preparationSignal,
+    AbortSignal.timeout(AI_IMAGE_DOWNLOAD_TIMEOUT_MS),
+  ])
+  const supabase = createSupabaseAdminClient({ signal })
   const { data, error } = await supabase.storage.from(BUCKET).download(img.storageKey)
+  if (signal.aborted) throw new Error('image fetch aborted')
   if (error || !data) {
     console.error('storage.download failed', { reason: error ? 'storage_error' : 'no_data' })
     throw new Error('image fetch failed')
   }
 
   const arrayBuffer = await data.arrayBuffer()
+  if (signal.aborted) throw new Error('image fetch aborted')
   const originalBuffer = Buffer.from(arrayBuffer)
   // 元画像は Storage にフル品質で残し、Claude に渡すコピーだけを縮める (ADR-0011 §11)
   const resized = await resizeForClaude(originalBuffer)
+  if (signal.aborted) throw new Error('image fetch aborted')
 
   return {
     mediaType: resized.mediaType,
@@ -65,12 +84,52 @@ async function prepareImageInputForClaude(
   }
 }
 
+async function prepareImageInputsForClaude(
+  images: readonly ImageForAiPreparation[],
+  requestDeadlineSignal: AbortSignal,
+): Promise<AiImageInput[]> {
+  const prepared = new Array<AiImageInput>(images.length)
+  const preparationController = new AbortController()
+  const preparationSignal = AbortSignal.any([preparationController.signal, requestDeadlineSignal])
+  let nextIndex = 0
+  let firstError: unknown
+  const worker = async () => {
+    while (!preparationSignal.aborted && nextIndex < images.length) {
+      const index = nextIndex
+      nextIndex += 1
+      try {
+        prepared[index] = await prepareImageInputForClaude(images[index]!, preparationSignal)
+      } catch (error) {
+        if (!firstError) firstError = error
+        preparationController.abort()
+      }
+    }
+  }
+  const workers = Array.from(
+    { length: Math.min(AI_IMAGE_PREPARATION_CONCURRENCY, images.length) },
+    () => worker(),
+  )
+  await Promise.allSettled(workers)
+  if (firstError) throw firstError
+  return prepared
+}
+
 export async function POST(request: Request) {
   const startTime = Date.now()
+  const externalWorkDeadlineController = new AbortController()
+  const externalWorkDeadline = setTimeout(
+    () => externalWorkDeadlineController.abort(),
+    AI_TOTAL_EXTERNAL_WORK_DEADLINE_MS,
+  )
+  const externalWorkDeadlineSignal = externalWorkDeadlineController.signal
   let generationLogId: string | undefined
+  let generationClaimToken: string | undefined
+  let generationUserId: string | undefined
+  let generationWasClaimed = false
 
   try {
     const user = await requireUser()
+    generationUserId = user.id
 
     // 1. AI 同意チェック
     if (!user.aiConsentAt) {
@@ -97,16 +156,25 @@ export async function POST(request: Request) {
 
     // 5. image 所有権検証
     const images = await prisma.image.findMany({
-      where: { id: { in: input.imageIds }, ...activeImageAccessWhere() },
+      where: {
+        id: { in: input.imageIds },
+        userId: user.id,
+        deletedAt: null,
+        memoryId: null,
+        metadataSanitizedAt: { not: null },
+      },
       select: { id: true, userId: true, storageKey: true, contentType: true },
     })
     if (images.length !== input.imageIds.length) {
       throw imageNotFoundProblem()
     }
-    if (images.some((img) => img.userId !== user.id)) {
-      throw problems.forbidden()
-    }
-    const unsupported = images.find((img) => !isMediaTypeSupportedByClaude(img.contentType))
+    const imagesById = new Map(images.map((image) => [image.id, image]))
+    const orderedImages = input.imageIds.flatMap((imageId) => {
+      const image = imagesById.get(imageId)
+      return image ? [image] : []
+    })
+    if (orderedImages.length !== input.imageIds.length) throw imageNotFoundProblem()
+    const unsupported = orderedImages.find((img) => !isMediaTypeSupportedByClaude(img.contentType))
     if (unsupported) {
       // HEIC 等は Claude 非対応。クライアントには明示エラーを返す
       throw problems.validation([
@@ -119,10 +187,7 @@ export async function POST(request: Request) {
     }
 
     // 6. Storage から画像取得 → resize (Claude 5MB 制約) → base64
-    const supabase = createSupabaseAdminClient()
-    const imageInputs = await Promise.all(
-      images.map((img) => prepareImageInputForClaude(supabase, img)),
-    )
+    const imageInputs = await prepareImageInputsForClaude(orderedImages, externalWorkDeadlineSignal)
 
     // 7. 月齢計算 (送信は month/day のみ。birthdate そのものは送らない・CLAUDE.md §7 PII)
     const recordedAtDate = input.recordedAt ?? new Date()
@@ -145,76 +210,63 @@ export async function POST(request: Request) {
       promptVersion: PROMPT_VERSION,
     })
     generationLogId = generationLog.id
+    generationClaimToken = generationLog.claimToken
 
-    const vendorAbort = new AbortController()
-    const vendorDeadline = setTimeout(() => vendorAbort.abort(), AI_VENDOR_DEADLINE_MS)
-    let generationAttempt:
-      | { generationLogId: string; result: Awaited<ReturnType<typeof generateAi>> }
-      | { generationLogId: string; error: unknown }
-    try {
-      generationAttempt = await prisma.$transaction(
-        async (transaction) => {
-          await lockImageAccess(transaction, input.imageIds)
-          const latestImages = await transaction.image.findMany({
-            where: {
-              id: { in: input.imageIds },
-              ...activeImageAccessWhere(user.id),
-            },
-            select: { id: true },
-          })
-          if (latestImages.length !== input.imageIds.length) {
-            throw imageNotFoundProblem()
-          }
-
-          try {
-            vendorAbort.signal.throwIfAborted()
-            const result = await generateAi(
-              {
-                childName: child.name,
-                ageMonths: age.months,
-                ageDays: age.days,
-                recordedAt: recordedAtIso,
-                weather: input.weather,
-                parentNote: input.parentNote,
-              },
-              imageInputs,
-              { signal: vendorAbort.signal },
-            )
-            return { generationLogId: generationLog.id, result }
-          } catch (error) {
-            return { generationLogId: generationLog.id, error }
-          }
-        },
-        {
-          maxWait: 5_000,
-          timeout: IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS,
-        },
-      )
-    } finally {
-      clearTimeout(vendorDeadline)
+    const boundaryInput = {
+      generationId: generationLog.id,
+      userId: user.id,
+      childId: child.id,
+      imageIds: input.imageIds,
+      claimToken: generationLog.claimToken,
+      consentVersion: latestConsent.aiConsentAt,
     }
-    if ('error' in generationAttempt) throw generationAttempt.error
-    const result = generationAttempt.result
+    const claim = await prisma.$transaction(
+      (transaction) => claimAiGeneration(transaction, boundaryInput),
+      AI_STATE_TRANSACTION_OPTIONS,
+    )
+    if (claim.outcome === 'rejected') throw generationBoundaryProblem(claim.reason)
+    if (claim.outcome === 'stale') throw new Error('ai generation reservation is stale')
+    generationWasClaimed = true
 
-    // 9. 成功ログ。生成本文自体は保管しない (PII)
-    const log = await prisma.aiGeneration.update({
-      where: { id: generationLogId },
-      data: {
-        succeeded: true,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        durationMs: Date.now() - startTime,
-        attemptCount: result.attempts,
-        policyCategoryIds: result.policyRejections,
-        policyOutcome:
-          result.policyRejections.length > 0 ? 'accepted_after_retry' : 'accepted_first_attempt',
-        errorReason: null,
+    externalWorkDeadlineSignal.throwIfAborted()
+    const result = await generateAi(
+      {
+        childName: child.name,
+        ageMonths: age.months,
+        ageDays: age.days,
+        recordedAt: recordedAtIso,
+        weather: input.weather,
+        parentNote: input.parentNote,
       },
-      select: { id: true },
-    })
+      imageInputs,
+      { signal: externalWorkDeadlineSignal },
+    )
+
+    const finalized = await prisma.$transaction(
+      (transaction) =>
+        finalizeAiGeneration(transaction, {
+          ...boundaryInput,
+          success: {
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            durationMs: Date.now() - startTime,
+            attemptCount: result.attempts,
+            policyCategoryIds: result.policyRejections,
+            policyOutcome:
+              result.policyRejections.length > 0
+                ? 'accepted_after_retry'
+                : 'accepted_first_attempt',
+          },
+        }),
+      AI_STATE_TRANSACTION_OPTIONS,
+    )
+    if (finalized.outcome === 'discarded') {
+      throw generationBoundaryProblem(finalized.reason)
+    }
+    if (finalized.outcome === 'stale') throw new Error('ai generation finalization is stale')
 
     return NextResponse.json({
-      generation_id: log.id,
+      generation_id: generationLog.id,
       title: result.title,
       body: result.body,
       tags: result.tags,
@@ -227,13 +279,15 @@ export async function POST(request: Request) {
 
     // 失敗ログ (quota チェック・所有権チェック等は除く)
     const isProblem = e instanceof ApiProblemError
-    const shouldLogFailure = !!generationLogId
-    if (shouldLogFailure && generationLogId) {
+    const shouldLogFailure = !!generationLogId && !!generationClaimToken && !!generationUserId
+    if (shouldLogFailure && generationLogId && generationClaimToken && generationUserId) {
       try {
-        await prisma.aiGeneration.update({
-          where: { id: generationLogId },
-          data: {
-            succeeded: false,
+        await failAiGeneration(prisma, {
+          generationId: generationLogId,
+          userId: generationUserId,
+          claimToken: generationClaimToken,
+          wasClaimed: generationWasClaimed,
+          failure: {
             inputTokens: policyFailure?.inputTokens,
             outputTokens: policyFailure?.outputTokens,
             durationMs: Date.now() - startTime,
@@ -257,5 +311,7 @@ export async function POST(request: Request) {
       return toProblemResponse(problems.aiGenerationFailed())
     }
     return toProblemResponse(e)
+  } finally {
+    clearTimeout(externalWorkDeadline)
   }
 }

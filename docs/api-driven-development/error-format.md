@@ -103,6 +103,7 @@ if (problem.status === 401) {
 | 403    | `forbidden`                | 認可拒否（他人のリソース含む）    |
 | 404    | `not_found`                | 自分のリソースが見つからない      |
 | 409    | `email_already_registered` | メール重複（auth）                |
+| 409    | `image_already_linked`     | 保存済み画像の削除競合            |
 | 422    | `validation_error`         | フィールドバリデーション失敗      |
 | 429    | `rate_limited`             | 汎用レート制限                    |
 | 429    | `ai_quota_exceeded`        | AI 生成回数上限                   |
