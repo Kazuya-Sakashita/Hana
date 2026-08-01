@@ -2,7 +2,7 @@
 id: ISSUE-146
 title: 復元写真のstateとrefを同期して即時保存競合を防ぐ
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-08-01
 github_issue: 312
@@ -53,6 +53,7 @@ blocked_by:
 - `pnpm pr:gate`: PASS（format、lint、OpenAPI route map、全テスト、契約QA、production buildを含む）
 - `git diff --check`: PASS
 - Standards / Spec独立レビュー: GO（指摘0件）
+- GitHub `pr-gate`: PASS
 
 ## セキュリティ・プライバシー考慮
 
