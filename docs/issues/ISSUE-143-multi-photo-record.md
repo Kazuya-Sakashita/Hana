@@ -2,7 +2,7 @@
 id: ISSUE-143
 title: 記録作成で写真を最大5枚扱えるようにする
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-08-01
 github_issue: 302
@@ -86,6 +86,7 @@ requires_human_review:
 
 - 2026-08-01: ブラウザ下書きの写真情報が順序付き画像IDだけで、画像URL、画像データ、storage key、ファイル名を含まないことを人間が確認し、問題なし
 - 2026-08-01: ブラウザとサーバのログに写真URL、storage key、ファイル名、画像データ、AI入出力、個人情報が表示されないことを人間が確認し、問題なし
+- 2026-08-01: 記録へ紐付かなかった写真だけを48時間後に再検証して削除し、保存済み写真を対象外とするcleanup方針を人間が承認
 
 ## 自動検証・専門レビュー
 
@@ -93,7 +94,7 @@ requires_human_review:
 - `pnpm openapi:lint`: PASS（既存warningのみ）
 - 合成データ限定のローカルPostgreSQL競合QA: 7 scenarios PASS
 - Standards / Spec / Product-Accessibility / Reliability / Security-Privacy-OpenAPI: GO
-- Human gateはDraft PR上で、実ユーザー写真を使わず1項目ずつ実施する
+- Product / Accessibility / PrivacyのHuman gate: 完了
 
 ## 参考
 
