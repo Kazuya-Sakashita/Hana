@@ -2,7 +2,7 @@
 id: ISSUE-147
 title: AI生成の旧版互換triggerを削除する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-08-02
 github_issue: 315
@@ -58,7 +58,7 @@ ISSUE-139のrolling deploy用に追加した旧Route互換triggerを、Hanaが�
 - [x] 旧Route互換専用テストを最終DB状態から除去する
 - [x] ISSUE-139のDeployment stateとADRが現在状態に一致する
 - [x] `pnpm pr:gate`とDB統合検証が成功する
-- [ ] Backend / Reliability / Operatorレビューを完了する
+- [x] Backend / Reliability / Operatorレビューを完了する
 
 ## 検証結果
 
@@ -81,7 +81,7 @@ ISSUE-139のrolling deploy用に追加した旧Route互換triggerを、Hanaが�
 
 - [x] Backend: forward-only migrationがtrigger / 関数だけを削除する（2026-08-02承認）
 - [x] Reliability: 最終schemaと新状態機械のDB統合検証（2026-08-02承認）
-- [ ] Operator: Hanaが未公開で旧version trafficが存在しないこと、および実DB適用手順
+- [x] Operator: Hanaが未公開で旧version trafficが存在しないこと、および実DB適用手順（2026-08-02承認）
 
 ## 参考
 
