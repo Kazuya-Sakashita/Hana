@@ -2,7 +2,7 @@
 id: ISSUE-147
 title: AI生成の旧版互換triggerを削除する
 priority: P0
-status: in_progress
+status: review
 size: S
 created_at: 2026-08-02
 github_issue: 315
@@ -52,13 +52,23 @@ ISSUE-139のrolling deploy用に追加した旧Route互換triggerを、Hanaが�
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] migration chain適用後に互換triggerと関数が存在しない
-- [ ] `quota_counted_at`列とindexを維持する
-- [ ] 新状態機械のclaim / finalize / stale回収 / UTC月quotaが通る
-- [ ] 旧Route互換専用テストを最終DB状態から除去する
-- [ ] ISSUE-139のDeployment stateとADRが現在状態に一致する
-- [ ] `pnpm pr:gate`とDB統合検証が成功する
+- [x] migration chain適用後に互換triggerと関数が存在しない
+- [x] `quota_counted_at`列とindexを維持する
+- [x] 新状態機械のclaim / finalize / stale回収 / UTC月quotaが通る
+- [x] 旧Route互換専用テストを最終DB状態から除去する
+- [x] ISSUE-139のDeployment stateとADRが現在状態に一致する
+- [x] `pnpm pr:gate`とDB統合検証が成功する
 - [ ] Backend / Reliability / Operatorレビューを完了する
+
+## 検証結果
+
+- TDD RED: 互換trigger / 関数が残る既存migration chainで期待どおり失敗
+- TDD GREEN: 削除migration適用後、DB統合2件成功
+- fresh migration chain: 空のローカルPostgreSQLへ14件を適用して成功
+- focused test: 38件成功
+- `pnpm pr:gate`: 1109件成功、DB条件付き2件skip
+- Standardsレビュー: GO、指摘0件
+- Specレビュー: GO、指摘0件
 
 ## セキュリティ・プライバシー考慮
 

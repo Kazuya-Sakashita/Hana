@@ -93,7 +93,7 @@ Codex-ready と判断する条件:
 
 ## In Progress
 
-- `ISSUE-147` / `#315`: AI生成の旧版互換triggerをforward-only migrationで削除中。
+現在はありません。
 
 ## Planned Design Rebuild Sequence
 
@@ -196,6 +196,7 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
+- `ISSUE-147` / `#315`: 実装・専門レビュー完了 / Backend・Reliability・Operatorレビュー待ち。
 - `ISSUE-122` / `#268`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-121` / `#264`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-118` / `#253`: 実装・privacy / legal review承認済み / merge 待ち。
