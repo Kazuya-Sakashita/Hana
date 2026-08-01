@@ -62,3 +62,7 @@ requires_human_review:
 
 - Privacy / Security / Operationsによる削除順序、30日保持、failed再投入手順の承認
 - staging migration適用後、合成テストアカウント限定でStorage smokeを実施
+
+## Human gate
+
+- 2026-08-01: 退会受付直後にアクセスを停止し、30日未満では物理削除せず、30日経過後だけを対象にする保持方針を人間が承認
