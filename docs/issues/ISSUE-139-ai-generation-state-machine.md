@@ -104,10 +104,10 @@ AI vendor通信中にDB transaction、行lock、transaction advisory lockを保�
 
 ## 人間レビュー
 
-- [ ] Backend: 2段migration、互換trigger、deploy順、旧version drain後のtrigger削除方針
+- [x] Backend: 2段migration、互換trigger、deploy順、旧version drain後のtrigger削除方針（2026-08-01承認）
 - [ ] Reliability: lease fencing、stale回収、UTC月quota、撤回・削除競合
 - [ ] AI Safety: claim後は外部requestが完了し得るが、撤回後の結果を保存・返却しない契約
-- [ ] Operator: 最初のmigrationがSupabaseへ先行適用済みであることの認識
+- [x] Operator: 最初のmigrationがSupabaseへ先行適用済みであることの認識（2026-08-01承認）
 
 ## 参考
 
