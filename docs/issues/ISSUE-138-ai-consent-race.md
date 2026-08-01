@@ -58,7 +58,7 @@ requires_human_review:
 ## 人間レビュー
 
 - [x] Privacy: 撤回確定後は新しい外部送信を開始せず、先に始まった1件は完了後に撤回が確定する契約を承認（2026-08-01）
-- [ ] AI Safety: 進行中送信を完了後に撤回する文言・挙動を確認
+- [x] AI Safety: 進行中送信を完了後に撤回する文言・挙動を承認（2026-08-01）
 - [ ] Backend: 40秒transaction / 60秒RouteとISSUE-139への引継ぎを確認
 
 ## Blocked by
