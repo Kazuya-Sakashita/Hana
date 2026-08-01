@@ -79,7 +79,7 @@ ISSUE-139のrolling deploy用に追加した旧Route互換triggerを、Hanaが�
 
 ## 人間レビュー
 
-- [ ] Backend: forward-only migrationがtrigger / 関数だけを削除する
+- [x] Backend: forward-only migrationがtrigger / 関数だけを削除する（2026-08-02承認）
 - [ ] Reliability: 最終schemaと新状態機械のDB統合検証
 - [ ] Operator: Hanaが未公開で旧version trafficが存在しないこと、および実DB適用手順
 
