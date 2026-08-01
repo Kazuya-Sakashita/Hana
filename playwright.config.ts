@@ -1,13 +1,14 @@
 import { defineConfig, devices } from '@playwright/test'
 import { authStatePath } from './tests/e2e/global-setup'
 import { assertSyntheticE2eEnvironment } from './tests/e2e/support/environment'
+import { syntheticE2ePolicy } from './tests/e2e/support/playwright-policy'
 
 const { databaseUrl, directUrl } = assertSyntheticE2eEnvironment(process.env)
 
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: false,
-  workers: 1,
+  fullyParallel: syntheticE2ePolicy.fullyParallel,
+  workers: syntheticE2ePolicy.workers,
   retries: process.env.CI ? 1 : 0,
   timeout: 45_000,
   expect: { timeout: 8_000 },
@@ -17,15 +18,15 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:3100',
     storageState: authStatePath,
-    trace: 'off',
-    video: 'off',
-    screenshot: 'only-on-failure',
+    trace: syntheticE2ePolicy.trace,
+    video: syntheticE2ePolicy.video,
+    screenshot: syntheticE2ePolicy.screenshot,
   },
-  outputDir: 'test-results/issue-140',
+  outputDir: syntheticE2ePolicy.outputDir,
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: 'node tests/e2e/support/fake-supabase-auth.mjs',
+      command: 'pnpm exec tsx tests/e2e/support/fake-supabase.ts',
       url: 'http://127.0.0.1:54321/health',
       reuseExistingServer: false,
       timeout: 30_000,

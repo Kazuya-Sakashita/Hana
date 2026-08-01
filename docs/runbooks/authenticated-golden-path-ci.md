@@ -9,8 +9,9 @@ ISSUE-140 の実ブラウザゲートを、実ユーザー・実写真・実Supa
 - Chromium 1 project、worker 1、CI retry 1回
 - production build + `next start`
 - GitHub Actionsの使い捨てPostgreSQL 16
-- QAプロセス内だけで起動する偽Supabase Auth HTTP service
-- Storage uploadとAI requestはPlaywrightの契約fixture
+- QAプロセス内だけで起動する偽Supabase Auth + Storage HTTP service
+- 写真は実`/v1/uploads/presigned-url`と実`/v1/uploads/confirm`を通し、外部Storage境界だけを偽Supabaseへ向ける
+- AI requestはOpenAPI生成型に沿ってmethod・body・画像IDを検証するPlaywright契約fixture
 - Memory保存、一覧、編集409、sign-outは実Route Handlerと実PostgreSQL
 - 認証CookieはSupabase SSR互換のchunked synthetic session（3KB超、7.5KB未満）
 
@@ -36,9 +37,9 @@ pnpm e2e
 
 ## 検証シナリオ
 
-1. chunked認証Cookieでホームを開き、実Memory APIで保存してアルバムに表示する
-2. Storage PUTを1回だけ503にし、同じ写真の再送後に手書き保存する
-3. AI fixtureを停止し、ブラウザ時計を30秒進めてtimeoutと再試行導線を確認する
+1. chunked認証Cookieで写真を選び、実Upload Route Handlerと実Memory APIを通して画面から保存し、アルバムに表示する
+2. 偽Supabase Storageの署名付きPUTを1回だけ503にし、実Upload Route Handlerを使った再送後に手書き保存する
+3. upload完了後のAI request契約を検証してfixtureを停止し、ブラウザ時計を30秒進めてtimeoutと再試行導線を確認する
 4. 編集画面の背後で実HTTP PUTを行い、画面側の409、入力維持、最新確認ボタンを確認する
 5. 実`POST /sign-out`後、保護ページがsign-inへ戻ることを確認する
 

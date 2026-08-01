@@ -1,7 +1,16 @@
-import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { E2E_CHILD_ID, E2E_IMAGE_ID, E2E_RETRY_IMAGE_ID } from './support/constants'
+import { E2E_CHILD_ID, E2E_FIXTURE_CONTROL_TOKEN } from './support/constants'
 import { seedSyntheticAccount } from './support/database'
+import type { components } from '@/lib/api/generated/schema'
+
+type UploadConfirmRequest = components['schemas']['UploadConfirmRequest']
+type AiGenerateRequest = components['schemas']['AiGenerateRequest']
+type Memory = components['schemas']['Memory']
+
+const SYNTHETIC_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZf6VfQAAAAASUVORK5CYII=',
+  'base64',
+)
 
 let createdMemoryPath = ''
 
@@ -9,39 +18,69 @@ test.describe.serial('authenticated synthetic golden path', () => {
   test.beforeAll(async () => {
     await seedSyntheticAccount()
   })
-  test('crosses the real cookie and Route Handler boundary, saves, and renders the album', async ({
+  test('uploads through real routes, saves through the record UI, and renders the album', async ({
     page,
+    request,
   }) => {
-    await page.goto('/')
-    await expect(page).toHaveURL('http://127.0.0.1:3100/')
-    await expect(page.locator('#home-primary-action')).toBeVisible()
-
-    const status = await page.evaluate(
-      async ({ childId, imageId, idempotencyKey }) => {
-        const response = await fetch('/v1/memories', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-          body: JSON.stringify({
-            child_id: childId,
-            title: '合成データの記録',
-            body: '実ユーザー情報を含まないCI専用の本文です。',
-            recorded_at: '2026-07-31',
-            image_ids: [imageId],
-            ai_generated: false,
-          }),
+    let resolveSignedUploadUrl: ((value: string) => void) | undefined
+    const signedUploadUrl = new Promise<string>((resolve) => {
+      resolveSignedUploadUrl = resolve
+    })
+    page.on('request', (browserRequest) => {
+      const pathname = new URL(browserRequest.url()).pathname
+      if (
+        pathname.startsWith('/storage/v1/object/upload/sign/images/') &&
+        browserRequest.method() === 'PUT'
+      ) {
+        resolveSignedUploadUrl?.(browserRequest.url())
+        resolveSignedUploadUrl = undefined
+      }
+    })
+    await page.goto('/record')
+    await page.locator('#memory-photo').setInputFiles({
+      name: 'synthetic-success.png',
+      mimeType: 'image/png',
+      buffer: SYNTHETIC_PNG,
+    })
+    await expect(page.getByRole('status').filter({ hasText: '追加できました' })).toBeVisible()
+    expect(
+      (
+        await request.put(await signedUploadUrl, {
+          data: SYNTHETIC_PNG,
+          headers: { 'content-type': 'image/png' },
         })
-        return response.status
-      },
-      { childId: E2E_CHILD_ID, imageId: E2E_IMAGE_ID, idempotencyKey: randomUUID() },
-    )
-    expect(status).toBe(201)
+      ).status(),
+    ).toBe(401)
+    expect(
+      (
+        await request.get(
+          'http://127.0.0.1:54321/storage/v1/object/sign/images/synthetic.png?token=invalid',
+        )
+      ).status(),
+    ).toBe(401)
 
-    await page.goto('/album?month=2026-07')
-    await expect(page).toHaveURL(/\/album\?month=2026-07$/)
-    await expect(page.getByText('合成データの記録', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'AI を使わずに 書く' }).click()
+    await page.locator('#memory-title').fill('画面から残した合成記録')
+    const recordedMonth = (await page.locator('#memory-date').inputValue()).slice(0, 7)
+    const saveResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/v1/memories' &&
+        response.request().method() === 'POST',
+    )
+    await page.getByRole('button', { name: 'このまま 残す' }).click()
+    expect((await saveResponse).status()).toBe(201)
+
+    await expect(page).toHaveURL(/\/memory\/[0-9a-f-]+\?saved=1$/)
+    createdMemoryPath = new URL(page.url()).pathname
+    await page.goto(`/album?month=${recordedMonth}`)
+    await expect(page).toHaveURL(new RegExp(`/album\\?month=${recordedMonth}$`))
+    await expect(page.getByText('画面から残した合成記録', { exact: true })).toBeVisible()
   })
 
-  test('recovers a failed upload and saves through the record UI without AI', async ({ page }) => {
+  test('recovers a failed upload and saves through the record UI without AI', async ({
+    page,
+    request,
+  }) => {
     let uploadAttempts = 0
     let prepareAttempts = 0
     let resolveMemoryHeaders:
@@ -53,8 +92,27 @@ test.describe.serial('authenticated synthetic golden path', () => {
     }>((resolve) => {
       resolveMemoryHeaders = resolve
     })
+    let resolveConfirmRequest: ((value: UploadConfirmRequest) => void) | undefined
+    const confirmRequest = new Promise<UploadConfirmRequest>((resolve) => {
+      resolveConfirmRequest = resolve
+    })
     page.on('request', async (request) => {
-      if (new URL(request.url()).pathname !== '/v1/memories' || request.method() !== 'POST') return
+      const pathname = new URL(request.url()).pathname
+      if (pathname === '/v1/uploads/presigned-url' && request.method() === 'POST') {
+        prepareAttempts += 1
+      }
+      if (
+        pathname.startsWith('/storage/v1/object/upload/sign/images/') &&
+        request.method() === 'PUT'
+      ) {
+        uploadAttempts += 1
+        expect(request.headers()['content-type']).toBe('image/png')
+      }
+      if (pathname === '/v1/uploads/confirm' && request.method() === 'POST') {
+        resolveConfirmRequest?.(request.postDataJSON() as UploadConfirmRequest)
+        resolveConfirmRequest = undefined
+      }
+      if (pathname !== '/v1/memories' || request.method() !== 'POST') return
       const headers = await request.allHeaders()
       resolveMemoryHeaders?.({
         cookieHeaderBytes: Buffer.byteLength(headers.cookie ?? ''),
@@ -62,74 +120,31 @@ test.describe.serial('authenticated synthetic golden path', () => {
       })
       resolveMemoryHeaders = undefined
     })
-    await page.route('**/v1/me', async (route) => {
-      if (route.request().method() !== 'GET') return route.continue()
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: '00000000-0000-4000-8000-000000000140',
-          email: null,
-          display_name: 'synthetic-parent',
-          ai_consent_at: null,
-          created_at: '2026-07-31T00:00:00.000Z',
-        }),
-      })
-    })
-    await page.route('**/v1/uploads/presigned-url', async (route) => {
-      prepareAttempts += 1
-      const suffix = prepareAttempts === 1 ? 'first' : 'second'
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          presigned_url: `http://127.0.0.1:3100/__synthetic-upload-${suffix}`,
-          storage_key: `uploads/synthetic/issue-140-retry-${suffix}.png`,
-          expires_at: '2026-08-01T00:00:00.000Z',
-        }),
-      })
-    })
-    await page.route('**/__synthetic-upload-*', async (route) => {
-      uploadAttempts += 1
-      expect(route.request().headers()['content-type']).toBe('image/png')
-      await route.fulfill({ status: uploadAttempts === 1 ? 503 : 200, body: '' })
-    })
-    await page.route('**/v1/uploads/confirm', async (route) => {
-      const body = route.request().postDataJSON() as Record<string, unknown>
-      expect(Object.keys(body).sort()).toEqual(['file_size', 'height', 'storage_key', 'width'])
-      expect(body.storage_key).toBe('uploads/synthetic/issue-140-retry-second.png')
-      await route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: E2E_RETRY_IMAGE_ID,
-          memory_id: null,
-          content_type: 'image/png',
-          width: 2,
-          height: 2,
-          file_size: 68,
-          created_at: '2026-07-31T00:00:00.000Z',
-        }),
-      })
-    })
+    const controlUrl = 'http://127.0.0.1:54321/__fixture__/fail-next-upload'
+    expect((await request.post(controlUrl)).status()).toBe(401)
+    expect(
+      (
+        await request.post(controlUrl, {
+          headers: { 'x-fixture-control': E2E_FIXTURE_CONTROL_TOKEN },
+        })
+      ).ok(),
+    ).toBe(true)
 
     await page.goto('/record')
     await page.locator('#memory-photo').setInputFiles({
       name: 'synthetic.png',
       mimeType: 'image/png',
-      buffer: Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZf6VfQAAAAASUVORK5CYII=',
-        'base64',
-      ),
+      buffer: SYNTHETIC_PNG,
     })
 
     await expect(page.getByRole('alert')).toBeVisible()
     await page.getByRole('button', { name: '同じ写真を もういちど送る' }).click()
-    await expect(
-      page.getByRole('status').filter({ hasText: 'しゃしんを 受けとりました' }),
-    ).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: '追加できました' })).toBeVisible()
     expect(uploadAttempts).toBe(2)
     expect(prepareAttempts).toBe(2)
+    const confirmed = await confirmRequest
+    expect(Object.keys(confirmed).sort()).toEqual(['file_size', 'height', 'storage_key', 'width'])
+    expect(confirmed.storage_key).toMatch(/^uploads\/[0-9a-f]{16}\/\d{6}\/[0-9a-f-]{36}\.png$/)
 
     await page.getByRole('button', { name: 'AI を使わずに 書く' }).click()
     await page.locator('#memory-title').fill('再送して残した合成記録')
@@ -155,40 +170,25 @@ test.describe.serial('authenticated synthetic golden path', () => {
 
   test('stops a stalled AI fixture at the client timeout and offers recovery', async ({ page }) => {
     await page.clock.install()
-    await page.route('**/v1/uploads/presigned-url', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          presigned_url: 'http://127.0.0.1:3100/__synthetic-ai-upload',
-          storage_key: 'uploads/synthetic/issue-140-ai.png',
-          expires_at: '2026-08-01T00:00:00.000Z',
-        }),
-      }),
-    )
-    await page.route('**/__synthetic-ai-upload', (route) =>
-      route.fulfill({ status: 200, body: '' }),
-    )
-    await page.route('**/v1/uploads/confirm', (route) =>
-      route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: E2E_RETRY_IMAGE_ID,
-          memory_id: null,
-          content_type: 'image/png',
-          width: 2,
-          height: 2,
-          file_size: 68,
-          created_at: '2026-07-31T00:00:00.000Z',
-        }),
-      }),
-    )
-
     let releaseAiFixture: (() => void) | undefined
     let aiRoute: Parameters<Parameters<typeof page.route>[1]>[0] | undefined
     const aiRequested = new Promise<void>((resolve) => {
       void page.route('**/v1/ai/generate', async (route) => {
+        expect(route.request().method()).toBe('POST')
+        const body = route.request().postDataJSON() as AiGenerateRequest
+        expect(Object.keys(body).sort()).toEqual([
+          'child_id',
+          'image_ids',
+          'parent_note',
+          'recorded_at',
+          'weather',
+        ])
+        expect(body.child_id).toBe(E2E_CHILD_ID)
+        expect(body.image_ids).toHaveLength(1)
+        expect(body.image_ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/)
+        expect(body.recorded_at).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+        expect(body.weather).toBeNull()
+        expect(body.parent_note).toBeNull()
         aiRoute = route
         resolve()
         await new Promise<void>((release) => {
@@ -201,11 +201,9 @@ test.describe.serial('authenticated synthetic golden path', () => {
     await page.locator('#memory-photo').setInputFiles({
       name: 'synthetic-ai.png',
       mimeType: 'image/png',
-      buffer: Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZf6VfQAAAAASUVORK5CYII=',
-        'base64',
-      ),
+      buffer: SYNTHETIC_PNG,
     })
+    await expect(page.getByRole('status').filter({ hasText: '追加できました' })).toBeVisible()
     await page.getByRole('button', { name: 'AI で 下書きする' }).click()
     await aiRequested
     await page.clock.fastForward(30_000)
@@ -224,7 +222,7 @@ test.describe.serial('authenticated synthetic golden path', () => {
     const apiPath = `/v1${createdMemoryPath.replace('/memory/', '/memories/')}`
     const initial = await page.evaluate(async (path) => {
       const response = await fetch(path)
-      return response.json() as Promise<{ updated_at: string }>
+      return response.json() as Promise<Memory>
     }, apiPath)
 
     const competingStatus = await page.evaluate(

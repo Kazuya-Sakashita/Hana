@@ -1,5 +1,5 @@
 import pg from 'pg'
-import { E2E_CHILD_ID, E2E_IMAGE_ID, E2E_RETRY_IMAGE_ID, E2E_USER_ID } from './constants'
+import { E2E_CHILD_ID, E2E_USER_ID } from './constants'
 import { assertSyntheticE2eEnvironment } from './environment'
 
 const { Client } = pg
@@ -20,21 +20,6 @@ export async function seedSyntheticAccount() {
     await client.query(
       `INSERT INTO children (id, user_id, name, birthdate, updated_at) VALUES ($1, $2, $3, $4, $5)`,
       [E2E_CHILD_ID, E2E_USER_ID, 'はな', '2025-04-01', new Date('2026-07-31T00:00:00Z')],
-    )
-    await client.query(
-      `INSERT INTO images
-         (id, user_id, storage_key, content_type, width, height, file_size, metadata_sanitized_at, updated_at)
-       VALUES
-         ($1, $3, $4, 'image/png', 2, 2, 68, $6, $6),
-         ($2, $3, $5, 'image/png', 2, 2, 68, $6, $6)`,
-      [
-        E2E_IMAGE_ID,
-        E2E_RETRY_IMAGE_ID,
-        E2E_USER_ID,
-        'uploads/synthetic/issue-140-api.png',
-        'uploads/synthetic/issue-140-retry.png',
-        new Date('2026-07-31T00:00:00Z'),
-      ],
     )
   } finally {
     await client.end()

@@ -37,8 +37,12 @@ requires_human_review:
 
 ## 検証結果
 
-- production build + localhost PostgreSQL 16 + Chromium: 5 tests passed
+- production build + localhost PostgreSQL 16 + 偽Supabase Auth/Storage + Chromium: 5 tests passed
 - 同じE2E commandを再seedして連続2回実行: 5 tests passed x 2
+- 写真選択、署名付きPUT、Storage実体検証、画像sanitization、Image作成、Memory保存、Album表示を実Route Handlerで確認
+- upload再試行は偽Storageの次回PUTだけを503にし、再発行された署名URLと実confirm routeで復旧
+- 使用済みupload tokenの再利用、無効なdownload token、制御tokenなしのfailure注入を401で拒否
+- AI fixtureはOpenAPI生成型に沿ってmethod・request body・合成画像IDを検証してから停止
 - environment guard: opt-inなし、外部host、別DB名、URL不一致をseed前に拒否
 - 認証Cookieは3KB超7.5KB未満を実計測し、Authorization headerを重複送信しない
 - 実ユーザー、実Storage、実Auth、実AI vendorは未使用
@@ -47,4 +51,4 @@ requires_human_review:
 
 - 実ユーザー、実写真、実Storage/Auth/AI vendorを使わない
 - synthetic sessionはdevelopment + 明示opt-in + loopbackに限定する
-- trace、screenshot、consoleへrequest body、画像、署名URL、storage keyを残さない
+- traceとvideoは無効。失敗時screenshotとconsoleへrequest body、画像、署名URL、storage keyを残さない
