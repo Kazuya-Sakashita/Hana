@@ -68,7 +68,7 @@ AI vendor通信中にDB transaction、行lock、transaction advisory lockを保�
 - PIIや生成本文をDB状態、ログ、metrics、テストfixtureへ追加しない
 - テストは合成UUID・合成画像・合成本文とローカルPostgreSQLだけを使う
 
-## Rolling deploy契約
+## Rolling deploy契約（実装時の計画）
 
 1. `20260801123000_add_ai_generation_lifecycle`で状態・lease列を追加する
 2. `20260801124500_add_ai_generation_quota_compatibility`でquota計上時刻を追加し、既存行を再backfillする
@@ -78,6 +78,9 @@ AI vendor通信中にDB transaction、行lock、transaction advisory lockを保�
 6. 旧queryは期限切れreservedを同月内で保守的に数えるため、旧versionへの新規routingを停止して短時間でdrainする
 7. 新Routeをdeployし、旧versionのrequestがdrainしたことを確認する
 8. 互換triggerの削除は別migrationとし、本Issueのdeployと同時には行わない
+
+HanaはISSUE-139統合時点で未公開だったため、旧version trafficのdrainは不要だった。ISSUE-147で
+互換triggerと関数を初回公開前に削除し、新しい状態機械だけを残す。
 
 ## 検証手順
 
@@ -98,8 +101,10 @@ AI vendor通信中にDB transaction、行lock、transaction advisory lockを保�
 ## Deployment state
 
 - 2026-08-01、CLI接続先の確認不備により最初のlifecycle migrationだけが現在のSupabase DBへ先行適用された
-- 適用内容は`ai_generations`の列・制約・index追加と既存status backfill。生成本文・画像・promptは読み書きしていない
-- quota互換migrationと新Routeは未適用。rolling deploy互換triggerを先に適用してから新Routeへ切り替える
+- 同日、4項目の人間承認後にquota互換migrationを適用し、未適用0件、checksum、列、index、triggerを再確認した
+- 適用内容は状態・quota metadataのbackfillとschema変更。生成本文・画像・promptは読み書きしていない
+- 2026-08-02、Hanaが未公開で旧version trafficが存在しないことを確認した。新Routeの公開deployは未実施
+- ISSUE-147で互換triggerと関数を初回公開前に削除する
 - 最初のmigration fileは適用済みchecksumと一致させるため変更しない
 
 ## 人間レビュー

@@ -93,7 +93,7 @@ Codex-ready と判断する条件:
 
 ## In Progress
 
-現在はありません。
+- `ISSUE-147` / `#315`: AI生成の旧版互換triggerをforward-only migrationで削除中。
 
 ## Planned Design Rebuild Sequence
 
