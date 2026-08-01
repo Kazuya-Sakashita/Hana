@@ -434,23 +434,23 @@ export default function RecordPage() {
     const restoreTimer = window.setTimeout(() => {
       if (cancelled) return
       if (draft) {
+        const restoredPhotos = draft.imageIds.map((imageId) => ({
+          ...createRecordPhotoItem(`restored-${imageId}`),
+          imageId,
+          status: 'confirmed' as const,
+          file: null,
+          previewUrl: null,
+          previewIsObjectUrl: false,
+          removalStatus: 'idle' as const,
+        }))
         setIdempotencyKey(draft.idempotencyKey)
         setTitle(draft.title)
         setBody(draft.body)
         setParentNote(draft.parentNote)
         setRecordedAt(draft.recordedAt)
         setWeather(draft.weather)
-        setPhotos(
-          draft.imageIds.map((imageId) => ({
-            ...createRecordPhotoItem(`restored-${imageId}`),
-            imageId,
-            status: 'confirmed',
-            file: null,
-            previewUrl: null,
-            previewIsObjectUrl: false,
-            removalStatus: 'idle',
-          })),
-        )
+        photosRef.current = restoredPhotos
+        setPhotos(restoredPhotos)
         setHasAiGeneratedContent(draft.aiGenerated)
         setAiDraftNeedsReview(draft.aiDraftNeedsReview)
         setAiStatus(draft.aiGenerated ? 'done' : 'idle')

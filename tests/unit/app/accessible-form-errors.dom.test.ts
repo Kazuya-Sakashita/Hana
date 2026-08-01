@@ -243,7 +243,7 @@ describe('ISSUE-119 form error DOM behavior', () => {
     act(() => root.render(createElement(OnboardingPage)))
   }
 
-  async function renderRestoredRecord() {
+  async function renderRestoredRecord({ saveImmediately = false } = {}) {
     mocks.useChildrenQuery.mockReturnValue({
       data: {
         data: [
@@ -273,13 +273,30 @@ describe('ISSUE-119 form error DOM behavior', () => {
       aiGenerated: false,
       aiDraftNeedsReview: false,
     })
+    let clickedImmediately = false
+    const observer = saveImmediately
+      ? new MutationObserver(() => {
+          const save = Array.from(container.querySelectorAll('button')).find(
+            (candidate) => candidate.textContent?.trim() === 'このまま 残す',
+          )
+          if (!save || save.disabled || clickedImmediately) return
+          clickedImmediately = true
+          observer?.disconnect()
+          save.click()
+        })
+      : null
+    observer?.observe(container, { childList: true, subtree: true })
     await act(async () => {
       root.render(
         createElement(QueryClientProvider, { client: queryClient }, createElement(RecordPage)),
       )
       await new Promise((resolve) => window.setTimeout(resolve, 5))
     })
-    await vi.waitFor(() => expect(findButton('このまま 残す').disabled).toBe(false))
+    if (saveImmediately) {
+      await vi.waitFor(() => expect(clickedImmediately).toBe(true))
+    } else {
+      await vi.waitFor(() => expect(findButton('このまま 残す').disabled).toBe(false))
+    }
   }
 
   async function renderEmptyRecord() {
@@ -351,17 +368,16 @@ describe('ISSUE-119 form error DOM behavior', () => {
         { path: 'body.recorded_at', reason: 'future_date', message: 'technical date message' },
       ]),
     )
-    await renderRestoredRecord()
-
-    await act(async () => {
-      findButton('このまま 残す').click()
-      await Promise.resolve()
-    })
+    await renderRestoredRecord({ saveImmediately: true })
     const details = document.querySelector<HTMLDetailsElement>(
       '[data-testid="record-secondary-edits"]',
     )
     const date = document.querySelector<HTMLInputElement>('#memory-date')
     const title = document.querySelector<HTMLInputElement>('#memory-title')
+    expect(mocks.createMemory).toHaveBeenCalledOnce()
+    expect(mocks.createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.objectContaining({ image_ids: [IMAGE_ID] }) }),
+    )
     await vi.waitFor(() => expect(document.activeElement).toBe(date))
     expect(details?.open).toBe(true)
     expect(date?.getAttribute('aria-describedby')).toBe('memory-date-error')
