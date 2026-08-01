@@ -234,6 +234,7 @@ Codex-ready と判断する条件:
 - recording completed: `ISSUE-143`
 - recording reliability completed: `ISSUE-146`
 - ai safety completed: `ISSUE-138`
+- ai reliability completed: `ISSUE-139`
 
 ---
 

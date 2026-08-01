@@ -3,6 +3,7 @@
 - 状態: Accepted
 - 決定日: 2026-05-23
 - 対象 Issue: ISSUE-010
+- 追補: 2026-08-01 / ISSUE-139（外部通信をDB transactionから分離）
 
 ## 背景
 
@@ -78,6 +79,8 @@ PRD §16 マネタイズ:
 実装:
 
 - `ai_generations` テーブルでAI vendor呼び出しに到達したrequestを成否にかかわらずカウント
+- `reserved`は短いlease付きで同時実行枠を確保するがquotaへは未加算。送信直前の`processing` claimがcommitした時点とUTC月を`quota_counted_at`へ記録し、1回分に加算
+- `reserved`のまま期限切れなら未加算で失敗へ、`processing`のまま期限切れなら加算済みの失敗へ収束
 - UTC 月境界 (1 日 00:00:00) でリセット
 - 1 request内の安全性retryは最大1回で、quota上は1回として扱う
 
@@ -95,6 +98,7 @@ system prompt に PRD §9 の禁止リストを明記し、生成後に安定カ
 - input_tokens / output_tokens / duration_ms
 - succeeded (boolean) / error_reason
 - attempt_count / policy_category_ids / policy_outcome
+- status / claim_token / lease_expires_at / quota_counted_at / completed_at（状態遷移、quota月、fencing用）
 - user_id / child_id / created_at
 
 **保管しない**:
@@ -157,6 +161,33 @@ iPhone デフォルト解像度 (4032×3024) を Canvas で quality 92% 再エ�
 - HEIC は sharp の libheif サポートが環境依存 → 既存の **422 弾き** (`media_type_not_supported_for_ai`) で防衛
 
 将来の ISSUE-015 (サムネイル生成) で同じ sharp 基盤を再利用予定。
+
+### 12. 外部AI通信の状態機械と撤回・削除境界
+
+`POST /v1/ai/generate`は次の3つの短いDB区間と、transaction外のvendor通信に分離する。
+
+1. quota lock下で`reserved`行を作る
+2. AI同意世代、子どもの所有権、画像の有効性を再確認し、fencing token付きで`processing`へclaimする
+3. DB transactionを保持せずAnthropicへ送信する
+4. 同じ境界を再確認し、`succeeded`、`failed`、または`discarded`へ確定する
+
+永続状態は`reserved → processing → succeeded | failed | discarded`とする。claim tokenとleaseを
+更新条件に含め、期限切れ処理や古いrequestが新しい状態を上書きしないようにする。stale leaseは次の
+quota予約時にuser単位lock下で回収する。
+
+rolling deployではDB migrationが旧Routeより先に適用される。互換triggerは旧Routeがstatusを明示しない
+INSERT/UPDATEだけを検出し、processing/succeeded/failedとquota計上時刻を同期する。新Routeはstatusを明示して
+遷移する。加えて新Routeの`reserved`を旧Routeのquota queryにも一時的に見せるため、混在期間だけ
+`counts_toward_quota=true / quota_counted_at=NULL`へ補正する。送信前失敗・lease期限切れはfalseへ戻し、
+processing claim時にquota計上時刻を入れる。reserved leaseは次のUTC月初を越えないため、旧queryでも
+前月のcapacityが翌月から消える。旧queryは期限切れreservedを新Routeが回収するまで同月内で保守的に
+数え続けるため、rolling deployでは旧versionへの新規routingを止め、短時間でdrainする。旧versionの
+drain確認後、trigger削除は別migrationで行う。
+
+同意撤回と`processing` claimは同じuser単位advisory lockを使う。撤回が先なら外部送信を開始しない。
+claimが先でも、vendor通信中はlockもDB connectionも保持しないため撤回・画像削除は確定できる。
+その場合、vendor request自体は完了する可能性があるが、finalizeで同意世代または画像有効性の変化を検知し、
+結果を保存・返却せず`discarded`にする。
 
 ## 受容コスト
 
