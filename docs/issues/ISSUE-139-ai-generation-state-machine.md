@@ -2,7 +2,7 @@
 id: ISSUE-139
 title: AI外部通信をDBトランザクションから分離する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-31
 github_issue: 298

@@ -196,7 +196,6 @@ Codex-ready と判断する条件:
 
 ## Review Queue
 
-- `ISSUE-139` / `#298`: 実装・専門レビュー完了 / 人間レビュー4項目・merge待ち。
 - `ISSUE-122` / `#268`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-121` / `#264`: 実装・専門レビュー完了 / merge 待ち。
 - `ISSUE-118` / `#253`: 実装・privacy / legal review承認済み / merge 待ち。
@@ -235,6 +234,7 @@ Codex-ready と判断する条件:
 - recording completed: `ISSUE-143`
 - recording reliability completed: `ISSUE-146`
 - ai safety completed: `ISSUE-138`
+- ai reliability completed: `ISSUE-139`
 
 ---
 
