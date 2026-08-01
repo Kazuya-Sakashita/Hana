@@ -182,7 +182,9 @@ INSERT/UPDATEだけを検出し、processing/succeeded/failedとquota計上時�
 processing claim時にquota計上時刻を入れる。reserved leaseは次のUTC月初を越えないため、旧queryでも
 前月のcapacityが翌月から消える。旧queryは期限切れreservedを新Routeが回収するまで同月内で保守的に
 数え続けるため、rolling deployでは旧versionへの新規routingを止め、短時間でdrainする。旧versionの
-drain確認後、trigger削除は別migrationで行う。
+drain確認後、trigger削除は別migrationで行う。実際のISSUE-139統合時点ではHanaが未公開で旧version
+trafficが存在しなかったため、ISSUE-147のforward-only migrationで初回公開前にtriggerと関数を削除する。
+削除後は新しい状態機械だけを正本とし、互換triggerを恒久機能として残さない。
 
 同意撤回と`processing` claimは同じuser単位advisory lockを使う。撤回が先なら外部送信を開始しない。
 claimが先でも、vendor通信中はlockもDB connectionも保持しないため撤回・画像削除は確定できる。

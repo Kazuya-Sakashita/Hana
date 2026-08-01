@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { PrismaClient } from '@prisma/client'
 
-const qaEnabled = process.env.ISSUE_139_DATABASE_QA === '1'
+const qaEnabled =
+  process.env.ISSUE_139_DATABASE_QA === '1' || process.env.ISSUE_147_DATABASE_QA === '1'
 
 function assertSafeTarget(
   connectionString: string | undefined,
@@ -14,7 +15,7 @@ function assertSafeTarget(
   }
 }
 
-describe.skipIf(!qaEnabled)('ISSUE-139 production lifecycle on local PostgreSQL', () => {
+describe.skipIf(!qaEnabled)('ISSUE-139/147 production lifecycle on local PostgreSQL', () => {
   let prisma: PrismaClient
   let lifecycle: typeof import('@/features/ai/server/generation-lifecycle')
   let quota: typeof import('@/features/ai/server/quota')
@@ -23,8 +24,6 @@ describe.skipIf(!qaEnabled)('ISSUE-139 production lifecycle on local PostgreSQL'
 
   const userId = randomUUID()
   const childId = randomUUID()
-  const mixedVersionUserId = randomUUID()
-  const mixedVersionChildId = randomUUID()
   const consentAt = new Date('2026-08-01T00:00:00Z')
   const imageIds = [randomUUID(), randomUUID(), randomUUID()]
 
@@ -42,15 +41,6 @@ describe.skipIf(!qaEnabled)('ISSUE-139 production lifecycle on local PostgreSQL'
       data: {
         id: childId,
         userId,
-        name: 'synthetic',
-        birthdate: new Date('2025-01-01T00:00:00Z'),
-      },
-    })
-    await prisma.profile.create({ data: { id: mixedVersionUserId, aiConsentAt: consentAt } })
-    await prisma.child.create({
-      data: {
-        id: mixedVersionChildId,
-        userId: mixedVersionUserId,
         name: 'synthetic',
         birthdate: new Date('2025-01-01T00:00:00Z'),
       },
@@ -73,11 +63,57 @@ describe.skipIf(!qaEnabled)('ISSUE-139 production lifecycle on local PostgreSQL'
 
   afterAll(async () => {
     if (!prisma) return
-    await prisma.profile.deleteMany({ where: { id: { in: [userId, mixedVersionUserId] } } })
+    await prisma.profile.deleteMany({ where: { id: userId } })
     await prisma.$disconnect()
   })
 
-  it('runs claim, discard, stale recovery, quota month, and legacy compatibility through production code', async () => {
+  it('keeps quota schema and removes legacy compatibility after the full migration chain', async () => {
+    const [state] = await prisma.$queryRaw<
+      Array<{
+        quotaColumnPresent: boolean
+        quotaIndexPresent: boolean
+        legacyTriggerPresent: boolean
+        legacyFunctionPresent: boolean
+      }>
+    >`
+      SELECT
+        EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'ai_generations'
+            AND column_name = 'quota_counted_at'
+        ) AS "quotaColumnPresent",
+        EXISTS (
+          SELECT 1
+          FROM pg_indexes
+          WHERE schemaname = 'public'
+            AND tablename = 'ai_generations'
+            AND indexname = 'ai_generations_user_id_quota_counted_at_idx'
+        ) AS "quotaIndexPresent",
+        EXISTS (
+          SELECT 1
+          FROM pg_trigger AS trigger
+          JOIN pg_class AS relation ON relation.oid = trigger.tgrelid
+          JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+          WHERE namespace.nspname = 'public'
+            AND relation.relname = 'ai_generations'
+            AND trigger.tgname = 'sync_legacy_ai_generation_lifecycle_trigger'
+            AND NOT trigger.tgisinternal
+        ) AS "legacyTriggerPresent",
+        to_regprocedure('public.sync_legacy_ai_generation_lifecycle()') IS NOT NULL
+          AS "legacyFunctionPresent"
+    `
+
+    expect(state).toEqual({
+      quotaColumnPresent: true,
+      quotaIndexPresent: true,
+      legacyTriggerPresent: false,
+      legacyFunctionPresent: false,
+    })
+  })
+
+  it('runs claim, discard, stale recovery, and UTC quota through production code', async () => {
     const revokeGenerationId = randomUUID()
     const revokeClaimToken = randomUUID()
     const reservationCreatedAt = new Date('2026-07-31T23:59:59Z')
@@ -259,7 +295,7 @@ describe.skipIf(!qaEnabled)('ISSUE-139 production lifecycle on local PostgreSQL'
       }),
     ).resolves.toEqual({ outcome: 'stale' })
 
-    await prisma.$transaction((transaction) =>
+    const activeReservation = await prisma.$transaction((transaction) =>
       quota.reserveMonthlyAiQuotaInTransaction(transaction, {
         userId,
         childId,
@@ -267,6 +303,13 @@ describe.skipIf(!qaEnabled)('ISSUE-139 production lifecycle on local PostgreSQL'
         promptVersion: 'qa',
       }),
     )
+    await expect(
+      prisma.aiGeneration.findUniqueOrThrow({ where: { id: activeReservation.id } }),
+    ).resolves.toMatchObject({
+      status: 'reserved',
+      countsTowardQuota: false,
+      quotaCountedAt: null,
+    })
     const recovered = await prisma.aiGeneration.findUniqueOrThrow({
       where: { id: expiredGenerationId },
     })
@@ -278,88 +321,7 @@ describe.skipIf(!qaEnabled)('ISSUE-139 production lifecycle on local PostgreSQL'
       errorReason: 'processing_lease_expired',
     })
 
-    const legacyGenerationId = randomUUID()
-    await prisma.aiGeneration.create({
-      data: {
-        id: legacyGenerationId,
-        userId,
-        childId,
-        model: 'synthetic-model',
-        promptVersion: 'legacy',
-        succeeded: false,
-        countsTowardQuota: true,
-        errorReason: 'in_progress',
-      },
-    })
-    const legacyProcessing = await prisma.aiGeneration.findUniqueOrThrow({
-      where: { id: legacyGenerationId },
-    })
-    expect(legacyProcessing).toMatchObject({
-      status: 'processing',
-      claimToken: legacyGenerationId,
-      countsTowardQuota: true,
-    })
-    expect(legacyProcessing.quotaCountedAt).toBeInstanceOf(Date)
-
-    await prisma.aiGeneration.update({
-      where: { id: legacyGenerationId },
-      data: { succeeded: true, errorReason: null },
-    })
-    const legacySucceeded = await prisma.aiGeneration.findUniqueOrThrow({
-      where: { id: legacyGenerationId },
-    })
-    expect(legacySucceeded).toMatchObject({
-      status: 'succeeded',
-      succeeded: true,
-      claimToken: null,
-      leaseExpiresAt: null,
-    })
-
     const quotaState = await quota.checkMonthlyQuota(userId)
     expect(quotaState.used).toBeGreaterThanOrEqual(4)
-
-    const quotaCountedAt = new Date()
-    await prisma.aiGeneration.createMany({
-      data: Array.from({ length: 19 }, () => ({
-        id: randomUUID(),
-        userId: mixedVersionUserId,
-        childId: mixedVersionChildId,
-        model: 'synthetic-model',
-        promptVersion: 'qa',
-        status: 'succeeded',
-        quotaCountedAt,
-        succeeded: true,
-        countsTowardQuota: true,
-      })),
-    })
-    const mixedReservation = await prisma.$transaction((transaction) =>
-      quota.reserveMonthlyAiQuotaInTransaction(transaction, {
-        userId: mixedVersionUserId,
-        childId: mixedVersionChildId,
-        model: 'synthetic-model',
-        promptVersion: 'qa',
-      }),
-    )
-    const persistedMixedReservation = await prisma.aiGeneration.findUniqueOrThrow({
-      where: { id: mixedReservation.id },
-    })
-    expect(persistedMixedReservation).toMatchObject({
-      status: 'reserved',
-      countsTowardQuota: true,
-      quotaCountedAt: null,
-    })
-
-    const oldVersionUsed = await prisma.aiGeneration.count({
-      where: {
-        userId: mixedVersionUserId,
-        countsTowardQuota: true,
-        createdAt: { gte: quota.startOfUtcMonth() },
-      },
-    })
-    expect(oldVersionUsed).toBe(20)
-    await expect(quota.checkMonthlyQuota(mixedVersionUserId)).resolves.toMatchObject({
-      used: 20,
-      ok: false,
-    })
   })
 })
