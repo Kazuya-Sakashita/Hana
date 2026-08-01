@@ -2,7 +2,7 @@
 id: ISSUE-136
 title: 退会30日後にDB・Storage・Authを物理削除する
 priority: P0
-status: in_progress
+status: review
 size: M
 created_at: 2026-07-31
 github_issue: 295
@@ -51,3 +51,14 @@ requires_human_review:
 ## Blocked by
 
 - ISSUE-135
+
+## 自動検証・専門レビュー
+
+- `pnpm pr:gate`: PASS（142 files / 1118 tests、lint、typecheck、buildを含む）
+- Security / Reliability review: APPROVE
+- 実ユーザーデータ、実Storage、実Auth userを使った検証は行っていない
+
+## Human HOLD
+
+- Privacy / Security / Operationsによる削除順序、30日保持、failed再投入手順の承認
+- staging migration適用後、合成テストアカウント限定でStorage smokeを実施
