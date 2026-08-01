@@ -52,6 +52,7 @@ blocked_by:
 - `pnpm typecheck`: PASS
 - `pnpm pr:gate`: PASS（format、lint、OpenAPI route map、全テスト、契約QA、production buildを含む）
 - `git diff --check`: PASS
+- Standards / Spec独立レビュー: GO（指摘0件）
 
 ## セキュリティ・プライバシー考慮
 
