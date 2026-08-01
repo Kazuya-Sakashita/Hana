@@ -72,7 +72,10 @@ export interface paths {
          *     撤回後の `POST /ai/generate` は 403 `ai_consent_required` を返す。
          *     AIを使わない記録の作成・編集・閲覧と既存記録には影響しない。
          *     本操作は過去のAI送信や既存記録を個別削除する手続きではない。
-         *     撤回前に開始したAI生成は完了する場合がある。
+         *     撤回とAI生成開始は同じ直列化境界を使う。撤回が先に確定した場合、
+         *     生成は外部送信直前の再検証で停止する。既に外部送信を開始した生成がある場合、
+         *     撤回はその送信試行の終了を待ってから確定する。
+         *     待機が40秒を超えた場合は 409 `ai_consent_update_busy` を返し、再試行できる。
          */
         delete: operations["revokeAiConsent"];
         options?: never;
@@ -1468,6 +1471,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -1499,6 +1503,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };

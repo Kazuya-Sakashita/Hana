@@ -55,6 +55,13 @@ export const problems = {
     build('image_already_linked', 'Conflict', 409, 'この画像は記録に保存されています'),
   aiConsentRequired: () =>
     build('ai_consent_required', 'Forbidden', 403, 'AI への画像送信に同意が必要です'),
+  aiConsentUpdateBusy: () =>
+    build(
+      'ai_consent_update_busy',
+      'Conflict',
+      409,
+      'AI の処理が完了してから、もう一度お試しください',
+    ),
   aiQuotaExceeded: () =>
     build('ai_quota_exceeded', 'Too Many Requests', 429, '今月の AI 生成回数の上限に達しました'),
   rateLimited: () =>

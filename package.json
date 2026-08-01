@@ -35,6 +35,7 @@
     "qa:issue110:staging-public": "node scripts/qa/issue-110-staging-public-qa-strict-runtime.cjs",
     "qa:issue123:db-bootstrap": "node scripts/qa/issue-123-bootstrap-postgres.mjs",
     "qa:issue123:image-boundary-db": "node scripts/qa/issue-123-image-access-concurrency.mjs",
+    "qa:issue138:consent-boundary-db": "node scripts/qa/issue-138-ai-consent-concurrency.mjs",
     "qa:issue143:image-races": "node scripts/qa/issue-143-image-races.mjs",
     "backfill:issue137:images": "tsx scripts/maintenance/issue-137-sanitize-existing-images.ts",
     "qa:issue082:lp-app-visual-parity": "node scripts/qa/issue-082-lp-app-visual-parity-contract.cjs",
