@@ -47,18 +47,26 @@ function setControlValue(control: HTMLInputElement | HTMLTextAreaElement, value:
 
 function findButton(label: string): HTMLButtonElement {
   const button = Array.from(document.querySelectorAll('button')).find(
-    (candidate) => candidate.textContent?.trim() === label,
+    (candidate) =>
+      candidate.textContent?.trim() === label || candidate.getAttribute('aria-label') === label,
   )
   if (!button) throw new Error(`button not found: ${label}`)
   return button
 }
 
-describe('ISSUE-126 memory edit form', () => {
+describe('ISSUE-126/144 memory edit form', () => {
   let container: HTMLDivElement
   let root: Root
   let queryClient: QueryClient
 
   beforeEach(() => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    vi.stubGlobal('CSS', { escape: (value: string) => value })
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -75,6 +83,8 @@ describe('ISSUE-126 memory edit form', () => {
     queryClient.clear()
     container.remove()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     mocks.updatePending = false
   })
 
@@ -118,6 +128,210 @@ describe('ISSUE-126 memory edit form', () => {
     expect(mocks.updateMemory).not.toHaveBeenCalled()
     expect(mocks.replace).toHaveBeenCalledWith(`/memory/${MEMORY_ID}`)
     expect(findButton('この内容で なおす').disabled).toBe(true)
+  })
+
+  it('keeps changed values when the user continues editing from the leave dialog', async () => {
+    await renderForm()
+
+    const title = document.querySelector('#memory-edit-title') as HTMLInputElement
+    const backButton = findButton('変更せず もどる')
+    await act(async () => setControlValue(title, 'まだ保存していない合成タイトル'))
+    backButton.focus()
+    await act(async () => backButton.click())
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('memory-edit-leave-title')
+    expect(dialog?.textContent).toContain('まだ保存していない変更があります')
+    expect(mocks.replace).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(findButton('編集を続ける'))
+
+    await act(async () => findButton('編集を続ける').click())
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(title.value).toBe('まだ保存していない合成タイトル')
+    expect(mocks.replace).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(backButton)
+  })
+
+  it('leaves only after the user explicitly discards changed values', async () => {
+    await renderForm()
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-body') as HTMLTextAreaElement,
+        '破棄する合成本文',
+      ),
+    )
+    await act(async () => findButton('変更せず もどる').click())
+    expect(mocks.replace).not.toHaveBeenCalled()
+
+    await act(async () => findButton('変更を破棄する').click())
+
+    expect(mocks.replace).toHaveBeenCalledWith(`/memory/${MEMORY_ID}`)
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('shows the destructive leave action as a button before hover', async () => {
+    await renderForm()
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-title') as HTMLInputElement,
+        '視認性確認用の合成タイトル',
+      ),
+    )
+    await act(async () => findButton('変更せず もどる').click())
+
+    const discardButton = findButton('変更を破棄する')
+    expect(discardButton.className).toContain('border-2')
+    expect(discardButton.className).toContain('border-amber')
+    expect(discardButton.className).toContain('bg-amber')
+    expect(discardButton.className).toContain('text-white')
+    expect(discardButton.className).toContain('shadow-lift')
+  })
+
+  it('makes both leave actions visibly respond to hover while respecting reduced motion', async () => {
+    await renderForm()
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-title') as HTMLInputElement,
+        'ホバー確認用の合成タイトル',
+      ),
+    )
+    await act(async () => findButton('変更せず もどる').click())
+
+    const continueButton = findButton('編集を続ける')
+    expect(continueButton.className).toContain('hover:-translate-y-0.5')
+    expect(continueButton.className).toContain('hover:shadow-lift')
+    expect(continueButton.className).toContain('motion-reduce:hover:translate-y-0')
+
+    const discardButton = findButton('変更を破棄する')
+    expect(discardButton.className).toContain('hover:-translate-y-0.5')
+    expect(discardButton.className).toContain('hover:bg-amber-deep')
+    expect(discardButton.className).toContain('hover:text-white')
+    expect(discardButton.className).not.toContain('hover:brightness-75')
+    expect(discardButton.className).toContain('motion-reduce:hover:translate-y-0')
+  })
+
+  it('uses the same leave confirmation from the top back control', async () => {
+    await renderForm()
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-weather') as HTMLInputElement,
+        'まだ保存していない天気',
+      ),
+    )
+    await act(async () => findButton('記録へ もどる').click())
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(mocks.replace).not.toHaveBeenCalled()
+    expect((document.querySelector('#memory-edit-weather') as HTMLInputElement).value).toBe(
+      'まだ保存していない天気',
+    )
+  })
+
+  it('activates the standard browser leave warning only after a change', async () => {
+    await renderForm()
+
+    const unchangedEvent = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(unchangedEvent)
+    expect(unchangedEvent.defaultPrevented).toBe(false)
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-body') as HTMLTextAreaElement,
+        'まだ保存していない合成本文',
+      ),
+    )
+    const changedEvent = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(changedEvent)
+
+    expect(changedEvent.defaultPrevented).toBe(true)
+  })
+
+  it('removes the browser leave warning after a successful save', async () => {
+    mocks.updateMemory.mockResolvedValue({
+      id: MEMORY_ID,
+      child_id: '22222222-2222-4222-8222-222222222222',
+      title: '保存した合成タイトル',
+      body: '合成の本文',
+      weather: 'はれ',
+      recorded_at: '2026-07-30',
+      is_favorite: false,
+      ai_generated: false,
+      image_ids: [],
+      cover_thumbnail_url: null,
+      created_at: '2026-07-30T00:00:00.000Z',
+      updated_at: '2026-07-30T01:00:00.000Z',
+    })
+    await renderForm()
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-title') as HTMLInputElement,
+        '保存した合成タイトル',
+      ),
+    )
+    await act(async () => findButton('この内容で なおす').click())
+    const afterSaveEvent = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(afterSaveEvent)
+
+    expect(mocks.replace).toHaveBeenCalledWith(`/memory/${MEMORY_ID}?updated=1`)
+    expect(afterSaveEvent.defaultPrevented).toBe(false)
+  })
+
+  it('traps focus, closes on Escape, and restores focus to the back control', async () => {
+    await renderForm()
+
+    const backButton = findButton('変更せず もどる')
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-title') as HTMLInputElement,
+        'キーボード確認用の合成タイトル',
+      ),
+    )
+    backButton.focus()
+    await act(async () => backButton.click())
+
+    const continueButton = findButton('編集を続ける')
+    const discardButton = findButton('変更を破棄する')
+    discardButton.focus()
+    await act(async () =>
+      discardButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })),
+    )
+    expect(document.activeElement).toBe(continueButton)
+
+    await act(async () =>
+      continueButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+    )
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(backButton)
+    expect(mocks.replace).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unsaved body in memory without storage, logging, or analytics calls', async () => {
+    const storageWrite = vi.spyOn(Storage.prototype, 'setItem')
+    const fetchCall = vi.fn()
+    const sendBeacon = vi.fn()
+    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.stubGlobal('fetch', fetchCall)
+    vi.stubGlobal('navigator', { sendBeacon })
+    await renderForm()
+
+    const body = document.querySelector('#memory-edit-body') as HTMLTextAreaElement
+    await act(async () => setControlValue(body, '保存していない合成本文'))
+    await act(async () => findButton('変更せず もどる').click())
+    await act(async () => findButton('編集を続ける').click())
+
+    expect(body.value).toBe('保存していない合成本文')
+    expect(storageWrite).not.toHaveBeenCalled()
+    expect(fetchCall).not.toHaveBeenCalled()
+    expect(sendBeacon).not.toHaveBeenCalled()
+    expect(consoleInfo).not.toHaveBeenCalled()
+    expect(consoleError).not.toHaveBeenCalled()
   })
 
   it('updates all editable fields and returns to the refreshed detail', async () => {
@@ -299,6 +513,9 @@ describe('ISSUE-126 memory edit form', () => {
     expect(alert?.querySelector('.font-bold')?.textContent).toContain('保存できませんでした')
     expect(document.activeElement).toBe(document.querySelector('[role="alert"]'))
     expect(mocks.replace).not.toHaveBeenCalled()
+    const beforeUnload = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(beforeUnload)
+    expect(beforeUnload.defaultPrevented).toBe(true)
   })
 
   it('keeps input on a conflict and offers a latest-content refresh', async () => {
@@ -323,6 +540,9 @@ describe('ISSUE-126 memory edit form', () => {
     expect(refreshButton.querySelector('svg')).not.toBeNull()
     await act(async () => refreshButton.click())
     expect(mocks.refresh).toHaveBeenCalledOnce()
+    const beforeUnload = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(beforeUnload)
+    expect(beforeUnload.defaultPrevented).toBe(true)
   })
 
   it('invalidates memory lists after a not-found update while keeping input', async () => {

@@ -3,8 +3,9 @@
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
-import { CircleAlert, RefreshCw } from 'lucide-react'
+import { ChevronLeft, CircleAlert, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AccessibleDialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -74,12 +75,14 @@ export function MemoryEditForm({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitMessage, setSubmitMessage] = useState<string | null>(null)
   const [hasConflict, setHasConflict] = useState(false)
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const weatherRef = useRef<HTMLInputElement>(null)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
   const errorFocusRequestedRef = useRef(false)
   const submitInFlightRef = useRef(false)
+  const navigationAllowedRef = useRef(false)
   const detailPath = `/memory/${encodeURIComponent(memoryId)}`
   const normalizedInitialBody = initialBody?.length ? initialBody : null
   const normalizedInitialWeather = initialWeather?.length ? initialWeather : null
@@ -151,6 +154,7 @@ export function MemoryEditForm({
         weather: updated.weather,
         updated_at: updated.updated_at,
       }))
+      navigationAllowedRef.current = true
       router.replace(`${detailPath}?updated=1`)
       router.refresh()
     } catch (error) {
@@ -197,8 +201,54 @@ export function MemoryEditForm({
   const summaryMessage =
     submitMessage ?? (hasErrors ? quietStateCopy.memoryEdit.validationFailed : null)
 
+  useEffect(() => {
+    if (!hasChanges) return
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (navigationAllowedRef.current) return
+      event.preventDefault()
+      event.returnValue = true
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [hasChanges])
+
+  function requestLeave() {
+    if (!hasChanges) {
+      router.replace(detailPath)
+      return
+    }
+    setLeaveDialogOpen(true)
+  }
+
+  function discardChangesAndLeave() {
+    navigationAllowedRef.current = true
+    setLeaveDialogOpen(false)
+    router.replace(detailPath)
+  }
+
   return (
     <>
+      <header className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="記録へ もどる"
+          disabled={pending}
+          onClick={requestLeave}
+        >
+          <ChevronLeft aria-hidden="true" />
+        </Button>
+        <div>
+          <p className="meta-label">ページを整える</p>
+          <h1 className="text-ink mt-1 font-serif text-2xl">ことばと天気を なおす</h1>
+        </div>
+      </header>
+
+      <p className="text-ink-secondary leading-narrative mt-5 px-1 text-sm">
+        写真と日付はそのままに、あとから読み返したいことばへ整えられます。
+      </p>
       <p role="status" aria-live="polite" className="sr-only">
         {pending ? quietStateCopy.memoryEdit.pending : ''}
       </p>
@@ -350,12 +400,53 @@ export function MemoryEditForm({
             size="lg"
             className="w-full"
             disabled={pending}
-            onClick={() => router.replace(detailPath)}
+            onClick={requestLeave}
           >
             変更せず もどる
           </Button>
         </div>
       </form>
+      {leaveDialogOpen ? (
+        <AccessibleDialog
+          titleId="memory-edit-leave-title"
+          descriptionId="memory-edit-leave-description"
+          initialFocusId="memory-edit-leave-continue"
+          onClose={() => setLeaveDialogOpen(false)}
+        >
+          <div className="bg-paper-slip w-full max-w-md rounded-[var(--radius-paper-card)] border border-hairline p-6 shadow-lift">
+            <h2 id="memory-edit-leave-title" className="text-ink font-serif text-xl">
+              変更を破棄しますか？
+            </h2>
+            <p
+              id="memory-edit-leave-description"
+              className="text-ink-secondary mt-3 text-sm leading-narrative"
+            >
+              まだ保存していない変更があります。編集を続けると、入力した内容はそのまま残ります。
+            </p>
+            <div className="mt-6 flex flex-col gap-3">
+              <Button
+                id="memory-edit-leave-continue"
+                type="button"
+                size="lg"
+                className="w-full hover:-translate-y-0.5 hover:shadow-lift motion-reduce:hover:translate-y-0"
+                onClick={() => setLeaveDialogOpen(false)}
+              >
+                編集を続ける
+              </Button>
+              <Button
+                id="memory-edit-leave-discard"
+                type="button"
+                variant="destructive"
+                size="lg"
+                className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:-translate-y-0.5 hover:bg-amber-deep hover:text-white active:bg-amber-deep motion-reduce:hover:translate-y-0"
+                onClick={discardChangesAndLeave}
+              >
+                変更を破棄する
+              </Button>
+            </div>
+          </div>
+        </AccessibleDialog>
+      ) : null}
     </>
   )
 }
