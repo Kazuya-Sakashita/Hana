@@ -68,4 +68,5 @@ requires_human_review:
 - 2026-08-01: 専用staging環境が未作成であることを人間が確認し、当時は実ユーザー環境を使わずsmokeとmergeをHOLD
 - 2026-08-03: 既承認のTest Architectureに従い、loopback providerと専用`/hana_ci`だけで合成smokeを代替する方針を人間が承認。明示opt-in・接続先guardが実環境を拒否することを確認し、staging未作成によるHOLDを代替検証へ置き換え
 - 2026-08-03: migrationコードの最終reviewを人間が承認。実ユーザーDBへの適用はこの承認に含めない
+- 2026-08-03: Purge QA / release safetyの最終reviewを人間が承認。合成QA証跡と本番apply停止境界を確認し、PRのmergeを許可。実DB migration、production設定変更、実ユーザー削除はこの承認に含めない
 - productionでは`ACCOUNT_PHYSICAL_PURGE_APPLY`を未設定のままデプロイし、実DB migration実行とdry-run件数をそれぞれ別途承認するまで削除を開始しない
