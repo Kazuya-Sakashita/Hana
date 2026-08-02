@@ -4,13 +4,34 @@ on:
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Select invoke to call the protected endpoint once
+        required: true
+        type: choice
+        default: hold
+        options:
+          - hold
+          - invoke
 
 concurrency:
   group: image-variant-repair
   cancel-in-progress: false
 
 jobs:
+  hold:
+    if: >-
+      (github.event_name == 'schedule' && vars.HANA_MAINTENANCE_SCHEDULES_ENABLED != 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.operation != 'invoke')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report held maintenance schedule
+        run: echo "Maintenance schedule is held; no endpoint was invoked." >> "$GITHUB_STEP_SUMMARY"
+
   repair:
+    if: >-
+      (github.event_name == 'schedule' && vars.HANA_MAINTENANCE_SCHEDULES_ENABLED == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.operation == 'invoke')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
