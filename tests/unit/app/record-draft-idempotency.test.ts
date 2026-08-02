@@ -47,9 +47,10 @@ describe('ISSUE-116 record draft and create idempotency', () => {
   it('persists only the allowed tab draft and restores a confirmed image id', () => {
     expect(recordSource).toContain('recordDraftStore.load(currentUserId)')
     expect(recordSource).toContain('recordDraftStore.save(')
-    expect(recordSource).toContain('setUploadedImage(draft.imageId ? { id: draft.imageId } : null)')
-    expect(recordSource).toContain("title={uploadedImage ? 'アップロード済みの写真があります'")
-    expect(recordSource).toContain('再読み込み後はプレビューできません。')
+    expect(recordSource).toContain('draft.imageIds.map((imageId) =>')
+    expect(recordSource).toContain("photo.clientId.startsWith('restored-')")
+    expect(recordSource).toContain("query: { size: 'thumbnail', context: 'record-draft' }")
+    expect(recordSource).toContain('setAiDraftNeedsReview(draft.aiDraftNeedsReview)')
     expect(draftStoreSource).not.toMatch(
       /fields\.(?:blob|file|imageUrl|presignedUrl|storageKey|prompt)/,
     )
@@ -57,8 +58,8 @@ describe('ISSUE-116 record draft and create idempotency', () => {
 
   it('keeps edited text when replacing a photo and rotates the key after a content conflict', () => {
     const fileSelectionSource = recordSource.slice(
-      recordSource.indexOf('async function onFileSelected'),
-      recordSource.indexOf('async function retryUpload'),
+      recordSource.indexOf('function onFileSelected'),
+      recordSource.indexOf('function retryUpload'),
     )
     expect(fileSelectionSource).not.toContain("setTitle('')")
     expect(fileSelectionSource).not.toContain("setBody('')")
@@ -81,11 +82,10 @@ describe('ISSUE-116 record draft and create idempotency', () => {
     expect(recordSource).toMatch(
       /createMemoryMutation\.mutateAsync[\s\S]+recordDraftStore\.clear\(\)/,
     )
-    expect(recordSource).toMatch(
-      /onClose=\{\(\) => \{[\s\S]+recordDraftStore\.clear\(\)[\s\S]+router\.push\('\/'\)/,
-    )
+    expect(recordSource).toContain('async function discardDraftAndClose()')
+    expect(recordSource).toMatch(/discardDraftAndClose[\s\S]+recordDraftStore\.clear\(\)/)
     expect(settingsSource).toContain('recordDraftStore.clear()')
-    expect(draftStoreSource).toContain('parsed.expiresAt <= now')
+    expect(draftStoreSource).toContain('stored.expiresAt <= now')
     expect(recordSource).toContain('この下書きを 破棄しますか？')
     expect(recordSource).toContain('下書きを 破棄して閉じる')
   })

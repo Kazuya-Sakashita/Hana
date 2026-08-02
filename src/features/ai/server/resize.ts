@@ -1,6 +1,7 @@
 import 'server-only'
 
 import sharp from 'sharp'
+import { MAX_UPLOAD_PIXELS } from '@/features/uploads/server/image-limits'
 
 // Anthropic Claude Messages API の image 上限:
 //   - base64 size: 5,242,880 bytes (5 MB)
@@ -32,10 +33,11 @@ export interface ResizedImage {
  * 出力は常に image/jpeg。
  */
 export async function resizeForClaude(buffer: Buffer): Promise<ResizedImage> {
-  const meta = await sharp(buffer).metadata()
+  const sharpInputOptions = { failOn: 'warning' as const, limitInputPixels: MAX_UPLOAD_PIXELS }
+  const meta = await sharp(buffer, sharpInputOptions).metadata()
   const longest = Math.max(meta.width ?? 0, meta.height ?? 0)
 
-  const primary = await sharp(buffer)
+  const primary = await sharp(buffer, sharpInputOptions)
     .rotate() // EXIF orientation を反映 (回転)。ADR-0009 で EXIF はクライアント Canvas で削除済の想定だが、安全のため
     .resize({
       width: longest > TARGET_MAX_EDGE ? TARGET_MAX_EDGE : undefined,
@@ -50,7 +52,7 @@ export async function resizeForClaude(buffer: Buffer): Promise<ResizedImage> {
     return { buffer: primary, mediaType: 'image/jpeg' }
   }
 
-  const fallback = await sharp(buffer)
+  const fallback = await sharp(buffer, sharpInputOptions)
     .rotate()
     .resize({
       width: FALLBACK_MAX_EDGE,

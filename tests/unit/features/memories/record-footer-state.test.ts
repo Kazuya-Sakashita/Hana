@@ -15,6 +15,43 @@ const base = {
 }
 
 describe('getRecordFooterState', () => {
+  it('requires an explicit choice before saving an AI draft made for earlier photos', () => {
+    expect(
+      getRecordFooterState({
+        ...base,
+        hasSelectedPhoto: true,
+        uploaded: true,
+        hasTitle: true,
+        canSubmit: false,
+        aiStatus: 'idle',
+        aiDraftNeedsReview: true,
+      }),
+    ).toMatchObject({
+      primaryAction: 'generate-ai',
+      primaryLabel: 'AI で 下書きを 作り直す',
+      secondaryAction: 'confirm-ai-draft',
+      secondaryLabel: '内容を確認して 保存へ進む',
+    })
+  })
+
+  it('offers only confirmation when quota prevents regenerating a stale AI draft', () => {
+    expect(
+      getRecordFooterState({
+        ...base,
+        hasSelectedPhoto: true,
+        uploaded: true,
+        hasTitle: true,
+        canSubmit: false,
+        aiStatus: 'failed',
+        aiQuotaExceeded: true,
+        aiDraftNeedsReview: true,
+      }),
+    ).toMatchObject({
+      primaryAction: 'confirm-ai-draft',
+      primaryLabel: '内容を確認して 保存へ進む',
+      secondaryAction: null,
+    })
+  })
   it('starts with photo selection as the primary action', () => {
     expect(getRecordFooterState(base)).toMatchObject({
       primaryAction: 'choose-photo',

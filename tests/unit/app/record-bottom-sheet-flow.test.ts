@@ -9,6 +9,10 @@ const footerStateSource = readFileSync(
   new URL('../../../src/features/memories/client/record-footer-state.ts', import.meta.url),
   'utf8',
 )
+const photoListSource = readFileSync(
+  new URL('../../../src/features/memories/components/record-photo-list.tsx', import.meta.url),
+  'utf8',
+)
 const qaNoteSource = readFileSync(
   new URL('../../../docs/design/record-bottom-sheet-capture-qa.md', import.meta.url),
   'utf8',
@@ -83,7 +87,8 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toContain('quietStateCopy.record.uploadConfirmFailed')
     expect(recordSource).toContain('quietStateCopy.record.aiFailed')
     expect(recordSource).toContain('quietStateCopy.record.saveFailedDescription')
-    expect(recordSource).toMatch(/uploadStatus === 'failed'[\s\S]+role="alert"/)
+    expect(photoListSource).not.toContain('role="alert"')
+    expect(photoListSource).toContain('role="status"')
     expect(recordSource).toMatch(/aiError \?[\s\S]+role="alert"/)
     expect(recordSource).toMatch(/formErrorMessage \?[\s\S]+role="alert"/)
     expect(recordSource).toMatch(/fieldErrors\.title \?[\s\S]+id="memory-title-error"/)
@@ -95,7 +100,7 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toContain(
       'const [hasAiGeneratedContent, setHasAiGeneratedContent] = useState(false)',
     )
-    expect(recordSource).toContain('setHasAiGeneratedContent(false)')
+    expect(recordSource).not.toContain('setHasAiGeneratedContent(false)')
     expect(recordSource).toContain('setHasAiGeneratedContent(true)')
     expect(recordSource).toContain('ai_generated: hasAiGeneratedContent')
     expect(recordSource).toMatch(/id="memory-title"[\s\S]+disabled=\{aiStatus === 'generating'\}/)

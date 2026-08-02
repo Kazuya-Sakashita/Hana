@@ -72,7 +72,11 @@ export interface paths {
          *     撤回後の `POST /ai/generate` は 403 `ai_consent_required` を返す。
          *     AIを使わない記録の作成・編集・閲覧と既存記録には影響しない。
          *     本操作は過去のAI送信や既存記録を個別削除する手続きではない。
-         *     撤回前に開始したAI生成は完了する場合がある。
+         *     撤回とAI生成のprocessing claimは同じ直列化境界を使う。撤回が先に確定した場合、
+         *     生成はclaim時の再検証で停止する。processing claim後はAI外部通信中も撤回を確定できる。
+         *     既にclaimした外部request自体は完了する可能性があるが、完了時に同意世代を再確認し、
+         *     撤回後の生成結果は保存も返却もせず破棄する。
+         *     待機が40秒を超えた場合は 409 `ai_consent_update_busy` を返し、再試行できる。
          */
         delete: operations["revokeAiConsent"];
         options?: never;
@@ -318,6 +322,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 画像 ID (UUID) */
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 記録へ未紐付けの確定画像を削除
+         * @description 現在のユーザーが所有し、記録へ紐付いていない確定画像だけを削除する。
+         *     画像をロックしてImageを先に論理削除状態へ確定し、保存・AI生成から除外した後、
+         *     original、thumbnail、previewを非公開Storageから削除してImage行を物理削除する。
+         *     Storageまたは最終DB処理に失敗した論理削除行は、同じ所有者の再試行または
+         *     未紐付け画像cleanupが冪等に回収する。
+         *     同じ画像に対する削除、AI生成、記録保存とは画像単位のロックで直列化する。
+         *
+         *     不存在または他ユーザー所有はいずれも404 `not_found` とし、他ユーザーの画像の
+         *     存在を開示しない。所有者の論理削除済み未紐付け行は削除を再試行する。
+         *     記録へ紐付け済みの場合は
+         *     409 `image_already_linked`、Storage一時障害は503 `storage_unavailable`を返す。
+         *     画像URL、storage_key、画像内容はレスポンスとログへ含めない。
+         */
+        delete: operations["deleteUnlinkedImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/memories": {
         parameters: {
             query?: never;
@@ -488,6 +526,12 @@ export interface paths {
          *
          *     AI vendor 呼び出しに到達した生成リクエストは、成功・失敗を問わず
          *     **月間 20 回まで** (Free tier)。超過時は 429 `ai_quota_exceeded`。
+         *     quotaのUTC月は外部送信直前のprocessing claim時刻で決定する。
+         *
+         *     生成は短いreservation / processing claim transaction、transaction外のAI外部通信、
+         *     短いfinalize transactionの状態機械で処理する。外部通信中はDB transactionを保持しない。
+         *     processing claim後に同意撤回または画像削除が確定した場合、外部request自体は完了する
+         *     可能性があるが、完了時の再検証で生成結果を保存も返却もせず破棄する。
          *
          *     生成結果が出力ポリシーに違反した場合は内部で1回だけ再生成する。
          *     再生成時は、拒否本文やカテゴリを含めず、安全基準を再確認する固定指示だけを追加する。
@@ -1437,6 +1481,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -1468,6 +1513,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -1768,6 +1814,11 @@ export interface operations {
             query?: {
                 /** @description 画像サイズ。 省略時は `original` */
                 size?: "thumbnail" | "preview" | "original";
+                /**
+                 * @description 利用文脈。`record-draft` 指定時は、現在のユーザーが所有する
+                 *     未削除・未紐付け・メタデータ除去済み画像に限り URL を発行する。
+                 */
+                context?: "record-draft";
             };
             header?: never;
             path: {
@@ -1794,6 +1845,32 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    deleteUnlinkedImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 画像 ID (UUID) */
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 削除成功 (bodyなし) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listMemories: {

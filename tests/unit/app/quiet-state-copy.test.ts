@@ -12,6 +12,10 @@ const recordSource = readFileSync(
   new URL('../../../src/app/record/page.tsx', import.meta.url),
   'utf8',
 )
+const photoListSource = readFileSync(
+  new URL('../../../src/features/memories/components/record-photo-list.tsx', import.meta.url),
+  'utf8',
+)
 const onboardingSource = readFileSync(
   new URL('../../../src/app/onboarding/page.tsx', import.meta.url),
   'utf8',
@@ -77,7 +81,8 @@ describe('Quiet state copy and motion contracts', () => {
       '<span className="sr-only">{recordAiGeneratingCopy(childName)}</span>',
     )
     expect(recordSource).toContain('aria-busy={aiStatus ===')
-    expect(recordSource).toMatch(/uploadStatus === 'failed'[\s\S]+role="alert"/)
+    expect(photoListSource).not.toContain('role="alert"')
+    expect(photoListSource).toContain('role="status"')
     expect(recordSource).toMatch(/aiError \?[\s\S]+role="alert"/)
     expect(recordSource).not.toContain("router.push('/record')")
     expect(recordSource).not.toContain('hadMemoryListCache')
