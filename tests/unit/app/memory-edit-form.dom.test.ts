@@ -190,6 +190,28 @@ describe('ISSUE-126/144 memory edit form', () => {
     expect(discardButton.className).toContain('shadow-lift')
   })
 
+  it('makes both leave actions visibly respond to hover while respecting reduced motion', async () => {
+    await renderForm()
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-title') as HTMLInputElement,
+        'ホバー確認用の合成タイトル',
+      ),
+    )
+    await act(async () => findButton('変更せず もどる').click())
+
+    const continueButton = findButton('編集を続ける')
+    expect(continueButton.className).toContain('hover:-translate-y-0.5')
+    expect(continueButton.className).toContain('hover:shadow-lift')
+    expect(continueButton.className).toContain('motion-reduce:hover:translate-y-0')
+
+    const discardButton = findButton('変更を破棄する')
+    expect(discardButton.className).toContain('hover:-translate-y-0.5')
+    expect(discardButton.className).toContain('hover:brightness-75')
+    expect(discardButton.className).toContain('motion-reduce:hover:translate-y-0')
+  })
+
   it('uses the same leave confirmation from the top back control', async () => {
     await renderForm()
 

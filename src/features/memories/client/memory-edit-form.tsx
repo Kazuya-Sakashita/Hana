@@ -428,7 +428,7 @@ export function MemoryEditForm({
                 id="memory-edit-leave-continue"
                 type="button"
                 size="lg"
-                className="w-full"
+                className="w-full hover:-translate-y-0.5 hover:shadow-lift motion-reduce:hover:translate-y-0"
                 onClick={() => setLeaveDialogOpen(false)}
               >
                 編集を続ける
@@ -438,7 +438,7 @@ export function MemoryEditForm({
                 type="button"
                 variant="destructive"
                 size="lg"
-                className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:bg-amber/90 hover:text-white active:bg-amber/90"
+                className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:-translate-y-0.5 hover:brightness-75 hover:text-white active:bg-amber/90 motion-reduce:hover:translate-y-0"
                 onClick={discardChangesAndLeave}
               >
                 変更を破棄する
