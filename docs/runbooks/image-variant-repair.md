@@ -7,6 +7,7 @@ original・`thumbnail`・`preview` の状態を追跡し、派生画像が欠損
 
 ## 実行モード
 
+- 定期workflowのHOLD・手動実行・再開は`maintenance-schedule-activation.md`に従う。
 - `IMAGE_VARIANT_REPAIR_APPLY` が未設定または `confirmed` 以外: dry-run。対象件数の確認だけを行う。
 - `IMAGE_VARIANT_REPAIR_APPLY=confirmed`: apply。1回につき1件を修復する。
 - エンドポイントは `CRON_SECRET` の Bearer 認証に成功した場合だけ応答し、それ以外は404を返す。

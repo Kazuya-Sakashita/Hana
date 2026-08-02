@@ -14,6 +14,8 @@
 
 ## Rollout
 
+定期workflowのHOLD・手動実行・再開は`maintenance-schedule-activation.md`に従う。
+
 1. migrationをstagingへ適用する。
 2. `UNCONFIRMED_IMAGE_CLEANUP_APPLY`を未設定のままcronを実行する。
 3. responseの件数だけを確認する。識別子、key、URLを証跡に残さない。
