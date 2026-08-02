@@ -22,6 +22,8 @@
 6. cronを実行し、未confirmの既知3 objectだけが404、confirm済み3 objectが存続することを確認する。
 7. 再実行して`deleted: 0`を確認する。
 
+検証専用プロジェクトがない間は、上記4〜7の事前確認をローカルの合成Storage HTTP fixtureと専用PostgreSQL `/hana_ci`で代替する。`pnpm qa:issue141:storage-db`は`ISSUE_141_STORAGE_QA=1`に加えて、DB・DIRECT DB・Storageの全接続先がloopbackであり、DB名が`hana_ci`である場合だけ動く。実ユーザー、実写真、実Storageは使用しない。この代替確認は本番applyの許可ではなく、デプロイ先が用意された後も本番でapplyを有効にする前にdry-run件数を確認する。
+
 ## Failure recovery
 
 - Storage失敗または削除後の残存は予約を保持し、指数backoffで再試行する。
@@ -30,4 +32,4 @@
 
 ## Metrics
 
-許可する値は`legacyScanned`, `legacyDiscovered`, `legacyInvalid`, `mode`, `scanned`, `eligible`, `protected`, `skippedRecent`, `invalid`, `deleted`, `retried`, `failed`の件数だけ。user ID、hash、prefix、storage key、filename、URL、provider messageを含めない。
+許可する値は`legacyScanned`, `legacyDiscovered`, `legacyInvalid`, `legacyListFailed`, `mode`, `scanned`, `eligible`, `protected`, `skippedRecent`, `invalid`, `deleted`, `retried`, `failed`の件数だけ。user ID、hash、prefix、storage key、filename、URL、provider messageを含めない。

@@ -1,6 +1,6 @@
 ---
 title: Hana セキュリティ・プライバシー運用ガイド
-last_updated: 2026-08-01
+last_updated: 2026-08-02
 owner: kazuya
 ---
 
@@ -52,6 +52,7 @@ Known superseded / clarified items:
 - Auth provider は Supabase Auth。MVP は Google 先行、Apple は後続有効化。
 - Hana は password を持たない。password reset、bcrypt、独自 refresh token は実装しない。
 - Route Handler は最初に `requireUser()` を呼ぶ。公開・匿名許容 endpoint は OpenAPI に明示する。
+- 非公開の`/internal/*`定期運用endpointはADR-0007のmachine認証例外とし、`CRON_SECRET`をconstant-timeで照合する。未設定・欠落・不一致は404でfail closedにし、OpenAPIへ公開しない。
 - private resource access は `requireOwnership(currentUserId, resourceUserId)` 相当の所有権確認を通す。
 - RLS は Phase 2。MVP は Route Handler 層の認可とテストで担保する。
 - 403 / 404 の扱いは `docs/api-driven-development/error-format.md` §7 に従う。
@@ -62,6 +63,8 @@ Current public / anonymous exceptions:
 | ------------------------- | ------------------- | ------------------------------------- |
 | `GET /v1/health`          | public              | uptime check                          |
 | `POST /v1/metrics/vitals` | bearer or anonymous | RUM beacon can be sent before sign-in |
+
+Internal machine endpoints are not public / anonymous exceptions. Scheduler専用であり、ユーザーJWTの代わりに`CRON_SECRET`を必須とする。responseとログはendpoint固有のallowlistへ限定する。
 
 ## Image Security
 

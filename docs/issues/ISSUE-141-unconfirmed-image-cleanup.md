@@ -49,5 +49,7 @@ signed upload後にconfirmされなかった写真を、確定済み画像や処
 - full Vitest: 138 files / 1060 tests pass
 - actual PostgreSQL 16: confirm先行、cleanup先行、別key非干渉、lock timeout、退会先行、cleanupのProfile lock先行の6ケースpass
 - migration deploy: synthetic local `hana_ci`で全migration適用pass
+- actual cleanup route + Storage HTTP contract: dry-runで削除0、applyで未confirmの既知3 objectだけ削除、confirm済み3 object存続、再実行`deleted: 0`を確認
+- synthetic gate: 明示opt-in、loopback DB / Storage、専用DB名`hana_ci`以外は実行前に拒否
 - legacy cursor: 1001 object、121 month folderを複数runで継続できることを確認
 - 実ユーザー、実Storage、実写真は未使用

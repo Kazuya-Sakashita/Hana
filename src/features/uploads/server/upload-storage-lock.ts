@@ -9,6 +9,6 @@ export async function acquireUploadStorageLock(
   await transaction.$queryRaw`
     SELECT pg_advisory_xact_lock(
       hashtextextended(${`${UPLOAD_STORAGE_LOCK_PREFIX}${storageKey}`}, 0)
-    )
+    )::text
   `
 }
