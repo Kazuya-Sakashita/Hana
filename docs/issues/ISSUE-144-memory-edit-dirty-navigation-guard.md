@@ -55,9 +55,20 @@ requires_human_review:
 
 ## 検証結果
 
-- `pnpm exec vitest run tests/unit/app/memory-edit-form.dom.test.ts tests/unit/app/album-memory-keepsake.test.ts tests/unit/components/accessible-dialog.dom.test.ts`: 24 tests passed
-- `pnpm pr:gate`: 1124 tests passed、2 tests skipped、build passed
+- `pnpm exec vitest run tests/unit/app/memory-edit-form.dom.test.ts tests/unit/app/album-memory-keepsake.test.ts tests/unit/components/accessible-dialog.dom.test.ts`: 25 tests passed
+- `pnpm pr:gate`: 1125 tests passed、2 tests skipped、build passed
 - OpenAPI・DB・更新APIの変更なし
+
+## 人間レビュー記録
+
+### Product UX Round 1
+
+- 判定: REQUEST_CHANGES
+- 「変更を破棄する」が周囲と近い色で、hover前にボタンと判別しにくい
+- 対応:
+  - 通常状態から警告色の塗り、2px枠、白文字、影を表示
+  - 既存の「下書きを 破棄して閉じる」と同じ破棄操作の視認性基準へ統一
+  - hoverに依存せず操作可能と分かるDOM回帰テストを追加
 
 ## 人による確認方法
 

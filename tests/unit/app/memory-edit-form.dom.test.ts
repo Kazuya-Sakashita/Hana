@@ -171,6 +171,25 @@ describe('ISSUE-126/144 memory edit form', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull()
   })
 
+  it('shows the destructive leave action as a button before hover', async () => {
+    await renderForm()
+
+    await act(async () =>
+      setControlValue(
+        document.querySelector('#memory-edit-title') as HTMLInputElement,
+        '視認性確認用の合成タイトル',
+      ),
+    )
+    await act(async () => findButton('変更せず もどる').click())
+
+    const discardButton = findButton('変更を破棄する')
+    expect(discardButton.className).toContain('border-2')
+    expect(discardButton.className).toContain('border-amber')
+    expect(discardButton.className).toContain('bg-amber')
+    expect(discardButton.className).toContain('text-white')
+    expect(discardButton.className).toContain('shadow-lift')
+  })
+
   it('uses the same leave confirmation from the top back control', async () => {
     await renderForm()
 

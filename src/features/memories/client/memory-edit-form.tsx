@@ -436,9 +436,9 @@ export function MemoryEditForm({
               <Button
                 id="memory-edit-leave-discard"
                 type="button"
-                variant="outline"
+                variant="destructive"
                 size="lg"
-                className="w-full"
+                className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:bg-amber/90 hover:text-white active:bg-amber/90"
                 onClick={discardChangesAndLeave}
               >
                 変更を破棄する
