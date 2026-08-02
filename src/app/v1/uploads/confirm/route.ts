@@ -26,6 +26,7 @@ import {
 import { isApiProblemError } from '@/lib/api/error'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { logStorageError } from '@/features/uploads/server/storage-error-log'
+import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -198,60 +199,82 @@ export async function POST(request: Request) {
       ])
     }
 
-    const existingImage = await prisma.image.findUnique({
-      where: { storageKey: input.storageKey },
-    })
-    if (existingImage) {
-      if (existingImage.userId !== user.id || existingImage.deletedAt) {
-        throw problems.notFound('画像が見つかりません')
-      }
-      if (existingImage.metadataSanitizedAt === null) {
-        const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
-        const repaired = await prisma.image.update({
-          where: { id: existingImage.id },
-          data: {
-            contentType: verified.contentType,
-            width: verified.width,
-            height: verified.height,
-            fileSize: verified.fileSize,
-            metadataSanitizedAt: new Date(),
-          },
-        })
-        return NextResponse.json(toImageResponse(repaired), { status: 200 })
-      }
-      return NextResponse.json(toImageResponse(existingImage), { status: 200 })
-    }
+    return await prisma.$transaction(
+      async (transaction) => {
+        await acquireUploadStorageLock(transaction, input.storageKey)
 
-    const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
-
-    try {
-      const image = await prisma.image.create({
-        data: {
-          userId: user.id,
-          storageKey: input.storageKey,
-          contentType: verified.contentType,
-          width: verified.width,
-          height: verified.height,
-          fileSize: verified.fileSize,
-          metadataSanitizedAt: new Date(),
-        },
-      })
-      return NextResponse.json(toImageResponse(image), { status: 201 })
-    } catch (dbErr) {
-      if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === 'P2002') {
-        const concurrentlyCreated = await prisma.image.findUnique({
+        const reservation = await transaction.uploadReservation.findUnique({
           where: { storageKey: input.storageKey },
         })
-        if (
-          concurrentlyCreated &&
-          concurrentlyCreated.userId === user.id &&
-          !concurrentlyCreated.deletedAt
-        ) {
-          return NextResponse.json(toImageResponse(concurrentlyCreated), { status: 200 })
+        if (reservation && reservation.userId !== user.id) {
+          throw problems.notFound('画像が見つかりません')
         }
-      }
-      throw dbErr
-    }
+
+        const existingImage = await transaction.image.findUnique({
+          where: { storageKey: input.storageKey },
+        })
+        if (existingImage) {
+          if (existingImage.userId !== user.id || existingImage.deletedAt) {
+            throw problems.notFound('画像が見つかりません')
+          }
+          if (existingImage.metadataSanitizedAt === null) {
+            const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
+            const repaired = await transaction.image.update({
+              where: { id: existingImage.id },
+              data: {
+                contentType: verified.contentType,
+                width: verified.width,
+                height: verified.height,
+                fileSize: verified.fileSize,
+                metadataSanitizedAt: new Date(),
+              },
+            })
+            await transaction.uploadReservation.deleteMany({
+              where: { storageKey: input.storageKey },
+            })
+            return NextResponse.json(toImageResponse(repaired), { status: 200 })
+          }
+          await transaction.uploadReservation.deleteMany({
+            where: { storageKey: input.storageKey },
+          })
+          return NextResponse.json(toImageResponse(existingImage), { status: 200 })
+        }
+
+        const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
+        let image
+        try {
+          image = await transaction.image.create({
+            data: {
+              userId: user.id,
+              storageKey: input.storageKey,
+              contentType: verified.contentType,
+              width: verified.width,
+              height: verified.height,
+              fileSize: verified.fileSize,
+              metadataSanitizedAt: new Date(),
+            },
+          })
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            const concurrent = await transaction.image.findUnique({
+              where: { storageKey: input.storageKey },
+            })
+            if (concurrent && concurrent.userId === user.id && !concurrent.deletedAt) {
+              await transaction.uploadReservation.deleteMany({
+                where: { storageKey: input.storageKey },
+              })
+              return NextResponse.json(toImageResponse(concurrent), { status: 200 })
+            }
+          }
+          throw error
+        }
+        await transaction.uploadReservation.deleteMany({
+          where: { storageKey: input.storageKey },
+        })
+        return NextResponse.json(toImageResponse(image), { status: 201 })
+      },
+      { maxWait: 5_000, timeout: 50_000 },
+    )
   } catch (e) {
     return toProblemResponse(e)
   }

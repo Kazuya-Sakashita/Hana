@@ -42,11 +42,43 @@ model Profile {
 
   children               Child[]
   images                 Image[]
+  uploadReservations     UploadReservation[]
   memories               Memory[]
   aiGenerations          AiGeneration[]
   accountDeletionIntents AccountDeletionIntent[]
 
   @@map("profiles")
+}
+
+model UploadReservation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  storageKey         String    @unique @map("storage_key")
+  candidateKind      String    @default("original") @map("candidate_kind") @db.VarChar(20)
+  issuedAt           DateTime  @map("issued_at") @db.Timestamptz
+  signedUrlExpiresAt DateTime  @map("signed_url_expires_at") @db.Timestamptz
+  cleanupAfter       DateTime  @map("cleanup_after") @db.Timestamptz
+  status             String    @default("pending") @db.VarChar(20)
+  attempts           Int       @default(0)
+  nextAttemptAt      DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz
+  claimToken         String?   @map("claim_token") @db.Uuid
+  claimedAt          DateTime? @map("claimed_at") @db.Timestamptz
+  failureReason      String?   @map("failure_reason") @db.VarChar(40)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, cleanupAfter, nextAttemptAt])
+  @@map("upload_reservations")
+}
+
+model MaintenanceCursor {
+  id          String   @id @db.VarChar(50)
+  cursorValue String?  @map("cursor_value") @db.Text
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("maintenance_cursors")
 }
 
 model AccountDeletionIntent {
