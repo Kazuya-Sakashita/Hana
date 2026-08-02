@@ -2,7 +2,7 @@
 id: ISSUE-144
 title: 記録編集中の誤離脱で入力を失わないようにする
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-31
 github_issue: 303
@@ -93,6 +93,11 @@ requires_human_review:
 
 - 判定: APPROVED
 - 通常時・hover時とも両ボタンを判別でき、「変更を破棄する」の文字も見えることを人間が確認
+
+### Accessibility Final
+
+- 判定: APPROVED
+- Dialog表示時の初期focus、Tab循環、Escapeで閉じる操作、起点ボタンへのfocus復帰、入力保持を人間が確認
 
 ## 人による確認方法
 
