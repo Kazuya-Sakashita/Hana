@@ -48,7 +48,7 @@ requires_human_review:
 
 ## 自動検証・専門レビュー
 
-- `pnpm pr:gate`: PASS（155 files / 1210 tests、12 skipped、lint、typecheck、buildを含む）
+- `pnpm pr:gate`: PASS（155 files / 1211 tests、12 skipped、lint、typecheck、buildを含む）
 - fresh local `/hana_ci` migration deploy: PASS（18 migrations）
 - `pnpm qa:issue136:purge-db`: PASS（loopback合成Storage/Auth + 専用PostgreSQL）
   - apply未設定のcron requestがread-only dry-runになる
