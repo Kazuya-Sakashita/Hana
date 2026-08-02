@@ -17,6 +17,10 @@ const memoryEditPageSource = readFileSync(
   new URL('../../../src/app/memory/[memoryId]/edit/page.tsx', import.meta.url),
   'utf8',
 )
+const memoryEditFormSource = readFileSync(
+  new URL('../../../src/features/memories/client/memory-edit-form.tsx', import.meta.url),
+  'utf8',
+)
 const memoryActionsSource = readFileSync(
   new URL('../../../src/components/memory-actions.tsx', import.meta.url),
   'utf8',
@@ -34,6 +38,7 @@ const evidenceSources = {
   albumPageSource,
   albumListSource,
   memoryDetailSource,
+  memoryEditFormSource,
   memoryActionsSource,
   qaContract,
   issueSource,
@@ -110,7 +115,9 @@ describe('album and memory keepsake refresh', () => {
     expect(memoryDetailSource).toContain('MemoryActions')
     expect(memoryDetailSource).toContain('ことばと天気を なおす')
     expect(memoryDetailSource).toContain('href={`/memory/${encodeURIComponent(memory.id)}/edit`}')
-    expect(memoryEditPageSource).toContain('<Link href={detailPath} replace')
+    expect(memoryEditPageSource).toContain('<MemoryEditForm')
+    expect(memoryEditFormSource).toContain('aria-label="記録へ もどる"')
+    expect(memoryEditFormSource).toContain('onClick={requestLeave}')
     expect(memoryDetailSource).toContain('tap-target absolute')
     expect(memoryDetailSource).toContain('data-testid="memory-saved-notice"')
     expect(memoryDetailSource).toContain('PaperSlip')
