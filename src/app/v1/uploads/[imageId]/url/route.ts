@@ -22,12 +22,16 @@ const IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS = 10_000
 async function generateSignedImageUrlBeforeDeadline(
   storageKey: string,
   size: ImageSize,
+  allowOriginalFallback: boolean,
 ): Promise<string | null> {
   const abort = new AbortController()
   let deadline: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      generateSignedImageUrl(storageKey, size, { signal: abort.signal }),
+      generateSignedImageUrl(storageKey, size, {
+        signal: abort.signal,
+        allowOriginalFallback,
+      }),
       new Promise<never>((_, reject) => {
         deadline = setTimeout(() => {
           abort.abort()
@@ -85,7 +89,13 @@ export async function GET(request: Request, { params }: Params) {
                   metadataSanitizedAt: { not: null },
                 }
               : { id: imageId, ...activeImageAccessWhere(user.id) },
-          select: { id: true, userId: true, storageKey: true, metadataSanitizedAt: true },
+          select: {
+            id: true,
+            userId: true,
+            storageKey: true,
+            metadataSanitizedAt: true,
+            originalVariantStatus: true,
+          },
         })
         if (!image) {
           throw problems.notFound('画像が見つかりません')
@@ -96,8 +106,15 @@ export async function GET(request: Request, { params }: Params) {
         if (size === 'original' && image.metadataSanitizedAt === null) {
           throw problems.imageSanitizationPending()
         }
+        if (size === 'original' && image.originalVariantStatus !== 'ready') {
+          throw problems.notFound('画像が見つかりません')
+        }
 
-        const url = await generateSignedImageUrlBeforeDeadline(image.storageKey, size)
+        const url = await generateSignedImageUrlBeforeDeadline(
+          image.storageKey,
+          size,
+          image.metadataSanitizedAt !== null && image.originalVariantStatus === 'ready',
+        )
         if (!url) {
           throw new Error('Storage signed URL failed')
         }

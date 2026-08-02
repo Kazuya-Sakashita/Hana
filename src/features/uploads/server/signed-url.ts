@@ -42,7 +42,7 @@ export function deriveVariantKey(originalKey: string, size: ImageSize): string {
 export async function generateSignedImageUrl(
   storageKey: string,
   size: ImageSize,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; allowOriginalFallback?: boolean },
 ): Promise<string | null> {
   const signal = options?.signal
   signal?.throwIfAborted()
@@ -54,7 +54,7 @@ export async function generateSignedImageUrl(
   if (primary.data) return primary.data.signedUrl
 
   // variant が存在しない (ISSUE-031 以前のデータ) → original にフォールバック
-  if (size !== 'original') {
+  if (size !== 'original' && options?.allowOriginalFallback) {
     signal?.throwIfAborted()
     const fallback = await supabase.storage
       .from(BUCKET)

@@ -508,6 +508,10 @@ describe('POST /v1/uploads/confirm', () => {
         height: 600,
         fileSize: verifiedBuffer.length,
         metadataSanitizedAt: expect.any(Date),
+        originalVariantStatus: 'ready',
+        thumbnailVariantStatus: 'ready',
+        previewVariantStatus: 'ready',
+        variantRepairStatus: 'complete',
       },
     })
   })
@@ -608,7 +612,7 @@ describe('POST /v1/uploads/confirm', () => {
     expect(mocks.thumbnailVariant.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.previewVariant.mock.invocationCallOrder[0] as number,
     )
-    expect(mocks.createAdminClient).toHaveBeenCalledTimes(2)
+    expect(mocks.createAdminClient).toHaveBeenCalledTimes(3)
     expect(mocks.storageUpdate.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.thumbnailVariant.mock.invocationCallOrder[0] as number,
     )
