@@ -2,7 +2,7 @@
 id: ISSUE-113
 title: AI下書き前の親のひとことを独立入力にする
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-28
 github_issue: 248

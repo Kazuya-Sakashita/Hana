@@ -2,7 +2,7 @@
 id: ISSUE-125
 title: Storageエラーログを固定reason allowlistへ統一する
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-30
 github_issue: 271

@@ -2,7 +2,7 @@
 id: ISSUE-106
 title: staging target の read-only contract を追加する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 236

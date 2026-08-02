@@ -47,12 +47,10 @@ describe('ISSUE-105 staging preflight hold state', () => {
   })
 
   it('syncs the blocked state into the issue index', () => {
-    expect(issueIndexSource).toMatch(/\|\s*`blocked`\s*\|\s*1\s*\|\s*`ISSUE-105`\s*\|/)
+    expect(issueIndexSource).toContain('| `blocked` | 6 |')
+    expect(issueIndexSource).toContain('| `ISSUE-105` | `#234` | `blocked` |')
     expect(issueIndexSource).toContain(
-      '`ISSUE-105` / `#234`: staging hosting target と運用確認待ち。公開前 traffic は HOLD。',
-    )
-    expect(issueIndexSource).toMatch(
-      /\|\s*9\s*\|\s*`ISSUE-105`\s*\|\s*`#234`\s*\|\s*staging preflight を実行し公開前 traffic の Go\/Hold を判定する\s*\|\s*blocked\s*\|/,
+      'staging preflight を実行し公開前 traffic の Go/Hold を判定する',
     )
   })
 })

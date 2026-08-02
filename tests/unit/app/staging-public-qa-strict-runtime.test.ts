@@ -472,12 +472,12 @@ describe('ISSUE-110 staging public QA strict runtime', () => {
     expect(() => assertNetworkState({ id: 'lp' }, state)).toThrow('lp: network_policy_violation')
   })
 
-  it('records the strict runtime contract and review state', () => {
+  it('records the strict runtime contract and merged state', () => {
     expect(packageSource).toContain('qa:issue110:staging-public')
     expect(packageSource).toContain('pnpm qa:issue110:staging-public -- --mode=contract')
     expect(releaseDoc).toContain('host、email、payload')
     expect(issueSource).toContain('github_issue: 240')
-    expect(issueSource).toContain('status: review')
-    expect(issueIndexSource).toContain('`ISSUE-110` / `#240`: PR 作成 / review / merge 待ち。')
+    expect(issueSource).toContain('status: done')
+    expect(issueIndexSource).toContain('| `ISSUE-110` | `#240` | `done` |')
   })
 })

@@ -2,9 +2,10 @@
 id: ISSUE-133
 title: 記録APIの他者所有と不存在を404へ統一する
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-30
+github_issue: 282
 ---
 
 ## 目的 (Why)

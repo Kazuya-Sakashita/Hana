@@ -228,6 +228,15 @@ todo → in_progress → review → done
               blocked
 ```
 
+### Issue Index と GitHub 状態の照合
+
+- `docs/issues/README.md` は frontmatter から生成する。直接編集しない。
+- `pnpm issues:write`: frontmatter を検証し、Issue Index を決定的に再生成する。
+- `pnpm issues:check`: schema、Issue ID / `github_issue` 重複、許可status、生成差分を検証する。
+- `pnpm issues:check-github -- --github-status-file <status-only.json>`: GitHub IssueのOPEN/CLOSEDとlocal statusを照合する。
+- `pnpm issues:sync-github -- --github-status-file <status-only.json>`: closed GitHub Issueに対応するlocal `review`だけを`done`へ同期する。
+- GitHub入力はIssue番号とOPEN/CLOSEDだけに限定し、本文、コメント、ユーザー情報、secretを取得・artifact保存しない。
+
 ### PR との対応
 
 - 1 PR 1 Issue

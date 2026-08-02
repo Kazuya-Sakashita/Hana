@@ -61,9 +61,7 @@ describe('ISSUE-101 LP paper/card boundary refinement', () => {
     expect(issueSource).toContain('public trust copy、API、保存処理、ログ出力は変更していない')
     expect(issueIndexSource).toContain('`ISSUE-101`')
     expect(issueIndexSource).toContain('`#226`')
-    expect(issueIndexSource).toContain(
-      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`',
-    )
+    expect(issueIndexSource).toContain('| `ISSUE-101` | `#226` | `done` |')
     expect(`${lpSource}\n${waitlistFormSource}\n${issueSource}`).not.toMatch(
       /uploads\/|previewUrl|storage_key\s*[:=]|presigned_url\s*[:=]|prompt\s*[:=]/i,
     )

@@ -13,6 +13,7 @@ node_modules/
 src/lib/api/generated/
 docs/openapi/openapi.bundled.yaml
 docs/openapi/openapi.bundled.json
+docs/issues/README.md
 next-env.d.ts
 
 # Lock files

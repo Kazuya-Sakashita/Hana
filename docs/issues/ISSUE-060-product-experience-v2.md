@@ -1,6 +1,6 @@
 ---
 id: ISSUE-060
-title: プロダクト体験 V2: 約束整合と共通シェル基盤
+title: 'プロダクト体験 V2: 約束整合と共通シェル基盤'
 priority: P0
 status: done
 size: M

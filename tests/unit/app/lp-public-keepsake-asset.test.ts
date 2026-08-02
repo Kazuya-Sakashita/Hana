@@ -51,9 +51,7 @@ describe('ISSUE-099 LP public keepsake asset', () => {
     expect(issueIndexSource).toContain('`ISSUE-099`')
     expect(issueIndexSource).toContain('`#222`')
     expect(issueIndexSource).toContain('LP 公開用 keepsake 画像 asset を追加する')
-    expect(issueIndexSource).toContain(
-      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`',
-    )
+    expect(issueIndexSource).toContain('| `ISSUE-099` | `#222` | `done` |')
     expect(`${lpSource}\n${issueSource}`).not.toMatch(
       /https?:\/\/|uploads\/|previewUrl|storage_key\s*[:=]|presigned_url\s*[:=]|prompt\s*[:=]/i,
     )

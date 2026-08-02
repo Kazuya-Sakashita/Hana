@@ -2,7 +2,7 @@
 id: ISSUE-110
 title: staging public QA の strict runtime mode を追加する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 240

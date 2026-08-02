@@ -2,9 +2,10 @@
 id: ISSUE-128
 title: 404・予期しないエラーを温かい復帰画面にする
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-30
+github_issue: 274
 ---
 
 ## 目的 (Why)

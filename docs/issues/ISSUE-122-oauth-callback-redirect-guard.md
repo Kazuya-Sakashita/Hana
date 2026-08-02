@@ -2,7 +2,7 @@
 id: ISSUE-122
 title: OAuth callback の外部リダイレクトを遮断する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-29
 github_issue: 268

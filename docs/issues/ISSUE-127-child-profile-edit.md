@@ -2,9 +2,10 @@
 id: ISSUE-127
 title: 設定から子どもの呼び名と誕生日を編集できるようにする
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-30
+github_issue: 273
 ---
 
 ## 目的 (Why)

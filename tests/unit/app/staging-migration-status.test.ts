@@ -217,13 +217,13 @@ describe('ISSUE-107 staging migration status', () => {
     expect(`${result.stdout}\n${result.stderr}`).not.toContain(unsupportedMode)
   })
 
-  it('records the implementation scope and review issue state', () => {
+  it('records the implementation scope and merged issue state', () => {
     expect(packageSource).toContain('qa:issue107:migration-status')
     expect(packageSource).toContain('pnpm qa:issue107:migration-status -- --mode=contract')
     expect(releaseDoc).toContain('Prisma の raw stdout / stderr は出力しない')
     expect(releaseDoc).toContain('--target=staging')
     expect(issueSource).toContain('github_issue: 238')
-    expect(issueSource).toContain('status: review')
-    expect(issueIndexSource).toContain('`ISSUE-107` / `#238`: PR 作成 / review / merge 待ち。')
+    expect(issueSource).toContain('status: done')
+    expect(issueIndexSource).toContain('| `ISSUE-107` | `#238` | `done` |')
   })
 })

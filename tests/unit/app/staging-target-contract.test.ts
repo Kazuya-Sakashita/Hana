@@ -197,10 +197,10 @@ describe('ISSUE-106 staging target contract', () => {
     expect(output).not.toContain('/tests/scripts/qa')
   })
 
-  it('records the issue in review under ISSUE-105', () => {
+  it('records the merged issue under ISSUE-105', () => {
     expect(issueSource).toContain('github_issue: 236')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('parent: ISSUE-105')
-    expect(issueIndexSource).toContain('`ISSUE-106` / `#236`: PR 作成 / review / merge 待ち。')
+    expect(issueIndexSource).toContain('| `ISSUE-106` | `#236` | `done` |')
   })
 })

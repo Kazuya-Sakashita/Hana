@@ -2,7 +2,7 @@
 id: ISSUE-129
 title: 認証後画面にプライバシー安全なページタイトルを付ける
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-30
 github_issue: 275

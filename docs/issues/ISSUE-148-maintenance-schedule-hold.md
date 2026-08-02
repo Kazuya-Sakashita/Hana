@@ -2,7 +2,7 @@
 id: ISSUE-148
 title: 未構成環境のmaintenance scheduleを明示的にHOLDする
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-08-03
 github_issue: 318

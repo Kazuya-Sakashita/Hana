@@ -2,9 +2,10 @@
 id: ISSUE-132
 title: サインアウト失敗を検知しセッション残存を誤表示しない
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-30
+github_issue: 278
 ---
 
 ## 目的 (Why)

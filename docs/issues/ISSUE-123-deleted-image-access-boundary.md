@@ -2,7 +2,7 @@
 id: ISSUE-123
 title: 削除済み記録の画像アクセスとAI再送信を遮断する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-29
 github_issue: 269

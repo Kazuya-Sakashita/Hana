@@ -2,7 +2,7 @@
 id: ISSUE-130
 title: 30秒記録の3ステップを意味のある進行表示にする
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-30
 github_issue: 276

@@ -2,7 +2,7 @@
 id: ISSUE-116
 title: 記録下書きのタブ内保全と保存API冪等化を実装する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 251

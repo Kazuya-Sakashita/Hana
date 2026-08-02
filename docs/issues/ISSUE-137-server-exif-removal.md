@@ -2,7 +2,7 @@
 id: ISSUE-137
 title: confirm時に原画像を再エンコードしてEXIFを除去する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-31
 github_issue: 296

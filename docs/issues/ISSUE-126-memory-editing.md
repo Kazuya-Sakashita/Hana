@@ -2,7 +2,7 @@
 id: ISSUE-126
 title: 保存済み記録のタイトル・本文・天気を編集できるようにする
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-30
 github_issue: 272

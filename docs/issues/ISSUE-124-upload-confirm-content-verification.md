@@ -2,7 +2,7 @@
 id: ISSUE-124
 title: アップロード確定時にStorage実体と画像内容を検証する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-30
 github_issue: 270

@@ -114,44 +114,26 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issue070Source).toContain('ISSUE-067')
   })
 
-  it('updates the issue index with the refinement sequence and ready follow-up state', () => {
-    expect(issueIndexSource).toContain('Planned Quiet Heirloom Refinement Sequence')
-    expect(issueIndexSource).toContain('| 1     | `ISSUE-066` | Quiet Heirloom refinement 設計契約')
-    expect(issueIndexSource).toContain('| 2     | `ISSUE-067` | トークンと共通 UI の質感調整')
-    expect(issueIndexSource).toContain('| 3     | `ISSUE-068` | ホーム first view を写真主役へ調整')
-    expect(issueIndexSource).toContain(
-      '| 4     | `ISSUE-069` | 記録画面を 1 判断ずつの下部シート体験へ調整',
-    )
-    expect(issueIndexSource).toContain(
-      '| 5     | `ISSUE-070` | アルバムと記録詳細を private shelf 体験へ調整 | done',
-    )
-    expect(issueIndexSource).toContain('done')
-    expect(issueIndexSource).toContain('## Codex Ready Queue\n\n現在はありません。')
-    expect(issueIndexSource).not.toContain('todo, ready')
-    expect(issueIndexSource).not.toContain('todo, blocked by `ISSUE-067`')
-    expect(issueIndexSource).toContain('Planned LP Public Readiness Sequence')
-    expect(issueIndexSource).toContain('| 1     | `ISSUE-071` | `#162`')
-    expect(issueIndexSource).toContain(
-      '| 2     | `ISSUE-072` | `#163` | LP の実行可能な CV 導線を決めて接続               | done',
-    )
-    expect(issueIndexSource).toContain(
-      '| 5     | `ISSUE-075` | `#166` | LP 公開前 QA と trust human review gate           | done',
-    )
-    expect(issueIndexSource).toContain(
-      '| 1     | `ISSUE-084` | `#190` | /privacy を Quiet Heirloom trust surface に再設計する   | done',
-    )
-    expect(issueIndexSource).toMatch(
-      /\|\s*1\s*\|\s*`ISSUE-089`\s*\|\s*`#202`\s*\|\s*待機リスト登録後の連絡期待値を明確にする\s*\|\s*done\s*\|/,
-    )
-    expect(issueIndexSource).toContain(
-      '## Blocked Or Needs Human Decision\n\n- `ISSUE-105` / `#234`: staging hosting target と運用確認待ち。公開前 traffic は HOLD。',
-    )
-    expect(issueIndexSource).toContain(
-      'prelaunch validation completed: `ISSUE-089`, `ISSUE-091`, `ISSUE-093`, `ISSUE-095`, `ISSUE-097`, `ISSUE-099`, `ISSUE-101`, `ISSUE-103`',
-    )
-    expect(issueIndexSource).toContain(
-      '`ISSUE-088`, `ISSUE-090`, `ISSUE-092`, `ISSUE-094`, `ISSUE-096`, `ISSUE-098`, `ISSUE-100`, `ISSUE-102`, `ISSUE-104`',
-    )
+  it('keeps completed refinement work and current queues in the generated issue index', () => {
+    for (const issueId of [
+      'ISSUE-066',
+      'ISSUE-067',
+      'ISSUE-068',
+      'ISSUE-069',
+      'ISSUE-070',
+      'ISSUE-071',
+      'ISSUE-072',
+      'ISSUE-075',
+      'ISSUE-084',
+      'ISSUE-089',
+    ]) {
+      const row = issueIndexSource.split('\n').find((line) => line.startsWith(`| \`${issueId}\` |`))
+      expect(row).toContain('| `done` |')
+    }
+    expect(issueIndexSource).toContain('## Codex Ready Queue')
+    expect(issueIndexSource).toContain('| `ISSUE-150` | `#320` | `todo` |')
+    expect(issueIndexSource).toContain('## Blocked Or Needs Human Decision')
+    expect(issueIndexSource).toContain('| `ISSUE-105` | `#234` | `blocked` |')
   })
 
   it('records the public surface warmth plan without weakening the prelaunch privacy hold', () => {
@@ -176,18 +158,13 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
     expect(issue086Source).toContain('ISSUE-084')
     expect(issue086Source).toContain('ISSUE-085')
 
-    expect(issueIndexSource).toContain('Planned Public Surface Warmth Sequence')
     expect(publicSurfacePlanSource).toContain(
       '| `ISSUE-085` | `/lp` を keepsake journey と public trust bridge へ寄せる | done',
     )
     expect(publicSurfacePlanSource).toContain(
       '| `ISSUE-086` | Public LP / Privacy visual QA gate を拡張する             | done',
     )
-    expect(issueIndexSource).toContain(
-      '| 3     | `ISSUE-086` | `#192` | Public LP / Privacy visual QA gate を拡張する           | done',
-    )
-    expect(issueIndexSource).toContain(
-      '## Blocked Or Needs Human Decision\n\n- `ISSUE-105` / `#234`: staging hosting target と運用確認待ち。公開前 traffic は HOLD。',
-    )
+    expect(issueIndexSource).toContain('| `ISSUE-086` | `#192` | `done` |')
+    expect(issueIndexSource).toContain('| `ISSUE-105` | `#234` | `blocked` |')
   })
 })
