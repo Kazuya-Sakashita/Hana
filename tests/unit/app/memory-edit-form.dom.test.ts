@@ -208,7 +208,9 @@ describe('ISSUE-126/144 memory edit form', () => {
 
     const discardButton = findButton('変更を破棄する')
     expect(discardButton.className).toContain('hover:-translate-y-0.5')
-    expect(discardButton.className).toContain('hover:brightness-75')
+    expect(discardButton.className).toContain('hover:bg-amber-deep')
+    expect(discardButton.className).toContain('hover:text-white')
+    expect(discardButton.className).not.toContain('hover:brightness-75')
     expect(discardButton.className).toContain('motion-reduce:hover:translate-y-0')
   })
 

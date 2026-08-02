@@ -438,7 +438,7 @@ export function MemoryEditForm({
                 type="button"
                 variant="destructive"
                 size="lg"
-                className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:-translate-y-0.5 hover:brightness-75 hover:text-white active:bg-amber/90 motion-reduce:hover:translate-y-0"
+                className="border-amber bg-amber w-full border-2 text-white shadow-lift hover:-translate-y-0.5 hover:bg-amber-deep hover:text-white active:bg-amber-deep motion-reduce:hover:translate-y-0"
                 onClick={discardChangesAndLeave}
               >
                 変更を破棄する

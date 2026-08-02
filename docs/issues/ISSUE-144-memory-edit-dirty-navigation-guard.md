@@ -55,8 +55,8 @@ requires_human_review:
 
 ## 検証結果
 
-- `pnpm exec vitest run tests/unit/app/memory-edit-form.dom.test.ts tests/unit/app/album-memory-keepsake.test.ts tests/unit/components/accessible-dialog.dom.test.ts`: 26 tests passed
-- `pnpm pr:gate`: 1126 tests passed、2 tests skipped、build passed
+- `pnpm exec vitest run tests/unit/app/memory-edit-form.dom.test.ts tests/unit/app/album-memory-keepsake.test.ts tests/unit/components/accessible-dialog.dom.test.ts tests/unit/app/accessibility-baseline.test.ts`: 32 tests passed
+- `pnpm pr:gate`: 1127 tests passed、2 tests skipped、build passed
 - OpenAPI・DB・更新APIの変更なし
 
 ## 人間レビュー記録
@@ -78,6 +78,16 @@ requires_human_review:
   - 両ボタンをhover時に少し浮かせ、影または明度の変化を強化
   - `prefers-reduced-motion`時は移動を止め、色・影の変化だけを維持
   - 両ボタンのhover契約をDOM回帰テストへ追加
+
+### Product UX Round 3
+
+- 判定: REQUEST_CHANGES
+- 「変更を破棄する」はhover時に白文字が見えなくなる
+- 原因: destructive共通の薄いhover背景が残り、白文字とのコントラストが失われていた
+- 対応:
+  - hover専用の濃い警告色tokenを追加し、白文字を維持
+  - 文字も暗くするbrightness filterを削除
+  - ライト約8.0:1、ダーク約5.6:1のコントラストを自動テストで固定
 
 ## 人による確認方法
 
