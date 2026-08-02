@@ -5,13 +5,12 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { generateStorageKey } from '@/features/uploads/server/storage-key'
 import { parsePresignedUploadRequest, readJsonBody } from '@/features/uploads/server/parse'
 import { logStorageError } from '@/features/uploads/server/storage-error-log'
+import { prisma } from '@/server/db/prisma'
+import { uploadReservationTimes } from '@/features/uploads/server/upload-reservation-policy'
 
 export const dynamic = 'force-dynamic'
 
 const BUCKET = 'images'
-// Supabase の signed upload URL は現状約 2 時間有効。情報提供として expires_at を返す。
-const SIGNED_UPLOAD_TTL_MS = 2 * 60 * 60 * 1000
-
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -19,6 +18,14 @@ export async function POST(request: Request) {
     const input = parsePresignedUploadRequest(raw)
 
     const storageKey = generateStorageKey(user.id, input.contentType)
+    const reservationTimes = uploadReservationTimes()
+    await prisma.uploadReservation.create({
+      data: {
+        userId: user.id,
+        storageKey,
+        ...reservationTimes,
+      },
+    })
     // 認可は requireUser() で済んでいるため、Storage への発行は service_role で行う
     // (Storage Policy は Phase 2 で導入予定・ADR-0009 §3)
     const supabase = createSupabaseAdminClient()
@@ -29,11 +36,10 @@ export async function POST(request: Request) {
       throw new Error('Storage signed upload URL failed')
     }
 
-    const expiresAt = new Date(Date.now() + SIGNED_UPLOAD_TTL_MS).toISOString()
     return NextResponse.json({
       presigned_url: data.signedUrl,
       storage_key: storageKey,
-      expires_at: expiresAt,
+      expires_at: reservationTimes.signedUrlExpiresAt.toISOString(),
     })
   } catch (e) {
     return toProblemResponse(e)

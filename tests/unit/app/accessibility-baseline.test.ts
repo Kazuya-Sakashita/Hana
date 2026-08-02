@@ -119,6 +119,14 @@ describe('Hana accessibility baseline', () => {
     expect(failures).toEqual([])
   })
 
+  it('keeps destructive hover text readable in light and dark themes', () => {
+    const lightRatio = contrastRatio('#ffffff', token('warning-amber-deep'))
+    const darkRatio = contrastRatio('#ffffff', token('warning-amber-deep', darkTokenBlock))
+
+    expect(lightRatio).toBeGreaterThanOrEqual(4.5)
+    expect(darkRatio).toBeGreaterThanOrEqual(4.5)
+  })
+
   it('does not lock browser zoom in viewport metadata', () => {
     expect(layoutSource).not.toMatch(/maximumScale\s*:/)
     expect(layoutSource).not.toMatch(/userScalable\s*:\s*false/)

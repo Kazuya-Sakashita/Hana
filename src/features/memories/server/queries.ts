@@ -70,6 +70,7 @@ export async function fetchMemoriesWithCovers(
           memoryPosition: true,
           storageKey: true,
           metadataSanitizedAt: true,
+          originalVariantStatus: true,
         },
       },
     },
@@ -84,7 +85,8 @@ export async function fetchMemoriesWithCovers(
       const first = sortedImages[0]
       const coverThumbnailUrl = first
         ? await generateSignedImageUrl(first.storageKey, 'thumbnail', {
-            allowOriginalFallback: first.metadataSanitizedAt !== null,
+            allowOriginalFallback:
+              first.metadataSanitizedAt !== null && first.originalVariantStatus === 'ready',
           })
         : null
       return { ...m, coverThumbnailUrl }
@@ -181,6 +183,7 @@ export async function fetchMemoryWithPreviews(opts: {
           memoryPosition: true,
           storageKey: true,
           metadataSanitizedAt: true,
+          originalVariantStatus: true,
         },
       },
     },
@@ -192,7 +195,8 @@ export async function fetchMemoryWithPreviews(opts: {
   const imagesWithPreviews = await Promise.all(
     sortedImages.map(async (img): Promise<MemoryDetailImage> => {
       const previewUrl = await generateSignedImageUrl(img.storageKey, 'preview', {
-        allowOriginalFallback: img.metadataSanitizedAt !== null,
+        allowOriginalFallback:
+          img.metadataSanitizedAt !== null && img.originalVariantStatus === 'ready',
       })
       return { id: img.id, previewUrl }
     }),

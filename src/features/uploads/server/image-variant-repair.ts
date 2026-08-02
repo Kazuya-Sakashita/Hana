@@ -2,10 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { Prisma, type Image, type PrismaClient } from '@prisma/client'
 import { deriveVariantKey } from '@/features/uploads/server/signed-url'
 import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
+import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
 import type { VariantGenerationResult } from '@/features/uploads/server/variant-generation'
 
 export const VARIANT_REPAIR_MAX_ATTEMPTS = 10
 const CLAIM_LEASE_MS = 10 * 60 * 1000
+const COMPLETE_VERIFICATION_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+interface ObservedVariantState {
+  original?: 'ready' | 'missing' | 'invalid'
+  thumbnail?: 'ready' | 'missing'
+  preview?: 'ready' | 'missing'
+}
 
 export type VariantRepairFailureReason =
   | 'storage_unavailable'
@@ -59,8 +67,10 @@ function failureReason(error: unknown): VariantRepairFailureReason {
 function isDueForClaim(image: Image, now: Date, staleClaimBefore: Date): boolean {
   return (
     !image.deletedAt &&
+    image.metadataSanitizedAt !== null &&
     image.variantRepairNextAt <= now &&
     (image.variantRepairStatus === 'pending' ||
+      image.variantRepairStatus === 'complete' ||
       (image.variantRepairStatus === 'claimed' &&
         image.variantRepairClaimedAt !== null &&
         image.variantRepairClaimedAt <= staleClaimBefore))
@@ -101,6 +111,7 @@ async function recordFailure(
   token: string,
   now: Date,
   reason: VariantRepairFailureReason,
+  observed: ObservedVariantState,
 ): Promise<'retried' | 'dead_letter' | 'protected'> {
   return prisma.$transaction(
     async (transaction) => {
@@ -120,8 +131,9 @@ async function recordFailure(
       await transaction.image.updateMany({
         where: { id: image.id, variantRepairClaimToken: token, deletedAt: null },
         data: {
-          ...(reason === 'original_missing' ? { originalVariantStatus: 'missing' } : {}),
-          ...(reason === 'original_invalid' ? { originalVariantStatus: 'invalid' } : {}),
+          ...(observed.original ? { originalVariantStatus: observed.original } : {}),
+          ...(observed.thumbnail ? { thumbnailVariantStatus: observed.thumbnail } : {}),
+          ...(observed.preview ? { previewVariantStatus: observed.preview } : {}),
           variantRepairStatus: deadLetter ? 'dead_letter' : 'pending',
           variantRepairAttempts: attempts,
           variantRepairNextAt: retryAt(now, attempts),
@@ -140,11 +152,14 @@ async function repairClaimedImage(
   prisma: PrismaClient,
   storage: ImageVariantRepairStorage,
   imageId: string,
+  storageKey: string,
   token: string,
+  now: Date,
   timeout: number,
 ): Promise<'repaired' | 'ready' | 'protected'> {
   return prisma.$transaction(
     async (transaction) => {
+      await acquireUploadStorageLock(transaction, storageKey)
       await lockImageAccess(transaction, [imageId])
       const image = await transaction.image.findUnique({ where: { id: imageId } })
       if (
@@ -153,6 +168,23 @@ async function repairClaimedImage(
         image.variantRepairStatus !== 'claimed' ||
         image.variantRepairClaimToken !== token
       ) {
+        return 'protected'
+      }
+
+      const reservation = await transaction.uploadReservation.findUnique({
+        where: { storageKey: image.storageKey },
+        select: { id: true },
+      })
+      if (reservation || image.metadataSanitizedAt === null) {
+        await transaction.image.updateMany({
+          where: { id: image.id, variantRepairClaimToken: token, deletedAt: null },
+          data: {
+            variantRepairStatus: 'pending',
+            variantRepairNextAt: retryAt(now, 1),
+            variantRepairClaimToken: null,
+            variantRepairClaimedAt: null,
+          },
+        })
         return 'protected'
       }
 
@@ -195,6 +227,7 @@ async function repairClaimedImage(
           previewVariantStatus: 'ready',
           variantRepairStatus: 'complete',
           variantRepairAttempts: 0,
+          variantRepairNextAt: new Date(now.getTime() + COMPLETE_VERIFICATION_INTERVAL_MS),
           variantRepairClaimToken: null,
           variantRepairClaimedAt: null,
           variantRepairFailureReason: null,
@@ -204,6 +237,37 @@ async function repairClaimedImage(
     },
     { maxWait: 3_000, timeout },
   )
+}
+
+async function observeVariantState(
+  storage: ImageVariantRepairStorage,
+  image: Image,
+  reason: VariantRepairFailureReason,
+): Promise<ObservedVariantState> {
+  const keys = [
+    image.storageKey,
+    deriveVariantKey(image.storageKey, 'thumbnail'),
+    deriveVariantKey(image.storageKey, 'preview'),
+  ] as const
+  const results = await Promise.allSettled(keys.map((key) => storage.exists(key)))
+  const original = results[0]!
+  const thumbnail = results[1]!
+  const preview = results[2]!
+  return {
+    original:
+      reason === 'original_invalid'
+        ? 'invalid'
+        : reason === 'original_missing'
+          ? 'missing'
+          : original.status === 'fulfilled'
+            ? original.value
+              ? 'ready'
+              : 'missing'
+            : undefined,
+    thumbnail:
+      thumbnail.status === 'fulfilled' ? (thumbnail.value ? 'ready' : 'missing') : undefined,
+    preview: preview.status === 'fulfilled' ? (preview.value ? 'ready' : 'missing') : undefined,
+  }
 }
 
 export async function runImageVariantRepairs(
@@ -218,8 +282,10 @@ export async function runImageVariantRepairs(
     variantRepairNextAt: { lte: now },
     OR: [
       { variantRepairStatus: 'pending' },
+      { variantRepairStatus: 'complete' },
       { variantRepairStatus: 'claimed', variantRepairClaimedAt: { lte: staleClaimBefore } },
     ],
+    metadataSanitizedAt: { not: null },
   }
   const [eligibleTotal, deadLetterTotal, candidates] = await Promise.all([
     prisma.image.count({ where }),
@@ -256,17 +322,15 @@ export async function runImageVariantRepairs(
             prisma,
             storage,
             claim.image.id,
+            claim.image.storageKey,
             claim.token,
+            now,
             Math.min(Math.max(options.workTimeoutMs ?? 50_000, 1), 50_000),
           )
         } catch (error) {
-          outcome = await recordFailure(
-            prisma,
-            claim.image.id,
-            claim.token,
-            now,
-            failureReason(error),
-          )
+          const reason = failureReason(error)
+          const observed = await observeVariantState(storage, claim.image, reason)
+          outcome = await recordFailure(prisma, claim.image.id, claim.token, now, reason, observed)
         }
       }
     } catch {

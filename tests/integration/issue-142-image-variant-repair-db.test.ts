@@ -9,6 +9,8 @@ import {
 } from '@/features/uploads/server/image-variant-repair'
 import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { deriveVariantKey } from '@/features/uploads/server/signed-url'
+import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
+import { assertIssue142DatabaseQaEnvironment } from '../support/issue-142-environment'
 
 const enabled = process.env.ISSUE_142_DATABASE_QA === '1'
 const describeDatabase = enabled ? describe : describe.skip
@@ -31,13 +33,8 @@ describeDatabase('ISSUE-142 PostgreSQL integration', () => {
   const profileIds: string[] = []
 
   beforeAll(() => {
-    const connectionString = process.env.DATABASE_URL
-    if (!connectionString) throw new Error('database_url_required')
-    const url = new URL(connectionString)
-    if (!['localhost', '127.0.0.1'].includes(url.hostname)) {
-      throw new Error('local_database_required')
-    }
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
+    const { databaseUrl } = assertIssue142DatabaseQaEnvironment(process.env)
+    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) })
   })
 
   afterAll(async () => {
@@ -247,6 +244,76 @@ describeDatabase('ISSUE-142 PostgreSQL integration', () => {
     const [, result] = await Promise.all([deletion, repair])
 
     expect(result.protected).toBe(1)
+    expect(storage.exists).not.toHaveBeenCalled()
+  })
+
+  it('waits for upload confirmation holding the same storage-key lock', async () => {
+    const image = await createImage()
+    const confirmationLocked = deferred()
+    const releaseConfirmation = deferred()
+    const confirmation = prisma.$transaction(async (transaction) => {
+      await acquireUploadStorageLock(transaction, image.storageKey)
+      confirmationLocked.resolve()
+      await releaseConfirmation.promise
+    })
+    await confirmationLocked.promise
+
+    const storage: ImageVariantRepairStorage = {
+      exists: vi.fn(async () => true),
+      loadOriginal: vi.fn(async () => Buffer.from('unused')),
+      generate: vi.fn(async () => ({
+        thumbnail: 'ready' as const,
+        preview: 'ready' as const,
+      })),
+    }
+    const repair = runImageVariantRepairs(prisma, storage, { apply: true, now: NOW })
+
+    await delay(50)
+    expect(storage.exists).not.toHaveBeenCalled()
+    releaseConfirmation.resolve()
+
+    const [, result] = await Promise.all([confirmation, repair])
+    expect(result.alreadyReady).toBe(1)
+    expect(storage.exists).toHaveBeenCalledTimes(3)
+  })
+
+  it('selects a due complete image and excludes it again until the next verification', async () => {
+    const image = await createImage({
+      originalVariantStatus: 'ready',
+      thumbnailVariantStatus: 'ready',
+      previewVariantStatus: 'ready',
+      variantRepairStatus: 'complete',
+    })
+    const thumbnailKey = deriveVariantKey(image.storageKey, 'thumbnail')
+    let thumbnailChecks = 0
+    const storage: ImageVariantRepairStorage = {
+      exists: vi.fn(async (key: string) => {
+        if (key !== thumbnailKey) return true
+        thumbnailChecks += 1
+        return thumbnailChecks > 1
+      }),
+      loadOriginal: vi.fn(async () => Buffer.from('synthetic-original')),
+      generate: vi.fn(async () => ({
+        thumbnail: 'ready' as const,
+        preview: 'ready' as const,
+      })),
+    }
+
+    const repaired = await runImageVariantRepairs(prisma, storage, { apply: true, now: NOW })
+    const state = await prisma.image.findUniqueOrThrow({ where: { id: image.id } })
+
+    expect(repaired).toMatchObject({ eligibleTotal: 1, scanned: 1, repaired: 1 })
+    expect(storage.generate).toHaveBeenCalledWith(
+      image.storageKey,
+      Buffer.from('synthetic-original'),
+      { thumbnail: true, preview: false },
+    )
+    expect(state.variantRepairNextAt).toEqual(new Date(NOW.getTime() + 24 * 60 * 60 * 1000))
+
+    vi.mocked(storage.exists).mockClear()
+    const notDue = await runImageVariantRepairs(prisma, storage, { apply: false, now: NOW })
+
+    expect(notDue).toMatchObject({ eligibleTotal: 0, scanned: 0 })
     expect(storage.exists).not.toHaveBeenCalled()
   })
 })

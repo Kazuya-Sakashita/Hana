@@ -1,8 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
 import { notFound, redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { MemoryEditForm } from '@/features/memories/client/memory-edit-form'
 import { fetchEditableMemory } from '@/features/memories/server/queries'
 import { signInPath } from '@/lib/auth/safe-redirect'
@@ -30,22 +27,6 @@ export default async function MemoryEditPage({ params }: PageProps) {
   return (
     <main className="bg-canvas min-h-dvh px-4 pb-[calc(env(safe-area-inset-bottom)+3rem)] pt-4">
       <div className="mx-auto w-full max-w-md">
-        <header className="flex items-center gap-3">
-          <Button asChild variant="ghost" size="icon">
-            <Link href={detailPath} replace aria-label="記録へ もどる">
-              <ChevronLeft aria-hidden="true" />
-            </Link>
-          </Button>
-          <div>
-            <p className="meta-label">ページを整える</p>
-            <h1 className="text-ink mt-1 font-serif text-2xl">ことばと天気を なおす</h1>
-          </div>
-        </header>
-
-        <p className="text-ink-secondary leading-narrative mt-5 px-1 text-sm">
-          写真と日付はそのままに、あとから読み返したいことばへ整えられます。
-        </p>
-
         <MemoryEditForm
           key={memory.updatedAt.toISOString()}
           memoryId={memory.id}

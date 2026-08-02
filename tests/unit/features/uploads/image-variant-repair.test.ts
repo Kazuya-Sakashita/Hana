@@ -47,6 +47,10 @@ function harness(initial = image(), beforeTransaction?: (row: Image) => void) {
   const candidate = { ...initial }
   const transaction = {
     $executeRaw: vi.fn(),
+    $queryRaw: vi.fn(),
+    uploadReservation: {
+      findUnique: vi.fn(async (): Promise<{ id: string } | null> => null),
+    },
     image: {
       findUnique: vi.fn(async () => ({ ...row })),
       update: vi.fn(async ({ data }: { data: Partial<Image> }) => Object.assign(row, data)),
@@ -163,6 +167,39 @@ describe('runImageVariantRepairs', () => {
       preview: false,
     })
     expect(row.variantRepairStatus).toBe('complete')
+    expect(row.variantRepairNextAt.getTime()).toBeGreaterThan(NOW.getTime())
+  })
+
+  it('periodically revalidates a complete image and repairs a newly missing thumbnail', async () => {
+    const { prisma, row } = harness(
+      image({
+        originalVariantStatus: 'ready',
+        thumbnailVariantStatus: 'ready',
+        previewVariantStatus: 'ready',
+        variantRepairStatus: 'complete',
+      }),
+    )
+    const store = storage()
+    const thumbnailKey = STORAGE_KEY.replace(/\.jpg$/, '_thumb.webp')
+    let thumbnailChecks = 0
+    store.exists.mockImplementation(async (key: string) => {
+      if (key !== thumbnailKey) return true
+      thumbnailChecks += 1
+      return thumbnailChecks > 1
+    })
+
+    const result = await runImageVariantRepairs(prisma, store, { apply: true, now: NOW })
+
+    expect(result.repaired).toBe(1)
+    expect(store.generate).toHaveBeenCalledWith(STORAGE_KEY, Buffer.from('original'), {
+      thumbnail: true,
+      preview: false,
+    })
+    expect(row).toMatchObject({
+      thumbnailVariantStatus: 'ready',
+      variantRepairStatus: 'complete',
+    })
+    expect(row.variantRepairNextAt.getTime()).toBeGreaterThan(NOW.getTime())
   })
 
   it('recovers idempotently after a temporary Storage failure', async () => {
@@ -233,6 +270,51 @@ describe('runImageVariantRepairs', () => {
 
     expect(result.retried).toBe(1)
     expect(row.variantRepairFailureReason).toBe('variant_verification_failed')
+  })
+
+  it('records the observed variant state after a partial generation failure', async () => {
+    const { prisma, row } = harness()
+    const store = storage()
+    const thumbnailKey = STORAGE_KEY.replace(/\.jpg$/, '_thumb.webp')
+    const previewKey = STORAGE_KEY.replace(/\.jpg$/, '_preview.webp')
+    let generationAttempted = false
+    store.exists.mockImplementation(async (key: string) => {
+      if (key === STORAGE_KEY) return true
+      if (!generationAttempted) return false
+      return key === thumbnailKey
+    })
+    store.generate.mockImplementation(async () => {
+      generationAttempted = true
+      throw new VariantRepairError('storage_unavailable')
+    })
+
+    const result = await runImageVariantRepairs(prisma, store, { apply: true, now: NOW })
+
+    expect(result.retried).toBe(1)
+    expect(row).toMatchObject({
+      originalVariantStatus: 'ready',
+      thumbnailVariantStatus: 'ready',
+      previewVariantStatus: 'missing',
+      variantRepairFailureReason: 'storage_unavailable',
+    })
+  })
+
+  it('does not inspect or generate Storage objects while confirmation is reserved', async () => {
+    const { prisma, row, transaction } = harness()
+    transaction.uploadReservation.findUnique.mockResolvedValue({ id: 'synthetic-reservation' })
+    const store = storage()
+
+    const result = await runImageVariantRepairs(prisma, store, { apply: true, now: NOW })
+
+    expect(result.protected).toBe(1)
+    expect(store.exists).not.toHaveBeenCalled()
+    expect(store.generate).not.toHaveBeenCalled()
+    expect(row).toMatchObject({
+      variantRepairStatus: 'pending',
+      variantRepairClaimToken: null,
+      variantRepairClaimedAt: null,
+    })
+    expect(transaction.$queryRaw).toHaveBeenCalledTimes(1)
   })
 
   it('protects an image deleted after candidate selection', async () => {

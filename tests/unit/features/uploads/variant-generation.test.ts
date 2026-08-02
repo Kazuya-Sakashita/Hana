@@ -27,6 +27,38 @@ beforeEach(() => {
 })
 
 describe('generateMissingVariants', () => {
+  it('waits for every requested upload to settle before reporting a failure', async () => {
+    let releasePreview!: () => void
+    const previewUpload = new Promise<{ data: object; error: null }>((resolve) => {
+      releasePreview = () => resolve({ data: {}, error: null })
+    })
+    mocks.upload.mockImplementation(async (key: string) => {
+      if (key.endsWith('_thumb.webp')) {
+        return { data: null, error: { message: 'synthetic storage failure' } }
+      }
+      return previewUpload
+    })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let settled = false
+
+    const generation = generateMissingVariants(
+      'uploads/hash/202607/11111111-1111-4111-8111-111111111111.jpg',
+      Buffer.from('original'),
+      { thumbnail: true, preview: true },
+      { failOnError: true },
+    ).finally(() => {
+      settled = true
+    })
+    void generation.catch(() => {})
+    await vi.waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(2))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(settled).toBe(false)
+
+    releasePreview()
+    await expect(generation).rejects.toMatchObject({ reason: 'storage_unavailable' })
+    spy.mockRestore()
+  })
+
   it('distinguishes image generation failures', async () => {
     mocks.thumbnail.mockRejectedValue(new Error('synthetic sharp failure'))
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})

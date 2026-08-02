@@ -1,6 +1,6 @@
 ---
 title: Hana セキュリティ・プライバシー運用ガイド
-last_updated: 2026-07-21
+last_updated: 2026-08-02
 owner: kazuya
 ---
 
@@ -52,6 +52,7 @@ Known superseded / clarified items:
 - Auth provider は Supabase Auth。MVP は Google 先行、Apple は後続有効化。
 - Hana は password を持たない。password reset、bcrypt、独自 refresh token は実装しない。
 - Route Handler は最初に `requireUser()` を呼ぶ。公開・匿名許容 endpoint は OpenAPI に明示する。
+- 非公開の`/internal/*`定期運用endpointはADR-0007のmachine認証例外とし、`CRON_SECRET`をconstant-timeで照合する。未設定・欠落・不一致は404でfail closedにし、OpenAPIへ公開しない。
 - private resource access は `requireOwnership(currentUserId, resourceUserId)` 相当の所有権確認を通す。
 - RLS は Phase 2。MVP は Route Handler 層の認可とテストで担保する。
 - 403 / 404 の扱いは `docs/api-driven-development/error-format.md` §7 に従う。
@@ -63,6 +64,8 @@ Current public / anonymous exceptions:
 | `GET /v1/health`          | public              | uptime check                          |
 | `POST /v1/metrics/vitals` | bearer or anonymous | RUM beacon can be sent before sign-in |
 
+Internal machine endpoints are not public / anonymous exceptions. Scheduler専用であり、ユーザーJWTの代わりに`CRON_SECRET`を必須とする。responseとログはendpoint固有のallowlistへ限定する。
+
 ## Image Security
 
 - Storage は Supabase Storage private bucket。
@@ -73,11 +76,13 @@ Current public / anonymous exceptions:
 - 同一`storage_key`の同時確定はprocess内single-flightで高負荷処理を集約し、別instance間はDB一意制約で収束させる。
 - HEIC元ファイルはクライアントでJPEGへ再エンコードする。HEICの直接signed uploadはdecoderを本番・CIで固定できるまで発行しない。
 - Memory論理削除時は関連Image metadataも同じtimestamp・transactionで論理削除する。
-- signed URL発行とAI送信は画像単位のtransaction advisory lockを保持し、削除commit後の新規利用を遮断する。
-- signed URL生成は8秒、AI vendor呼び出しは共通AbortSignalで25秒を上限とし、DB lock transactionより短くする。
+- signed URL発行は画像単位のtransaction advisory lockを保持し、削除commit後の新規利用を遮断する。
+- AI生成はprocessing claimとfinalizeの短いtransactionだけ画像lockを取得する。vendor通信中はDB transactionもlockも保持しない。
+- AI画像の取得・変換・vendor呼び出しは共通AbortSignalで合計12秒を上限とする。
 - signed URL期限時はStorage requestをabortし、期限後にoriginal fallbackを開始しない。Storageの外部エラー文字列はログへ出さない。
-- AI quota予約は画像の初期検証・AI同意再確認後、画像lock transactionより前に独立確定する。
-- quota予約後に画像lockを取得し、本人所有・親Memory未削除を再検証してから外部送信する。
+- AI quotaの`reserved`は画像の初期検証・AI同意再確認後に短いlease付きで独立確定し、この時点ではquota未加算とする。
+- 送信直前に同意世代、子どもの所有権、画像有効性を再確認し、`processing` claimがcommitした時点でquotaへ加算する。
+- vendor通信後も同じ境界を再確認する。同意撤回、再同意、画像削除・紐付け、所有権喪失を検知した結果は保存・返却せず破棄する。
 - `storage_key` は `uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`。
 - normal API response は `storage_key` を返さない。UI は `image.id` から download URL を取得する。
 - upload signed URL は Supabase の既定 TTL。download signed URL は 30 分。
@@ -92,11 +97,15 @@ Current public / anonymous exceptions:
 - 送信可: child given name、計算済み月齢、撮影日、天気、親のひとこと、EXIF 削除済み写真。
 - 送信禁止: parent email、parent name、surname / full name、birthdate、生年月日、住所、raw location、storage_key、presigned URL。
 - generation log は user_id / child_id / model / prompt version / token / duration / success /
-  error reason / attempt count / 型付き出力ポリシーカテゴリID / 固定outcome / created_at まで。
+  error reason / attempt count / 型付き出力ポリシーカテゴリID / 固定outcome / 状態 / fencing token /
+  lease期限 / quota計上時刻 / 完了時刻 / created_at まで。
   prompt 本文と生成本文は保存しない。
 - 出力ポリシーカテゴリIDとoutcomeは`ai_generations`だけに保存し、一般ログへ出さない。
   アカウント削除時のcascade対象とし、AI安全性の集計・監査以外に使用しない。
 - prompt 本文と生成本文は AI log に保存しない。
+- 状態は`reserved → processing → succeeded | failed | discarded`。外部通信中はDB transactionを保持しない。
+- 同意撤回とprocessing claimはuser単位lockで直列化する。claim後の撤回はvendor通信中にも確定でき、
+  完了した結果は同意世代の再確認で破棄する。
 - vendor retention / zero data retention / training non-use の公開文言は `docs/design/ai-consent-privacy-evidence.md` を入力に、
   release 前の人間 privacy / legal review gate とする。
 

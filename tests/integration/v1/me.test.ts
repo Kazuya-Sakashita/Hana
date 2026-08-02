@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Prisma } from '@prisma/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -7,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   updateMany: vi.fn(),
   findUniqueOrThrow: vi.fn(),
+  advisoryLock: vi.fn(),
+  transaction: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -17,13 +20,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
-    $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
-      callback({
-        profile: {
-          updateMany: mocks.updateMany,
-          findUniqueOrThrow: mocks.findUniqueOrThrow,
-        },
-      }),
+    $transaction: mocks.transaction,
     profile: { findUnique: mocks.findUnique, create: mocks.create, update: mocks.update },
   },
 }))
@@ -53,6 +50,19 @@ function authed(profileOverrides: Partial<typeof profile> = {}) {
 function unauthed() {
   mocks.getUser.mockResolvedValue({ data: { user: null } })
 }
+
+beforeEach(() => {
+  mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+    callback({
+      $executeRaw: mocks.advisoryLock,
+      profile: {
+        updateMany: mocks.updateMany,
+        update: mocks.update,
+        findUniqueOrThrow: mocks.findUniqueOrThrow,
+      },
+    }),
+  )
+})
 
 afterEach(() => vi.clearAllMocks())
 
@@ -98,6 +108,10 @@ describe('POST /v1/me/ai-consent', () => {
       where: { id: USER_ID, aiConsentAt: null },
       data: { aiConsentAt: expect.any(Date) },
     })
+    expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), {
+      maxWait: 5_000,
+      timeout: 40_000,
+    })
   })
 })
 
@@ -142,5 +156,21 @@ describe('DELETE /v1/me/ai-consent', () => {
       where: { id: USER_ID },
       data: { aiConsentAt: null },
     })
+  })
+
+  it('returns a stable conflict when the serialized update exceeds its wait budget', async () => {
+    authed({ aiConsentAt: CONSENT_AT })
+    mocks.transaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('synthetic transaction timeout', {
+        code: 'P2028',
+        clientVersion: 'test',
+      }),
+    )
+
+    const response = await DELETE()
+
+    expect(response.status).toBe(409)
+    expect(response.headers.get('Content-Type')).toBe('application/problem+json')
+    expect(await response.json()).toMatchObject({ reason: 'ai_consent_update_busy' })
   })
 })

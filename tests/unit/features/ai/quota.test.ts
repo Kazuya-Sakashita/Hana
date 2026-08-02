@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   aiGenerationCount: vi.fn(),
   aiGenerationCreate: vi.fn(),
+  aiGenerationUpdateMany: vi.fn(),
   advisoryLock: vi.fn(),
   transaction: vi.fn(),
 }))
@@ -10,19 +11,27 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/server/db/prisma', () => ({
   prisma: {
     $transaction: mocks.transaction,
-    aiGeneration: { count: mocks.aiGenerationCount, create: mocks.aiGenerationCreate },
+    aiGeneration: {
+      count: mocks.aiGenerationCount,
+      create: mocks.aiGenerationCreate,
+      updateMany: mocks.aiGenerationUpdateMany,
+    },
   },
 }))
 
 import {
   checkMonthlyQuota,
   MONTHLY_QUOTA_FREE,
+  reservationLeaseExpiresAt,
   reserveMonthlyAiQuota,
   startOfUtcMonth,
   startOfNextUtcMonth,
 } from '@/features/ai/server/quota'
 
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.clearAllMocks()
+})
 
 describe('startOfUtcMonth', () => {
   it('returns Jan 1 UTC for a January date', () => {
@@ -40,6 +49,18 @@ describe('startOfNextUtcMonth', () => {
   it('rolls over Dec → Jan of next year', () => {
     const out = startOfNextUtcMonth(new Date('2026-12-31T23:59:59Z'))
     expect(out.toISOString()).toBe('2027-01-01T00:00:00.000Z')
+  })
+})
+
+describe('reservationLeaseExpiresAt', () => {
+  it('uses the normal thirty second lease away from a UTC month boundary', () => {
+    const now = new Date('2026-08-01T12:00:00Z')
+    expect(reservationLeaseExpiresAt(now).toISOString()).toBe('2026-08-01T12:00:30.000Z')
+  })
+
+  it('does not let a reserved capacity row cross the next UTC month boundary', () => {
+    const now = new Date('2026-08-31T23:59:50Z')
+    expect(reservationLeaseExpiresAt(now).toISOString()).toBe('2026-09-01T00:00:00.000Z')
   })
 })
 
@@ -72,8 +93,13 @@ describe('checkMonthlyQuota', () => {
       | { where: { succeeded?: boolean; createdAt?: { gte?: Date } } }
       | undefined
     expect(callArgs?.where.succeeded).toBeUndefined()
-    expect(callArgs?.where).toMatchObject({ countsTowardQuota: true })
-    expect(callArgs?.where.createdAt?.gte).toBeInstanceOf(Date)
+    expect(callArgs?.where).toMatchObject({
+      OR: [
+        { countsTowardQuota: true, quotaCountedAt: { gte: expect.any(Date) } },
+        { status: 'reserved', leaseExpiresAt: { gt: expect.any(Date) } },
+      ],
+    })
+    expect(callArgs?.where).not.toHaveProperty('createdAt')
   })
 })
 
@@ -81,6 +107,7 @@ describe('reserveMonthlyAiQuota', () => {
   function mockTransaction() {
     mocks.advisoryLock.mockResolvedValue(1)
     mocks.aiGenerationCreate.mockResolvedValue({ id: 'reservation-1' })
+    mocks.aiGenerationUpdateMany.mockResolvedValue({ count: 0 })
     mocks.transaction.mockImplementation(
       async (
         callback: (transaction: {
@@ -88,6 +115,7 @@ describe('reserveMonthlyAiQuota', () => {
           aiGeneration: {
             count: typeof mocks.aiGenerationCount
             create: typeof mocks.aiGenerationCreate
+            updateMany: typeof mocks.aiGenerationUpdateMany
           }
         }) => Promise<unknown>,
       ) =>
@@ -96,12 +124,13 @@ describe('reserveMonthlyAiQuota', () => {
           aiGeneration: {
             count: mocks.aiGenerationCount,
             create: mocks.aiGenerationCreate,
+            updateMany: mocks.aiGenerationUpdateMany,
           },
         }),
     )
   }
 
-  it('serializes the per-user check and reserves a quota-counted row', async () => {
+  it('serializes the per-user check and reserves a non-charged capacity row', async () => {
     mockTransaction()
     mocks.aiGenerationCount.mockResolvedValue(19)
 
@@ -112,13 +141,16 @@ describe('reserveMonthlyAiQuota', () => {
         model: 'model-1',
         promptVersion: 'v1',
       }),
-    ).resolves.toEqual({ id: 'reservation-1' })
+    ).resolves.toEqual({ id: 'reservation-1', claimToken: expect.any(String) })
 
     expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
     expect(mocks.aiGenerationCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: 'user-1',
-        countsTowardQuota: true,
+        status: 'reserved',
+        countsTowardQuota: false,
+        claimToken: expect.any(String),
+        leaseExpiresAt: expect.any(Date),
         succeeded: false,
         errorReason: 'in_progress',
       }),
@@ -139,5 +171,43 @@ describe('reserveMonthlyAiQuota', () => {
       }),
     ).rejects.toMatchObject({ reason: 'ai_quota_exceeded' })
     expect(mocks.aiGenerationCreate).not.toHaveBeenCalled()
+  })
+
+  it('recovers expired reserved and processing leases before counting capacity', async () => {
+    mockTransaction()
+    mocks.aiGenerationCount.mockResolvedValue(0)
+
+    await reserveMonthlyAiQuota({
+      userId: 'user-1',
+      childId: 'child-1',
+      model: 'model-1',
+      promptVersion: 'v1',
+    })
+
+    expect(mocks.aiGenerationUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        userId: 'user-1',
+        status: 'reserved',
+        leaseExpiresAt: { lte: expect.any(Date) },
+      },
+      data: expect.objectContaining({
+        status: 'failed',
+        countsTowardQuota: false,
+        errorReason: 'reservation_lease_expired',
+      }),
+    })
+    expect(mocks.aiGenerationUpdateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        userId: 'user-1',
+        status: 'processing',
+        leaseExpiresAt: { lte: expect.any(Date) },
+      },
+      data: expect.objectContaining({
+        status: 'failed',
+        countsTowardQuota: true,
+        errorReason: 'processing_lease_expired',
+      }),
+    })
+    expect(mocks.aiGenerationCount).toHaveBeenCalledAfter(mocks.aiGenerationUpdateMany)
   })
 })

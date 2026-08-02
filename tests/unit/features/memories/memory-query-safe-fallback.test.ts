@@ -20,7 +20,10 @@ import { fetchMemoryWithPreviews } from '@/features/memories/server/queries'
 const USER_ID = '11111111-1111-4111-8111-111111111111'
 const MEMORY_ID = '22222222-2222-4222-8222-222222222222'
 
-function memory(metadataSanitizedAt: Date | null) {
+function memory(
+  metadataSanitizedAt: Date | null,
+  originalVariantStatus: 'unknown' | 'ready' | 'missing' | 'invalid' = 'unknown',
+) {
   return {
     id: MEMORY_ID,
     userId: USER_ID,
@@ -43,6 +46,7 @@ function memory(metadataSanitizedAt: Date | null) {
         memoryPosition: 0,
         storageKey: 'uploads/hash/202607/55555555-5555-4555-8555-555555555555.jpg',
         metadataSanitizedAt,
+        originalVariantStatus,
       },
     ],
   }
@@ -69,7 +73,7 @@ describe('memory detail image fallback', () => {
   })
 
   it('keeps the sanitized original fallback available during repair', async () => {
-    mocks.memoryFindFirst.mockResolvedValue(memory(new Date('2026-07-31T00:00:00.000Z')))
+    mocks.memoryFindFirst.mockResolvedValue(memory(new Date('2026-07-31T00:00:00.000Z'), 'ready'))
     mocks.createSignedUrl
       .mockResolvedValueOnce({ data: null, error: { message: 'variant missing' } })
       .mockResolvedValueOnce({
@@ -82,4 +86,24 @@ describe('memory detail image fallback', () => {
     expect(result?.imagesWithPreviews[0]?.previewUrl).toBe('https://example.com/synthetic-original')
     expect(mocks.createSignedUrl).toHaveBeenCalledTimes(2)
   })
+
+  it.each(['missing', 'invalid'] as const)(
+    'does not fall back to an original whose repair status is %s',
+    async (originalVariantStatus) => {
+      mocks.memoryFindFirst.mockResolvedValue(
+        memory(new Date('2026-07-31T00:00:00.000Z'), originalVariantStatus),
+      )
+      mocks.createSignedUrl.mockResolvedValue({
+        data: null,
+        error: { message: 'variant missing' },
+      })
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const result = await fetchMemoryWithPreviews({ memoryId: MEMORY_ID, userId: USER_ID })
+
+      expect(result?.imagesWithPreviews[0]?.previewUrl).toBeNull()
+      expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
+      spy.mockRestore()
+    },
+  )
 })

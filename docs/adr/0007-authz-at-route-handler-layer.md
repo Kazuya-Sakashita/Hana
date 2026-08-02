@@ -40,6 +40,16 @@ Hana は個人開発でメンテ負荷を最小化したい。
   (詳細は `docs/api-driven-development/error-format.md` §7)
 - Route Handler テストで認可ロジックを担保
 
+#### Internal machine endpointの例外
+
+`/internal/*`の定期運用endpointはユーザー向けAPIではなく、schedulerからのmachine-to-machine呼び出しに限定するため、`requireUser()`の対象外とする。
+
+- `CRON_SECRET`のBearer認証を必須とし、未設定・欠落・不一致はfail closedで404にする
+- secret比較は長さ確認後のconstant-time比較を使う
+- OpenAPIへ公開せず、通常のユーザー向けクライアントから到達させない
+- endpointごとに未認証拒否と明示的apply flagのテストを持つ
+- responseとログは運用件数などのallowlistに限定し、user ID、storage key、URL、本文を含めない
+
 ### Phase 2 (将来)
 
 - RLS を有効化し、defense-in-depth を強化
@@ -72,7 +82,7 @@ defense-in-depth は最終的に確保される。
 
 - `src/server/auth/current-user.ts` にヘルパ集約
 - 全 Route Handler の規約:
-  1. 最初に `requireUser()`
+  1. ユーザー向けRouteは最初に `requireUser()`。`/internal/*`は上記machine認証を最初に行う
   2. リソースアクセス前に `requireOwnership(user.id, resource.userId)`
   3. throw された `ApiProblemError` は `toProblemResponse(e)` で `application/problem+json` に変換
 - `profiles.id ↔ auth.users.id` の FK は shadow DB 制約で migration に書けないため

@@ -127,6 +127,7 @@ function authed() {
   mocks.memoryCount.mockResolvedValue(0)
   mocks.memoryFindFirst.mockResolvedValue(null)
   mocks.advisoryLock.mockResolvedValue(1)
+  mocks.txImageFindMany.mockImplementation((args) => mocks.imageFindMany(args))
   mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       $executeRaw: mocks.advisoryLock,

@@ -70,10 +70,23 @@ export async function generateMissingVariants(
   requested: { thumbnail: boolean; preview: boolean } = { thumbnail: true, preview: true },
   options?: { signal?: AbortSignal; failOnError?: boolean },
 ): Promise<VariantGenerationResult> {
-  const [thumbnail, preview] = await Promise.all([
+  const uploads = [
     requested.thumbnail ? uploadVariant(storageKey, original, 'thumbnail', options) : true,
     requested.preview ? uploadVariant(storageKey, original, 'preview', options) : true,
-  ])
+  ] as const
+  if (options?.failOnError) {
+    const settled = await Promise.allSettled(uploads)
+    const thumbnail = settled[0]
+    const preview = settled[1]
+    if (thumbnail.status === 'rejected') throw thumbnail.reason
+    if (preview.status === 'rejected') throw preview.reason
+    return {
+      thumbnail: thumbnail.value ? 'ready' : 'missing',
+      preview: preview.value ? 'ready' : 'missing',
+    }
+  }
+
+  const [thumbnail, preview] = await Promise.all(uploads)
   return {
     thumbnail: thumbnail ? 'ready' : 'missing',
     preview: preview ? 'ready' : 'missing',

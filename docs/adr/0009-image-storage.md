@@ -2,6 +2,7 @@
 
 - 状態: Accepted
 - 決定日: 2026-05-23
+- 更新日: 2026-08-02 (ISSUE-141: 未confirm画像cleanup用の予約を追加)
 - 対象 Issue: ISSUE-008
 
 ## 背景
@@ -48,6 +49,7 @@ Hana では子どもの写真を扱う。CLAUDE.md §7 で以下が宣言され�
 client                            server                              storage
   │  POST /uploads/presigned-url    │
   ├────────────────────────────────►│  generateStorageKey()
+  │                                 │  create UploadReservation
   │                                 │  createSignedUploadUrl()
   │  ◄─── { presigned_url, key } ───┤
   │  PUT (画像本体)                                                        │
@@ -58,9 +60,10 @@ client                            server                              storage
   │  ◄─── 201 { id, ... } ──────────┤
 ```
 
-- presigned-url 発行時には DB に **何も書かない** (確定処理は confirm で)
-- confirm が呼ばれなかった場合、Storage 側にゴミファイルが残る
-  - クリーンアップは将来 ISSUE で cron job 実装
+- presigned-url 発行前に`UploadReservation`を作成し、発行から48時間後をcleanup期限として記録する
+- confirm時は同じstorage keyのtransaction advisory lockを取得し、`Image`作成後に予約を削除する
+- confirmが呼ばれなかった場合は、ISSUE-141のcronが予約、所有prefix、Storage更新時刻、`Image`不存在をlock内で再確認し、original / thumbnail / previewの既知3 keyだけを削除する
+- 予約作成に失敗した場合はsigned URLを発行せず、追跡不能なobjectを新たに作らない
 
 ### 4. EXIF 削除はクライアント側とconfirm時のサーバー側で行う
 
@@ -166,6 +169,7 @@ orientation反映と再エンコードを行い、originalをmetadataなしの�
 ## 関連
 
 - ISSUE-008: 写真アップロード + Supabase Storage
+- ISSUE-141: 未confirm画像の期限後cleanup
 - ISSUE-009 (未着手): Memory API + 画像ダウンロード signed URL
 - ISSUE-016 (未着手): 退会フロー + Storage 物理削除
 - ADR-0004: Supabase をマネージド基盤に採用
