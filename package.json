@@ -37,6 +37,7 @@
     "qa:issue110:staging-public": "node scripts/qa/issue-110-staging-public-qa-strict-runtime.cjs",
     "qa:issue123:db-bootstrap": "node scripts/qa/issue-123-bootstrap-postgres.mjs",
     "qa:issue123:image-boundary-db": "node scripts/qa/issue-123-image-access-concurrency.mjs",
+    "qa:issue136:purge-db": "ISSUE_136_PURGE_QA=1 vitest run tests/integration/db/issue-136-account-physical-purge-provider.test.ts",
     "qa:issue138:consent-boundary-db": "node scripts/qa/issue-138-ai-consent-concurrency.mjs",
     "qa:issue139:generation-lifecycle-db": "vitest run tests/integration/db/issue-139-ai-generation-lifecycle-db.test.ts",
     "qa:issue141:storage-db": "ISSUE_141_STORAGE_QA=1 vitest run tests/integration/db/issue-141-unconfirmed-upload-cleanup-storage.test.ts",
