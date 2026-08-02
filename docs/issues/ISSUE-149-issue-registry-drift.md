@@ -2,7 +2,7 @@
 id: ISSUE-149
 title: Issue台帳とGitHub状態のdriftをCIで防ぐ
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-08-03
 github_issue: 319

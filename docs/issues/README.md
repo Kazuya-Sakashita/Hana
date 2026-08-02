@@ -13,8 +13,8 @@
 | --- | ---: |
 | `todo` | 8 |
 | `in_progress` | 0 |
-| `review` | 1 |
-| `done` | 148 |
+| `review` | 0 |
+| `done` | 149 |
 | `blocked` | 6 |
 
 ## Codex Ready Queue
@@ -38,9 +38,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 
 ## Review Queue
 
-| Issue | GitHub | status | priority | size | title | blocked_by |
-| --- | ---: | --- | --- | --- | --- | --- |
-| `ISSUE-149` | `#319` | `review` | P1 | M | Issue台帳とGitHub状態のdriftをCIで防ぐ | - |
+現在はありません。
 
 ## Blocked Or Needs Human Decision
 
@@ -206,7 +204,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-146` | `#312` | `done` | P1 | S | 復元写真のstateとrefを同期して即時保存競合を防ぐ | ISSUE-143 |
 | `ISSUE-147` | `#315` | `done` | P0 | S | AI生成の旧版互換triggerを削除する | ISSUE-139 |
 | `ISSUE-148` | `#318` | `done` | P0 | S | 未構成環境のmaintenance scheduleを明示的にHOLDする | - |
-| `ISSUE-149` | `#319` | `review` | P1 | M | Issue台帳とGitHub状態のdriftをCIで防ぐ | - |
+| `ISSUE-149` | `#319` | `done` | P1 | M | Issue台帳とGitHub状態のdriftをCIで防ぐ | - |
 | `ISSUE-150` | `#320` | `todo` | P1 | M | 認証方式と全Route応答契約をOpenAPIへ一致させる | - |
 | `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
