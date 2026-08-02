@@ -65,6 +65,7 @@ requires_human_review:
 - 2026-08-01: 退会受付直後にアクセスを停止し、30日未満では物理削除せず、30日経過後だけを対象にする保持方針を人間が承認
 - 2026-08-01: Storage全写真の削除と残存確認、AIログ匿名化、Auth削除、DB削除の順に進め、Storage失敗時は後続を停止する方針を人間が承認
 - 2026-08-01: 一時失敗をbackoff付きで再試行し、10回失敗で自動停止して、人間が安全条件を再確認した対象1件だけを再投入する運用方針を人間が承認
-- 2026-08-01: 専用staging環境が未作成であることを人間が確認。実ユーザー環境を使用せず、staging作成までsmokeとmergeをHOLD
-- 2026-08-03: 既承認のTest Architectureに従い、loopback providerと専用`/hana_ci`だけで合成smokeを代替。明示opt-in・接続先guardが実環境を拒否することを確認
-- productionでは`ACCOUNT_PHYSICAL_PURGE_APPLY`を未設定のままデプロイし、migrationとdry-run件数を別途承認するまで削除を開始しない
+- 2026-08-01: 専用staging環境が未作成であることを人間が確認し、当時は実ユーザー環境を使わずsmokeとmergeをHOLD
+- 2026-08-03: 既承認のTest Architectureに従い、loopback providerと専用`/hana_ci`だけで合成smokeを代替する方針を人間が承認。明示opt-in・接続先guardが実環境を拒否することを確認し、staging未作成によるHOLDを代替検証へ置き換え
+- 2026-08-03: migrationコードの最終reviewを人間が承認。実ユーザーDBへの適用はこの承認に含めない
+- productionでは`ACCOUNT_PHYSICAL_PURGE_APPLY`を未設定のままデプロイし、実DB migration実行とdry-run件数をそれぞれ別途承認するまで削除を開始しない
