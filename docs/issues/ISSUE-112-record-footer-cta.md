@@ -2,7 +2,7 @@
 id: ISSUE-112
 title: 記録フッターの主要ボタンを進行状態に同期する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 247

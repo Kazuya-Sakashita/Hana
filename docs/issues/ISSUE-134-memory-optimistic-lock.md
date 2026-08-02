@@ -2,9 +2,10 @@
 id: ISSUE-134
 title: 記録更新に楽観的排他を導入する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-30
+github_issue: 283
 ---
 
 ## 目的 (Why)

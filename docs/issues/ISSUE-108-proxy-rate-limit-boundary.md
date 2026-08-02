@@ -2,7 +2,7 @@
 id: ISSUE-108
 title: proxy client IP と rate limit 境界を強化する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-28
 github_issue: 239

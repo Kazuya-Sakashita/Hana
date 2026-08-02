@@ -2,7 +2,7 @@
 id: ISSUE-107
 title: staging migration status を redacted に確認する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-27
 github_issue: 238

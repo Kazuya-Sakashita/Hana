@@ -2,7 +2,7 @@
 id: ISSUE-136
 title: 退会30日後にDB・Storage・Authを物理削除する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-31
 github_issue: 295

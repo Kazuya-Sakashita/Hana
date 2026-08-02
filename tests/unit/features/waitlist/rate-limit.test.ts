@@ -225,14 +225,14 @@ describe('waitlist rate-limit buckets', () => {
 })
 
 describe('ISSUE-108 operational boundary', () => {
-  it('records the trusted-proxy assumptions and review state', () => {
+  it('records the trusted-proxy assumptions and merged state', () => {
     expect(issueSource).toContain('github_issue: 239')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('client IP のログ・永続化')
     expect(releaseDoc).toContain('Proxy Client IP / Rate Limit Boundary')
     expect(releaseDoc).toContain('除去または上書き')
     expect(releaseDoc).toContain('WAITLIST_TRUST_PROXY_HEADERS=true')
     expect(releaseDoc).toContain('最大 1024 bucket')
-    expect(issueIndexSource).toContain('`ISSUE-108` / `#239`: PR 作成 / review / merge 待ち。')
+    expect(issueIndexSource).toContain('| `ISSUE-108` | `#239` | `done` |')
   })
 })

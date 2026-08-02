@@ -2,7 +2,7 @@
 id: ISSUE-121
 title: ホームとアルバムの役割を整理し、最新ページの重複表示を減らす
 priority: P1
-status: review
+status: done
 size: S
 created_at: 2026-07-29
 github_issue: 264

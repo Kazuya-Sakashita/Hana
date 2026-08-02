@@ -2,7 +2,7 @@
 id: ISSUE-140
 title: 認証済みgolden pathを実ブラウザCIで検証する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-31
 github_issue: 299

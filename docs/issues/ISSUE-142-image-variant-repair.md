@@ -2,7 +2,7 @@
 id: ISSUE-142
 title: 欠損画像variantを自動修復する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-31
 github_issue: 301

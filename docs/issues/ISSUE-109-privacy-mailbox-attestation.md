@@ -2,7 +2,7 @@
 id: ISSUE-109
 title: privacy mailbox 運用 attestation を追加する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-28
 github_issue: 237

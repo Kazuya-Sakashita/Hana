@@ -2,7 +2,7 @@
 id: ISSUE-114
 title: 写真アップロードを段階別に再試行できるようにする
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 249

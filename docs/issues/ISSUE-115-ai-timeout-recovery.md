@@ -2,7 +2,7 @@
 id: ISSUE-115
 title: AI生成に待機上限と回復導線を追加する
 priority: P0
-status: review
+status: done
 size: S
 created_at: 2026-07-28
 github_issue: 250

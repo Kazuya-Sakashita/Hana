@@ -2,9 +2,10 @@
 id: ISSUE-131
 title: Route HandlerレスポンスをOpenAPIスキーマで検証するCIゲートを追加する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-30
+github_issue: 277
 ---
 
 ## 目的 (Why)

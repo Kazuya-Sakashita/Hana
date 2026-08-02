@@ -2,7 +2,7 @@
 id: ISSUE-141
 title: 未confirm画像を期限後に安全に清掃する
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-07-31
 github_issue: 300

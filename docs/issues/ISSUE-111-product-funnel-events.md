@@ -2,7 +2,7 @@
 id: ISSUE-111
 title: 個人情報を含めない記録ファネル計測を追加する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 246

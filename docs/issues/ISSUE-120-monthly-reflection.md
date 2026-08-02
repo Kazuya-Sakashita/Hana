@@ -2,7 +2,7 @@
 id: ISSUE-120
 title: 月別ふりかえりの最小体験を実装する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 255

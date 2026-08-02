@@ -2,7 +2,7 @@
 id: ISSUE-119
 title: 必須入力とエラー復帰をアクセシブルにする
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 254

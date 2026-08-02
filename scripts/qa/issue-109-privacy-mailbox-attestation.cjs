@@ -364,7 +364,7 @@ function runContract() {
     assertIncludes(issue103Script, checkId, 'issue-103')
   }
   assertIncludes(issue105Doc, 'ISSUE-109 mailbox attestation が `GO`', 'issue-105')
-  assertIncludes(issueIndex, '`ISSUE-109` / `#237`: PR 作成 / review / merge 待ち。', 'issue-index')
+  assertIncludes(issueIndex, '| `ISSUE-109` | `#237` | `done` |', 'issue-index')
 
   return {
     issue,

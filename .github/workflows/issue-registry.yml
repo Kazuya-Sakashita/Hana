@@ -1,0 +1,54 @@
+name: Issue registry drift
+
+on:
+  pull_request:
+    paths:
+      - 'docs/issues/**'
+      - 'scripts/issues/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/issue-registry.yml'
+  schedule:
+    - cron: '17 21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  local-registry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm issues:check
+
+  github-status:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Read status-only GitHub issue state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue list --state all --limit 1000 --json number,state > "$RUNNER_TEMP/issue-statuses.json"
+      - name: Compare local and GitHub state
+        run: pnpm issues:check-github -- --github-status-file "$RUNNER_TEMP/issue-statuses.json"

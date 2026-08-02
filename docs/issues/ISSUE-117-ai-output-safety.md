@@ -2,7 +2,7 @@
 id: ISSUE-117
 title: AI生成文の安全性検証と限定自動再生成を追加する
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 252

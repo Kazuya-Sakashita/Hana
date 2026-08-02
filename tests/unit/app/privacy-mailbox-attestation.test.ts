@@ -309,13 +309,13 @@ describe('ISSUE-109 privacy mailbox attestation', () => {
     expect(output).not.toContain(repoRoot)
   })
 
-  it('records the operational boundary and current review state', () => {
+  it('records the operational boundary and merged state', () => {
     expect(packageSource).toContain('qa:issue109:privacy-mailbox')
     expect(packageSource).toContain('pnpm qa:issue109:privacy-mailbox -- --mode=contract')
     expect(releaseDoc).toContain('Privacy Mailbox Attestation')
     expect(releaseDoc).toContain('担当者名、実メール、問い合わせ本文')
     expect(issueSource).toContain('github_issue: 237')
-    expect(issueSource).toContain('status: review')
-    expect(issueIndexSource).toContain('`ISSUE-109` / `#237`: PR 作成 / review / merge 待ち。')
+    expect(issueSource).toContain('status: done')
+    expect(issueIndexSource).toContain('| `ISSUE-109` | `#237` | `done` |')
   })
 })

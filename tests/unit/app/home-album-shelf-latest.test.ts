@@ -40,7 +40,7 @@ describe('ISSUE-121 Home and album role separation', () => {
 
   it('tracks the issue scope and privacy boundary', () => {
     expect(issueSource).toContain('github_issue: 264')
-    expect(issueSource).toContain('status: review')
+    expect(issueSource).toContain('status: done')
     expect(issueSource).toContain('ホームを「今、記録する場所」')
     expect(issueSource).toContain('API・OpenAPI・データ取得契約の変更')
     expect(issueSource).toContain('実写真、実タイトル、画像URL、`storage_key`、AI生成本文')

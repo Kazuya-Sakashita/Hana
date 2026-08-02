@@ -2,7 +2,7 @@
 id: ISSUE-118
 title: AI利用同意を設定画面から撤回できるようにする
 priority: P0
-status: review
+status: done
 size: M
 created_at: 2026-07-28
 github_issue: 253
