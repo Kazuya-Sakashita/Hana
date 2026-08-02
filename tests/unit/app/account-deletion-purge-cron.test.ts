@@ -13,11 +13,14 @@ vi.mock('@/features/account-deletion/server/physical-purge', () => ({
 import { GET } from '@/app/internal/account-deletion-purges/route'
 
 const originalSecret = process.env.CRON_SECRET
+const originalApply = process.env.ACCOUNT_PHYSICAL_PURGE_APPLY
 
 afterEach(() => {
   vi.clearAllMocks()
   if (originalSecret === undefined) delete process.env.CRON_SECRET
   else process.env.CRON_SECRET = originalSecret
+  if (originalApply === undefined) delete process.env.ACCOUNT_PHYSICAL_PURGE_APPLY
+  else process.env.ACCOUNT_PHYSICAL_PURGE_APPLY = originalApply
 })
 
 describe('GET /internal/account-deletion-purges', () => {
@@ -54,8 +57,25 @@ describe('GET /internal/account-deletion-purges', () => {
     expect(mocks.process).not.toHaveBeenCalled()
   })
 
-  it('runs the worker for the authorized cron request', async () => {
+  it('defaults an authorized scheduled request to read-only inspection', async () => {
     process.env.CRON_SECRET = 'synthetic-cron-secret'
+    delete process.env.ACCOUNT_PHYSICAL_PURGE_APPLY
+    mocks.inspect.mockResolvedValue({ eligibleAccounts: 1 })
+
+    const response = await GET(
+      new Request('http://localhost/internal/account-deletion-purges', {
+        headers: { Authorization: 'Bearer synthetic-cron-secret' },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.inspect).toHaveBeenCalledOnce()
+    expect(mocks.process).not.toHaveBeenCalled()
+  })
+
+  it('runs the worker only when server-side apply is confirmed', async () => {
+    process.env.CRON_SECRET = 'synthetic-cron-secret'
+    process.env.ACCOUNT_PHYSICAL_PURGE_APPLY = 'confirmed'
     mocks.process.mockResolvedValue({ claimed: 1, purged: 1, failed: 0 })
 
     const response = await GET(

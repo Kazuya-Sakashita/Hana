@@ -27,6 +27,7 @@
   --success-leaf: #5f6c57; /* soft sage — AA on warm surfaces */
   --success-leaf-deep: #4d5a47; /* sage pressed / primary nav action */
   --warning-amber: #8b5e32; /* warm amber, never red — AA on warm surfaces */
+  --warning-amber-deep: #6f4825; /* destructive hover with white text */
 
   --shadow-soft: 0 1px 2px rgba(58, 38, 30, 0.035), 0 8px 28px rgba(58, 38, 30, 0.045);
   --shadow-lift: 0 2px 4px rgba(58, 38, 30, 0.05), 0 16px 40px rgba(58, 38, 30, 0.075);
@@ -78,6 +79,7 @@
   --hairline: #3a322c;
   --success-leaf: #a7b29b;
   --warning-amber: #d5a66f;
+  --warning-amber-deep: #8b5e32;
 }
 
 @theme inline {
@@ -101,6 +103,7 @@
   --color-leaf: var(--success-leaf);
   --color-leaf-deep: var(--success-leaf-deep);
   --color-amber: var(--warning-amber);
+  --color-amber-deep: var(--warning-amber-deep);
 
   /* shadcn tokens */
   --color-background: var(--background);

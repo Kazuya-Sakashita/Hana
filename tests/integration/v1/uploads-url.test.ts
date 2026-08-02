@@ -56,6 +56,7 @@ const imageRow = {
   userId: USER_ID,
   storageKey: 'uploads/abc/202605/img.jpg',
   metadataSanitizedAt: new Date('2026-07-31T00:00:00Z'),
+  originalVariantStatus: 'ready',
 }
 
 function authed() {
@@ -129,7 +130,13 @@ describe('GET /v1/uploads/[imageId]/url', () => {
         deletedAt: null,
         OR: [{ memoryId: null }, { memory: { is: { userId: USER_ID, deletedAt: null } } }],
       },
-      select: { id: true, userId: true, storageKey: true, metadataSanitizedAt: true },
+      select: {
+        id: true,
+        userId: true,
+        storageKey: true,
+        metadataSanitizedAt: true,
+        originalVariantStatus: true,
+      },
     })
     expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
     expect(mocks.createSignedUrl).not.toHaveBeenCalled()
@@ -176,7 +183,13 @@ describe('GET /v1/uploads/[imageId]/url', () => {
         memoryId: null,
         metadataSanitizedAt: { not: null },
       },
-      select: { id: true, userId: true, storageKey: true, metadataSanitizedAt: true },
+      select: {
+        id: true,
+        userId: true,
+        storageKey: true,
+        metadataSanitizedAt: true,
+        originalVariantStatus: true,
+      },
     })
   })
 
@@ -240,6 +253,54 @@ describe('GET /v1/uploads/[imageId]/url', () => {
     expect(res.status).toBe(200)
     expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
   })
+
+  it('does not fall back to an unsanitized original when a variant is missing', async () => {
+    authed()
+    mocks.imageFindFirst.mockResolvedValue({ ...imageRow, metadataSanitizedAt: null })
+    mocks.createSignedUrl.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'variant missing' },
+    })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await call(IMG_ID, 'preview')
+
+    expect(response.status).toBe(500)
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
+    spy.mockRestore()
+  })
+
+  it.each(['missing', 'invalid'])(
+    'does not fall back to an original whose repair status is %s',
+    async (originalVariantStatus) => {
+      authed()
+      mocks.imageFindFirst.mockResolvedValue({ ...imageRow, originalVariantStatus })
+      mocks.createSignedUrl.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'variant missing' },
+      })
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const response = await call(IMG_ID, 'preview')
+
+      expect(response.status).toBe(500)
+      expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1)
+      spy.mockRestore()
+    },
+  )
+
+  it.each(['missing', 'invalid'])(
+    'does not sign an original whose repair status is %s',
+    async (originalVariantStatus) => {
+      authed()
+      mocks.imageFindFirst.mockResolvedValue({ ...imageRow, originalVariantStatus })
+
+      const response = await call(IMG_ID, 'original')
+
+      expect(response.status).toBe(404)
+      expect(mocks.createSignedUrl).not.toHaveBeenCalled()
+    },
+  )
 
   it('keeps the image lock transaction open until signing finishes', async () => {
     authed()

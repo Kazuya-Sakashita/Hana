@@ -16,8 +16,12 @@ import {
 } from '@/features/ai/server/generate'
 import { checkMonthlyQuota, reserveMonthlyAiQuota } from '@/features/ai/server/quota'
 import { resizeForClaude } from '@/features/ai/server/resize'
-import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { ApiProblemError } from '@/lib/api/error'
+import {
+  claimAiGeneration,
+  failAiGeneration,
+  finalizeAiGeneration,
+} from '@/features/ai/server/generation-lifecycle'
 
 export const dynamic = 'force-dynamic'
 // Claude API は haiku でも 5〜15 秒かかることがある
@@ -27,7 +31,7 @@ const BUCKET = 'images'
 const AI_TOTAL_EXTERNAL_WORK_DEADLINE_MS = 12_000
 const AI_IMAGE_DOWNLOAD_TIMEOUT_MS = 8_000
 const AI_IMAGE_PREPARATION_CONCURRENCY = 2
-const IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS = 30_000
+const AI_STATE_TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 5_000 } as const
 
 interface ImageForAiPreparation {
   storageKey: string
@@ -41,6 +45,14 @@ function imageNotFoundProblem() {
       message: '画像の一部が見つかりません',
     },
   ])
+}
+
+function generationBoundaryProblem(
+  reason: 'ai_consent_required' | 'image_not_found' | 'child_not_found',
+) {
+  if (reason === 'ai_consent_required') return problems.aiConsentRequired()
+  if (reason === 'image_not_found') return imageNotFoundProblem()
+  return problems.notFound('指定した子どもが見つかりません')
 }
 
 async function prepareImageInputForClaude(
@@ -111,9 +123,13 @@ export async function POST(request: Request) {
   )
   const externalWorkDeadlineSignal = externalWorkDeadlineController.signal
   let generationLogId: string | undefined
+  let generationClaimToken: string | undefined
+  let generationUserId: string | undefined
+  let generationWasClaimed = false
 
   try {
     const user = await requireUser()
+    generationUserId = user.id
 
     // 1. AI 同意チェック
     if (!user.aiConsentAt) {
@@ -194,73 +210,63 @@ export async function POST(request: Request) {
       promptVersion: PROMPT_VERSION,
     })
     generationLogId = generationLog.id
+    generationClaimToken = generationLog.claimToken
 
-    let generationAttempt:
-      | { generationLogId: string; result: Awaited<ReturnType<typeof generateAi>> }
-      | { generationLogId: string; error: unknown }
-    generationAttempt = await prisma.$transaction(
-      async (transaction) => {
-        await lockImageAccess(transaction, input.imageIds)
-        const latestImages = await transaction.image.findMany({
-          where: {
-            id: { in: input.imageIds },
-            userId: user.id,
-            deletedAt: null,
-            memoryId: null,
-            metadataSanitizedAt: { not: null },
-          },
-          select: { id: true },
-        })
-        if (latestImages.length !== input.imageIds.length) {
-          throw imageNotFoundProblem()
-        }
-
-        try {
-          externalWorkDeadlineSignal.throwIfAborted()
-          const result = await generateAi(
-            {
-              childName: child.name,
-              ageMonths: age.months,
-              ageDays: age.days,
-              recordedAt: recordedAtIso,
-              weather: input.weather,
-              parentNote: input.parentNote,
-            },
-            imageInputs,
-            { signal: externalWorkDeadlineSignal },
-          )
-          return { generationLogId: generationLog.id, result }
-        } catch (error) {
-          return { generationLogId: generationLog.id, error }
-        }
-      },
-      {
-        maxWait: 5_000,
-        timeout: IMAGE_ACCESS_TRANSACTION_TIMEOUT_MS,
-      },
+    const boundaryInput = {
+      generationId: generationLog.id,
+      userId: user.id,
+      childId: child.id,
+      imageIds: input.imageIds,
+      claimToken: generationLog.claimToken,
+      consentVersion: latestConsent.aiConsentAt,
+    }
+    const claim = await prisma.$transaction(
+      (transaction) => claimAiGeneration(transaction, boundaryInput),
+      AI_STATE_TRANSACTION_OPTIONS,
     )
-    if ('error' in generationAttempt) throw generationAttempt.error
-    const result = generationAttempt.result
+    if (claim.outcome === 'rejected') throw generationBoundaryProblem(claim.reason)
+    if (claim.outcome === 'stale') throw new Error('ai generation reservation is stale')
+    generationWasClaimed = true
 
-    // 9. 成功ログ。生成本文自体は保管しない (PII)
-    const log = await prisma.aiGeneration.update({
-      where: { id: generationLogId },
-      data: {
-        succeeded: true,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        durationMs: Date.now() - startTime,
-        attemptCount: result.attempts,
-        policyCategoryIds: result.policyRejections,
-        policyOutcome:
-          result.policyRejections.length > 0 ? 'accepted_after_retry' : 'accepted_first_attempt',
-        errorReason: null,
+    externalWorkDeadlineSignal.throwIfAborted()
+    const result = await generateAi(
+      {
+        childName: child.name,
+        ageMonths: age.months,
+        ageDays: age.days,
+        recordedAt: recordedAtIso,
+        weather: input.weather,
+        parentNote: input.parentNote,
       },
-      select: { id: true },
-    })
+      imageInputs,
+      { signal: externalWorkDeadlineSignal },
+    )
+
+    const finalized = await prisma.$transaction(
+      (transaction) =>
+        finalizeAiGeneration(transaction, {
+          ...boundaryInput,
+          success: {
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            durationMs: Date.now() - startTime,
+            attemptCount: result.attempts,
+            policyCategoryIds: result.policyRejections,
+            policyOutcome:
+              result.policyRejections.length > 0
+                ? 'accepted_after_retry'
+                : 'accepted_first_attempt',
+          },
+        }),
+      AI_STATE_TRANSACTION_OPTIONS,
+    )
+    if (finalized.outcome === 'discarded') {
+      throw generationBoundaryProblem(finalized.reason)
+    }
+    if (finalized.outcome === 'stale') throw new Error('ai generation finalization is stale')
 
     return NextResponse.json({
-      generation_id: log.id,
+      generation_id: generationLog.id,
       title: result.title,
       body: result.body,
       tags: result.tags,
@@ -273,13 +279,15 @@ export async function POST(request: Request) {
 
     // 失敗ログ (quota チェック・所有権チェック等は除く)
     const isProblem = e instanceof ApiProblemError
-    const shouldLogFailure = !!generationLogId
-    if (shouldLogFailure && generationLogId) {
+    const shouldLogFailure = !!generationLogId && !!generationClaimToken && !!generationUserId
+    if (shouldLogFailure && generationLogId && generationClaimToken && generationUserId) {
       try {
-        await prisma.aiGeneration.update({
-          where: { id: generationLogId },
-          data: {
-            succeeded: false,
+        await failAiGeneration(prisma, {
+          generationId: generationLogId,
+          userId: generationUserId,
+          claimToken: generationClaimToken,
+          wasClaimed: generationWasClaimed,
+          failure: {
             inputTokens: policyFailure?.inputTokens,
             outputTokens: policyFailure?.outputTokens,
             durationMs: Date.now() - startTime,

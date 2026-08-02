@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   imageFindUnique: vi.fn(),
   imageCreate: vi.fn(),
   imageUpdate: vi.fn(),
+  uploadReservationCreate: vi.fn(),
+  uploadReservationFindUnique: vi.fn(),
+  uploadReservationDeleteMany: vi.fn(),
+  queryRaw: vi.fn(),
   createAdminClient: vi.fn(),
   createSignedUploadUrl: vi.fn(),
   storageInfo: vi.fn(),
@@ -64,14 +68,29 @@ vi.mock('@/features/uploads/server/verify-uploaded-image', async (importOriginal
 }))
 
 vi.mock('@/server/db/prisma', () => ({
-  prisma: {
-    profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
-    image: {
-      findUnique: mocks.imageFindUnique,
-      create: mocks.imageCreate,
-      update: mocks.imageUpdate,
-    },
-  },
+  prisma: (() => {
+    const transaction = {
+      image: {
+        findUnique: mocks.imageFindUnique,
+        create: mocks.imageCreate,
+        update: mocks.imageUpdate,
+      },
+      uploadReservation: {
+        findUnique: mocks.uploadReservationFindUnique,
+        deleteMany: mocks.uploadReservationDeleteMany,
+      },
+      $queryRaw: mocks.queryRaw,
+    }
+    return {
+      ...transaction,
+      profile: { findUnique: mocks.profileFindUnique, create: mocks.profileCreate },
+      uploadReservation: {
+        ...transaction.uploadReservation,
+        create: mocks.uploadReservationCreate,
+      },
+      $transaction: (callback: (tx: typeof transaction) => unknown) => callback(transaction),
+    }
+  })(),
 }))
 
 import { POST as PRESIGNED_POST } from '@/app/v1/uploads/presigned-url/route'
@@ -93,6 +112,10 @@ function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
   mocks.profileFindUnique.mockResolvedValue(profileRow)
   mocks.imageFindUnique.mockResolvedValue(null)
+  mocks.uploadReservationCreate.mockResolvedValue({})
+  mocks.uploadReservationFindUnique.mockResolvedValue(null)
+  mocks.uploadReservationDeleteMany.mockResolvedValue({ count: 1 })
+  mocks.queryRaw.mockResolvedValue([])
 }
 
 function unauthed() {
@@ -485,6 +508,10 @@ describe('POST /v1/uploads/confirm', () => {
         height: 600,
         fileSize: verifiedBuffer.length,
         metadataSanitizedAt: expect.any(Date),
+        originalVariantStatus: 'ready',
+        thumbnailVariantStatus: 'ready',
+        previewVariantStatus: 'ready',
+        variantRepairStatus: 'complete',
       },
     })
   })
@@ -585,7 +612,7 @@ describe('POST /v1/uploads/confirm', () => {
     expect(mocks.thumbnailVariant.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.previewVariant.mock.invocationCallOrder[0] as number,
     )
-    expect(mocks.createAdminClient).toHaveBeenCalledTimes(2)
+    expect(mocks.createAdminClient).toHaveBeenCalledTimes(3)
     expect(mocks.storageUpdate.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.thumbnailVariant.mock.invocationCallOrder[0] as number,
     )

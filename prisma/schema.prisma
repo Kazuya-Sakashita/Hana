@@ -42,11 +42,43 @@ model Profile {
 
   children               Child[]
   images                 Image[]
+  uploadReservations     UploadReservation[]
   memories               Memory[]
   aiGenerations          AiGeneration[]
   accountDeletionIntents AccountDeletionIntent[]
 
   @@map("profiles")
+}
+
+model UploadReservation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  storageKey         String    @unique @map("storage_key")
+  candidateKind      String    @default("original") @map("candidate_kind") @db.VarChar(20)
+  issuedAt           DateTime  @map("issued_at") @db.Timestamptz
+  signedUrlExpiresAt DateTime  @map("signed_url_expires_at") @db.Timestamptz
+  cleanupAfter       DateTime  @map("cleanup_after") @db.Timestamptz
+  status             String    @default("pending") @db.VarChar(20)
+  attempts           Int       @default(0)
+  nextAttemptAt      DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz
+  claimToken         String?   @map("claim_token") @db.Uuid
+  claimedAt          DateTime? @map("claimed_at") @db.Timestamptz
+  failureReason      String?   @map("failure_reason") @db.VarChar(40)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, cleanupAfter, nextAttemptAt])
+  @@map("upload_reservations")
+}
+
+model MaintenanceCursor {
+  id          String   @id @db.VarChar(50)
+  cursorValue String?  @map("cursor_value") @db.Text
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("maintenance_cursors")
 }
 
 model AccountDeletionIntent {
@@ -124,25 +156,35 @@ model Child {
 //   - storage_key は推測不可能な uploads/{userIdHash}/{yyyymm}/{uuid}.{ext} 形式
 //   - 物理ファイルの削除は退会フロー (ISSUE-016) で扱う
 model Image {
-  id                  String    @id @default(uuid()) @db.Uuid
-  userId              String    @map("user_id") @db.Uuid
-  memoryId            String?   @map("memory_id") @db.Uuid
-  memoryPosition      Int?      @map("memory_position")
-  storageKey          String    @unique @map("storage_key")
-  contentType         String    @map("content_type")
-  width               Int
-  height              Int
-  fileSize            Int       @map("file_size")
-  metadataSanitizedAt DateTime? @map("metadata_sanitized_at") @db.Timestamptz
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz
+  id                         String    @id @default(uuid()) @db.Uuid
+  userId                     String    @map("user_id") @db.Uuid
+  memoryId                   String?   @map("memory_id") @db.Uuid
+  memoryPosition             Int?      @map("memory_position")
+  storageKey                 String    @unique @map("storage_key")
+  contentType                String    @map("content_type")
+  width                      Int
+  height                     Int
+  fileSize                   Int       @map("file_size")
+  metadataSanitizedAt        DateTime? @map("metadata_sanitized_at") @db.Timestamptz
+  originalVariantStatus      String    @default("unknown") @map("original_variant_status") @db.VarChar(20)
+  thumbnailVariantStatus     String    @default("unknown") @map("thumbnail_variant_status") @db.VarChar(20)
+  previewVariantStatus       String    @default("unknown") @map("preview_variant_status") @db.VarChar(20)
+  variantRepairStatus        String    @default("pending") @map("variant_repair_status") @db.VarChar(20)
+  variantRepairAttempts      Int       @default(0) @map("variant_repair_attempts")
+  variantRepairNextAt        DateTime  @default(now()) @map("variant_repair_next_at") @db.Timestamptz
+  variantRepairClaimToken    String?   @map("variant_repair_claim_token") @db.Uuid
+  variantRepairClaimedAt     DateTime? @map("variant_repair_claimed_at") @db.Timestamptz
+  variantRepairFailureReason String?   @map("variant_repair_failure_reason") @db.VarChar(40)
+  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                  DateTime? @map("deleted_at") @db.Timestamptz
 
   user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
   memory Memory? @relation(fields: [memoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([memoryId])
+  @@index([variantRepairStatus, variantRepairNextAt])
   @@map("images")
 }
 
@@ -187,6 +229,12 @@ model AiGeneration {
   childId           String?   @map("child_id") @db.Uuid
   model             String    @db.VarChar(100)
   promptVersion     String    @map("prompt_version") @db.VarChar(20)
+  // reserved -> processing -> succeeded | failed | discarded。外部AI通信中の復旧とfencingに使う。
+  status            String    @default("succeeded") @db.VarChar(20)
+  claimToken        String?   @map("claim_token") @db.Uuid
+  leaseExpiresAt    DateTime? @map("lease_expires_at") @db.Timestamptz
+  quotaCountedAt    DateTime? @map("quota_counted_at") @db.Timestamptz
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz
   // 成否・コスト等の集計情報のみ。生成本文は保管しない (PII)。
   succeeded         Boolean   @default(true)
   inputTokens       Int?      @map("input_tokens")
@@ -205,6 +253,8 @@ model AiGeneration {
   user Profile? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([userId, quotaCountedAt])
+  @@index([status, leaseExpiresAt])
   @@map("ai_generations")
 }
 

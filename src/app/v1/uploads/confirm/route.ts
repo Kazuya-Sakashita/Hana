@@ -11,11 +11,6 @@ import {
 } from '@/features/uploads/server/storage-key'
 import { parseUploadConfirmRequest, readJsonBody } from '@/features/uploads/server/parse'
 import { toImageResponse } from '@/features/uploads/view-models/image'
-import { deriveVariantKey } from '@/features/uploads/server/signed-url'
-import {
-  generatePreviewVariant,
-  generateThumbnailVariant,
-} from '@/features/uploads/server/variants'
 import {
   assertUploadedImageSize,
   readUploadedImageStream,
@@ -25,14 +20,32 @@ import {
 } from '@/features/uploads/server/verify-uploaded-image'
 import { isApiProblemError } from '@/lib/api/error'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
-import { logStorageError } from '@/features/uploads/server/storage-error-log'
+import {
+  generateMissingVariants,
+  type VariantGenerationResult,
+} from '@/features/uploads/server/variant-generation'
+import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const BUCKET = 'images'
 const STORAGE_TIMEOUT_MS = 10_000
-const activeUploadPreparations = new Map<string, Promise<VerifiedUploadedImage>>()
+const activeUploadPreparations = new Map<string, Promise<PreparedUploadedImage>>()
+
+interface PreparedUploadedImage extends VerifiedUploadedImage {
+  variants: VariantGenerationResult
+}
+
+function confirmedVariantState(variants: VariantGenerationResult) {
+  return {
+    originalVariantStatus: 'ready',
+    thumbnailVariantStatus: variants.thumbnail,
+    previewVariantStatus: variants.preview,
+    variantRepairStatus:
+      variants.thumbnail === 'ready' && variants.preview === 'ready' ? 'complete' : 'pending',
+  } as const
+}
 
 function isStorageNotFound(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false
@@ -49,44 +62,10 @@ function throwStorageProblem(error: unknown): never {
   throw problems.storageUnavailable()
 }
 
-/**
- * ISSUE-031: 検証済みoriginalからthumbnail/previewを生成 → Storage に upload。
- * 失敗時はサーバログに残して **無視** (Image row は作成して 200 を返す。 ユーザーの
- * 「アップロード成功」 体験を壊さない。 variant が無いと一覧で 404 → ❀ placeholder)。
- */
-async function generateAndUploadVariants(storageKey: string, original: Buffer): Promise<void> {
-  const supabase = createSupabaseAdminClient({
-    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
-  })
-  const thumb = await generateThumbnailVariant(original)
-  const preview = await generatePreviewVariant(original)
-
-  const thumbKey = deriveVariantKey(storageKey, 'thumbnail')
-  const previewKey = deriveVariantKey(storageKey, 'preview')
-
-  const [thumbRes, previewRes] = await Promise.all([
-    supabase.storage.from(BUCKET).upload(thumbKey, thumb.buffer, {
-      contentType: thumb.contentType,
-      upsert: true,
-    }),
-    supabase.storage.from(BUCKET).upload(previewKey, preview.buffer, {
-      contentType: preview.contentType,
-      upsert: true,
-    }),
-  ])
-
-  if (thumbRes.error) {
-    logStorageError('variant_thumbnail_upload_failed')
-  }
-  if (previewRes.error) {
-    logStorageError('variant_preview_upload_failed')
-  }
-}
-
 async function prepareUploadedImage(
   storageKey: string,
   expectedContentType: string,
-): Promise<VerifiedUploadedImage> {
+): Promise<PreparedUploadedImage> {
   const storageSignal = AbortSignal.timeout(STORAGE_TIMEOUT_MS)
   const supabase = createSupabaseAdminClient({ signal: storageSignal })
   const storage = supabase.storage.from(BUCKET)
@@ -138,19 +117,16 @@ async function prepareUploadedImage(
   }
   if (replaceResult.error) throwStorageProblem(replaceResult.error)
 
-  try {
-    await generateAndUploadVariants(storageKey, sanitized.buffer)
-  } catch {
-    logStorageError('variant_generation_failed')
-  }
-
-  return sanitized
+  const variants = await generateMissingVariants(storageKey, sanitized.buffer, undefined, {
+    signal: storageSignal,
+  })
+  return { ...sanitized, variants }
 }
 
 async function prepareUploadedImageOnce(
   storageKey: string,
   expectedContentType: string,
-): Promise<VerifiedUploadedImage> {
+): Promise<PreparedUploadedImage> {
   const active = activeUploadPreparations.get(storageKey)
   if (active) return active
 
@@ -198,60 +174,84 @@ export async function POST(request: Request) {
       ])
     }
 
-    const existingImage = await prisma.image.findUnique({
-      where: { storageKey: input.storageKey },
-    })
-    if (existingImage) {
-      if (existingImage.userId !== user.id || existingImage.deletedAt) {
-        throw problems.notFound('画像が見つかりません')
-      }
-      if (existingImage.metadataSanitizedAt === null) {
-        const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
-        const repaired = await prisma.image.update({
-          where: { id: existingImage.id },
-          data: {
-            contentType: verified.contentType,
-            width: verified.width,
-            height: verified.height,
-            fileSize: verified.fileSize,
-            metadataSanitizedAt: new Date(),
-          },
-        })
-        return NextResponse.json(toImageResponse(repaired), { status: 200 })
-      }
-      return NextResponse.json(toImageResponse(existingImage), { status: 200 })
-    }
+    return await prisma.$transaction(
+      async (transaction) => {
+        await acquireUploadStorageLock(transaction, input.storageKey)
 
-    const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
-
-    try {
-      const image = await prisma.image.create({
-        data: {
-          userId: user.id,
-          storageKey: input.storageKey,
-          contentType: verified.contentType,
-          width: verified.width,
-          height: verified.height,
-          fileSize: verified.fileSize,
-          metadataSanitizedAt: new Date(),
-        },
-      })
-      return NextResponse.json(toImageResponse(image), { status: 201 })
-    } catch (dbErr) {
-      if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === 'P2002') {
-        const concurrentlyCreated = await prisma.image.findUnique({
+        const reservation = await transaction.uploadReservation.findUnique({
           where: { storageKey: input.storageKey },
         })
-        if (
-          concurrentlyCreated &&
-          concurrentlyCreated.userId === user.id &&
-          !concurrentlyCreated.deletedAt
-        ) {
-          return NextResponse.json(toImageResponse(concurrentlyCreated), { status: 200 })
+        if (reservation && reservation.userId !== user.id) {
+          throw problems.notFound('画像が見つかりません')
         }
-      }
-      throw dbErr
-    }
+
+        const existingImage = await transaction.image.findUnique({
+          where: { storageKey: input.storageKey },
+        })
+        if (existingImage) {
+          if (existingImage.userId !== user.id || existingImage.deletedAt) {
+            throw problems.notFound('画像が見つかりません')
+          }
+          if (existingImage.metadataSanitizedAt === null) {
+            const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
+            const repaired = await transaction.image.update({
+              where: { id: existingImage.id },
+              data: {
+                contentType: verified.contentType,
+                width: verified.width,
+                height: verified.height,
+                fileSize: verified.fileSize,
+                metadataSanitizedAt: new Date(),
+                ...confirmedVariantState(verified.variants),
+              },
+            })
+            await transaction.uploadReservation.deleteMany({
+              where: { storageKey: input.storageKey },
+            })
+            return NextResponse.json(toImageResponse(repaired), { status: 200 })
+          }
+          await transaction.uploadReservation.deleteMany({
+            where: { storageKey: input.storageKey },
+          })
+          return NextResponse.json(toImageResponse(existingImage), { status: 200 })
+        }
+
+        const verified = await prepareUploadedImageOnce(input.storageKey, contentType)
+        let image
+        try {
+          image = await transaction.image.create({
+            data: {
+              userId: user.id,
+              storageKey: input.storageKey,
+              contentType: verified.contentType,
+              width: verified.width,
+              height: verified.height,
+              fileSize: verified.fileSize,
+              metadataSanitizedAt: new Date(),
+              ...confirmedVariantState(verified.variants),
+            },
+          })
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            const concurrent = await transaction.image.findUnique({
+              where: { storageKey: input.storageKey },
+            })
+            if (concurrent && concurrent.userId === user.id && !concurrent.deletedAt) {
+              await transaction.uploadReservation.deleteMany({
+                where: { storageKey: input.storageKey },
+              })
+              return NextResponse.json(toImageResponse(concurrent), { status: 200 })
+            }
+          }
+          throw error
+        }
+        await transaction.uploadReservation.deleteMany({
+          where: { storageKey: input.storageKey },
+        })
+        return NextResponse.json(toImageResponse(image), { status: 201 })
+      },
+      { maxWait: 5_000, timeout: 50_000 },
+    )
   } catch (e) {
     return toProblemResponse(e)
   }

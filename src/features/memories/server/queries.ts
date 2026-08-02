@@ -64,7 +64,14 @@ export async function fetchMemoriesWithCovers(
     include: {
       images: {
         where: { deletedAt: null },
-        select: { id: true, createdAt: true, memoryPosition: true, storageKey: true },
+        select: {
+          id: true,
+          createdAt: true,
+          memoryPosition: true,
+          storageKey: true,
+          metadataSanitizedAt: true,
+          originalVariantStatus: true,
+        },
       },
     },
   })
@@ -77,7 +84,10 @@ export async function fetchMemoriesWithCovers(
       const sortedImages = sortMemoryImages(m.images)
       const first = sortedImages[0]
       const coverThumbnailUrl = first
-        ? await generateSignedImageUrl(first.storageKey, 'thumbnail')
+        ? await generateSignedImageUrl(first.storageKey, 'thumbnail', {
+            allowOriginalFallback:
+              first.metadataSanitizedAt !== null && first.originalVariantStatus === 'ready',
+          })
         : null
       return { ...m, coverThumbnailUrl }
     }),
@@ -167,7 +177,14 @@ export async function fetchMemoryWithPreviews(opts: {
     include: {
       images: {
         where: { deletedAt: null },
-        select: { id: true, createdAt: true, memoryPosition: true, storageKey: true },
+        select: {
+          id: true,
+          createdAt: true,
+          memoryPosition: true,
+          storageKey: true,
+          metadataSanitizedAt: true,
+          originalVariantStatus: true,
+        },
       },
     },
   })
@@ -177,7 +194,10 @@ export async function fetchMemoryWithPreviews(opts: {
   const sortedImages = sortMemoryImages(memory.images)
   const imagesWithPreviews = await Promise.all(
     sortedImages.map(async (img): Promise<MemoryDetailImage> => {
-      const previewUrl = await generateSignedImageUrl(img.storageKey, 'preview')
+      const previewUrl = await generateSignedImageUrl(img.storageKey, 'preview', {
+        allowOriginalFallback:
+          img.metadataSanitizedAt !== null && img.originalVariantStatus === 'ready',
+      })
       return { id: img.id, previewUrl }
     }),
   )

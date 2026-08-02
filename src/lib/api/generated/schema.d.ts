@@ -72,7 +72,11 @@ export interface paths {
          *     撤回後の `POST /ai/generate` は 403 `ai_consent_required` を返す。
          *     AIを使わない記録の作成・編集・閲覧と既存記録には影響しない。
          *     本操作は過去のAI送信や既存記録を個別削除する手続きではない。
-         *     撤回前に開始したAI生成は完了する場合がある。
+         *     撤回とAI生成のprocessing claimは同じ直列化境界を使う。撤回が先に確定した場合、
+         *     生成はclaim時の再検証で停止する。processing claim後はAI外部通信中も撤回を確定できる。
+         *     既にclaimした外部request自体は完了する可能性があるが、完了時に同意世代を再確認し、
+         *     撤回後の生成結果は保存も返却もせず破棄する。
+         *     待機が40秒を超えた場合は 409 `ai_consent_update_busy` を返し、再試行できる。
          */
         delete: operations["revokeAiConsent"];
         options?: never;
@@ -225,8 +229,9 @@ export interface paths {
         /**
          * 写真アップロード用 signed URL を発行
          * @description Supabase Storage に画像を直接 PUT するための **一回限りの signed URL** を発行する。
-         *     このエンドポイントは DB に書き込みを行わない。アップロード完了後に
-         *     `POST /uploads/confirm` を呼ぶことで Image レコードが作成される。
+         *     signed URL の発行前に、サーバはアップロード予約を DB に記録する。アップロード完了後に
+         *     `POST /uploads/confirm` を呼ぶことで Image レコードを作成し、予約を完了する。
+         *     保持期間を過ぎても確定されない予約は、別の cleanup job の対象になる。
          *
          *     PUT の成否が不明な場合や PUT が失敗した場合は、このエンドポイントで新しい
          *     signed URL と storage_key を発行し、同じ再エンコード済み画像を新しい URL へ送る。
@@ -270,6 +275,8 @@ export interface paths {
          *
          *     同じユーザーが同じ `storage_key` を再送した場合は、既存の Image を返す冪等操作とする。
          *     初回作成時は 201、既に確定済みの場合は 200 を返す。
+         *     confirm と未確定アップロード cleanup は storage_key 単位の同じロックで直列化する。
+         *     期限切れ予約を cleanup が先に確保した場合、削除済みobjectを指す Image 行は作成しない。
          */
         post: operations["confirmUpload"];
         delete?: never;
@@ -519,6 +526,12 @@ export interface paths {
          *
          *     AI vendor 呼び出しに到達した生成リクエストは、成功・失敗を問わず
          *     **月間 20 回まで** (Free tier)。超過時は 429 `ai_quota_exceeded`。
+         *     quotaのUTC月は外部送信直前のprocessing claim時刻で決定する。
+         *
+         *     生成は短いreservation / processing claim transaction、transaction外のAI外部通信、
+         *     短いfinalize transactionの状態機械で処理する。外部通信中はDB transactionを保持しない。
+         *     processing claim後に同意撤回または画像削除が確定した場合、外部request自体は完了する
+         *     可能性があるが、完了時の再検証で生成結果を保存も返却もせず破棄する。
          *
          *     生成結果が出力ポリシーに違反した場合は内部で1回だけ再生成する。
          *     再生成時は、拒否本文やカテゴリを含めず、安全基準を再確認する固定指示だけを追加する。
@@ -1468,6 +1481,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -1499,6 +1513,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };

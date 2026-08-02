@@ -5,6 +5,7 @@
 - `purge_after`到達前のアカウントは処理しない。
 - 削除順序はStorage（original / thumbnail / preview / 所有prefix内orphan）→ Auth → DB固定。
 - Storage削除が1件でも失敗した実行ではAuthとDBを削除しない。
+- `ACCOUNT_PHYSICAL_PURGE_APPLY=confirmed`がないcron requestはread-only inspectionへ固定する。
 - 返却・ログは件数と固定状態だけにし、user id、storage key、画像URL、氏名、本文を出さない。
 - `failedAccounts > 0`またはworkerの`failed > 0`は運用アラート対象とする。
 
@@ -31,6 +32,25 @@ curl --fail --silent \
 5. original、thumbnail、previewがStorageに存在しないことを管理画面で確認する。
 6. Auth user、Profile、子ども、記録、画像、退会requestが存在しないことを確認する。
 7. 同じworkerを再実行し、エラーにならず`purged: 0`となることを確認する。
+
+## 検証専用環境がない場合
+
+実ユーザーを含む環境ではsmokeを実施しない。代わりに`pnpm qa:issue136:purge-db`を使い、
+loopbackの合成Storage/Auth HTTP fixtureと専用PostgreSQL `/hana_ci`だけで実経路を確認する。
+このコマンドは`ISSUE_136_PURGE_QA=1`の明示opt-inに加え、`DATABASE_URL`、`DIRECT_URL`、
+`NEXT_PUBLIC_SUPABASE_URL`がすべてloopbackで、両DB URLが同一の`/hana_ci`を指す場合だけ動く。
+
+確認する結果は、apply未設定で変更なし、Storage全object削除、AIログ匿名化、Auth削除、
+DB削除、再実行0件である。生成した固定ID・合成文字列・4byteの合成objectだけを使い、
+実ユーザー、実写真、実Storage、実Authには接続しない。この代替確認はproduction applyの許可ではない。
+
+## production rollout
+
+1. `ACCOUNT_PHYSICAL_PURGE_APPLY`を未設定のままmigrationとアプリをデプロイする。
+2. cron requestがdry-run件数だけを返し、Storage・Auth・DBを変更しないことを確認する。
+3. `eligibleAccounts`、`storageListingFailures`、`failedAccounts`の件数だけをPrivacy / Security / Operationsが確認する。
+4. 別の人間承認後に限り`ACCOUNT_PHYSICAL_PURGE_APPLY=confirmed`を設定する。
+5. 初回apply後に件数だけを再確認し、異常時は直ちにapply設定を解除する。
 
 ## 障害対応
 
