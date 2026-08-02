@@ -48,11 +48,12 @@ requires_human_review:
 
 ## 自動検証・専門レビュー
 
-- `pnpm pr:gate`: PASS（155 files / 1211 tests、12 skipped、lint、typecheck、buildを含む）
+- `pnpm pr:gate`: PASS（155 files / 1214 tests、12 skipped、lint、typecheck、buildを含む）
 - fresh local `/hana_ci` migration deploy: PASS（18 migrations）
 - `pnpm qa:issue136:purge-db`: PASS（loopback合成Storage/Auth + 専用PostgreSQL）
   - apply未設定のcron requestがread-only dry-runになる
-  - Storageのoriginal、thumbnail、preview、orphanを先に削除する
+  - Storageのoriginal、thumbnail、preview、orphan、未知・旧形式objectを先に削除する
+  - 30日未満で`purge_after`だけが過去の別ユーザーは選択せず、DB・Auth・Storage・退会requestを変更しない
   - AIログ匿名化後だけAuth削除を許可し、最後にProfile関連DBと退会requestを削除する
   - 再実行が`claimed: 0`、`purged: 0`で収束する
 - Security / Reliability review: APPROVE

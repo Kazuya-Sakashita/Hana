@@ -2,8 +2,8 @@
 
 ## 安全契約
 
-- `purge_after`到達前のアカウントは処理しない。
-- 削除順序はStorage（original / thumbnail / preview / 所有prefix内orphan）→ Auth → DB固定。
+- `purge_after`到達に加え、退会requestの`requested_at`とProfileの`deletion_requested_at`から実時間で30日経過するまで処理しない。
+- 削除順序はStorage（original / thumbnail / preview / 所有prefix内の未知・旧形式objectを含む全object）→ Auth → DB固定。
 - Storage削除が1件でも失敗した実行ではAuthとDBを削除しない。
 - `ACCOUNT_PHYSICAL_PURGE_APPLY=confirmed`がないcron requestはread-only inspectionへ固定する。
 - 返却・ログは件数と固定状態だけにし、user id、storage key、画像URL、氏名、本文を出さない。
@@ -26,7 +26,7 @@ curl --fail --silent \
 実ユーザーデータを使わない。専用の合成テストアカウントと、識別可能な合成画像1枚だけを準備する。
 
 1. 合成アカウントを退会受付済みにする。
-2. staging DBの対象1件だけについて、管理手順で`purge_after`を過去へ変更する。
+2. 専用の時間制御テストまたは合成fixtureで、`requested_at`と`deletion_requested_at`から30日以上経過した対象を準備する。`purge_after`だけの変更では削除対象にならないことも確認する。
 3. dry-runが`eligibleAccounts: 1`、`imageRows: 1`、`dbExpectedObjects: 3`、`listedStorageObjects: 3`、`storageListingFailures: 0`を返すことを確認する。
 4. worker endpointを1回実行する。
 5. original、thumbnail、previewがStorageに存在しないことを管理画面で確認する。
@@ -40,8 +40,9 @@ loopbackの合成Storage/Auth HTTP fixtureと専用PostgreSQL `/hana_ci`だけ�
 このコマンドは`ISSUE_136_PURGE_QA=1`の明示opt-inに加え、`DATABASE_URL`、`DIRECT_URL`、
 `NEXT_PUBLIC_SUPABASE_URL`がすべてloopbackで、両DB URLが同一の`/hana_ci`を指す場合だけ動く。
 
-確認する結果は、apply未設定で変更なし、Storage全object削除、AIログ匿名化、Auth削除、
-DB削除、再実行0件である。生成した固定ID・合成文字列・4byteの合成objectだけを使い、
+確認する結果は、apply未設定で変更なし、所有prefix内の未知・旧形式を含むStorage全object削除、AIログ匿名化、Auth削除、
+DB削除、再実行0件である。30日未満なのに`purge_after`だけが過去の別ユーザーについて、
+DB・Auth・Storageがすべて不変であることも確認する。生成した固定ID・合成文字列・4byteの合成objectだけを使い、
 実ユーザー、実写真、実Storage、実Authには接続しない。この代替確認はproduction applyの許可ではない。
 
 ## production rollout

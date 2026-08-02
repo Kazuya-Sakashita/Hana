@@ -14,6 +14,9 @@ const memoryId = '00000000-0000-4000-8000-000000000138'
 const imageId = '00000000-0000-4000-8000-000000000139'
 const generationId = '00000000-0000-4000-8000-000000000140'
 const requestId = '00000000-0000-4000-8000-000000000141'
+const otherUserId = '00000000-0000-4000-8000-000000000150'
+const otherImageId = '00000000-0000-4000-8000-000000000151'
+const otherRequestId = '00000000-0000-4000-8000-000000000152'
 
 interface StoredObject {
   body: Buffer
@@ -93,7 +96,7 @@ function providerFixture(
       const authPrefix = '/auth/v1/admin/users/'
       if (url.pathname.startsWith(authPrefix) && request.method === 'DELETE') {
         const id = decodeURIComponent(url.pathname.slice(authPrefix.length))
-        if (objects.size > 0 || !(await canDeleteAuthUser(id))) {
+        if (!(await canDeleteAuthUser(id))) {
           return json(response, 409, { message: 'Synthetic deletion order rejected' })
         }
         if (!authUsers.delete(id)) return json(response, 404, { message: 'User not found' })
@@ -117,6 +120,9 @@ describe.skipIf(!qaEnabled)(
     const thumbnailKey = originalKey.replace(/\.jpg$/, '_thumb.webp')
     const previewKey = originalKey.replace(/\.jpg$/, '_preview.webp')
     const orphanKey = `uploads/${userHash}/202001/00000000-0000-4000-8000-000000000142.jpg`
+    const legacyKey = `uploads/${userHash}/legacy/tmp-object.bin`
+    const otherUserHash = createHash('sha256').update(otherUserId).digest('hex').slice(0, 16)
+    const otherOriginalKey = `uploads/${otherUserHash}/202001/${otherImageId}.jpg`
     const originalEnvironment = {
       cronSecret: process.env.CRON_SECRET,
       apply: process.env.ACCOUNT_PHYSICAL_PURGE_APPLY,
@@ -128,6 +134,9 @@ describe.skipIf(!qaEnabled)(
       const url = new URL(environment.providerUrl)
       server = providerFixture(objects, authUsers, async (id) => {
         if (!prisma) return false
+        const ownedPrefix = `uploads/${createHash('sha256').update(id).digest('hex').slice(0, 16)}/`
+        if ([...objects.keys()].some((key) => key.startsWith(ownedPrefix))) return false
+        if (id === otherUserId) return true
         const generation = await prisma.aiGeneration.findUnique({ where: { id: generationId } })
         return (
           id === userId &&
@@ -147,14 +156,25 @@ describe.skipIf(!qaEnabled)(
       ;({ GET: purgeGet } = await import('@/app/internal/account-deletion-purges/route'))
 
       const old = new Date(fixtureTimestamp)
-      await prisma.accountDeletionRequest.deleteMany({ where: { userId } })
+      const recent = new Date()
+      await prisma.accountDeletionRequest.deleteMany({
+        where: { userId: { in: [userId, otherUserId] } },
+      })
       await prisma.aiGeneration.deleteMany({ where: { id: generationId } })
-      await prisma.profile.deleteMany({ where: { id: userId } })
+      await prisma.profile.deleteMany({ where: { id: { in: [userId, otherUserId] } } })
       await prisma.profile.create({
         data: {
           id: userId,
           deletionRequestedAt: old,
           accessBlockedAt: old,
+          purgeAfter: old,
+        },
+      })
+      await prisma.profile.create({
+        data: {
+          id: otherUserId,
+          deletionRequestedAt: recent,
+          accessBlockedAt: recent,
           purgeAfter: old,
         },
       })
@@ -195,6 +215,22 @@ describe.skipIf(!qaEnabled)(
           deletedAt: old,
         },
       })
+      await prisma.image.create({
+        data: {
+          id: otherImageId,
+          userId: otherUserId,
+          storageKey: otherOriginalKey,
+          contentType: 'image/jpeg',
+          width: 1,
+          height: 1,
+          fileSize: 4,
+          metadataSanitizedAt: old,
+          originalVariantStatus: 'ready',
+          thumbnailVariantStatus: 'pending',
+          previewVariantStatus: 'pending',
+          variantRepairStatus: 'pending',
+        },
+      })
       await prisma.aiGeneration.create({
         data: {
           id: generationId,
@@ -221,7 +257,29 @@ describe.skipIf(!qaEnabled)(
           nextPurgeAttemptAt: old,
         },
       })
-      for (const key of [originalKey, thumbnailKey, previewKey, orphanKey]) {
+      await prisma.accountDeletionRequest.create({
+        data: {
+          id: otherRequestId,
+          userId: otherUserId,
+          idempotencyKey: '00000000-0000-4000-8000-000000000153',
+          receiptHash: '1'.repeat(64),
+          requestedAt: recent,
+          accessBlockedAt: recent,
+          purgeAfter: old,
+          authRevocationStatus: 'succeeded',
+          authRevokedAt: recent,
+          nextAuthAttemptAt: recent,
+          nextPurgeAttemptAt: old,
+        },
+      })
+      for (const key of [
+        originalKey,
+        thumbnailKey,
+        previewKey,
+        orphanKey,
+        legacyKey,
+        otherOriginalKey,
+      ]) {
         objects.set(key, {
           body: Buffer.from('test'),
           createdAt: fixtureTimestamp,
@@ -229,13 +287,16 @@ describe.skipIf(!qaEnabled)(
         })
       }
       authUsers.add(userId)
+      authUsers.add(otherUserId)
     })
 
     afterAll(async () => {
       if (prisma) {
-        await prisma.accountDeletionRequest.deleteMany({ where: { userId } })
+        await prisma.accountDeletionRequest.deleteMany({
+          where: { userId: { in: [userId, otherUserId] } },
+        })
         await prisma.aiGeneration.deleteMany({ where: { id: generationId } })
-        await prisma.profile.deleteMany({ where: { id: userId } })
+        await prisma.profile.deleteMany({ where: { id: { in: [userId, otherUserId] } } })
         await prisma.$disconnect()
       }
       if (server) await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -267,19 +328,31 @@ describe.skipIf(!qaEnabled)(
         leasedAccounts: 0,
         imageRows: 1,
         dbExpectedObjects: 3,
-        listedStorageObjects: 4,
+        listedStorageObjects: 5,
         storageListingFailures: 0,
         failedAccounts: 0,
       })
-      expect(objects.size).toBe(4)
+      expect(objects.size).toBe(6)
       expect(authUsers.has(userId)).toBe(true)
+      expect(authUsers.has(otherUserId)).toBe(true)
       expect(await prisma.profile.count({ where: { id: userId } })).toBe(1)
+      expect(await prisma.profile.count({ where: { id: otherUserId } })).toBe(1)
+      expect(
+        await prisma.accountDeletionRequest.findUnique({ where: { id: otherRequestId } }),
+      ).toMatchObject({ purgeStatus: 'pending', purgeAttempts: 0 })
 
       const applied = await runPurge(true)
       expect(applied).toEqual({ claimed: 1, purged: 1, failed: 0 })
-      expect(objects.size).toBe(0)
+      expect(objects.size).toBe(1)
+      expect(objects.has(otherOriginalKey)).toBe(true)
       expect(authUsers.has(userId)).toBe(false)
+      expect(authUsers.has(otherUserId)).toBe(true)
       expect(await prisma.profile.count({ where: { id: userId } })).toBe(0)
+      expect(await prisma.profile.count({ where: { id: otherUserId } })).toBe(1)
+      expect(await prisma.image.count({ where: { id: otherImageId } })).toBe(1)
+      expect(
+        await prisma.accountDeletionRequest.findUnique({ where: { id: otherRequestId } }),
+      ).toMatchObject({ purgeStatus: 'pending', purgeAttempts: 0 })
       expect(await prisma.child.count({ where: { id: childId } })).toBe(0)
       expect(await prisma.memory.count({ where: { id: memoryId } })).toBe(0)
       expect(await prisma.image.count({ where: { id: imageId } })).toBe(0)
@@ -293,6 +366,7 @@ describe.skipIf(!qaEnabled)(
       const repeated = await runPurge(true)
       expect(repeated).toEqual({ claimed: 0, purged: 0, failed: 0 })
       expect(JSON.stringify([dryRun, applied, repeated])).not.toContain(userId)
+      expect(JSON.stringify([dryRun, applied, repeated])).not.toContain(otherUserId)
       expect(JSON.stringify([dryRun, applied, repeated])).not.toContain('uploads/')
     })
   },

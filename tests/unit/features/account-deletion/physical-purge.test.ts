@@ -56,6 +56,7 @@ const dueDate = new Date('2026-06-01T00:00:00Z')
 const candidate = {
   id: REQUEST_ID,
   userId: USER_ID,
+  requestedAt: dueDate,
   purgeAfter: dueDate,
   purgeAttempts: 0,
   purgeStage: 'storage',
@@ -207,6 +208,40 @@ describe('processAccountPhysicalPurges', () => {
     ).toBe('failed')
   })
 
+  it('rejects a request whose stored purge deadline is earlier than the 30 day retention period', async () => {
+    setupDueCandidate()
+    const twentyNineDaysAgo = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000)
+    mocks.deletionFindMany.mockResolvedValue([
+      { ...candidate, requestedAt: twentyNineDaysAgo, purgeAfter: dueDate },
+    ])
+
+    await expect(processAccountPhysicalPurges()).resolves.toEqual({
+      claimed: 1,
+      purged: 0,
+      failed: 1,
+    })
+    expect(mocks.storageRemove).not.toHaveBeenCalled()
+    expect(mocks.deleteUser).not.toHaveBeenCalled()
+  })
+
+  it('rejects a Profile whose deletion request is less than 30 days old', async () => {
+    setupDueCandidate()
+    const twentyNineDaysAgo = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000)
+    mocks.profileFindUnique.mockResolvedValue({
+      accessBlockedAt: dueDate,
+      deletionRequestedAt: twentyNineDaysAgo,
+      purgeAfter: dueDate,
+    })
+
+    await expect(processAccountPhysicalPurges()).resolves.toEqual({
+      claimed: 1,
+      purged: 0,
+      failed: 1,
+    })
+    expect(mocks.storageRemove).not.toHaveBeenCalled()
+    expect(mocks.deleteUser).not.toHaveBeenCalled()
+  })
+
   it('converges when Storage and Auth were already deleted', async () => {
     setupDueCandidate()
     mocks.profileFindUnique.mockResolvedValue(null)
@@ -264,6 +299,22 @@ describe('processAccountPhysicalPurges', () => {
     await processAccountPhysicalPurges()
 
     expect(mocks.storageRemove).toHaveBeenCalledWith(expect.arrayContaining([orphan]))
+  })
+
+  it('deletes a legacy object with an unknown name under the owned prefix', async () => {
+    setupDueCandidate()
+    const legacyObject = 'uploads/3933181cf32d61a0/legacy/tmp-object.bin'
+    mocks.storageList
+      .mockResolvedValueOnce({ data: [{ id: null, name: 'legacy' }], error: null })
+      .mockResolvedValueOnce({
+        data: [{ id: 'legacy-object-id', name: 'tmp-object.bin' }],
+        error: null,
+      })
+      .mockResolvedValue({ data: [], error: null })
+
+    await expect(processAccountPhysicalPurges()).resolves.toMatchObject({ purged: 1 })
+
+    expect(mocks.storageRemove).toHaveBeenCalledWith(expect.arrayContaining([legacyObject]))
   })
 
   it('resumes from the Auth stage without repeating Storage deletion', async () => {

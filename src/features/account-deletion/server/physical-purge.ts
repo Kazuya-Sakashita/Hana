@@ -10,13 +10,12 @@ import {
 } from '@/features/uploads/server/storage-key'
 
 const CLAIM_LEASE_MS = 10 * 60 * 1000
+const PURGE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 const PROVIDER_TIMEOUT_MS = 30_000
 const MAX_ATTEMPTS = 10
 const MAX_BACKOFF_MS = 24 * 60 * 60 * 1000
 const STORAGE_BATCH_SIZE = 100
 const IMAGE_BUCKET = 'images'
-const STORAGE_OBJECT_KEY_PATTERN =
-  /^uploads\/[0-9a-f]{16}\/\d{6}\/[0-9a-f-]{36}(?:\.(?:jpg|png|webp|heic)|_(?:thumb|preview)\.webp)$/
 
 type PurgeFailureStage = 'state' | 'storage' | 'auth' | 'database'
 type PurgeStage = 'storage' | 'auth' | 'database'
@@ -40,10 +39,6 @@ function storageObjectKeys(originalKeys: string[]): string[] {
       ]),
     ),
   ]
-}
-
-function isOwnedStorageObjectKey(key: string, userId: string): boolean {
-  return STORAGE_OBJECT_KEY_PATTERN.test(key) && storageKeyBelongsToUser(key, userId)
 }
 
 async function listOwnedStorageObjects(
@@ -92,7 +87,7 @@ async function listOwnedStorageObjects(
     }
   }
 
-  if (keys.some((key) => !isOwnedStorageObjectKey(key, userId))) {
+  if (keys.some((key) => !storageKeyBelongsToUser(key, userId))) {
     return { keys: [], failed: true }
   }
   return { keys, failed: false }
@@ -166,9 +161,11 @@ export async function inspectAccountPhysicalPurge(now = new Date()): Promise<{
   failedAccounts: number
 }> {
   const staleClaim = new Date(now.getTime() - CLAIM_LEASE_MS)
+  const retentionCutoff = new Date(now.getTime() - PURGE_RETENTION_MS)
   const eligible = await prisma.accountDeletionRequest.findMany({
     where: {
       purgeStatus: 'pending',
+      requestedAt: { lte: retentionCutoff },
       purgeAfter: { lte: now },
       nextPurgeAttemptAt: { lte: now },
       purgeAttempts: { lt: MAX_ATTEMPTS },
@@ -210,9 +207,11 @@ export async function processAccountPhysicalPurges(limit = 10): Promise<{
 }> {
   const startedAt = new Date()
   const staleClaim = new Date(startedAt.getTime() - CLAIM_LEASE_MS)
+  const retentionCutoff = new Date(startedAt.getTime() - PURGE_RETENTION_MS)
   const candidates = await prisma.accountDeletionRequest.findMany({
     where: {
       purgeStatus: 'pending',
+      requestedAt: { lte: retentionCutoff },
       purgeAfter: { lte: startedAt },
       nextPurgeAttemptAt: { lte: startedAt },
       purgeAttempts: { lt: MAX_ATTEMPTS },
@@ -223,6 +222,7 @@ export async function processAccountPhysicalPurges(limit = 10): Promise<{
     select: {
       id: true,
       userId: true,
+      requestedAt: true,
       purgeAfter: true,
       purgeAttempts: true,
       purgeStage: true,
@@ -241,6 +241,7 @@ export async function processAccountPhysicalPurges(limit = 10): Promise<{
       where: {
         id: candidate.id,
         purgeStatus: 'pending',
+        requestedAt: { lte: retentionCutoff },
         purgeAfter: { lte: startedAt },
         nextPurgeAttemptAt: { lte: startedAt },
         purgeAttempts: candidate.purgeAttempts,
@@ -260,10 +261,13 @@ export async function processAccountPhysicalPurges(limit = 10): Promise<{
       profile?.accessBlockedAt &&
       profile.deletionRequestedAt &&
       profile.purgeAfter &&
+      profile.deletionRequestedAt <= retentionCutoff &&
+      candidate.requestedAt <= retentionCutoff &&
       profile.purgeAfter <= startedAt &&
       candidate.purgeAfter <= startedAt,
     )
-    const validMissingProfile = !profile && candidate.purgeAfter <= startedAt
+    const validMissingProfile =
+      !profile && candidate.requestedAt <= retentionCutoff && candidate.purgeAfter <= startedAt
     const validStageMarkers =
       candidate.purgeStage === 'storage' ||
       (candidate.purgeStage === 'auth' && candidate.storageDeletedAt !== null) ||
@@ -414,6 +418,7 @@ export async function processAccountPhysicalPurges(limit = 10): Promise<{
               purgeStatus: 'pending',
               purgeStage: 'database',
               purgeClaimToken: claimToken,
+              requestedAt: { lte: retentionCutoff },
               purgeAfter: { lte: startedAt },
             },
             select: { id: true },
