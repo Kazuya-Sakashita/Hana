@@ -24,6 +24,7 @@ export function assertIssue136PurgeQaEnvironment(environment: {
   if (!['127.0.0.1', 'localhost'].includes(providerUrl.hostname)) {
     throw new Error('supabase_url_loopback_required')
   }
+  if (providerUrl.protocol !== 'http:') throw new Error('supabase_url_http_required')
   return {
     databaseUrl: databaseUrl.toString(),
     directUrl: directUrl.toString(),

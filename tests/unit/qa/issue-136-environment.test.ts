@@ -39,6 +39,11 @@ describe('ISSUE-136 synthetic purge QA environment', () => {
       { NEXT_PUBLIC_SUPABASE_URL: 'https://project.supabase.co' },
       'supabase_url_loopback_required',
     ],
+    [
+      'TLS endpoint instead of the local HTTP fixture',
+      { NEXT_PUBLIC_SUPABASE_URL: 'https://127.0.0.1:55445' },
+      'supabase_url_http_required',
+    ],
   ])('rejects %s', (_label, override, reason) => {
     expect(() => assertIssue136PurgeQaEnvironment({ ...safeEnvironment, ...override })).toThrow(
       reason,
