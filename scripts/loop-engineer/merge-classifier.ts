@@ -95,33 +95,107 @@ const baselineCheckNames = [
   'rollback-record',
   'pr-gate',
 ] as const
-const allowedCheckNames = new Set([
-  ...baselineCheckNames,
-  'openapi-contract',
-  'security',
-  'privacy',
-  'database',
-  'ai-safety',
-  'image-pipeline',
-  'ui-accessibility',
-  'supply-chain',
-  'issue-registry',
-])
 const baseReviewerRoles = [
   'spec-acceptance',
   'implementation-correctness',
   'test-reliability',
 ] as const
+type ChangeAreaPolicy = {
+  check?: string
+  reviewerRole?: string
+  humanReason?: MergeClassificationReason
+}
+const changeAreaPolicy: Record<string, ChangeAreaPolicy> = {
+  docs: {},
+  tests: {},
+  ci: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  workflow: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  dependency: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  ui: { check: 'ui-accessibility', reviewerRole: 'ui-accessibility' },
+  api: { check: 'openapi-contract', reviewerRole: 'api-contract' },
+  auth: { check: 'security', reviewerRole: 'security-authorization' },
+  ai: { check: 'ai-safety', reviewerRole: 'ai-safety-privacy' },
+  image: { check: 'image-pipeline', reviewerRole: 'image-pipeline-privacy' },
+  storage: { check: 'image-pipeline', reviewerRole: 'image-pipeline-privacy' },
+  privacy: { check: 'privacy', reviewerRole: 'privacy-data-protection' },
+  database: { check: 'database', reviewerRole: 'database-migration' },
+  'migration-code': { check: 'database', reviewerRole: 'database-migration' },
+  'real-db-migration': {
+    check: 'database',
+    reviewerRole: 'database-migration',
+    humanReason: 'real_db_migration',
+  },
+  'destructive-operation': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'destructive_operation',
+  },
+  'real-user-data': {
+    check: 'privacy',
+    reviewerRole: 'privacy-data-protection',
+    humanReason: 'real_user_data',
+  },
+  'production-deploy': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'production_deploy',
+  },
+  'secret-change': {
+    check: 'security',
+    reviewerRole: 'security-authorization',
+    humanReason: 'secret_change',
+  },
+  'vendor-change': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'vendor_change',
+  },
+  'breaking-waiver': {
+    check: 'openapi-contract',
+    reviewerRole: 'api-contract',
+    humanReason: 'breaking_waiver',
+  },
+  'force-push': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'force_push',
+  },
+  'ruleset-change': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'ruleset_change',
+  },
+  'repository-setting-change': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'repository_setting_change',
+  },
+  'token-permission-change': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'token_permission_change',
+  },
+  'external-notification': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'external_notification',
+  },
+  'billing-change': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+    humanReason: 'billing_change',
+  },
+}
+const allowedCheckNames = new Set([
+  ...baselineCheckNames,
+  ...Object.values(changeAreaPolicy).flatMap(({ check }) => (check ? [check] : [])),
+  'issue-registry',
+])
 const allowedReviewerRoles = new Set([
   ...baseReviewerRoles,
-  'security-authorization',
-  'ai-safety-privacy',
-  'privacy-data-protection',
-  'database-migration',
-  'api-contract',
-  'ui-accessibility',
-  'image-pipeline-privacy',
-  'ci-supply-chain-operations',
+  ...Object.values(changeAreaPolicy).flatMap(({ reviewerRole }) =>
+    reviewerRole ? [reviewerRole] : [],
+  ),
 ])
 const requiredReviewGateFields = [
   'schema_version',
@@ -133,92 +207,7 @@ const requiredReviewGateFields = [
   'completed_roles',
 ] as const
 const allowedReviewGateFields = new Set<string>(requiredReviewGateFields)
-const allowedChangeAreas = new Set([
-  'docs',
-  'tests',
-  'ci',
-  'workflow',
-  'dependency',
-  'ui',
-  'api',
-  'auth',
-  'ai',
-  'image',
-  'storage',
-  'privacy',
-  'database',
-  'migration-code',
-  'real-db-migration',
-  'destructive-operation',
-  'real-user-data',
-  'production-deploy',
-  'secret-change',
-  'vendor-change',
-  'breaking-waiver',
-  'force-push',
-  'ruleset-change',
-  'repository-setting-change',
-  'token-permission-change',
-  'external-notification',
-  'billing-change',
-])
-const humanRequiredChangeAreas = [
-  ['real-db-migration', 'real_db_migration'],
-  ['destructive-operation', 'destructive_operation'],
-  ['real-user-data', 'real_user_data'],
-  ['production-deploy', 'production_deploy'],
-  ['secret-change', 'secret_change'],
-  ['vendor-change', 'vendor_change'],
-  ['breaking-waiver', 'breaking_waiver'],
-  ['force-push', 'force_push'],
-  ['ruleset-change', 'ruleset_change'],
-  ['repository-setting-change', 'repository_setting_change'],
-  ['token-permission-change', 'token_permission_change'],
-  ['external-notification', 'external_notification'],
-  ['billing-change', 'billing_change'],
-] as const
-const changeAreaEvidence: Record<string, { check: string; reviewerRole: string }> = {
-  auth: { check: 'security', reviewerRole: 'security-authorization' },
-  ai: { check: 'ai-safety', reviewerRole: 'ai-safety-privacy' },
-  privacy: { check: 'privacy', reviewerRole: 'privacy-data-protection' },
-  database: { check: 'database', reviewerRole: 'database-migration' },
-  'migration-code': { check: 'database', reviewerRole: 'database-migration' },
-  api: { check: 'openapi-contract', reviewerRole: 'api-contract' },
-  ui: { check: 'ui-accessibility', reviewerRole: 'ui-accessibility' },
-  image: { check: 'image-pipeline', reviewerRole: 'image-pipeline-privacy' },
-  storage: { check: 'image-pipeline', reviewerRole: 'image-pipeline-privacy' },
-  ci: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
-  workflow: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
-  dependency: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
-  'real-db-migration': { check: 'database', reviewerRole: 'database-migration' },
-  'destructive-operation': {
-    check: 'supply-chain',
-    reviewerRole: 'ci-supply-chain-operations',
-  },
-  'real-user-data': { check: 'privacy', reviewerRole: 'privacy-data-protection' },
-  'production-deploy': {
-    check: 'supply-chain',
-    reviewerRole: 'ci-supply-chain-operations',
-  },
-  'secret-change': { check: 'security', reviewerRole: 'security-authorization' },
-  'vendor-change': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
-  'breaking-waiver': { check: 'openapi-contract', reviewerRole: 'api-contract' },
-  'force-push': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
-  'ruleset-change': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
-  'repository-setting-change': {
-    check: 'supply-chain',
-    reviewerRole: 'ci-supply-chain-operations',
-  },
-  'token-permission-change': {
-    check: 'supply-chain',
-    reviewerRole: 'ci-supply-chain-operations',
-  },
-  'external-notification': {
-    check: 'supply-chain',
-    reviewerRole: 'ci-supply-chain-operations',
-  },
-  'billing-change': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
-}
+const allowedChangeAreas = new Set(Object.keys(changeAreaPolicy))
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -362,10 +351,10 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
   const requiredCheckNames = new Set<string>(baselineCheckNames)
   const requiredReviewerRoles = new Set<string>(baseReviewerRoles)
   for (const changeArea of input.change_areas) {
-    const evidence = changeAreaEvidence[changeArea]
-    if (!evidence) continue
-    requiredCheckNames.add(evidence.check)
-    requiredReviewerRoles.add(evidence.reviewerRole)
+    const policy = changeAreaPolicy[changeArea]
+    if (!policy) return classification(input, 'HOLD', 'unknown_change_area')
+    if (policy.check) requiredCheckNames.add(policy.check)
+    if (policy.reviewerRole) requiredReviewerRoles.add(policy.reviewerRole)
   }
 
   if ([...requiredCheckNames].some((name) => !checkNames.includes(name))) {
@@ -416,9 +405,12 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
     return classification(input, 'HOLD', 'actionable_findings_present')
   }
 
-  const humanRequired = humanRequiredChangeAreas.find(([area]) => input.change_areas.includes(area))
-  if (humanRequired) {
-    return classification(input, 'HUMAN_REQUIRED', humanRequired[1])
+  const humanReason = Object.entries(changeAreaPolicy).find(
+    ([changeArea, policy]) =>
+      policy.humanReason !== undefined && input.change_areas.includes(changeArea),
+  )?.[1].humanReason
+  if (humanReason) {
+    return classification(input, 'HUMAN_REQUIRED', humanReason)
   }
 
   return classification(input, 'AUTO_MERGE_ELIGIBLE', 'all_required_evidence_passed')
