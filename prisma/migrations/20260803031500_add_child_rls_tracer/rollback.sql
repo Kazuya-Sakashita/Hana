@@ -1,4 +1,4 @@
--- Apply after rolling the app back; then run upgrade-handoff-rollback-to-postgres.sql.
+-- Apply as the unchanged schema owner after rolling the app back.
 BEGIN;
 
 REVOKE EXECUTE ON FUNCTION public.hana_child_access_status(uuid) FROM hana_child_owner;

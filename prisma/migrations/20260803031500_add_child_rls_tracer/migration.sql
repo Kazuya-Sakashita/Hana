@@ -1,23 +1,35 @@
 -- ISSUE-151: children RLS tracer bullet.
--- Existing databases require the separately approved upgrade-handoff-from-postgres.sql first.
+-- Run as the existing non-superuser owner of public.children and public.profiles.
 -- Apply only after the synthetic/staging preflight in ADR-0016.
 
 BEGIN;
 
 DO $$
 BEGIN
-  IF current_user <> 'hana_migrator' OR NOT EXISTS (
+  IF NOT EXISTS (
     SELECT 1
     FROM pg_catalog.pg_roles
     WHERE rolname = current_user
       AND rolcanlogin
       AND NOT rolsuper
-      AND NOT rolcreatedb
       AND rolcreaterole
-      AND NOT rolreplication
       AND rolbypassrls
   ) THEN
-    RAISE EXCEPTION 'child_rls_preflight_migrator_role_required';
+    RAISE EXCEPTION 'child_rls_preflight_schema_owner_role_required';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    JOIN pg_catalog.pg_roles AS owner ON owner.oid = relation.relowner
+    WHERE namespace.nspname = 'public'
+      AND relation.relname IN ('children', 'profiles')
+      AND owner.rolname = current_user
+    GROUP BY owner.rolname
+    HAVING count(*) = 2
+  ) OR NOT has_schema_privilege(current_user, 'public', 'USAGE, CREATE') THEN
+    RAISE EXCEPTION 'child_rls_preflight_schema_owner_required';
   END IF;
 
   IF NOT EXISTS (
@@ -48,18 +60,6 @@ BEGIN
     RAISE EXCEPTION 'child_rls_preflight_runtime_membership_present';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_catalog.pg_class AS relation
-    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
-    JOIN pg_catalog.pg_roles AS owner ON owner.oid = relation.relowner
-    WHERE namespace.nspname = 'public'
-      AND relation.relname = 'children'
-      AND owner.rolname = current_user
-  ) OR NOT has_table_privilege(current_user, 'public.profiles', 'SELECT') THEN
-    RAISE EXCEPTION 'child_rls_preflight_upgrade_handoff_required';
-  END IF;
-
   IF EXISTS (
     SELECT 1
     FROM public.children AS child
@@ -75,7 +75,7 @@ BEGIN
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
     WHERE namespace.nspname = 'public'
       AND relation.relname = 'children'
-      AND relation.relrowsecurity
+      AND (relation.relrowsecurity OR relation.relforcerowsecurity)
   ) THEN
     RAISE EXCEPTION 'child_rls_preflight_already_enabled';
   END IF;
@@ -93,6 +93,11 @@ BEGIN
 
   IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_owner') THEN
     RAISE EXCEPTION 'child_rls_preflight_role_already_exists';
+  END IF;
+
+  IF to_regprocedure('public.hana_current_user_id()') IS NOT NULL
+    OR to_regprocedure('public.hana_child_access_status(uuid)') IS NOT NULL THEN
+    RAISE EXCEPTION 'child_rls_preflight_existing_function';
   END IF;
 END
 $$;
@@ -169,7 +174,6 @@ AS $$
   END
 $$;
 
-ALTER FUNCTION public.hana_child_access_status(uuid) OWNER TO hana_migrator;
 REVOKE ALL ON FUNCTION public.hana_child_access_status(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.hana_child_access_status(uuid) TO hana_child_owner;
 

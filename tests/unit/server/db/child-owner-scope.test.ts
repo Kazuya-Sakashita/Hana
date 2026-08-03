@@ -79,25 +79,20 @@ describe('child owner DB scope', () => {
     const migrationDirectory = 'prisma/migrations/20260803031500_add_child_rls_tracer'
     const migration = readFileSync(`${migrationDirectory}/migration.sql`, 'utf8')
     const rollback = readFileSync(`${migrationDirectory}/rollback.sql`, 'utf8')
-    const handoff = readFileSync(`${migrationDirectory}/upgrade-handoff-from-postgres.sql`, 'utf8')
-    const handoffRollback = readFileSync(
-      `${migrationDirectory}/upgrade-handoff-rollback-to-postgres.sql`,
-      'utf8',
-    )
     const workflow = readFileSync('.github/workflows/typecheck.yml', 'utf8')
 
     expect(migration.trimStart()).toContain('BEGIN;')
-    expect(migration).toContain('child_rls_preflight_migrator_role_required')
+    expect(migration).toContain('child_rls_preflight_schema_owner_role_required')
+    expect(migration).toContain('child_rls_preflight_schema_owner_required')
     expect(migration).toContain('child_rls_preflight_runtime_role_required')
-    expect(migration).toContain('child_rls_preflight_upgrade_handoff_required')
     expect(migration).toContain('child_rls_preflight_orphan_owner')
     expect(migration).toContain('child_rls_preflight_role_already_exists')
+    expect(migration).toContain('child_rls_preflight_existing_function')
     expect(migration).toContain('CREATE ROLE hana_child_owner')
     expect(migration).toContain('NOBYPASSRLS')
     expect(migration).toContain('GRANT hana_child_owner TO hana_child_runtime')
-    expect(migration).toContain(
-      'ALTER FUNCTION public.hana_child_access_status(uuid) OWNER TO hana_migrator',
-    )
+    expect(migration).not.toContain('ALTER TABLE public.children OWNER TO')
+    expect(migration).not.toContain('ALTER FUNCTION public.hana_child_access_status(uuid) OWNER TO')
     expect(migration).toContain('ENABLE ROW LEVEL SECURITY')
     expect(migration).toContain('FORCE ROW LEVEL SECURITY')
     expect(migration).toContain('WITH CHECK (user_id = public.hana_current_user_id())')
@@ -105,12 +100,11 @@ describe('child owner DB scope', () => {
     expect(rollback).toContain('DROP POLICY children_owner_scope ON public.children')
     expect(rollback).toContain('REVOKE hana_child_owner FROM hana_child_runtime')
     expect(rollback).toContain('DROP ROLE hana_child_owner')
-    expect(handoff).toContain('ALTER TABLE public.children OWNER TO hana_migrator')
-    expect(handoff).toContain('GRANT SELECT ON TABLE public.profiles TO hana_migrator')
-    expect(handoffRollback).toContain('ALTER TABLE public.children OWNER TO postgres')
-    expect(handoffRollback).toContain('REVOKE SELECT ON TABLE public.profiles FROM hana_migrator')
     expect(workflow).toContain('pnpm qa:issue151:db-bootstrap')
     expect(workflow).toContain('CHILD_DATABASE_URL: postgresql://hana_child_runtime:')
+    expect(workflow).toContain(
+      'DIRECT_URL: postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+    )
     expect(workflow).toContain('pnpm qa:issue151:child-rls-db')
   })
 })

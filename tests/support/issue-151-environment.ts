@@ -17,8 +17,8 @@ export function assertIssue151DatabaseQaEnvironment(environment: {
   const databaseUrl = checkedDatabaseUrl(environment.DATABASE_URL, 'DATABASE_URL')
   const directUrl = checkedDatabaseUrl(environment.DIRECT_URL, 'DIRECT_URL')
   const childDatabaseUrl = checkedDatabaseUrl(environment.CHILD_DATABASE_URL, 'CHILD_DATABASE_URL')
-  if (databaseUrl.username !== 'postgres') throw new Error('database_url_admin_role_required')
-  if (directUrl.username !== 'hana_migrator') throw new Error('direct_url_migrator_role_required')
+  if (databaseUrl.username !== 'hana_admin') throw new Error('database_url_admin_role_required')
+  if (directUrl.username !== 'postgres') throw new Error('direct_url_schema_owner_role_required')
   if (childDatabaseUrl.username !== 'hana_child_runtime') {
     throw new Error('child_database_url_runtime_role_required')
   }

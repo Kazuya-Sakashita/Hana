@@ -1,7 +1,7 @@
 import pg from 'pg'
 
 const { Client } = pg
-const ROLE_NAMES = ['hana_migrator', 'hana_child_runtime']
+const ROLE_NAMES = ['postgres', 'hana_child_runtime']
 
 function assertSafeTarget(connectionString) {
   if (process.env.ISSUE_151_DATABASE_QA !== '1') {
@@ -29,8 +29,8 @@ async function run() {
 
     await client.query('BEGIN')
     await client.query(`
-      CREATE ROLE hana_migrator
-        LOGIN PASSWORD 'synthetic-migrator'
+      CREATE ROLE postgres
+        LOGIN PASSWORD 'synthetic-schema-owner'
         NOSUPERUSER NOCREATEDB CREATEROLE INHERIT NOREPLICATION BYPASSRLS
     `)
     await client.query(`
@@ -38,8 +38,8 @@ async function run() {
         LOGIN PASSWORD 'synthetic-runtime'
         NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
     `)
-    await client.query('GRANT CONNECT ON DATABASE hana_ci TO hana_migrator, hana_child_runtime')
-    await client.query('GRANT USAGE, CREATE ON SCHEMA public TO hana_migrator')
+    await client.query('GRANT CONNECT ON DATABASE hana_ci TO postgres, hana_child_runtime')
+    await client.query('GRANT USAGE, CREATE ON SCHEMA public TO postgres')
     await client.query('COMMIT')
     console.log('ISSUE-151 synthetic PostgreSQL role bootstrap: PASS')
   } catch (error) {

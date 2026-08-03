@@ -56,12 +56,12 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     await prisma.$disconnect()
   })
 
-  it('separates the non-superuser migrator, runtime, and owner roles', async () => {
+  it('separates the non-superuser schema owner, runtime, and request owner roles', async () => {
     const [state] = await prisma.$queryRaw<
       Array<{
-        migratorSuperuser: boolean
-        migratorCreateRole: boolean
-        migratorBypassRls: boolean
+        schemaOwnerSuperuser: boolean
+        schemaOwnerCreateRole: boolean
+        schemaOwnerBypassRls: boolean
         runtimeSuperuser: boolean
         runtimeBypassRls: boolean
         runtimeInherits: boolean
@@ -81,9 +81,9 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       }>
     >`
       SELECT
-        migrator.rolsuper AS "migratorSuperuser",
-        migrator.rolcreaterole AS "migratorCreateRole",
-        migrator.rolbypassrls AS "migratorBypassRls",
+        schema_owner.rolsuper AS "schemaOwnerSuperuser",
+        schema_owner.rolcreaterole AS "schemaOwnerCreateRole",
+        schema_owner.rolbypassrls AS "schemaOwnerBypassRls",
         runtime.rolsuper AS "runtimeSuperuser",
         runtime.rolbypassrls AS "runtimeBypassRls",
         runtime.rolinherit AS "runtimeInherits",
@@ -115,23 +115,23 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
           'EXECUTE'
         ) AS "anonymousStatusExecuteGranted",
         pg_get_userbyid(status_function.proowner) AS "statusFunctionOwner"
-      FROM pg_catalog.pg_roles AS migrator
+      FROM pg_catalog.pg_roles AS schema_owner
       CROSS JOIN pg_catalog.pg_roles AS runtime
       CROSS JOIN pg_catalog.pg_roles AS owner
       JOIN pg_catalog.pg_class AS relation ON relation.relname = 'children'
       JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
       JOIN pg_catalog.pg_proc AS status_function
         ON status_function.oid = 'public.hana_child_access_status(uuid)'::regprocedure
-      WHERE migrator.rolname = 'hana_migrator'
+      WHERE schema_owner.rolname = 'postgres'
         AND runtime.rolname = 'hana_child_runtime'
         AND owner.rolname = 'hana_child_owner'
         AND namespace.nspname = 'public'
     `
 
     expect(state).toEqual({
-      migratorSuperuser: false,
-      migratorCreateRole: true,
-      migratorBypassRls: true,
+      schemaOwnerSuperuser: false,
+      schemaOwnerCreateRole: true,
+      schemaOwnerBypassRls: true,
       runtimeSuperuser: false,
       runtimeBypassRls: false,
       runtimeInherits: false,
@@ -147,7 +147,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       profileSelectGranted: false,
       statusExecuteGranted: true,
       anonymousStatusExecuteGranted: false,
-      statusFunctionOwner: 'hana_migrator',
+      statusFunctionOwner: 'postgres',
     })
   })
 
@@ -290,94 +290,45 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     ).resolves.toMatchObject({ name: 'synthetic-a' })
   })
 
-  it('fails closed on an orphaned upgrade, then proves handoff and rollback on existing rows', async () => {
+  it('fails before changing an orphaned database, then preserves ownership through upgrade and rollback', async () => {
     const migrationDirectory = 'prisma/migrations/20260803031500_add_child_rls_tracer'
     const rollbackSql = readFileSync(`${migrationDirectory}/rollback.sql`, 'utf8')
     const migrationSql = readFileSync(`${migrationDirectory}/migration.sql`, 'utf8')
-    const handoffSql = readFileSync(
-      `${migrationDirectory}/upgrade-handoff-from-postgres.sql`,
-      'utf8',
-    )
-    const handoffRollbackSql = readFileSync(
-      `${migrationDirectory}/upgrade-handoff-rollback-to-postgres.sql`,
-      'utf8',
-    )
     const orphanChildId = randomUUID()
     const orphanUserId = randomUUID()
     const admin = new Client({ connectionString: process.env.DATABASE_URL })
-    const migrator = new Client({ connectionString: process.env.DIRECT_URL })
+    const schemaOwner = new Client({ connectionString: process.env.DIRECT_URL })
 
-    await disconnectChildOwnerPrisma()
-    await admin.connect()
-    await migrator.connect()
-    try {
-      await migrator.query(rollbackSql)
-      await admin.query('ALTER TABLE public.children OWNER TO postgres')
-      await admin.query('ALTER TABLE public.profiles OWNER TO postgres')
-      await admin.query('ALTER TABLE public.children DROP CONSTRAINT children_user_id_fkey')
-      await admin.query(
-        `INSERT INTO public.children (
-          id, user_id, name, birthdate, created_at, updated_at
-        ) VALUES ($1, $2, 'synthetic-orphan', DATE '2025-04-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [orphanChildId, orphanUserId],
-      )
-
-      await admin.query(handoffSql)
-      await expect(migrator.query(migrationSql)).rejects.toThrow(/child_rls_preflight_orphan_owner/)
-      await migrator.query('ROLLBACK')
-
-      const failedState = await migrator.query<{
+    async function readMigrationState(client: Client) {
+      const result = await client.query<{
+        childOwner: string
+        profileOwner: string
+        childAcl: string | null
+        profileAcl: string | null
         ownerRoleCount: string
         rowSecurity: boolean
         forceRowSecurity: boolean
         currentUserFunction: string | null
         accessStatusFunction: string | null
-      }>(`
-        SELECT
-          (SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_owner')
-            AS "ownerRoleCount",
-          relation.relrowsecurity AS "rowSecurity",
-          relation.relforcerowsecurity AS "forceRowSecurity",
-          to_regprocedure('public.hana_current_user_id()')::text AS "currentUserFunction",
-          to_regprocedure('public.hana_child_access_status(uuid)')::text AS "accessStatusFunction"
-        FROM pg_catalog.pg_class AS relation
-        JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
-        WHERE namespace.nspname = 'public' AND relation.relname = 'children'
-      `)
-      expect(failedState.rows[0]).toEqual({
-        ownerRoleCount: '0',
-        rowSecurity: false,
-        forceRowSecurity: false,
-        currentUserFunction: null,
-        accessStatusFunction: null,
-      })
-
-      await admin.query('DELETE FROM public.children WHERE id = $1', [orphanChildId])
-      await admin.query(`
-        ALTER TABLE public.children
-        ADD CONSTRAINT children_user_id_fkey
-        FOREIGN KEY (user_id) REFERENCES public.profiles(id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-      `)
-
-      await migrator.query(migrationSql)
-      const upgraded = await migrator.query<{
-        childOwner: string
-        profileOwner: string
-        ownerRoleCount: string
-        rowSecurity: boolean
-        forceRowSecurity: boolean
-        profileSelectGranted: boolean
+        accessStatusFunctionOwner: string | null
       }>(`
         SELECT
           pg_get_userbyid(child_relation.relowner) AS "childOwner",
           pg_get_userbyid(profile_relation.relowner) AS "profileOwner",
+          child_relation.relacl::text AS "childAcl",
+          profile_relation.relacl::text AS "profileAcl",
           (SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_owner')
             AS "ownerRoleCount",
           child_relation.relrowsecurity AS "rowSecurity",
           child_relation.relforcerowsecurity AS "forceRowSecurity",
-          has_table_privilege('hana_migrator', 'public.profiles', 'SELECT')
-            AS "profileSelectGranted"
+          to_regprocedure('public.hana_current_user_id()')::text AS "currentUserFunction",
+          to_regprocedure('public.hana_child_access_status(uuid)')::text
+            AS "accessStatusFunction",
+          (
+            SELECT pg_get_userbyid(procedure.proowner)
+            FROM pg_catalog.pg_proc AS procedure
+            WHERE procedure.oid = to_regprocedure('public.hana_child_access_status(uuid)')
+          ) AS "accessStatusFunctionOwner"
         FROM pg_catalog.pg_class AS child_relation
         JOIN pg_catalog.pg_namespace AS child_namespace
           ON child_namespace.oid = child_relation.relnamespace
@@ -389,13 +340,60 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
           AND profile_namespace.nspname = 'public'
           AND profile_relation.relname = 'profiles'
       `)
-      expect(upgraded.rows[0]).toEqual({
-        childOwner: 'hana_migrator',
+      const state = result.rows[0]
+      if (!state) throw new Error('issue_151_migration_state_missing')
+      return state
+    }
+
+    await disconnectChildOwnerPrisma()
+    await admin.connect()
+    await schemaOwner.connect()
+    try {
+      await schemaOwner.query(rollbackSql)
+      const baseline = await readMigrationState(schemaOwner)
+      expect(baseline).toMatchObject({
+        childOwner: 'postgres',
+        profileOwner: 'postgres',
+        ownerRoleCount: '0',
+        rowSecurity: false,
+        forceRowSecurity: false,
+        currentUserFunction: null,
+        accessStatusFunction: null,
+        accessStatusFunctionOwner: null,
+      })
+
+      await admin.query('ALTER TABLE public.children DROP CONSTRAINT children_user_id_fkey')
+      await admin.query(
+        `INSERT INTO public.children (
+          id, user_id, name, birthdate, created_at, updated_at
+        ) VALUES ($1, $2, 'synthetic-orphan', DATE '2025-04-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [orphanChildId, orphanUserId],
+      )
+
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_orphan_owner/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+
+      await admin.query('DELETE FROM public.children WHERE id = $1', [orphanChildId])
+      await admin.query(`
+        ALTER TABLE public.children
+        ADD CONSTRAINT children_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+      `)
+
+      await schemaOwner.query(migrationSql)
+      await expect(readMigrationState(schemaOwner)).resolves.toMatchObject({
+        childOwner: 'postgres',
         profileOwner: 'postgres',
         ownerRoleCount: '1',
         rowSecurity: true,
         forceRowSecurity: true,
-        profileSelectGranted: true,
+        currentUserFunction: 'hana_current_user_id()',
+        accessStatusFunction: 'hana_child_access_status(uuid)',
+        accessStatusFunctionOwner: 'postgres',
       })
 
       childPrisma = getChildOwnerPrisma()
@@ -406,34 +404,12 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       ).resolves.toMatchObject({ id: childAId, userId: userAId })
 
       await disconnectChildOwnerPrisma()
-      await migrator.query(rollbackSql)
-      await admin.query(handoffRollbackSql)
-      const rolledBack = await admin.query<{
-        childOwner: string
-        ownerRoleCount: string
-        profileSelectGranted: boolean
-      }>(`
-        SELECT
-          pg_get_userbyid(relation.relowner) AS "childOwner",
-          (SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_owner')
-            AS "ownerRoleCount",
-          has_table_privilege('hana_migrator', 'public.profiles', 'SELECT')
-            AS "profileSelectGranted"
-        FROM pg_catalog.pg_class AS relation
-        JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
-        WHERE namespace.nspname = 'public' AND relation.relname = 'children'
-      `)
-      expect(rolledBack.rows[0]).toEqual({
-        childOwner: 'postgres',
-        ownerRoleCount: '0',
-        profileSelectGranted: false,
-      })
-
-      await admin.query(handoffSql)
-      await migrator.query(migrationSql)
+      await schemaOwner.query(rollbackSql)
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+      await schemaOwner.query(migrationSql)
     } finally {
       await admin.end()
-      await migrator.end()
+      await schemaOwner.end()
     }
 
     childPrisma = getChildOwnerPrisma()

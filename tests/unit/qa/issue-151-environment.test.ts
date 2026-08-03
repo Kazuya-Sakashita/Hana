@@ -3,8 +3,8 @@ import { assertIssue151DatabaseQaEnvironment } from '../../support/issue-151-env
 
 const safeEnvironment = {
   ISSUE_151_DATABASE_QA: '1',
-  DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:55451/hana_ci',
-  DIRECT_URL: 'postgresql://hana_migrator:synthetic-migrator@127.0.0.1:55451/hana_ci',
+  DATABASE_URL: 'postgresql://hana_admin:hana-admin@127.0.0.1:55451/hana_ci',
+  DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@127.0.0.1:55451/hana_ci',
   CHILD_DATABASE_URL: 'postgresql://hana_child_runtime:synthetic-runtime@127.0.0.1:55451/hana_ci',
 }
 
@@ -27,21 +27,21 @@ describe('ISSUE-151 database QA environment', () => {
       'different migration target',
       {
         ...safeEnvironment,
-        DIRECT_URL: 'postgresql://hana_migrator:synthetic-migrator@localhost:55451/hana_ci',
+        DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:55451/hana_ci',
       },
     ],
     [
       'privileged child runtime',
       {
         ...safeEnvironment,
-        CHILD_DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:55451/hana_ci',
+        CHILD_DATABASE_URL: 'postgresql://hana_admin:hana-admin@127.0.0.1:55451/hana_ci',
       },
     ],
     [
-      'service role used for migration',
+      'cluster admin used for migration',
       {
         ...safeEnvironment,
-        DIRECT_URL: 'postgresql://postgres:postgres@127.0.0.1:55451/hana_ci',
+        DIRECT_URL: 'postgresql://hana_admin:hana-admin@127.0.0.1:55451/hana_ci',
       },
     ],
   ])('rejects %s', (_label, environment) => {
