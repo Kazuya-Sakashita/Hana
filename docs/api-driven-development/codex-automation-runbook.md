@@ -154,6 +154,14 @@ ISSUE-164のマージ適格性schemaと固定reasonは
 pnpm qa:issue164:merge-classifier -- --mode=contract
 ```
 
+ISSUE-165の独立review入力、role選択、wave、最大3巡、固定reasonは
+`docs/api-driven-development/loop-engineer-specialist-review-gate.md`を正とする。副作用のない契約確認は
+次を実行し、`pr:gate`からも同じcommandを呼ぶ。
+
+```bash
+pnpm qa:issue165:specialist-review -- --mode=contract
+```
+
 `pnpm pr:gate` が未導入の branch では、暫定 fallback として以下を実行する。
 ISSUE-034 merge 後は `pnpm pr:gate` を正規ゲートにする。
 
