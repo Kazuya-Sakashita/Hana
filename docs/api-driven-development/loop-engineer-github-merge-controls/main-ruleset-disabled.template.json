@@ -1,7 +1,7 @@
 {
   "name": "Hana main merge controls",
   "target": "branch",
-  "enforcement": "active",
+  "enforcement": "disabled",
   "bypass_actors": [],
   "conditions": {
     "ref_name": {
@@ -35,23 +35,23 @@
         "required_status_checks": [
           {
             "context": "pr-gate",
-            "integration_id": 15368
+            "integration_id": 0
           },
           {
             "context": "validate",
-            "integration_id": 15368
+            "integration_id": 0
           },
           {
             "context": "local-registry",
-            "integration_id": 15368
+            "integration_id": 0
           },
           {
             "context": "specialist-review-gate",
-            "integration_id": 15368
+            "integration_id": 0
           },
           {
             "context": "merge-eligibility",
-            "integration_id": 15368
+            "integration_id": 0
           }
         ]
       }

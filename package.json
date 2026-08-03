@@ -26,6 +26,7 @@
     "loop-engineer:classify": "node --import tsx scripts/loop-engineer/classify-merge-eligibility.ts",
     "loop-engineer:review": "node --import tsx scripts/loop-engineer/evaluate-specialist-reviews.ts",
     "loop-engineer:github-gate": "node --import tsx scripts/loop-engineer/evaluate-github-merge-gates.ts",
+    "loop-engineer:apply-github-controls": "node --import tsx scripts/loop-engineer/apply-github-merge-controls.ts",
     "qa:issue164:merge-classifier": "node --import tsx scripts/loop-engineer/classify-merge-eligibility.ts",
     "qa:issue165:specialist-review": "node --import tsx scripts/loop-engineer/evaluate-specialist-reviews.ts",
     "qa:issue166:github-merge-controls": "node --import tsx scripts/loop-engineer/evaluate-github-merge-gates.ts",

@@ -14,25 +14,28 @@ function readJson(path: string) {
 }
 
 describe('ISSUE-166 GitHub merge controls repository contract', () => {
-  it('defines an active no-bypass main ruleset with only squash and five pinned checks', () => {
-    const ruleset = readJson(
-      'docs/api-driven-development/loop-engineer-github-merge-controls/main-ruleset.json',
+  it('defines no-bypass main Ruleset templates with five dedicated-app checks', () => {
+    const activeRuleset = readJson(
+      'docs/api-driven-development/loop-engineer-github-merge-controls/main-ruleset.template.json',
     )
-    const pullRequestRule = ruleset.rules.find(
+    const disabledRuleset = readJson(
+      'docs/api-driven-development/loop-engineer-github-merge-controls/main-ruleset-disabled.template.json',
+    )
+    const pullRequestRule = activeRuleset.rules.find(
       ({ type }: { type: string }) => type === 'pull_request',
     )
-    const checkRule = ruleset.rules.find(
+    const checkRule = activeRuleset.rules.find(
       ({ type }: { type: string }) => type === 'required_status_checks',
     )
 
-    expect(ruleset).toMatchObject({
+    expect(activeRuleset).toMatchObject({
       name: 'Hana main merge controls',
       target: 'branch',
       enforcement: 'active',
       bypass_actors: [],
       conditions: { ref_name: { include: ['~DEFAULT_BRANCH'], exclude: [] } },
     })
-    expect(ruleset.rules.map(({ type }: { type: string }) => type)).toEqual([
+    expect(activeRuleset.rules.map(({ type }: { type: string }) => type)).toEqual([
       'deletion',
       'non_fast_forward',
       'pull_request',
@@ -46,9 +49,11 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(checkRule.parameters.strict_required_status_checks_policy).toBe(true)
     expect(checkRule.parameters.required_status_checks).toEqual(
       ['pr-gate', 'validate', 'local-registry', 'specialist-review-gate', 'merge-eligibility'].map(
-        (context) => ({ context, integration_id: 15368 }),
+        (context) => ({ context, integration_id: 0 }),
       ),
     )
+    expect(JSON.stringify(activeRuleset)).not.toContain('15368')
+    expect(disabledRuleset).toEqual({ ...activeRuleset, enforcement: 'disabled' })
   })
 
   it('enables native auto-merge while disabling merge commit and rebase methods', () => {
@@ -66,63 +71,79 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     })
   })
 
-  it('records the redacted preflight and reversible rollback target', () => {
-    const activeRuleset = readJson(
-      'docs/api-driven-development/loop-engineer-github-merge-controls/main-ruleset.json',
-    )
-    const disabledRuleset = readJson(
-      'docs/api-driven-development/loop-engineer-github-merge-controls/main-ruleset-disabled.json',
-    )
-    expect(
-      readJson('docs/api-driven-development/loop-engineer-github-merge-controls/preflight.json'),
-    ).toEqual({
-      schema_version: 'loop-engineer-github-controls-snapshot/v1',
-      repository: 'Kazuya-Sakashita/Hana',
-      default_branch: 'main',
+  it('records an exact redacted preflight and reversible rollback target', () => {
+    const expectedRollback = {
       allow_auto_merge: false,
       allow_squash_merge: true,
       allow_merge_commit: true,
       allow_rebase_merge: true,
+      squash_merge_commit_title: 'COMMIT_OR_PR_TITLE',
+      squash_merge_commit_message: 'COMMIT_MESSAGES',
+    }
+
+    expect(
+      readJson('docs/api-driven-development/loop-engineer-github-merge-controls/preflight.json'),
+    ).toEqual({
+      schema_version: 'loop-engineer-github-controls-snapshot/v2',
+      repository: 'Kazuya-Sakashita/Hana',
+      default_branch: 'main',
+      ...expectedRollback,
       delete_branch_on_merge: false,
       repository_rulesets: [],
       main_branch_protected: false,
     })
     expect(
-      readJson('docs/api-driven-development/loop-engineer-github-merge-controls/rollback.json'),
-    ).toEqual({
-      ruleset_enforcement: 'disabled',
-      repository_settings: {
-        allow_auto_merge: false,
-        allow_squash_merge: true,
-        allow_merge_commit: true,
-        allow_rebase_merge: true,
-      },
-    })
-    expect(disabledRuleset).toEqual({ ...activeRuleset, enforcement: 'disabled' })
-    expect(
       readJson(
         'docs/api-driven-development/loop-engineer-github-merge-controls/repository-settings-rollback.json',
       ),
+    ).toEqual(expectedRollback)
+    expect(
+      readJson('docs/api-driven-development/loop-engineer-github-merge-controls/rollback.json'),
     ).toEqual({
-      allow_auto_merge: false,
-      allow_squash_merge: true,
-      allow_merge_commit: true,
-      allow_rebase_merge: true,
+      ruleset_enforcement: 'disabled',
+      repository_settings: expectedRollback,
     })
   })
 
-  it('defines two SHA-bound manual checks with read-only workflow permissions', () => {
+  it('runs only trusted main workflow code and publishes dedicated-app check runs', () => {
     const source = read('.github/workflows/loop-engineer-merge-gates.yml')
 
     expect(source).toContain('workflow_dispatch:')
-    expect(source).toContain('permissions:\n  contents: read')
-    expect(source).toContain('  specialist-review-gate:')
-    expect(source).toContain('  merge-eligibility:')
-    expect(source).toContain('--expected-head-sha="$GITHUB_SHA" --check=specialist')
-    expect(source).toContain('--expected-head-sha="$GITHUB_SHA" --check=merge')
-    expect(source).not.toContain('secrets.')
-    expect(source).not.toContain('pull-requests: write')
-    expect(source).not.toContain('administration:')
+    expect(source).toContain('ref: main')
+    expect(source).toContain('LOOP_ENGINEER_DISPATCHER_LOGIN')
+    expect(source).toContain('github.event.sender.type')
+    expect(source).toContain('LOOP_ENGINEER_APP_ID')
+    expect(source).toContain('LOOP_ENGINEER_APP_PRIVATE_KEY')
+    expect(source).toContain(
+      'actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349',
+    )
+    expect(source).toContain('actions/checkout@11d5960a326750d5838078e36cf38b85af677262')
+    expect(source).toContain('actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020')
+    expect(source).toContain('pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1')
+    expect(source).not.toContain('permission-actions: write')
+    expect(source).toContain('candidate_pr_gate:')
+    expect(source).toContain('candidate_openapi_validate:')
+    expect(source).toContain('candidate_issue_registry:')
+    expect(source).toContain('repos/${GITHUB_REPOSITORY}/check-runs')
+    expect(source).toContain('environment: hana-merge-human-approval')
+    expect(source).toContain("merge_decision == 'HUMAN_REQUIRED'")
+    expect(source).not.toContain('actions/checkout@v4')
+    expect(source).not.toContain('actions/setup-node@v4')
+    expect(source).not.toContain('pnpm/action-setup@v4')
+    expect(source).not.toContain('integration_id: 15368')
+  })
+
+  it('ships a scope-confirmed transactional apply command', () => {
+    const source = read('scripts/loop-engineer/apply-github-merge-controls.ts')
+    const packageJson = readJson('package.json')
+
+    expect(packageJson.scripts['loop-engineer:apply-github-controls']).toContain(
+      'apply-github-merge-controls.ts',
+    )
+    expect(source).toContain("repository !== 'Kazuya-Sakashita/Hana'")
+    expect(source).toContain("approval !== 'ISSUE-166'")
+    expect(source).toContain('applyGitHubMergeControls')
+    expect(source).not.toContain('console.log')
   })
 
   it('emits OpenAPI and Issue Registry job names on every main pull request', () => {
@@ -144,7 +165,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(issueRegistry).toContain('  local-registry:')
   })
 
-  it('documents approval, least privilege, activation hold, postflight, and rollback', () => {
+  it('documents least privilege, protected human approval, staged activation, and rollback', () => {
     const runbook = read(
       'docs/api-driven-development/loop-engineer-github-merge-controls/README.md',
     )
@@ -152,14 +173,18 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     for (const statement of [
       'Rulesetとrepository settingsの変更は`HUMAN_REQUIRED`',
       'Actions: write',
+      'Checks: write',
       'Contents: read',
+      'Pull requests: read',
       'Administration: none',
-      'Secrets: none',
       'bypass actorは0件',
+      '専用GitHub App',
+      'hana-merge-human-approval',
+      'main-ruleset-disabled.template.json',
+      'fresh preflight',
+      'exact readback',
+      'automatic rollback',
       'ISSUE-167の5 PR dry-runと人間GOまではauto-mergeを予約しない',
-      '追加commit後は新しい`GITHUB_SHA`で再dispatch',
-      'main-ruleset-disabled.json',
-      'repository-settings-rollback.json',
       'production deployと実DB migrationは別の人間承認',
     ]) {
       expect(runbook).toContain(statement)

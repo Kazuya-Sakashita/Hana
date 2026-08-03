@@ -29,30 +29,30 @@ function invalidInput(): void {
 }
 
 function contractInput(): GitHubMergeGateInput {
+  const reviewGate = {
+    schema_version: 'loop-engineer-review-gate/v1' as const,
+    status: 'pass' as const,
+    reviewed_sha: contractHeadSha,
+    required_reviewers: 3,
+    completed_reviewers: 3,
+    actionable_findings: 0,
+    completed_roles: [...contractRoles],
+  }
+
   return {
-    schema_version: 'loop-engineer-github-gate-input/v1',
-    review_input: {
-      schema_version: 'loop-engineer-review-input/v1',
+    schema_version: 'loop-engineer-github-gate-input/v2',
+    review_attestation: {
+      schema_version: 'loop-engineer-review-attestation/v1',
       issue_id: 'ISSUE-166',
       pr_number: 345,
       merge_base_sha: contractMergeBaseSha,
       head_sha: contractHeadSha,
       round: 1,
-      parallel_slots: 3,
       change_areas: ['docs', 'tests'],
-      reviews: contractRoles.map((role) => ({
-        role,
-        reviewer_instance_id: `reviewer_${role.replaceAll('-', '_')}`,
-        reviewed_issue_id: 'ISSUE-166',
-        reviewed_merge_base_sha: contractMergeBaseSha,
-        reviewed_round: 1,
-        reviewed_sha: contractHeadSha,
-        status: 'go',
-        read_only: true,
-        independent_context: true,
-        other_reviewer_outputs_visible: false,
-        findings: [],
-      })),
+      status: 'pass',
+      reason: 'all_required_reviews_passed',
+      required_roles: [...contractRoles],
+      review_gate: structuredClone(reviewGate),
     },
     merge_input: {
       schema_version: 'loop-engineer-merge-input/v1',
@@ -67,20 +67,7 @@ function contractInput(): GitHubMergeGateInput {
         { name: 'rollback-record', status: 'success' },
         { name: 'pr-gate', status: 'success' },
       ],
-      review_gate: {
-        schema_version: 'loop-engineer-review-gate/v1',
-        status: 'pass',
-        reviewed_sha: contractHeadSha,
-        required_reviewers: 3,
-        completed_reviewers: 3,
-        actionable_findings: 0,
-        completed_roles: [...contractRoles],
-      },
-    },
-    human_approval: {
-      status: 'absent',
-      reason: null,
-      approved_head_sha: null,
+      review_gate: reviewGate,
     },
   }
 }
@@ -89,42 +76,31 @@ function runContract(): void {
   const lowRisk = contractInput()
 
   const humanRequired = contractInput()
-  humanRequired.review_input.change_areas = ['ci', 'ruleset-change']
-  humanRequired.review_input.reviews.push({
-    role: 'ci-supply-chain-operations',
-    reviewer_instance_id: 'reviewer_ci_supply_chain_operations',
-    reviewed_issue_id: 'ISSUE-166',
-    reviewed_merge_base_sha: contractMergeBaseSha,
-    reviewed_round: 1,
-    reviewed_sha: contractHeadSha,
-    status: 'go',
-    read_only: true,
-    independent_context: true,
-    other_reviewer_outputs_visible: false,
-    findings: [],
-  })
-  humanRequired.merge_input.change_areas = [...humanRequired.review_input.change_areas]
+  const operationsRole = 'ci-supply-chain-operations'
+  humanRequired.review_attestation.change_areas = ['ci', 'ruleset-change']
+  humanRequired.review_attestation.required_roles.push(operationsRole)
+  humanRequired.review_attestation.review_gate.required_reviewers = 4
+  humanRequired.review_attestation.review_gate.completed_reviewers = 4
+  humanRequired.review_attestation.review_gate.completed_roles.push(operationsRole)
+  humanRequired.merge_input.change_areas = [...humanRequired.review_attestation.change_areas]
   humanRequired.merge_input.required_checks.push({ name: 'supply-chain', status: 'success' })
   humanRequired.merge_input.review_gate.required_reviewers = 4
   humanRequired.merge_input.review_gate.completed_reviewers = 4
-  humanRequired.merge_input.review_gate.completed_roles.push('ci-supply-chain-operations')
-  humanRequired.human_approval = {
-    status: 'approved',
-    reason: 'ruleset_change',
-    approved_head_sha: contractHeadSha,
-  }
+  humanRequired.merge_input.review_gate.completed_roles.push(operationsRole)
 
   const hold = structuredClone(humanRequired)
-  hold.review_input.reviews[0]!.status = 'timeout'
-  hold.human_approval = {
-    status: 'approved',
-    reason: 'review_attestation_mismatch',
-    approved_head_sha: contractHeadSha,
-  }
+  hold.review_attestation.status = 'fail'
+  hold.review_attestation.reason = 'reviewer_timeout'
+  hold.review_attestation.review_gate.status = 'fail'
+  hold.merge_input.review_gate.status = 'fail'
 
   const cases = [
     { name: 'low-risk-auto', input: lowRisk, expectedSha: contractHeadSha },
-    { name: 'approved-human-required', input: humanRequired, expectedSha: contractHeadSha },
+    {
+      name: 'human-required-protected-environment',
+      input: humanRequired,
+      expectedSha: contractHeadSha,
+    },
     { name: 'stale-workflow-sha', input: lowRisk, expectedSha: 'c'.repeat(40) },
     { name: 'hold-not-overridden', input: hold, expectedSha: contractHeadSha },
     { name: 'malformed-input', input: null, expectedSha: contractHeadSha },
@@ -141,13 +117,13 @@ function runContract(): void {
     checks[0]?.specialist === 'success' &&
     checks[0]?.merge === 'success' &&
     checks[1]?.specialist === 'success' &&
-    checks[1]?.merge === 'success' &&
+    checks[1]?.merge === 'human_approval_required' &&
     checks
       .slice(2)
       .every(({ specialist, merge }) => specialist === 'failure' && merge === 'failure')
 
   writeJson({
-    schema_version: 'loop-engineer-github-gate-contract/v1',
+    schema_version: 'loop-engineer-github-gate-contract/v2',
     issue_id: 'ISSUE-166',
     mode: 'contract',
     result: passed ? 'pass' : 'fail',
