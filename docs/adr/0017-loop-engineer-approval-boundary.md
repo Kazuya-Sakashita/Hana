@@ -168,8 +168,9 @@ AI生成本文、secret、接続文字列は取得・artifact保存・ログ出�
 ## Rollback
 
 有効化後に誤許可またはbypassを検出した場合は、native auto-merge予約を解除し、Loop Engineerを
-停止して全PRを`HUMAN_REQUIRED`へ戻す。Ruleset変更のrollbackと再開条件はISSUE-166、監査と
-kill switchはISSUE-167で具体化する。
+停止する。`HOLD`条件に該当するPRは`HOLD`のまま維持し、それ以外のPRのmergeを
+`HUMAN_REQUIRED`へ戻す。Ruleset変更のrollbackと再開条件はISSUE-166、監査とkill switchは
+ISSUE-167で具体化する。
 
 ## References
 

@@ -101,6 +101,10 @@ describe('ISSUE-163 Loop Engineer approval boundary', () => {
     expect(adrSource).toContain('ISSUE-167のdry-runと人間GO後だけnative auto-mergeを予約')
     expect(adrSource).not.toContain('review結果、actionable finding件数')
     expect(adrSource).toContain('必須check名とstatus、固定された最終判定reason')
+    expect(adrSource).toContain('`HOLD`条件に該当するPRは`HOLD`のまま維持')
+    expect(adrSource).toContain('それ以外のPRのmergeを')
+    expect(adrSource).toContain('`HUMAN_REQUIRED`へ戻す')
+    expect(adrSource).not.toContain('全PRを`HUMAN_REQUIRED`へ戻す')
 
     for (const source of [agentsSource, claudeSource]) {
       expect(source).toContain('docs/adr/0017-loop-engineer-approval-boundary.md')
