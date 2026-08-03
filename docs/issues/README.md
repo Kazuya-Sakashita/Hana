@@ -12,7 +12,7 @@
 | status | count |
 | --- | ---: |
 | `todo` | 7 |
-| `in_progress` | 0 |
+| `in_progress` | 1 |
 | `review` | 0 |
 | `done` | 150 |
 | `blocked` | 6 |
@@ -33,7 +33,9 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 
 ## In Progress
 
-現在はありません。
+| Issue | GitHub | status | priority | size | title | blocked_by |
+| --- | ---: | --- | --- | --- | --- | --- |
+| `ISSUE-163` | `#335` | `in_progress` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
 
 ## Review Queue
 
@@ -217,6 +219,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-152, ISSUE-159, ISSUE-161 |
 | `ISSUE-161` | `#328` | `blocked` | P0 | S | AI vendorのdata-handling attestationを確定する | - |
 | `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-152, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161 |
+| `ISSUE-163` | `#335` | `in_progress` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
 
 ## Status Rules
 
