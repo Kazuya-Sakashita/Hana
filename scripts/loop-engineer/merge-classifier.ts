@@ -278,7 +278,8 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
     }
     if (
       typeof check.name !== 'string' ||
-      !['success', 'pending', 'failure'].includes(String(check.status))
+      typeof check.status !== 'string' ||
+      !['success', 'pending', 'failure'].includes(check.status)
     ) {
       return classification(input, 'HOLD', 'invalid_required_checks')
     }
@@ -295,7 +296,8 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
     return classification(input, 'HOLD', 'unsupported_review_gate_schema')
   }
   if (
-    !['pass', 'pending', 'fail'].includes(String(reviewGate.status)) ||
+    typeof reviewGate.status !== 'string' ||
+    !['pass', 'pending', 'fail'].includes(reviewGate.status) ||
     typeof reviewGate.reviewed_sha !== 'string' ||
     !/^[0-9a-f]{40}$/.test(reviewGate.reviewed_sha) ||
     !Number.isInteger(reviewGate.required_reviewers) ||

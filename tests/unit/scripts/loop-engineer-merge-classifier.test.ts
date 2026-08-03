@@ -252,6 +252,42 @@ describe('ISSUE-164 Loop Engineer merge classifier', () => {
   })
 
   it.each([
+    ['array', ['failure']],
+    ['object', { value: 'failure' }],
+    ['number', 1],
+  ])('holds a required check whose status is a non-string %s', (_kind, invalidStatus) => {
+    const input = eligibleInput() as unknown as Record<string, unknown>
+    const checks = (input.required_checks as Array<Record<string, unknown>>).map((check) =>
+      check.name === 'pr-gate' ? { ...check, status: invalidStatus } : check,
+    )
+    input.required_checks = checks
+
+    expect(classifyMergeEligibility(input)).toMatchObject({
+      decision: 'HOLD',
+      reason: 'invalid_required_checks',
+    })
+  })
+
+  it.each([
+    ['array', ['pass']],
+    ['object', { value: 'pass' }],
+    ['number', 1],
+  ])('holds a review gate whose status is a non-string %s', (_kind, invalidStatus) => {
+    const input = {
+      ...eligibleInput(),
+      review_gate: {
+        ...eligibleInput().review_gate,
+        status: invalidStatus,
+      },
+    }
+
+    expect(classifyMergeEligibility(input)).toMatchObject({
+      decision: 'HOLD',
+      reason: 'invalid_review_gate',
+    })
+  })
+
+  it.each([
     [
       (input: MergeClassificationInput) => {
         input.required_checks.push({ name: 'future-check', status: 'success' })
