@@ -19,6 +19,7 @@ const passingInput = {
   change_areas: ['docs', 'tests'],
   reviews: roles.map((role) => ({
     role,
+    reviewer_instance_id: `reviewer_${role.replaceAll('-', '_')}`,
     reviewed_issue_id: 'ISSUE-165',
     reviewed_merge_base_sha: 'a'.repeat(40),
     reviewed_round: 1,
@@ -70,6 +71,57 @@ describe('ISSUE-165 specialist review gate CLI', () => {
       head_sha: null,
     })
     expect(result.stdout).not.toContain('forbidden-cli-input-sentinel')
+  })
+
+  it('returns exit 1 and JSON-only output for valid fail and pending evaluations', () => {
+    const staleSha = structuredClone(passingInput)
+    staleSha.reviews[0]!.reviewed_sha = 'c'.repeat(40)
+
+    const minorityFinding = {
+      ...structuredClone(passingInput),
+      reviews: passingInput.reviews.map((reviewInput, index) =>
+        index === 1
+          ? {
+              ...reviewInput,
+              status: 'finding',
+              findings: [
+                {
+                  severity: 'P1',
+                  evidence: 'synthetic CLI evidence',
+                  file: 'scripts/example.ts',
+                  line: 1,
+                  required_fix: 'retain the finding',
+                  reviewed_sha: headSha,
+                },
+              ],
+            }
+          : reviewInput,
+      ),
+    }
+
+    const timeout = {
+      ...structuredClone(passingInput),
+      reviews: passingInput.reviews.map((reviewInput, index) =>
+        index === 2 ? { ...reviewInput, status: 'timeout' } : reviewInput,
+      ),
+    }
+    const missingReviewer = {
+      ...structuredClone(passingInput),
+      reviews: passingInput.reviews.slice(0, 2),
+    }
+
+    for (const [input, status, reason] of [
+      [staleSha, 'fail', 'review_sha_mismatch'],
+      [minorityFinding, 'fail', 'actionable_findings_present'],
+      [timeout, 'fail', 'reviewer_timeout'],
+      [missingReviewer, 'pending', 'required_reviewer_missing'],
+    ] as const) {
+      const result = runCli([], JSON.stringify(input))
+
+      expect(result.status).toBe(1)
+      expect(result.stderr).toBe('')
+      expect(JSON.parse(result.stdout)).toMatchObject({ status, reason })
+    }
   })
 
   it('runs the side-effect-free contract matrix used by pr:gate', () => {

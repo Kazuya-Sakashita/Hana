@@ -18,6 +18,7 @@ export type SpecialistReviewGateReason =
   | 'unknown_review_field'
   | 'unknown_reviewer_role'
   | 'duplicate_reviewer_role'
+  | 'duplicate_reviewer_instance'
   | 'reviewer_role_mismatch'
   | 'review_context_mismatch'
   | 'reviewer_timeout'
@@ -68,6 +69,16 @@ const reviewerRoleByChangeArea: Record<string, string | undefined> = {
   'external-notification': 'ci-supply-chain-operations',
   'billing-change': 'ci-supply-chain-operations',
 }
+const specialistReviewerRoles = [
+  'security-authorization',
+  'ai-safety-privacy',
+  'privacy-data-protection',
+  'database-migration',
+  'api-contract',
+  'ui-accessibility',
+  'image-pipeline-privacy',
+  'ci-supply-chain-operations',
+] as const
 
 const requiredInputFields = [
   'schema_version',
@@ -83,6 +94,7 @@ const requiredInputFields = [
 const allowedInputFields = new Set<string>(requiredInputFields)
 const requiredReviewFields = [
   'role',
+  'reviewer_instance_id',
   'reviewed_issue_id',
   'reviewed_merge_base_sha',
   'reviewed_round',
@@ -103,15 +115,11 @@ const requiredFindingFields = [
   'reviewed_sha',
 ] as const
 const allowedFindingFields = new Set<string>(requiredFindingFields)
-const allowedReviewerRoles = new Set<string>([
-  ...baseReviewerRoles,
-  ...Object.values(reviewerRoleByChangeArea).filter(
-    (role): role is string => typeof role === 'string',
-  ),
-])
+const allowedReviewerRoles = new Set<string>([...baseReviewerRoles, ...specialistReviewerRoles])
 
 export type ReviewInput = {
   role: string
+  reviewer_instance_id: string
   reviewed_issue_id: string
   reviewed_merge_base_sha: string
   reviewed_round: number
@@ -192,6 +200,37 @@ function redactedFailure(reason: SpecialistReviewGateReason) {
   }
 }
 
+function evaluation(
+  input: SpecialistReviewInput,
+  requiredRoles: string[],
+  status: ReviewStatus,
+  reason: SpecialistReviewGateReason,
+  actionableFindings: number,
+) {
+  return {
+    schema_version: 'loop-engineer-review-evaluation/v1' as const,
+    status,
+    reason,
+    issue_id: input.issue_id,
+    pr_number: input.pr_number,
+    head_sha: input.head_sha,
+    round: input.round,
+    required_roles: requiredRoles,
+    waves: toWaves(requiredRoles, input.parallel_slots),
+    review_gate: {
+      schema_version: 'loop-engineer-review-gate/v1' as const,
+      status,
+      reviewed_sha: input.head_sha,
+      required_reviewers: requiredRoles.length,
+      completed_reviewers: input.reviews.length,
+      actionable_findings: actionableFindings,
+      completed_roles: requiredRoles.filter((requiredRole) =>
+        input.reviews.some(({ role }) => role === requiredRole),
+      ),
+    },
+  }
+}
+
 function validateInput(rawInput: unknown): SpecialistReviewInput | SpecialistReviewGateReason {
   if (!isRecord(rawInput)) return 'invalid_input'
   if (Object.keys(rawInput).some((field) => !allowedInputFields.has(field))) {
@@ -246,6 +285,8 @@ function validateInput(rawInput: unknown): SpecialistReviewInput | SpecialistRev
     }
     if (
       typeof reviewInput.role !== 'string' ||
+      typeof reviewInput.reviewer_instance_id !== 'string' ||
+      !/^reviewer_[a-z0-9_]{3,64}$/.test(reviewInput.reviewer_instance_id) ||
       typeof reviewInput.reviewed_issue_id !== 'string' ||
       !isSha(reviewInput.reviewed_merge_base_sha) ||
       !Number.isInteger(reviewInput.reviewed_round) ||
@@ -292,22 +333,41 @@ export function evaluateSpecialistReviewGate(rawInput: unknown) {
   const input = validated
 
   const requiredRoles = [...baseReviewerRoles] as string[]
-  for (const changeArea of input.change_areas) {
-    const reviewerRole = reviewerRoleByChangeArea[changeArea]
-    if (reviewerRole && !requiredRoles.includes(reviewerRole)) requiredRoles.push(reviewerRole)
+  const selectedSpecialistRoles = new Set(
+    input.change_areas.flatMap((changeArea) => {
+      const reviewerRole = reviewerRoleByChangeArea[changeArea]
+      return reviewerRole ? [reviewerRole] : []
+    }),
+  )
+  for (const reviewerRole of specialistReviewerRoles) {
+    if (selectedSpecialistRoles.has(reviewerRole)) requiredRoles.push(reviewerRole)
   }
-  if (requiredRoles.length > 6) return redactedFailure('reviewer_count_out_of_range')
 
   const reviewRoles = input.reviews.map(({ role }) => role)
+  const reviewerInstances = input.reviews.map(
+    ({ reviewer_instance_id: reviewerInstanceId }) => reviewerInstanceId,
+  )
+  if (reviewRoles.some((role) => !allowedReviewerRoles.has(role))) {
+    return redactedFailure('unknown_reviewer_role')
+  }
   const actionableFindings = input.reviews.reduce(
     (count, reviewInput) => count + reviewInput.findings.length,
     0,
   )
+  if (requiredRoles.length > 6) {
+    return evaluation(
+      input,
+      requiredRoles,
+      'fail',
+      'reviewer_count_out_of_range',
+      actionableFindings,
+    )
+  }
   let reason: SpecialistReviewGateReason = 'all_required_reviews_passed'
-  if (reviewRoles.some((role) => !allowedReviewerRoles.has(role))) {
-    reason = 'unknown_reviewer_role'
-  } else if (new Set(reviewRoles).size !== reviewRoles.length) {
+  if (new Set(reviewRoles).size !== reviewRoles.length) {
     reason = 'duplicate_reviewer_role'
+  } else if (new Set(reviewerInstances).size !== reviewerInstances.length) {
+    reason = 'duplicate_reviewer_instance'
   } else if (reviewRoles.some((role) => !requiredRoles.includes(role))) {
     reason = 'reviewer_role_mismatch'
   } else if (
@@ -356,24 +416,5 @@ export function evaluateSpecialistReviewGate(rawInput: unknown) {
         ? 'pending'
         : 'fail'
 
-  return {
-    schema_version: 'loop-engineer-review-evaluation/v1' as const,
-    status,
-    reason,
-    issue_id: input.issue_id,
-    pr_number: input.pr_number,
-    head_sha: input.head_sha,
-    round: input.round,
-    required_roles: requiredRoles,
-    waves: toWaves(requiredRoles, input.parallel_slots),
-    review_gate: {
-      schema_version: 'loop-engineer-review-gate/v1' as const,
-      status,
-      reviewed_sha: input.head_sha,
-      required_reviewers: requiredRoles.length,
-      completed_reviewers: input.reviews.length,
-      actionable_findings: actionableFindings,
-      completed_roles: input.reviews.map(({ role }) => role),
-    },
-  }
+  return evaluation(input, requiredRoles, status, reason, actionableFindings)
 }

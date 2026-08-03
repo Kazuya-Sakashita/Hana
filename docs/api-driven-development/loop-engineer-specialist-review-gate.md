@@ -19,7 +19,8 @@ child processを使用しない。
 - `change_areas`: ISSUE-164と同じ固定領域ID
 - `reviews`: roleごとのstatus-only review証跡
 
-各reviewは`role`、`reviewed_issue_id`、`reviewed_merge_base_sha`、`reviewed_round`、`reviewed_sha`、`status`、`read_only`、`independent_context`、
+各reviewは`role`、trusted orchestratorが発行する非PIIの`reviewer_instance_id`、`reviewed_issue_id`、
+`reviewed_merge_base_sha`、`reviewed_round`、`reviewed_sha`、`status`、`read_only`、`independent_context`、
 `other_reviewer_outputs_visible`、`findings`を必須にする。`status`は`go`、`finding`、`timeout`だけを
 許可する。初回reviewはread-onlyの独立コンテキストで行い、他reviewerの出力を見せない。
 
@@ -37,7 +38,7 @@ findingは`severity`（P0〜P2）、`evidence`、repository相対`file`、正の
 | Test / Reliability           | `test-reliability`           |
 
 変更領域に応じてSecurity、AI Safety、Privacy、Database、API、UI、Image、CIのroleを追加し、同じroleを
-共有する複数領域だけ重複排除する。必要人数は3〜6名で、7名以上を統合して減らさず
+共有する複数領域だけ重複排除し、入力順に依存しない固定role順でwave化する。必要人数は3〜6名で、7名以上を統合して減らさず
 `reviewer_count_out_of_range`で失敗する。`parallel_slots`ごとに決定的なwaveを返すため、並列枠が
 少なくても同じ観点を順番に実行できる。
 
@@ -46,6 +47,9 @@ findingは`severity`（P0〜P2）、`evidence`、repository相対`file`、正の
 `loop-engineer-review-evaluation/v1`は固定status、reason、Issue ID、PR番号、head SHA、round、
 required role、waveと、ISSUE-164へ渡せる`loop-engineer-review-gate/v1`だけを返す。
 review prompt、finding本文、PR本文、コメント本文は返さない。
+
+`reviewer_instance_id`はtrusted orchestratorがreview実行ごとに発行し、role間の重複だけを検査する。
+同じIDが複数roleを申告した場合は失敗し、このID自体はstdout、artifact、logへ出力しない。
 
 - `pass`: 必要role全員が最新SHAを独立・read-onlyで確認し、finding 0件
 - `pending`: 必要reviewerがまだ不足
@@ -60,7 +64,7 @@ review prompt、finding本文、PR本文、コメント本文は返さない。
 ## Privacyと禁止データ
 
 保存・出力してよいのはIssue ID、PR番号、SHA、領域ID、role、round、finding件数、固定status／reason
-だけである。PR本文、コメント、review prompt全文、実ユーザーデータ、氏名、メール、実画像情報、
+だけである。`reviewer_instance_id`は入力時の一意性検証だけに使い、保存・出力しない。PR本文、コメント、review prompt全文、実ユーザーデータ、氏名、メール、実画像情報、
 画像URL、storage key、AI生成本文、接続情報、secretを入力fixture、stdout、artifact、logへ残さない。
 unknown fieldは値を保持せず、redactedな`fail`を返す。
 

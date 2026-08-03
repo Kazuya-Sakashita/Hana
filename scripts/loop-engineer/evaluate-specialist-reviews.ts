@@ -17,6 +17,7 @@ function baselineInput(): SpecialistReviewInput {
     change_areas: ['docs', 'tests'],
     reviews: baseRoles.map((role) => ({
       role,
+      reviewer_instance_id: `reviewer_${role.replaceAll('-', '_')}`,
       reviewed_issue_id: 'ISSUE-165',
       reviewed_merge_base_sha: mergeBaseSha,
       reviewed_round: 1,

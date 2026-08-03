@@ -58,7 +58,8 @@ OpenAPI、DB、Storage、実環境には影響しない。
 
 ## セキュリティ・プライバシー考慮
 
-入力はallowlistで検証し、unknown fieldを保持しない。出力はrole、SHA、round、finding件数、固定statusと
+入力はallowlistで検証し、unknown fieldを保持しない。trusted orchestrator由来の非PII reviewer instance
+IDはrole間の一意性検証だけに使い、保存・出力しない。出力はrole、SHA、round、finding件数、固定statusと
 reasonに限定する。CLIはstdin以外の外部入力、network、環境変数、filesystem writeを使用しない。
 
 ## 参考

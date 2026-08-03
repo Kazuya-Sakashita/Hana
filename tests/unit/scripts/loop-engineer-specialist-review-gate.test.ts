@@ -40,6 +40,7 @@ const domainRoles = [
 function review(role: string): ReviewInput {
   return {
     role,
+    reviewer_instance_id: `reviewer_${role.replaceAll('-', '_')}`,
     reviewed_issue_id: 'ISSUE-165',
     reviewed_merge_base_sha: mergeBaseSha,
     reviewed_round: 1,
@@ -108,6 +109,36 @@ describe('ISSUE-165 specialist review gate', () => {
     })
   })
 
+  it('requires a distinct privacy-safe reviewer instance for every role', () => {
+    const input = passingInput()
+    const identityBoundInput = {
+      ...input,
+      reviews: input.reviews.map((reviewInput, index) => ({
+        ...reviewInput,
+        reviewer_instance_id: `reviewer_instance_${index + 1}`,
+      })),
+    }
+
+    expect(evaluateSpecialistReviewGate(identityBoundInput)).toMatchObject({
+      status: 'pass',
+      reason: 'all_required_reviews_passed',
+    })
+  })
+
+  it('fails when one reviewer instance claims multiple required roles', () => {
+    const input = passingInput()
+    input.reviews[1]!.reviewer_instance_id = input.reviews[0]!.reviewer_instance_id
+
+    const result = evaluateSpecialistReviewGate(input)
+
+    expect(result).toMatchObject({
+      status: 'fail',
+      reason: 'duplicate_reviewer_instance',
+      review_gate: { status: 'fail' },
+    })
+    expect(JSON.stringify(result)).not.toContain(input.reviews[0]!.reviewer_instance_id)
+  })
+
   it.each([
     ['reviewed_issue_id', 'ISSUE-999'],
     ['reviewed_merge_base_sha', 'c'.repeat(40)],
@@ -169,6 +200,32 @@ describe('ISSUE-165 specialist review gate', () => {
       required_roles: [...baseRoles, role],
       review_gate: { required_reviewers: 4 },
     })
+  })
+
+  it('keeps role and wave order canonical for change-area permutations and all slot counts', () => {
+    for (let parallelSlots = 1; parallelSlots <= 6; parallelSlots += 1) {
+      const first = passingInput()
+      first.change_areas = ['auth', 'ci']
+      first.parallel_slots = parallelSlots
+      first.reviews.push(review('security-authorization'), review('ci-supply-chain-operations'))
+
+      const second = passingInput()
+      second.change_areas = ['ci', 'auth']
+      second.parallel_slots = parallelSlots
+      second.reviews.push(review('security-authorization'), review('ci-supply-chain-operations'))
+      second.reviews.reverse()
+
+      const firstResult = evaluateSpecialistReviewGate(first)
+      const secondResult = evaluateSpecialistReviewGate(second)
+
+      expect(firstResult).toMatchObject({ status: 'pass' })
+      expect(secondResult).toMatchObject({ status: 'pass' })
+      expect(secondResult.required_roles).toEqual(firstResult.required_roles)
+      expect(secondResult.waves).toEqual(firstResult.waves)
+      expect(secondResult.review_gate?.completed_roles).toEqual(
+        firstResult.review_gate?.completed_roles,
+      )
+    }
   })
 
   it('fails closed when any review targets an older commit', () => {
@@ -281,6 +338,21 @@ describe('ISSUE-165 specialist review gate', () => {
     expect(JSON.stringify(result)).not.toContain('forbidden-prompt-sentinel')
   })
 
+  it('redacts an unknown reviewer role instead of reflecting it to output', () => {
+    const input = passingInput()
+    input.reviews[0] = review('forbidden_secret_role_sentinel')
+
+    const result = evaluateSpecialistReviewGate(input)
+
+    expect(result).toMatchObject({
+      status: 'fail',
+      reason: 'unknown_reviewer_role',
+      issue_id: null,
+      review_gate: null,
+    })
+    expect(JSON.stringify(result)).not.toContain('forbidden_secret_role_sentinel')
+  })
+
   it.each([
     [{ ...passingInput(), reviews: [null] }, 'invalid_review'],
     [
@@ -339,7 +411,23 @@ describe('ISSUE-165 specialist review gate', () => {
     expect(evaluateSpecialistReviewGate(input)).toMatchObject({
       status: 'fail',
       reason: 'reviewer_count_out_of_range',
-      required_roles: [],
+      issue_id: 'ISSUE-165',
+      pr_number: 344,
+      head_sha: headSha,
+      round: 1,
+      required_roles: [
+        ...baseRoles,
+        'security-authorization',
+        'ai-safety-privacy',
+        'privacy-data-protection',
+        'database-migration',
+      ],
+      review_gate: {
+        status: 'fail',
+        reviewed_sha: headSha,
+        required_reviewers: 7,
+        completed_reviewers: 3,
+      },
     })
   })
 
