@@ -10,14 +10,22 @@ function checkedDatabaseUrl(value: string | undefined, name: string): URL {
 
 export function assertIssue151DatabaseQaEnvironment(environment: {
   [key: string]: string | undefined
-}): { databaseUrl: string; directUrl: string } {
+}): void {
   if (environment.ISSUE_151_DATABASE_QA !== '1') {
     throw new Error('issue_151_database_qa_opt_in_required')
   }
   const databaseUrl = checkedDatabaseUrl(environment.DATABASE_URL, 'DATABASE_URL')
   const directUrl = checkedDatabaseUrl(environment.DIRECT_URL, 'DIRECT_URL')
-  if (databaseUrl.toString() !== directUrl.toString()) {
-    throw new Error('database_urls_must_match')
+  const childDatabaseUrl = checkedDatabaseUrl(environment.CHILD_DATABASE_URL, 'CHILD_DATABASE_URL')
+  if (databaseUrl.username !== 'postgres') throw new Error('database_url_admin_role_required')
+  if (directUrl.username !== 'hana_migrator') throw new Error('direct_url_migrator_role_required')
+  if (childDatabaseUrl.username !== 'hana_child_runtime') {
+    throw new Error('child_database_url_runtime_role_required')
   }
-  return { databaseUrl: databaseUrl.toString(), directUrl: directUrl.toString() }
+  const targets = [databaseUrl, directUrl, childDatabaseUrl].map(
+    (url) => `${url.hostname}:${url.port || '5432'}${url.pathname}`,
+  )
+  if (new Set(targets).size !== 1) {
+    throw new Error('database_targets_must_match')
+  }
 }

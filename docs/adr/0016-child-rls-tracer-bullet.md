@@ -26,10 +26,11 @@ ADR-0007はMVPの認可をRoute Handlerへ集約し、RLSをPhase 2へ延期し�
 `children`の通常CRUD Routeだけを次の境界へ移す。
 
 1. migrationで`hana_child_owner`を`NOLOGIN`、`NOINHERIT`、`NOBYPASSRLS`として作る
-2. 接続roleには`SET ROLE`のためのmembershipだけを与える
-3. `withChildOwnerScope(userId, operation)`が1 transaction内で`SET LOCAL ROLE hana_child_owner`とtransaction-local GUCを設定する
-4. `children_owner_scope` policyが`user_id = hana_current_user_id()`を`USING`と`WITH CHECK`の両方で要求する
-5. 通常CRUD Routeはprivileged `prisma`を直接importしない
+2. 非superuserの`hana_child_runtime`には`SET ROLE`のためのmembershipだけを与え、通常の`DATABASE_URL`と専用`CHILD_DATABASE_URL`を分ける
+3. 非superuserの`hana_migrator`がmigrationと限定`SECURITY DEFINER`関数を所有し、通常runtimeから分離する
+4. `withChildOwnerScope(userId, operation)`が専用接続の1 transaction内で`SET LOCAL ROLE hana_child_owner`とtransaction-local GUCを設定する
+5. `children_owner_scope` policyが`user_id = hana_current_user_id()`を`USING`と`WITH CHECK`の両方で要求する
+6. 通常CRUD Routeはprivileged `prisma`を直接importしない
 
 `SET LOCAL ROLE`と`set_config(..., true)`はcommit/rollbackで解除される。user IDはSQL文字列へ連結せず、parameterとして渡す。
 
@@ -42,11 +43,14 @@ RLSだけでは別owner行と存在しない行がどちらも見えない。既
 - child列、user ID、氏名、生年月日を返さない
 - `PUBLIC`の実行権限を剥奪し、`hana_child_owner`だけへ付与する
 - `search_path`を固定する
+- ownerは非superuserの`hana_migrator`へ固定する。`BYPASSRLS`は`FORCE RLS`下でforeign判定するために必要だが、通常runtimeの資格情報からは分離する
 
 ### Preflight and rollback
 
 migrationは変更前に次をfail closedで検査する。
 
+- 実行roleが非superuserの`hana_migrator`で、`CREATEROLE`と`BYPASSRLS`を持つ
+- `hana_child_runtime`が`NOINHERIT`、`NOBYPASSRLS`のlogin roleで、先行membershipを持たない
 - owner profileが存在しない既存childがない
 - `children`へRLSや既存policyが先行導入されていない
 - 同名roleが存在しない（未知のgrantやmembershipを再利用しない）
@@ -65,7 +69,7 @@ PostgreSQL 16の合成`hana_ci`だけでmigrationを適用し、User AからUser
 
 このIssueでは実環境へmigrationを適用しない。次の条件が揃うまでproduction rolloutはNO-GOとする。
 
-1. runtime接続roleとmigration roleを別資格情報に分離する
+1. `hana_migrator`と`hana_child_runtime`の資格情報をstaging/production Secret Managerへ別々に登録する
 2. home、memory、AIなど残る`children`参照をowner-scoped repositoryまたは複合resource RLSへ移す
 3. `memories`と`images`の原子的transactionに対応する複数table policyを別Issueで設計する
 4. stagingでredacted read-only preflight、1 migrationだけの承認、fresh connection postflightを行う
@@ -78,6 +82,7 @@ PostgreSQL 16の合成`hana_ci`だけでmigrationを適用し、User AからUser
 - child CRUDではRouteの条件漏れに対するDB二次防御が成立する
 - Prismaとtransaction poolを維持したまま段階展開できる
 - normal user Routeと管理接続の責務がコードimportとCIで判別できる
+- CIではmigration owner、child runtime、owner scopeを別roleとして実行し、superuser依存を検出できる
 
 ### Negative
 

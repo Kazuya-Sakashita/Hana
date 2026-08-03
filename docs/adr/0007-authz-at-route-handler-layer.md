@@ -57,7 +57,7 @@ Hana は個人開発でメンテ負荷を最小化したい。
 - 移行時は **全 Route Handler のテストが既に存在** している前提で、段階的に RLS を当てる
 - 移行判断は別 ADR (ADR-NNNN) で行う
 
-2026-08-03にADR-0016で`children` CRUDのrequest-scoped role tracerを採用した。合成DBでのtracerはGOだが、実環境と全面展開はruntime/migration role分離および残存参照の移行までNO-GOとする。
+2026-08-03にADR-0016で`children` CRUDのrequest-scoped role tracerを採用した。合成DBではmigration/runtime role分離を実証したが、実環境と全面展開は分離資格情報のprovisioningおよび残存参照の移行までNO-GOとする。
 
 ## Consequences
 

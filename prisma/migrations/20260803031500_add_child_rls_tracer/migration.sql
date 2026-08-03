@@ -5,6 +5,48 @@ BEGIN;
 
 DO $$
 BEGIN
+  IF current_user <> 'hana_migrator' OR NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_roles
+    WHERE rolname = current_user
+      AND rolcanlogin
+      AND NOT rolsuper
+      AND NOT rolcreatedb
+      AND rolcreaterole
+      AND NOT rolreplication
+      AND rolbypassrls
+  ) THEN
+    RAISE EXCEPTION 'child_rls_preflight_migrator_role_required';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_roles
+    WHERE rolname = 'hana_child_runtime'
+      AND rolcanlogin
+      AND NOT rolsuper
+      AND NOT rolcreatedb
+      AND NOT rolcreaterole
+      AND NOT rolinherit
+      AND NOT rolreplication
+      AND NOT rolbypassrls
+  ) THEN
+    RAISE EXCEPTION 'child_rls_preflight_runtime_role_required';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members AS membership
+    WHERE membership.member = (
+      SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_runtime'
+    )
+      OR membership.roleid = (
+        SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_runtime'
+      )
+  ) THEN
+    RAISE EXCEPTION 'child_rls_preflight_runtime_membership_present';
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM public.children AS child
@@ -51,7 +93,7 @@ CREATE ROLE hana_child_owner
   NOREPLICATION
   NOBYPASSRLS;
 
-GRANT hana_child_owner TO CURRENT_USER;
+GRANT hana_child_owner TO hana_child_runtime;
 GRANT USAGE ON SCHEMA public TO hana_child_owner;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.children TO hana_child_owner;
 
@@ -94,7 +136,7 @@ RETURNS text
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog
 AS $$
   SELECT CASE
     WHEN EXISTS (
@@ -114,6 +156,7 @@ AS $$
   END
 $$;
 
+ALTER FUNCTION public.hana_child_access_status(uuid) OWNER TO hana_migrator;
 REVOKE ALL ON FUNCTION public.hana_child_access_status(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.hana_child_access_status(uuid) TO hana_child_owner;
 

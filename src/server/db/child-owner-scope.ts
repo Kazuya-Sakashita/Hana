@@ -1,7 +1,7 @@
 import 'server-only'
 
 import type { Prisma } from '@prisma/client'
-import { prisma } from '@/server/db/prisma'
+import { getChildOwnerPrisma } from '@/server/db/child-owner-prisma'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -14,7 +14,7 @@ export async function withChildOwnerScope<T>(
 ): Promise<T> {
   if (!UUID_PATTERN.test(userId)) throw new Error('invalid_child_owner_scope')
 
-  return prisma.$transaction(async (transaction) => {
+  return getChildOwnerPrisma().$transaction(async (transaction) => {
     await transaction.$executeRawUnsafe('SET LOCAL ROLE hana_child_owner')
     await transaction.$queryRaw`SELECT set_config('hana.current_user_id', ${userId}, true)`
     return operation(transaction)

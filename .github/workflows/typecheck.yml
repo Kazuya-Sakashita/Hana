@@ -32,6 +32,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-role-key
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hana_ci
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/hana_ci
+      CHILD_DATABASE_URL: postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci
       ANTHROPIC_API_KEY: ci-dummy-anthropic-key
       AI_MODEL: claude-haiku-4-5
       HANA_SYNTHETIC_E2E: '1'
@@ -51,10 +52,17 @@ jobs:
       - name: Bootstrap Supabase roles in local PostgreSQL
         run: pnpm qa:issue123:db-bootstrap
 
+      - name: Bootstrap separated migration and child runtime roles
+        run: pnpm qa:issue151:db-bootstrap
+
       - name: Apply database migrations
+        env:
+          DIRECT_URL: postgresql://hana_migrator:synthetic-migrator@localhost:5432/hana_ci
         run: pnpm db:migrate:deploy
 
       - name: Verify child owner RLS boundary
+        env:
+          DIRECT_URL: postgresql://hana_migrator:synthetic-migrator@localhost:5432/hana_ci
         run: pnpm qa:issue151:child-rls-db
 
       - name: Verify image access concurrency boundary

@@ -68,7 +68,7 @@ export async function POST(req: Request) {
 他人のリソースを扱う場合は `requireOwnership(currentUserId, resourceUserId)`。
 不一致なら 403 `forbidden` を throw する。
 
-`/v1/children`の通常CRUDは`withChildOwnerScope()`を必須とし、request-scoped DB roleとRLSを二次防御に使う。privileged `prisma`を直接importしない。tracer外のresourceは従来どおりRoute Handlerの所有権条件を正とする。
+`/v1/children`の通常CRUDは`CHILD_DATABASE_URL`の非特権接続と`withChildOwnerScope()`を必須とし、request-scoped DB roleとRLSを二次防御に使う。privileged `prisma`や`child-owner-prisma`をRouteから直接importしない。tracer外のresourceは従来どおりRoute Handlerの所有権条件を正とする。
 
 ### 403 vs 404 の使い分け
 
@@ -153,7 +153,7 @@ Cookie、Bearer、OAuth codeの値はログやテスト失敗メッセージへ�
 - [ ] `service_role` key を `NEXT_PUBLIC_*` に置いていない
 - [ ] OAuth callback の `code` / `state` をログに出していない
 - [ ] 404 vs 403 ポリシーを守っている (存在の有無を漏らさない)
-- [ ] `children` CRUDは`withChildOwnerScope()`内でDB操作し、privileged Prismaを直接使っていない
+- [ ] `children` CRUDは`CHILD_DATABASE_URL` + `withChildOwnerScope()`内でDB操作し、privileged Prismaを直接使っていない
 
 ---
 

@@ -12,8 +12,8 @@ const transactionClient = {
   $queryRaw: mocks.queryRaw,
 }
 
-vi.mock('@/server/db/prisma', () => ({
-  prisma: { $transaction: mocks.transaction },
+vi.mock('@/server/db/child-owner-prisma', () => ({
+  getChildOwnerPrisma: () => ({ $transaction: mocks.transaction }),
 }))
 
 import { childAccessStatus, withChildOwnerScope } from '@/server/db/child-owner-scope'
@@ -71,6 +71,7 @@ describe('child owner DB scope', () => {
       const source = readFileSync(file, 'utf8')
       expect(source).toContain("from '@/server/db/child-owner-scope'")
       expect(source).not.toContain("from '@/server/db/prisma'")
+      expect(source).not.toContain("from '@/server/db/child-owner-prisma'")
     }
   })
 
@@ -81,16 +82,25 @@ describe('child owner DB scope', () => {
     const workflow = readFileSync('.github/workflows/typecheck.yml', 'utf8')
 
     expect(migration.trimStart()).toContain('BEGIN;')
+    expect(migration).toContain('child_rls_preflight_migrator_role_required')
+    expect(migration).toContain('child_rls_preflight_runtime_role_required')
     expect(migration).toContain('child_rls_preflight_orphan_owner')
     expect(migration).toContain('child_rls_preflight_role_already_exists')
     expect(migration).toContain('CREATE ROLE hana_child_owner')
     expect(migration).toContain('NOBYPASSRLS')
+    expect(migration).toContain('GRANT hana_child_owner TO hana_child_runtime')
+    expect(migration).toContain(
+      'ALTER FUNCTION public.hana_child_access_status(uuid) OWNER TO hana_migrator',
+    )
     expect(migration).toContain('ENABLE ROW LEVEL SECURITY')
     expect(migration).toContain('FORCE ROW LEVEL SECURITY')
     expect(migration).toContain('WITH CHECK (user_id = public.hana_current_user_id())')
     expect(migration.trimEnd().endsWith('COMMIT;')).toBe(true)
     expect(rollback).toContain('DROP POLICY children_owner_scope ON public.children')
+    expect(rollback).toContain('REVOKE hana_child_owner FROM hana_child_runtime')
     expect(rollback).toContain('DROP ROLE hana_child_owner')
+    expect(workflow).toContain('pnpm qa:issue151:db-bootstrap')
+    expect(workflow).toContain('CHILD_DATABASE_URL: postgresql://hana_child_runtime:')
     expect(workflow).toContain('pnpm qa:issue151:child-rls-db')
   })
 })

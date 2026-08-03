@@ -13,8 +13,7 @@ DROP FUNCTION public.hana_current_user_id();
 
 REVOKE ALL ON TABLE public.children FROM hana_child_owner;
 REVOKE USAGE ON SCHEMA public FROM hana_child_owner;
-REVOKE hana_child_owner FROM CURRENT_USER;
+REVOKE hana_child_owner FROM hana_child_runtime;
 DROP ROLE hana_child_owner;
 
 COMMIT;
-

@@ -35,6 +35,7 @@ Supabase のダッシュボードで以下の値を取得します。
 | ------------------------------- | --------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                  | Settings → Database → Connection string → **URI (pgbouncer/pooler)** モード (port 6543) |
 | `DIRECT_URL`                    | Settings → Database → Connection string → **Direct connection** モード (port 5432)      |
+| `CHILD_DATABASE_URL`            | ISSUE-151 rollout承認後の`hana_child_runtime`専用接続。承認前は設定しない               |
 | `NEXT_PUBLIC_SUPABASE_URL`      | プロジェクト top → **Connect** ボタン または Settings → API → Project URL               |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Settings → API → **anon (public)** key                                                  |
 | `SUPABASE_SERVICE_ROLE_KEY`     | Settings → API → **service_role** key (サーバ専用)                                      |
