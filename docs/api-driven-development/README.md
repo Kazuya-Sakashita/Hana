@@ -296,8 +296,9 @@ todo → in_progress → review → done
 ```markdown
 # NNNN. タイトル
 
-- Status: accepted | superseded
+- Status: proposed | accepted | superseded
 - Date: YYYY-MM-DD
+- Activation gate: 必要な場合だけ、有効化に必要な人間判断や後続条件
 
 ## Context
 
