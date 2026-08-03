@@ -57,6 +57,8 @@ Hana は個人開発でメンテ負荷を最小化したい。
 - 移行時は **全 Route Handler のテストが既に存在** している前提で、段階的に RLS を当てる
 - 移行判断は別 ADR (ADR-NNNN) で行う
 
+2026-08-03にADR-0016で`children` CRUDのrequest-scoped role tracerを採用した。合成DBでのtracerはGOだが、実環境と全面展開はruntime/migration role分離および残存参照の移行までNO-GOとする。
+
 ## Consequences
 
 ### 良い点
@@ -94,4 +96,5 @@ defense-in-depth は最終的に確保される。
 - ADR-0004 (Supabase 採用)
 - ADR-0005 (Prisma 採用)
 - ADR-0006 (Supabase Auth + SNS-only)
+- ADR-0016 (`children` RLS tracer bullet)
 - `docs/api-driven-development/error-format.md` §7 (403 vs 404 ポリシー)

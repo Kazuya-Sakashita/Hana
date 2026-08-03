@@ -79,8 +79,9 @@ operations:
     source: src/app/v1/children/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: session_user_filter
+    ownership_strategy: database_owner_scope
     ownership_evidence:
+      - call:withChildOwnerScope
       - property:userId=user.id
     ownership_denials: []
 
@@ -89,8 +90,9 @@ operations:
     source: src/app/v1/children/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: session_user_assignment
+    ownership_strategy: database_owner_scope
     ownership_evidence:
+      - call:withChildOwnerScope
       - property:userId=user.id
     ownership_denials: []
 
@@ -99,15 +101,16 @@ operations:
     source: src/app/v1/children/[childId]/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: explicit_owner_check
+    ownership_strategy: database_owner_scope
     ownership_evidence:
-      - comparison:child.userId!==user.id
+      - call:withChildOwnerScope
+      - call:childAccessStatus
       - call:problems.forbidden
     ownership_denials:
       - case: child_owned_by_another_user
         status: 403
         evidence:
-          - comparison:child.userId!==user.id
+          - call:childAccessStatus
           - call:problems.forbidden
 
   'PUT /children/{childId}':
@@ -115,15 +118,16 @@ operations:
     source: src/app/v1/children/[childId]/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: explicit_owner_check
+    ownership_strategy: database_owner_scope
     ownership_evidence:
-      - comparison:child.userId!==user.id
+      - call:withChildOwnerScope
+      - call:childAccessStatus
       - call:problems.forbidden
     ownership_denials:
       - case: child_owned_by_another_user
         status: 403
         evidence:
-          - comparison:child.userId!==user.id
+          - call:childAccessStatus
           - call:problems.forbidden
 
   'POST /uploads/presigned-url':

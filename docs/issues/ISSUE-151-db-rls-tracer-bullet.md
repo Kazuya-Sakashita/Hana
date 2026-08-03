@@ -2,7 +2,7 @@
 id: ISSUE-151
 title: DB least-privilegeとRLSのtracer bulletを実装する
 priority: P1
-status: todo
+status: in_progress
 size: M
 created_at: 2026-08-03
 github_issue: 321

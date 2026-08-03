@@ -11,8 +11,8 @@
 
 | status | count |
 | --- | ---: |
-| `todo` | 7 |
-| `in_progress` | 0 |
+| `todo` | 6 |
+| `in_progress` | 1 |
 | `review` | 0 |
 | `done` | 150 |
 | `blocked` | 6 |
@@ -21,7 +21,6 @@
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
-| `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
 | `ISSUE-155` | `#323` | `todo` | P0 | M | confirmed cleanupへlease・backoff・dead-letterを追加する | - |
 | `ISSUE-156` | `#324` | `todo` | P1 | M | Critical pathのcoverage・mutation gateを導入する | - |
@@ -33,7 +32,9 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 
 ## In Progress
 
-現在はありません。
+| Issue | GitHub | status | priority | size | title | blocked_by |
+| --- | ---: | --- | --- | --- | --- | --- |
+| `ISSUE-151` | `#321` | `in_progress` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 
 ## Review Queue
 
@@ -205,7 +206,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-148` | `#318` | `done` | P0 | S | 未構成環境のmaintenance scheduleを明示的にHOLDする | - |
 | `ISSUE-149` | `#319` | `done` | P1 | M | Issue台帳とGitHub状態のdriftをCIで防ぐ | - |
 | `ISSUE-150` | `#320` | `done` | P1 | M | 認証方式と全Route応答契約をOpenAPIへ一致させる | - |
-| `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
+| `ISSUE-151` | `#321` | `in_progress` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
 | `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |

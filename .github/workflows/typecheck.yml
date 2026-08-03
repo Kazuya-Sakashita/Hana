@@ -54,6 +54,9 @@ jobs:
       - name: Apply database migrations
         run: pnpm db:migrate:deploy
 
+      - name: Verify child owner RLS boundary
+        run: pnpm qa:issue151:child-rls-db
+
       - name: Verify image access concurrency boundary
         run: ISSUE_123_DATABASE_QA=1 pnpm qa:issue123:image-boundary-db
 

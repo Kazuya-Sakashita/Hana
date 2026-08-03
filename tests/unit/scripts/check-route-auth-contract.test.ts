@@ -138,6 +138,21 @@ describe('route authentication contract', () => {
     expect(collectMethodEvidence(source, 'POST').has('call:requireUser')).toBe(true)
   })
 
+  it('collects ownership evidence only from helpers reachable by the method', () => {
+    const source = `
+      async function loadOwned() { await childAccessStatus(); throw problems.forbidden() }
+      async function unrelated() { await privilegedBypass() }
+      export async function GET() { await loadOwned(); return new Response(null) }
+      export async function POST() { await requireUser(); return new Response(null) }
+    `
+
+    const getEvidence = collectMethodEvidence(source, 'GET')
+    expect(getEvidence.has('call:childAccessStatus')).toBe(true)
+    expect(getEvidence.has('call:problems.forbidden')).toBe(true)
+    expect(getEvidence.has('call:privilegedBypass')).toBe(false)
+    expect(collectMethodEvidence(source, 'POST').has('call:childAccessStatus')).toBe(false)
+  })
+
   it('accepts a documented 422 ownership denial only when it has evidence', () => {
     const { openapi, contract } = fixture()
     const openapiWith422 = {
