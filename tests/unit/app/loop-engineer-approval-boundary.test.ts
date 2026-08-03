@@ -96,11 +96,15 @@ describe('ISSUE-163 Loop Engineer approval boundary', () => {
     expect(adrSource).toContain('AI生成本文')
     expect(adrSource).toContain('取得・artifact保存・ログ出力しない')
     expect(adrSource).toContain('ISSUE-167の人間GO後')
-    expect(adrSource).toContain('すべてのmergeを`HUMAN_REQUIRED`として扱う')
+    expect(adrSource).toContain('`HOLD`条件は最優先で維持')
+    expect(adrSource).toContain('HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う')
+    expect(adrSource).toContain('ISSUE-167のdry-runと人間GO後だけnative auto-mergeを予約')
+    expect(adrSource).not.toContain('review結果、actionable finding件数')
+    expect(adrSource).toContain('必須check名とstatus、固定された最終判定reason')
 
     for (const source of [agentsSource, claudeSource]) {
       expect(source).toContain('docs/adr/0017-loop-engineer-approval-boundary.md')
-      expect(source).toContain('ISSUE-167の人間GOまでは全mergeを人間承認で止める')
+      expect(source).toContain('HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない')
     }
 
     expect(issueSource).toContain('github_issue: 335')

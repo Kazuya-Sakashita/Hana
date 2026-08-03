@@ -6,7 +6,7 @@
 `AUTO_MERGE_ELIGIBLE`、`HUMAN_REQUIRED`、`HOLD`を安全側に判定することである。
 
 本契約はADR-0017を正とする。ISSUE-164〜ISSUE-166の実装とISSUE-167のdry-run後に人間が
-有効化を承認するまでは、すべてのmergeを`HUMAN_REQUIRED`として扱う。
+有効化を承認するまでも`HOLD`条件を最優先し、HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う。
 
 ---
 
@@ -213,7 +213,7 @@ PR には以下を残す。
 - Link: `Closes #<GitHub issue number>`
 - State: 自動作成時は Draft PR から始める
 - Review loop: 必要role全員の独立reviewを最新SHA単位で最大3巡行う
-- Review evidence: reviewed SHA、role、round、result、actionable finding件数だけを記録する
+- Review evidence: reviewed SHA、role、round、actionable finding件数だけを記録する
 - Merge note: merge / release / deploy に人間承認が必要な場合は明記する
 
 ### Rollback Record
@@ -276,8 +276,10 @@ Codex は以下で止まる。
 - 推奨baselineは`approval_policy="on-request"`、`approvals_reviewer="auto_review"`、
   `sandbox_mode="workspace-write"`とし、networkは必要時だけ限定承認する。
 - 1 Issue / 1 PR、OpenAPI-first、生成物の直接編集禁止、PII非保存を維持する。
-- 証跡はIssue ID、PR番号、head SHA、変更領域、review role、round、件数、CI status、判定reasonだけにする。
+- 証跡はIssue ID、PR番号、head SHA、変更領域ID、review role、round、actionable finding件数、
+  必須check名とstatus、固定された最終判定reasonだけにする。
 - PR本文、コメント本文、prompt全文、実ユーザー情報、画像、生成本文、secretをartifactへ保存しない。
 
 有効化順はISSUE-164の判定、ISSUE-165のreview gate、ISSUE-166のRuleset、ISSUE-167のdry-runである。
-ISSUE-167で誤許可0件を確認し、人間がGOを出すまではすべてのmergeを`HUMAN_REQUIRED`にする。
+ISSUE-167で誤許可0件を確認し、人間がGOを出すまでも`HOLD`条件を最優先する。HOLDでないPRも、
+人間GOまではmergeを`HUMAN_REQUIRED`にする。

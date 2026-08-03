@@ -15,7 +15,7 @@
 - **開発スタイル**: API 駆動開発 + Issue 駆動開発
 - **Codex Skill**: `$hana-development`（Hana の Issue 着手・レビュー・PR 準備で使う）
 - **Codex 自動開発 Runbook**: `docs/api-driven-development/codex-automation-runbook.md`
-- **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（ISSUE-167の人間GOまでは全mergeを人間承認で止める）
+- **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない）
 
 ### Claude Code から Codex への読み替え
 

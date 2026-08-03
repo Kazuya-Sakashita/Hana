@@ -23,11 +23,11 @@ merge承認だけを人間に求め続けると、検証済みの低リスク変
 Loop EngineerはPRを次の3状態のどれかに分類する。優先順位は
 `HOLD > HUMAN_REQUIRED > AUTO_MERGE_ELIGIBLE`とし、複数条件に該当した場合は安全側を選ぶ。
 
-| 状態                  | 意味                                                                 | 許可される次の動作                                       |
-| --------------------- | -------------------------------------------------------------------- | -------------------------------------------------------- |
-| `AUTO_MERGE_ELIGIBLE` | 低リスクのコード変更で、最新SHAのreviewとCIがすべて合格              | ISSUE-166有効化後にnative auto-mergeを予約できる         |
-| `HUMAN_REQUIRED`      | 証跡は揃っているが、実環境・不可逆性・管理権限に関する人間判断が必要 | 人間が限定scopeを承認するまでmergeまたは操作しない       |
-| `HOLD`                | 指摘、矛盾、不明、stale証跡、検証不能のいずれかがある                | 人間承認でも上書きせず、修正または証跡追加後に再判定する |
+| 状態                  | 意味                                                                 | 許可される次の動作                                            |
+| --------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `AUTO_MERGE_ELIGIBLE` | 低リスクのコード変更で、最新SHAのreviewとCIがすべて合格              | ISSUE-167のdry-runと人間GO後だけnative auto-mergeを予約できる |
+| `HUMAN_REQUIRED`      | 証跡は揃っているが、実環境・不可逆性・管理権限に関する人間判断が必要 | 人間が限定scopeを承認するまでmergeまたは操作しない            |
+| `HOLD`                | 指摘、矛盾、不明、stale証跡、検証不能のいずれかがある                | 人間承認でも上書きせず、修正または証跡追加後に再判定する      |
 
 `HUMAN_REQUIRED`は判断待ちであり、`HOLD`は合格条件未達である。管理者がCIやreviewを無視して
 `HOLD`をmerge可能へ変える運用は採用しない。
@@ -134,7 +134,7 @@ rollback、最新SHA条件を満たすコード変更は`AUTO_MERGE_ELIGIBLE`候
 ### 9. 証跡の最小化
 
 自動判定と監査へ保存してよいのは、Issue ID、PR番号、head SHA、変更領域ID、reviewer role、round、
-review結果、actionable finding件数、必須check名とstatus、最終判定reasonである。
+actionable finding件数、必須check名とstatus、固定された最終判定reasonである。
 
 PR本文、コメント本文、review prompt全文、実ユーザー情報、画像、画像URL、storage key、AI prompt、
 AI生成本文、secret、接続文字列は取得・artifact保存・ログ出力しない。
@@ -145,11 +145,11 @@ AI生成本文、secret、接続文字列は取得・artifact保存・ログ出�
 
 1. ISSUE-164で副作用のない3状態判定を実装する
 2. ISSUE-165で最新SHA単位の複数専門review gateを実装する
-3. ISSUE-166で人間承認のもとRulesetとnative auto-mergeを設定する
+3. ISSUE-166で人間承認のもとRulesetとnative auto-merge設定を準備するが、PRへの予約は行わない
 4. ISSUE-167で最初の5 PRをdry-runし、誤許可0件を確認する
 5. ISSUE-167の人間GO後に、限定した低リスクPRだけを有効化する
 
-それまではすべてのmergeを`HUMAN_REQUIRED`として扱う。
+それまでも`HOLD`条件は最優先で維持し、HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う。
 
 ## Consequences
 
