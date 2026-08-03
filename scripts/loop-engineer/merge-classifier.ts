@@ -35,6 +35,10 @@ export type MergeClassificationReason =
   | 'required_check_pending'
   | 'required_check_failed'
   | 'invalid_review_gate'
+  | 'unsupported_review_gate_schema'
+  | 'unknown_reviewer_role'
+  | 'duplicate_reviewer_role'
+  | 'reviewer_role_mismatch'
   | 'review_sha_mismatch'
   | 'review_pending'
   | 'review_failed'
@@ -53,11 +57,13 @@ export type MergeClassificationInput = {
     status: 'success' | 'pending' | 'failure'
   }>
   review_gate: {
+    schema_version: 'loop-engineer-review-gate/v1'
     status: 'pass' | 'pending' | 'fail'
     reviewed_sha: string
     required_reviewers: number
     completed_reviewers: number
     actionable_findings: number
+    completed_roles: string[]
   }
 }
 
@@ -101,12 +107,30 @@ const allowedCheckNames = new Set([
   'supply-chain',
   'issue-registry',
 ])
+const baseReviewerRoles = [
+  'spec-acceptance',
+  'implementation-correctness',
+  'test-reliability',
+] as const
+const allowedReviewerRoles = new Set([
+  ...baseReviewerRoles,
+  'security-authorization',
+  'ai-safety-privacy',
+  'privacy-data-protection',
+  'database-migration',
+  'api-contract',
+  'ui-accessibility',
+  'image-pipeline-privacy',
+  'ci-supply-chain-operations',
+])
 const requiredReviewGateFields = [
+  'schema_version',
   'status',
   'reviewed_sha',
   'required_reviewers',
   'completed_reviewers',
   'actionable_findings',
+  'completed_roles',
 ] as const
 const allowedReviewGateFields = new Set<string>(requiredReviewGateFields)
 const allowedChangeAreas = new Set([
@@ -153,6 +177,48 @@ const humanRequiredChangeAreas = [
   ['external-notification', 'external_notification'],
   ['billing-change', 'billing_change'],
 ] as const
+const changeAreaEvidence: Record<string, { check: string; reviewerRole: string }> = {
+  auth: { check: 'security', reviewerRole: 'security-authorization' },
+  ai: { check: 'ai-safety', reviewerRole: 'ai-safety-privacy' },
+  privacy: { check: 'privacy', reviewerRole: 'privacy-data-protection' },
+  database: { check: 'database', reviewerRole: 'database-migration' },
+  'migration-code': { check: 'database', reviewerRole: 'database-migration' },
+  api: { check: 'openapi-contract', reviewerRole: 'api-contract' },
+  ui: { check: 'ui-accessibility', reviewerRole: 'ui-accessibility' },
+  image: { check: 'image-pipeline', reviewerRole: 'image-pipeline-privacy' },
+  storage: { check: 'image-pipeline', reviewerRole: 'image-pipeline-privacy' },
+  ci: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  workflow: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  dependency: { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  'real-db-migration': { check: 'database', reviewerRole: 'database-migration' },
+  'destructive-operation': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+  },
+  'real-user-data': { check: 'privacy', reviewerRole: 'privacy-data-protection' },
+  'production-deploy': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+  },
+  'secret-change': { check: 'security', reviewerRole: 'security-authorization' },
+  'vendor-change': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  'breaking-waiver': { check: 'openapi-contract', reviewerRole: 'api-contract' },
+  'force-push': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  'ruleset-change': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+  'repository-setting-change': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+  },
+  'token-permission-change': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+  },
+  'external-notification': {
+    check: 'supply-chain',
+    reviewerRole: 'ci-supply-chain-operations',
+  },
+  'billing-change': { check: 'supply-chain', reviewerRole: 'ci-supply-chain-operations' },
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -236,6 +302,9 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
   if (requiredReviewGateFields.some((field) => !Object.hasOwn(reviewGate, field))) {
     return classification(input, 'HOLD', 'invalid_review_gate')
   }
+  if (reviewGate.schema_version !== 'loop-engineer-review-gate/v1') {
+    return classification(input, 'HOLD', 'unsupported_review_gate_schema')
+  }
   if (
     !['pass', 'pending', 'fail'].includes(String(reviewGate.status)) ||
     typeof reviewGate.reviewed_sha !== 'string' ||
@@ -245,9 +314,19 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
     !Number.isInteger(reviewGate.completed_reviewers) ||
     (reviewGate.completed_reviewers as number) < 0 ||
     !Number.isInteger(reviewGate.actionable_findings) ||
-    (reviewGate.actionable_findings as number) < 0
+    (reviewGate.actionable_findings as number) < 0 ||
+    !Array.isArray(reviewGate.completed_roles) ||
+    reviewGate.completed_roles.some((role) => typeof role !== 'string')
   ) {
     return classification(input, 'HOLD', 'invalid_review_gate')
+  }
+  if (input.review_gate.completed_roles.some((role) => !allowedReviewerRoles.has(role))) {
+    return classification(input, 'HOLD', 'unknown_reviewer_role')
+  }
+  if (
+    new Set(input.review_gate.completed_roles).size !== input.review_gate.completed_roles.length
+  ) {
+    return classification(input, 'HOLD', 'duplicate_reviewer_role')
   }
 
   if (input.change_areas.length === 0) {
@@ -280,7 +359,16 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
     return classification(input, 'HOLD', 'acceptance_criteria_incomplete')
   }
 
-  if (baselineCheckNames.some((name) => !checkNames.includes(name))) {
+  const requiredCheckNames = new Set<string>(baselineCheckNames)
+  const requiredReviewerRoles = new Set<string>(baseReviewerRoles)
+  for (const changeArea of input.change_areas) {
+    const evidence = changeAreaEvidence[changeArea]
+    if (!evidence) continue
+    requiredCheckNames.add(evidence.check)
+    requiredReviewerRoles.add(evidence.reviewerRole)
+  }
+
+  if ([...requiredCheckNames].some((name) => !checkNames.includes(name))) {
     return classification(input, 'HOLD', 'required_check_missing')
   }
 
@@ -307,8 +395,19 @@ export function classifyMergeEligibility(rawInput: unknown): MergeClassification
   if (input.review_gate.status === 'fail') {
     return classification(input, 'HOLD', 'review_failed')
   }
-  if (input.review_gate.required_reviewers < 3 || input.review_gate.required_reviewers > 6) {
+  if (
+    requiredReviewerRoles.size > 6 ||
+    input.review_gate.required_reviewers < 3 ||
+    input.review_gate.required_reviewers > 6
+  ) {
     return classification(input, 'HOLD', 'reviewer_count_out_of_range')
+  }
+  if (
+    input.review_gate.required_reviewers !== requiredReviewerRoles.size ||
+    input.review_gate.completed_roles.length !== requiredReviewerRoles.size ||
+    [...requiredReviewerRoles].some((role) => !input.review_gate.completed_roles.includes(role))
+  ) {
+    return classification(input, 'HOLD', 'reviewer_role_mismatch')
   }
   if (input.review_gate.completed_reviewers !== input.review_gate.required_reviewers) {
     return classification(input, 'HOLD', 'review_incomplete')

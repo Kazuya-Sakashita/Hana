@@ -22,11 +22,13 @@ const eligibleInput = {
     { name: 'pr-gate', status: 'success' },
   ],
   review_gate: {
+    schema_version: 'loop-engineer-review-gate/v1',
     status: 'pass',
     reviewed_sha: headSha,
     required_reviewers: 3,
     completed_reviewers: 3,
     actionable_findings: 0,
+    completed_roles: ['spec-acceptance', 'implementation-correctness', 'test-reliability'],
   },
 }
 

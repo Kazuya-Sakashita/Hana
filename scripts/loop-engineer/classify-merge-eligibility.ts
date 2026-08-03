@@ -30,11 +30,13 @@ function eligibleInput(): MergeClassificationInput {
       { name: 'pr-gate', status: 'success' },
     ],
     review_gate: {
+      schema_version: 'loop-engineer-review-gate/v1',
       status: 'pass',
       reviewed_sha: headSha,
       required_reviewers: 3,
       completed_reviewers: 3,
       actionable_findings: 0,
+      completed_roles: ['spec-acceptance', 'implementation-correctness', 'test-reliability'],
     },
   }
 }
@@ -42,6 +44,10 @@ function eligibleInput(): MergeClassificationInput {
 function contractExpectations(): ContractExpectation[] {
   const humanRequired = eligibleInput()
   humanRequired.change_areas = ['database', 'real-db-migration']
+  humanRequired.required_checks.push({ name: 'database', status: 'success' })
+  humanRequired.review_gate.required_reviewers = 4
+  humanRequired.review_gate.completed_reviewers = 4
+  humanRequired.review_gate.completed_roles.push('database-migration')
 
   const acceptanceIncomplete = eligibleInput()
   acceptanceIncomplete.required_checks[0] = {

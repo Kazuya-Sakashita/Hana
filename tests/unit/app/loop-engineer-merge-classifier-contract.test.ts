@@ -33,7 +33,11 @@ describe('ISSUE-164 merge classifier repository contract', () => {
   it('documents the fixed schema, precedence, privacy boundary, and activation boundary', () => {
     expect(contractDocument).toContain('loop-engineer-merge-input/v1')
     expect(contractDocument).toContain('loop-engineer-merge-classification/v1')
+    expect(contractDocument).toContain('loop-engineer-review-gate/v1')
     expect(contractDocument).toContain('HOLD > HUMAN_REQUIRED > AUTO_MERGE_ELIGIBLE')
+    expect(contractDocument).toContain('auth` → `security` → `security-authorization')
+    expect(contractDocument).toContain('独立したread-only review')
+    expect(contractDocument).toContain('reviewer間の判断不一致')
     expect(contractDocument).toContain('PR本文')
     expect(contractDocument).toContain('実ユーザーデータ')
     expect(contractDocument).toContain('自動マージを実行・予約しない')
