@@ -112,6 +112,19 @@ describe('requireUser', () => {
     const user = await requireUser()
     expect(user.id).toBe(USER_ID)
   })
+
+  it('returns unauthorized for an expired or invalid cookie session', async () => {
+    mocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: { name: 'AuthSessionMissingError' },
+    })
+
+    await expect(requireUser()).rejects.toMatchObject({
+      reason: 'unauthorized',
+      status: 401,
+    })
+    expect(mocks.findUnique).not.toHaveBeenCalled()
+  })
 })
 
 describe('requireOwnership', () => {

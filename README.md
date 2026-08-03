@@ -78,7 +78,9 @@ pnpm openapi:lint         # redocly + spectral で OpenAPI を検証
 pnpm openapi:route-map    # OpenAPI paths と src/app/v1 Route Handler を照合
 pnpm openapi:bundle       # 分割ファイルを 1 つに集約
 pnpm openapi:gen          # OpenAPI → TypeScript 型を再生成
-pnpm openapi:check-breaking  # main ブランチに対する破壊変更を検出 (warn)
+pnpm openapi:check-breaking  # mainとの差分でWARN以上の破壊変更を失敗させる
+pnpm openapi:auth-contract   # 全Routeの認証・所有権matrixを実装と照合
+pnpm openapi:response-contract # 公開operation等のstatus/content/schemaを検証
 pnpm openapi:all          # lint → route-map → bundle → gen
 
 # Database (Supabase + Prisma)

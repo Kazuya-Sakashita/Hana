@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -52,6 +53,7 @@ describe('POST /v1/metrics/vitals', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const res = await POST(jsonRequest(validPayload))
     expect(res.status).toBe(204)
+    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response: res })
     expect(logSpy).toHaveBeenCalledTimes(1)
     const logged = logSpy.mock.calls[0]?.[0]
     expect(typeof logged).toBe('string')
@@ -85,6 +87,7 @@ describe('POST /v1/metrics/vitals', () => {
   it('rejects invalid metric name with 422', async () => {
     const res = await POST(jsonRequest({ ...validPayload, name: 'NOPE' }))
     expect(res.status).toBe(422)
+    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response: res })
   })
 
   it('rejects negative value with 422', async () => {

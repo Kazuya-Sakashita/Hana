@@ -2,6 +2,35 @@ import { describe, expect, it } from 'vitest'
 import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
 
 describe('OpenAPI response contract failures', () => {
+  it('accepts a declared no-content response without Content-Type', async () => {
+    const response = new Response(null, { status: 204 })
+
+    await expect(
+      assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response }),
+    ).resolves.toBeUndefined()
+  })
+
+  it('rejects a body for a declared no-content response', async () => {
+    const response = new Response('synthetic body')
+    response.headers.delete('Content-Type')
+    Object.defineProperty(response, 'status', { value: 204 })
+
+    await expect(
+      assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response }),
+    ).rejects.toThrow('must not include a body')
+  })
+
+  it('rejects Content-Type for a declared no-content response', async () => {
+    const response = new Response(null, {
+      status: 204,
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    await expect(
+      assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response }),
+    ).rejects.toThrow('must not include Content-Type')
+  })
+
   it('rejects an undeclared status', async () => {
     const response = Response.json({ data: [] }, { status: 418 })
     await expect(

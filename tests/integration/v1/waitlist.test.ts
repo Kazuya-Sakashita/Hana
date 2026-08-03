@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
+import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
 
 const mocks = vi.hoisted(() => ({
   waitlistUpsert: vi.fn(),
@@ -68,6 +69,7 @@ describe('POST /v1/waitlist', () => {
     )
 
     expect(res.status).toBe(202)
+    await assertOpenApiResponse({ method: 'POST', route: '/waitlist', response: res })
     expect(await res.json()).toEqual({ status: 'accepted' })
     expect(mocks.waitlistUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -99,6 +101,7 @@ describe('POST /v1/waitlist', () => {
   it('rejects invalid email with 422 before writing', async () => {
     const res = await POST(jsonRequest({ email: 'not-an-email', consent: true }))
     expect(res.status).toBe(422)
+    await assertOpenApiResponse({ method: 'POST', route: '/waitlist', response: res })
     expect(mocks.waitlistUpsert).not.toHaveBeenCalled()
   })
 

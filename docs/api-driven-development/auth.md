@@ -98,18 +98,14 @@ Phase 2 で SQL trigger + FK + RLS をまとめて入れる。
 
 ## 5. API クライアントとの連携
 
-Server Components からAPIを呼ぶ場合は、`createApiClient` の `resolveAuthToken` を
-Supabase session に接続する。Browser から同一originの `/v1` を呼ぶ場合は、
-`@supabase/ssr` のsession cookieだけを送る。CookieとBearer tokenを重ねると
-認証情報が二重になり、HTTP header size上限を超えるため、Browser clientでは
-`resolveAuthToken`を設定しない。
+Browserから同一originの`/v1`を呼ぶ場合は、`@supabase/ssr`のsession cookieだけを送る。
+CookieとBearer tokenを重ねると認証情報が二重になり、HTTP header size上限を超えるため、
+Browser clientにはBearer tokenを解決・追加する機能を持たせない。
+
+Server Componentsは自分自身の`/v1`へループバックせず、server feature関数を直接呼ぶ。
+これにより、request-scoped cookieの再転送やBearerへの変換を別経路で実装しない。
 
 ```ts
-// Server
-import { createServerApiClient } from '@/lib/api/server-client'
-const api = await createServerApiClient()
-const { data } = await api.GET('/me')
-
 // Browser
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 const api = getBrowserApiClient()
@@ -118,6 +114,20 @@ const { data } = await api.GET('/me')
 
 エラーは `ApiProblemError` として throw されるので `try/catch` で受ける。
 詳細は `src/lib/api/README.md` および `docs/api-driven-development/api-client.md`。
+
+### `/v1`の認証情報
+
+Route HandlerはCookieセッションだけを認証情報として採用する（ADR-0015）。
+未使用だったCookieからJWTを取り出してBearerへ変換するServer API clientは廃止する。
+
+| リクエスト             | private operationの結果      |
+| ---------------------- | ---------------------------- |
+| 有効なCookieだけ       | 認証成功                     |
+| Bearerだけ             | 401                          |
+| 期限切れ・不正なCookie | 401                          |
+| 有効なCookieとBearer   | Cookieを採用し、Bearerは無視 |
+
+Cookie、Bearer、OAuth codeの値はログやテスト失敗メッセージへ出さない。
 
 ---
 

@@ -4,11 +4,8 @@ import { ApiProblemError, isProblemDetails, PROBLEM_CONTENT_TYPE } from '@/lib/a
 import { type ApiLogger, type HttpMethod, createApiLogger } from '@/lib/api/logger'
 import { generateRequestId } from '@/lib/api/request-id'
 
-export type TokenResolver = () => Promise<string | null> | string | null
-
 export type CreateApiClientOptions = {
   baseUrl: string
-  resolveAuthToken?: TokenResolver
   logger?: ApiLogger
   fetch?: typeof globalThis.fetch
 }
@@ -49,7 +46,7 @@ function derivePath(url: string, baseUrl: string): string {
 }
 
 export function createApiClient(options: CreateApiClientOptions) {
-  const { baseUrl, resolveAuthToken, fetch } = options
+  const { baseUrl, fetch } = options
   const logger = options.logger ?? createApiLogger()
 
   const middleware: Middleware = {
@@ -57,11 +54,6 @@ export function createApiClient(options: CreateApiClientOptions) {
       const headers = new Headers(request.headers)
       const requestId = headers.get('X-Request-Id') ?? generateRequestId()
       headers.set('X-Request-Id', requestId)
-
-      if (!headers.has('Authorization') && resolveAuthToken) {
-        const token = await resolveAuthToken()
-        if (token) headers.set('Authorization', `Bearer ${token}`)
-      }
 
       const next = new Request(request, { headers })
       const method = deriveMethod(next.method)

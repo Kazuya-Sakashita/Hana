@@ -38,16 +38,9 @@ import { createApiLogger } from '@/lib/api/logger'
 
 export const api = createApiClient({
   baseUrl: '/v1',
-  resolveAuthToken: async () => /* ISSUE-005 でトークン管理を実装 */ null,
   logger: createApiLogger({ level: 'info' }),
 })
 ```
-
-### `resolveAuthToken`
-
-- 戻り値 `string | null | Promise<string | null>`
-- `null` を返すと `Authorization` ヘッダを付けない（公開エンドポイント想定）
-- 本 Issue ではインターフェースだけ整備。トークン保存・リフレッシュは **ISSUE-005** で実装
 
 ### `logger`
 
@@ -65,8 +58,8 @@ try {
   const { data } = await api.GET('/health')
   // data の型は OpenAPI から推論される
 } catch (e) {
-  if (isProblemReason(e, 'token_expired')) {
-    await refreshAndRetry()
+  if (isProblemReason(e, 'unauthorized')) {
+    redirectToSignIn()
     return
   }
   if (e instanceof ApiProblemError) {
@@ -138,17 +131,10 @@ logger.info({
 
 ## 7. Server Components / Route Handlers での利用
 
-```ts
-// app/some-page/page.tsx (Server Component)
-import { api } from '@/lib/api/_internal/server-client'
-
-export default async function Page() {
-  const { data } = await api.GET('/health')
-  return <pre>{data?.status}</pre>
-}
-```
-
-> Server / Browser でトークン解決を分けるための実装パターンは **ISSUE-005** で具体化する。本 Issue ではインターフェースのみ確保。
+Server Componentsは自分自身の`/v1`へループバックせず、server feature関数を直接呼ぶ。
+Route Handlerのユーザー認証は`requireUser()`へ集約し、CookieからBearerへ変換する
+別経路を作らない。BrowserからのAPI呼び出しは`getBrowserApiClient()`を使い、
+same-origin Cookieセッションをそのまま送る（ADR-0015）。
 
 ---
 
@@ -187,8 +173,8 @@ expect(data).toEqual({ status: 'ok' })
 | --------------------------------------- | --------------------------------------------------------- |
 | 手書きで `ProblemDetails` 型を再定義    | 生成型 (`components['schemas']['ProblemDetails']`) を使う |
 | `console.log(data)` で body を直接出す  | `logger.info({ ... })` 経由。body はログに残さない        |
-| `error.message.includes('期限')` で分岐 | `isProblemReason(e, 'token_expired')` を使う              |
-| `Authorization` を手で組み立てて fetch  | `resolveAuthToken` 経由で middleware に任せる             |
+| `error.message.includes('認証')` で分岐 | `isProblemReason(e, 'unauthorized')` を使う               |
+| Browserで`Authorization`を追加          | same-origin Cookieと二重になるため追加しない              |
 | `error` 戻り値だけで判定                | Problem は throw されるので `try/catch` で受ける          |
 
 ---

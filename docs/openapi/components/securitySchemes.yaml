@@ -1,9 +1,17 @@
-bearerAuth:
-  type: http
-  scheme: bearer
-  bearerFormat: JWT
+cookieSession:
+  type: apiKey
+  in: cookie
+  name: 'sb-<project-ref>-auth-token'
   description: |
-    JWT Bearer トークンによる認証。
-    - access token TTL: 15 分（既定）
-    - refresh token TTL: 30 日（既定）
-    - クライアントは `Authorization: Bearer <token>` ヘッダで送る
+    `@supabase/ssr` が管理するセッションcookie。実際のcookie名は
+    Supabase project refを含み、大きいセッションは `.0`、`.1` のように分割される。
+
+    Browser clientがrefresh tokenを扱うため、Supabase session cookieは既定で
+    HttpOnlyではない。`SameSite=Lax`を維持し、cookie値はログ・レスポンス・CI証跡へ出さない。
+
+    Hanaの `/v1` Route HandlerはCookieセッションだけを認証情報として採用する。
+    `Authorization: Bearer` 単独は認証されず401となる。CookieとBearerの両方が
+    提示された場合もCookieを正として扱い、Bearerは無視する。期限切れまたは
+    不正なCookieは401となる。
+  x-cookie-name-pattern: '^sb-.+-auth-token(?:\.\d+)?$'
+  x-auth-precedence: cookie-only

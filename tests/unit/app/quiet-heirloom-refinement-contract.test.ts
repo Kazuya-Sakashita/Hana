@@ -131,7 +131,8 @@ describe('ISSUE-066 Quiet Heirloom refinement contract', () => {
       expect(row).toContain('| `done` |')
     }
     expect(issueIndexSource).toContain('## Codex Ready Queue')
-    expect(issueIndexSource).toContain('| `ISSUE-150` | `#320` | `todo` |')
+    expect(issueIndexSource).toContain('## In Progress')
+    expect(issueIndexSource).toContain('## Review Queue')
     expect(issueIndexSource).toContain('## Blocked Or Needs Human Decision')
     expect(issueIndexSource).toContain('| `ISSUE-105` | `#234` | `blocked` |')
   })

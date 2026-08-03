@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'docs/openapi/**'
+      - 'docs/api-driven-development/openapi-breaking-waivers.yaml'
+      - 'docs/api-driven-development/route-auth-contract.yaml'
+      - 'scripts/check-openapi-breaking-waiver.mjs'
+      - 'scripts/check-route-auth-contract.mjs'
       - 'src/lib/api/generated/**'
       - '.spectral.yaml'
       - 'package.json'
@@ -42,6 +46,12 @@ jobs:
       - name: OpenAPI bundle (smoke test)
         run: pnpm openapi:bundle
 
+      - name: Route authentication contract
+        run: pnpm openapi:auth-contract
+
+      - name: Public response contracts
+        run: pnpm openapi:response-contract
+
       - name: Regenerate types
         run: pnpm openapi:gen
 
@@ -53,10 +63,23 @@ jobs:
             exit 1
           fi
 
-      - name: Detect breaking changes (warn-only)
+      - name: Detect breaking changes
+        id: breaking
         if: github.event_name == 'pull_request'
         continue-on-error: true
         uses: oasdiff/oasdiff-action/breaking@v0.0.21
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: /github/workspace
         with:
           base: 'origin/${{ github.base_ref }}:docs/openapi/openapi.yaml'
           revision: 'docs/openapi/openapi.yaml'
+          fail-on: WARN
+          output-to-file: oasdiff-breaking.txt
+
+      - name: Require approved exact-report waiver
+        if: github.event_name == 'pull_request' && steps.breaking.outcome == 'failure'
+        env:
+          OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(github.event.pull_request.labels.*.name, 'openapi-breaking-approved') }}
+        run: node scripts/check-openapi-breaking-waiver.mjs

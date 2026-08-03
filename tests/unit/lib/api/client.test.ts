@@ -29,17 +29,16 @@ const problemPayload: ProblemDetails = {
 }
 
 describe('createApiClient', () => {
-  it('attaches Authorization and X-Request-Id headers on each request', async () => {
+  it('attaches X-Request-Id without adding Authorization', async () => {
     const { logger } = makeLogger()
     const fetchMock = vi.fn(async (input: Request) => {
-      expect(input.headers.get('Authorization')).toBe('Bearer test-token')
+      expect(input.headers.get('Authorization')).toBeNull()
       expect(input.headers.get('X-Request-Id')).toMatch(/^req_[0-9a-f-]{36}$/)
       return jsonResponse(200, { status: 'ok' })
     })
 
     const client = createApiClient({
       baseUrl: BASE_URL,
-      resolveAuthToken: () => 'test-token',
       logger,
       fetch: fetchMock as unknown as typeof globalThis.fetch,
     })
@@ -47,24 +46,6 @@ describe('createApiClient', () => {
     const { data, error } = await client.GET('/health')
     expect(error).toBeUndefined()
     expect(data).toEqual({ status: 'ok' })
-    expect(fetchMock).toHaveBeenCalledOnce()
-  })
-
-  it('omits Authorization when resolveAuthToken returns null', async () => {
-    const { logger } = makeLogger()
-    const fetchMock = vi.fn(async (input: Request) => {
-      expect(input.headers.get('Authorization')).toBeNull()
-      return jsonResponse(200, { status: 'ok' })
-    })
-
-    const client = createApiClient({
-      baseUrl: BASE_URL,
-      resolveAuthToken: () => null,
-      logger,
-      fetch: fetchMock as unknown as typeof globalThis.fetch,
-    })
-
-    await client.GET('/health')
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 

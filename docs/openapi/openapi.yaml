@@ -6,7 +6,7 @@ info:
   description: |
     写真 1 枚から AI が子どもとの記憶を物語にする育児記録アプリ Hana の API。
 
-    - 認証: Bearer JWT
+    - 認証: Supabase SSR Cookie セッション
     - エラー形式: RFC 9457 Problem Details (`application/problem+json`)
     - ページネーション: カーソル方式（`limit` + `cursor`）
     - 画像アクセス: Presigned URL（公開 URL を使わない）
@@ -28,7 +28,7 @@ servers:
   - url: https://api.hana.app/v1
     description: Production（予定）
 security:
-  - bearerAuth: []
+  - cookieSession: []
 tags:
   - name: meta
     description: ヘルスチェック等の運用エンドポイント
@@ -782,9 +782,7 @@ paths:
         サインアウト状態でも送れる (匿名で記録)。
         PII を含めない (allowlist: name / value / id / navigationType / route + userIdHash)。
       tags: [metrics]
-      security:
-        - bearerAuth: []
-        - {} # 匿名も受け入れる
+      security: []
       requestBody:
         required: true
         content:
@@ -796,6 +794,8 @@ paths:
           description: 受信成功 (body なし)
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /metrics/events:
     post:
       operationId: reportProductEvent
@@ -916,8 +916,8 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
-    bearerAuth:
-      $ref: './components/securitySchemes.yaml#/bearerAuth'
+    cookieSession:
+      $ref: './components/securitySchemes.yaml#/cookieSession'
   schemas:
     ProblemDetails:
       $ref: './components/schemas/ProblemDetails.yaml'

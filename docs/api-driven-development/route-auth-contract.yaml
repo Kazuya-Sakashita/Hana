@@ -1,0 +1,336 @@
+version: 1
+private_security_scheme: cookieSession
+operations:
+  'GET /health':
+    operation_id: getHealth
+    source: src/app/v1/health/route.ts
+    access: public
+    guard: none
+    ownership_strategy: not_applicable
+    ownership_evidence: []
+    ownership_denials: []
+
+  'GET /me':
+    operation_id: getCurrentUser
+    source: src/app/v1/me/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: current_account
+    ownership_evidence:
+      - call:requireUser
+    ownership_denials: []
+
+  'POST /me/ai-consent':
+    operation_id: setAiConsent
+    source: src/app/v1/me/ai-consent/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: current_account
+    ownership_evidence:
+      - member:user.id
+    ownership_denials: []
+
+  'DELETE /me/ai-consent':
+    operation_id: revokeAiConsent
+    source: src/app/v1/me/ai-consent/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: current_account
+    ownership_evidence:
+      - member:user.id
+    ownership_denials: []
+
+  'POST /me/account-deletion-intents':
+    operation_id: createAccountDeletionIntent
+    source: src/app/v1/me/account-deletion-intents/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: current_account
+    ownership_evidence:
+      - property:userId=user.id
+    ownership_denials: []
+
+  'POST /me/account-deletion':
+    operation_id: requestAccountDeletion
+    source: src/app/v1/me/account-deletion/route.ts
+    access: private
+    guard: requireAuthenticatedAccount
+    ownership_strategy: current_account_cascade
+    ownership_evidence:
+      - property:userId=authUser.id
+    ownership_denials: []
+
+  'GET /me/account-deletion/status':
+    operation_id: getAccountDeletionStatus
+    source: src/app/v1/me/account-deletion/status/route.ts
+    access: receipt_cookie
+    guard: cookies
+    ownership_strategy: receipt_hash_match
+    ownership_evidence:
+      - property:receiptHash=hashAccountDeletionIntentSecret(secret)
+    ownership_denials:
+      - case: receipt_missing_or_unknown
+        status: 404
+        evidence:
+          - call:problems.notFound
+
+  'GET /children':
+    operation_id: listChildren
+    source: src/app/v1/children/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: session_user_filter
+    ownership_evidence:
+      - property:userId=user.id
+    ownership_denials: []
+
+  'POST /children':
+    operation_id: createChild
+    source: src/app/v1/children/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: session_user_assignment
+    ownership_evidence:
+      - property:userId=user.id
+    ownership_denials: []
+
+  'GET /children/{childId}':
+    operation_id: getChild
+    source: src/app/v1/children/[childId]/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: explicit_owner_check
+    ownership_evidence:
+      - comparison:child.userId!==user.id
+      - call:problems.forbidden
+    ownership_denials:
+      - case: child_owned_by_another_user
+        status: 403
+        evidence:
+          - comparison:child.userId!==user.id
+          - call:problems.forbidden
+
+  'PUT /children/{childId}':
+    operation_id: updateChild
+    source: src/app/v1/children/[childId]/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: explicit_owner_check
+    ownership_evidence:
+      - comparison:child.userId!==user.id
+      - call:problems.forbidden
+    ownership_denials:
+      - case: child_owned_by_another_user
+        status: 403
+        evidence:
+          - comparison:child.userId!==user.id
+          - call:problems.forbidden
+
+  'POST /uploads/presigned-url':
+    operation_id: createPresignedUpload
+    source: src/app/v1/uploads/presigned-url/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: user_scoped_storage_key
+    ownership_evidence:
+      - property:userId=user.id
+    ownership_denials: []
+
+  'POST /uploads/confirm':
+    operation_id: confirmUpload
+    source: src/app/v1/uploads/confirm/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: reservation_and_image_owner_check
+    ownership_evidence:
+      - call:storageKeyBelongsToUser
+      - comparison:reservation.userId!==user.id
+      - comparison:existingImage.userId!==user.id
+      - call:problems.forbidden
+      - call:problems.notFound
+    ownership_denials:
+      - case: storage_key_prefix_owned_by_another_user
+        status: 403
+        evidence:
+          - call:storageKeyBelongsToUser
+          - call:problems.forbidden
+      - case: reservation_owned_by_another_user
+        status: 404
+        evidence:
+          - comparison:reservation.userId!==user.id
+          - call:problems.notFound
+      - case: image_owned_by_another_user
+        status: 404
+        evidence:
+          - comparison:existingImage.userId!==user.id
+          - call:problems.notFound
+
+  'GET /uploads/{imageId}/url':
+    operation_id: getImageDownloadUrl
+    source: src/app/v1/uploads/[imageId]/url/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: explicit_image_owner_check
+    ownership_evidence:
+      - property:userId=user.id
+      - comparison:image.userId!==user.id
+      - call:problems.forbidden
+      - call:problems.notFound
+    ownership_denials:
+      - case: image_not_visible_to_session
+        status: 404
+        evidence:
+          - property:userId=user.id
+          - call:problems.notFound
+      - case: defensive_owner_mismatch
+        status: 403
+        evidence:
+          - comparison:image.userId!==user.id
+          - call:problems.forbidden
+
+  'DELETE /uploads/{imageId}':
+    operation_id: deleteUnlinkedImage
+    source: src/app/v1/uploads/[imageId]/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: user_scoped_delete_filter
+    ownership_evidence:
+      - property:userId=user.id
+      - call:problems.notFound
+    ownership_denials:
+      - case: image_not_visible_to_session
+        status: 404
+        evidence:
+          - property:userId=user.id
+          - call:problems.notFound
+
+  'GET /memories':
+    operation_id: listMemories
+    source: src/app/v1/memories/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: session_user_filter
+    ownership_evidence:
+      - property:userId=user.id
+    ownership_denials: []
+
+  'POST /memories':
+    operation_id: createMemory
+    source: src/app/v1/memories/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: child_and_image_owner_check
+    ownership_evidence:
+      - comparison:child.userId!==user.id
+      - comparison:image.userId!==user.id
+      - call:problems.forbidden
+    ownership_denials:
+      - case: child_owned_by_another_user
+        status: 403
+        evidence:
+          - comparison:child.userId!==user.id
+          - call:problems.forbidden
+      - case: image_owned_by_another_user
+        status: 403
+        evidence:
+          - comparison:image.userId!==user.id
+          - call:problems.forbidden
+
+  'GET /memories/{memoryId}':
+    operation_id: getMemory
+    source: src/app/v1/memories/[memoryId]/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: session_user_filter
+    ownership_evidence:
+      - call:loadMemory
+      - member:user.id
+    ownership_denials:
+      - case: memory_not_visible_to_session
+        status: 404
+        evidence:
+          - call:loadMemory
+
+  'PUT /memories/{memoryId}':
+    operation_id: updateMemory
+    source: src/app/v1/memories/[memoryId]/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: session_user_filter
+    ownership_evidence:
+      - call:loadMemory
+      - member:user.id
+    ownership_denials:
+      - case: memory_not_visible_to_session
+        status: 404
+        evidence:
+          - call:loadMemory
+
+  'DELETE /memories/{memoryId}':
+    operation_id: deleteMemory
+    source: src/app/v1/memories/[memoryId]/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: session_user_filter
+    ownership_evidence:
+      - call:loadMemory
+      - member:user.id
+    ownership_denials:
+      - case: memory_not_visible_to_session
+        status: 404
+        evidence:
+          - call:loadMemory
+
+  'POST /metrics/vitals':
+    operation_id: reportWebVitals
+    source: src/app/v1/metrics/vitals/route.ts
+    access: optional_session
+    guard: getCurrentUser
+    ownership_strategy: session_actor_if_present
+    ownership_evidence:
+      - call:userIdHash
+      - member:user.id
+    ownership_denials: []
+
+  'POST /metrics/events':
+    operation_id: reportProductEvent
+    source: src/app/v1/metrics/events/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: session_actor
+    ownership_evidence:
+      - call:productEventActorHash
+      - member:user.id
+    ownership_denials: []
+
+  'POST /waitlist':
+    operation_id: createWaitlistSignup
+    source: src/app/v1/waitlist/route.ts
+    access: public
+    guard: none
+    ownership_strategy: not_applicable
+    ownership_evidence: []
+    ownership_denials: []
+
+  'POST /ai/generate':
+    operation_id: generateAiText
+    source: src/app/v1/ai/generate/route.ts
+    access: private
+    guard: requireUser
+    ownership_strategy: child_and_image_owner_check
+    ownership_evidence:
+      - comparison:child.userId!==user.id
+      - property:userId=user.id
+      - call:problems.forbidden
+      - call:problems.notFound
+    ownership_denials:
+      - case: child_owned_by_another_user
+        status: 403
+        evidence:
+          - comparison:child.userId!==user.id
+          - call:problems.forbidden
+      - case: image_not_visible_to_session
+        status: 422
+        evidence:
+          - property:userId=user.id
+          - call:imageNotFoundProblem

@@ -97,8 +97,9 @@ Hana/
     "openapi:lint": "redocly lint docs/openapi/openapi.yaml && spectral lint docs/openapi/openapi.yaml",
     "openapi:bundle": "redocly bundle docs/openapi/openapi.yaml -o docs/openapi/openapi.bundled.yaml",
     "openapi:gen": "openapi-typescript docs/openapi/openapi.yaml -o src/lib/api/generated/schema.d.ts",
-    "openapi:check-breaking": "oasdiff breaking origin/main:docs/openapi/openapi.yaml docs/openapi/openapi.yaml",
+    "openapi:check-breaking": "oasdiff breaking --fail-on WARN origin/main:docs/openapi/openapi.yaml docs/openapi/openapi.yaml",
     "openapi:route-map": "node scripts/check-openapi-route-map.mjs",
+    "openapi:auth-contract": "node scripts/check-route-auth-contract.mjs",
     "openapi:all": "npm run openapi:lint && npm run openapi:route-map && npm run openapi:bundle && npm run openapi:gen",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -121,7 +122,7 @@ Hana/
 - **ID**: `format: uuid`
 - **日時**: `format: date-time`（RFC3339 / UTC）
 - **ページング**: カーソル方式（`limit` + `cursor` + `next_cursor`）
-- **認証**: `bearerAuth`（JWT）
+- **認証**: `cookieSession`（Supabase SSR Cookie。ADR-0015）
 - **バージョニング**: URL ベース（`/v1/...`）
 
 ---
@@ -168,7 +169,7 @@ type ListMemoriesResponse =
 `src/lib/api/client.ts` の責務は以下に絞る:
 
 1. baseUrl の付与
-2. `Authorization: Bearer ...` の自動付与（リフレッシュ含む）
+2. same-origin cookieの送信（Browser API clientはBearerを重ねない）
 3. レスポンスが `application/problem+json` なら `ProblemDetails` として throw
 4. `X-Request-Id` の付与
 5. ロギング（**body は出さない**）

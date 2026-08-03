@@ -61,12 +61,13 @@ PRD §11 は当初 `/v1/auth/register` `/v1/auth/login` を Hana 自前で持つ
 - `@supabase/supabase-js` + `@supabase/ssr` を採用
 - Server Components / Route Handlers: `createServerClient` + Next.js `cookies()`
 - Client Components: `createBrowserClient`
-- API クライアント (`src/lib/api/client.ts`) の `resolveAuthToken` を Supabase session に接続
-- profile の lazy 作成: `getCurrentUser()` 内で `prisma.profile.upsert`
+- Hana `/v1` APIはCookieセッションだけを認証情報として採用し、Bearerへ変換しない（ADR-0015）
+- profile作成はOAuth callbackに限定し、通常APIは`findUnique`だけを行う
 - 詳細は `docs/api-driven-development/auth.md`
 
 ## References
 
+- ADR-0015 (`/v1` APIはCookieセッションだけを認証情報として採用)
 - ISSUE-006 (本ADRを採用する Issue)
 - ADR-0004 (Supabase 採用)
 - ADR-0007 (RLS Phase 2)

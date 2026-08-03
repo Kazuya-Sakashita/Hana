@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 import { publicAppOrigin } from '@/lib/auth/safe-redirect'
+import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
 
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
@@ -324,6 +325,11 @@ describe('GET /v1/me/account-deletion/status', () => {
     const response = await GET_DELETION_STATUS()
 
     expect(response.status).toBe(200)
+    await assertOpenApiResponse({
+      method: 'GET',
+      route: '/me/account-deletion/status',
+      response,
+    })
     expect(await response.json()).toEqual({
       status: 'accepted',
       requested_at: '2026-07-31T00:00:00.000Z',
@@ -333,5 +339,48 @@ describe('GET /v1/me/account-deletion/status', () => {
       where: { receiptHash: expect.stringMatching(/^[a-f0-9]{64}$/) },
       select: { requestedAt: true, purgeAfter: true },
     })
+  })
+
+  it('returns Problem Details when the receipt cookie is missing', async () => {
+    mocks.cookieSecret = ''
+
+    const response = await GET_DELETION_STATUS()
+
+    expect(response.status).toBe(404)
+    expect(response.headers.get('Content-Type')).toBe('application/problem+json')
+    await assertOpenApiResponse({
+      method: 'GET',
+      route: '/me/account-deletion/status',
+      response,
+    })
+    expect(await response.json()).toMatchObject({ reason: 'not_found', status: 404 })
+    expect(mocks.deletionFindUnique).not.toHaveBeenCalled()
+  })
+
+  it('returns Problem Details when no request matches the receipt', async () => {
+    mocks.deletionFindUnique.mockResolvedValue(null)
+
+    const response = await GET_DELETION_STATUS()
+
+    expect(response.status).toBe(404)
+    await assertOpenApiResponse({
+      method: 'GET',
+      route: '/me/account-deletion/status',
+      response,
+    })
+  })
+
+  it('returns sanitized internal Problem Details for database failures', async () => {
+    mocks.deletionFindUnique.mockRejectedValue(new Error('synthetic database failure'))
+
+    const response = await GET_DELETION_STATUS()
+
+    expect(response.status).toBe(500)
+    await assertOpenApiResponse({
+      method: 'GET',
+      route: '/me/account-deletion/status',
+      response,
+    })
+    expect(await response.json()).toMatchObject({ reason: 'internal_server_error', status: 500 })
   })
 })

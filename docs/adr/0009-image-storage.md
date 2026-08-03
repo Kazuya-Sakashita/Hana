@@ -164,7 +164,7 @@ orientation反映と再エンコードを行い、originalをmetadataなしの�
   対策: 10 MiB / 25 MP上限、Storage timeout、失敗時のImage未確定で制御する
 - **storage_key の偽造防止**: `isValidStorageKey` + `storageKeyBelongsToUser` で防ぐが、
   prefix 自体は user_id を SHA-256 で出しただけなので、user_id を知られると prefix も計算できる。
-  ただし user_id は Bearer JWT の中にあり、外部に流出しない設計。
+  ただし user_id はSupabase Cookieセッションからサーバー側で解決し、外部に流出しない設計。
 
 ## 関連
 
