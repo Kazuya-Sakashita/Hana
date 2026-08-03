@@ -63,13 +63,17 @@ jobs:
             exit 1
           fi
 
+      - name: Materialize base OpenAPI
+        if: github.event_name == 'pull_request'
+        run: git show "origin/${{ github.base_ref }}:docs/openapi/openapi.yaml" > .oasdiff-base.yaml
+
       - name: Detect breaking changes
         id: breaking
         if: github.event_name == 'pull_request'
         continue-on-error: true
         uses: oasdiff/oasdiff-action/breaking@v0.0.21
         with:
-          base: 'origin/${{ github.base_ref }}:docs/openapi/openapi.yaml'
+          base: '.oasdiff-base.yaml'
           revision: 'docs/openapi/openapi.yaml'
           fail-on: WARN
           output-to-file: oasdiff-breaking.txt
