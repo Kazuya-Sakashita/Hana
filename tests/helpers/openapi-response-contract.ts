@@ -128,8 +128,24 @@ export async function assertOpenApiResponse({
   })
 
   const contentType = response.headers.get('Content-Type')?.split(';')[0]
+  const declaredContent = locatedResponse.value.content
+  if (!declaredContent || Object.keys(declaredContent).length === 0) {
+    if (contentType) {
+      throw new Error(
+        `OpenAPI no-content response must not include Content-Type: ${method.toUpperCase()} ${route} ${response.status}`,
+      )
+    }
+    const bodyLength = (await response.clone().arrayBuffer()).byteLength
+    if (bodyLength > 0) {
+      throw new Error(
+        `OpenAPI no-content response must not include a body: ${method.toUpperCase()} ${route} ${response.status}`,
+      )
+    }
+    return
+  }
+
   if (!contentType) throw new Error('Response Content-Type is missing')
-  const media = locatedResponse.value.content?.[contentType]
+  const media = declaredContent[contentType]
   if (!media) {
     throw new Error(
       `OpenAPI Content-Type not declared: ${method.toUpperCase()} ${route} ${response.status} ${contentType}`,

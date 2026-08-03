@@ -25,7 +25,7 @@ Known superseded / clarified items:
 | old statement                         | current source     | current rule                                                                                                                  |
 | ------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | PRD の email+password / 自前 auth API | ADR-0006           | Supabase Auth + SNS-only。email+password は MVP で持たない                                                                    |
-| 公開 API は `/v1/auth/*` のみ         | OpenAPI / ADR-0006 | Supabase auth routes are outside Hana v1 API。Hana v1 の明示例外は `/v1/health` と `/v1/metrics/vitals`                       |
+| 公開 API は `/v1/auth/*` のみ         | OpenAPI / ADR-0015 | Supabase auth routes are outside Hana v1 API。Hana v1 の明示例外は health、account-deletion status、metrics vitals、waitlist  |
 | AI に子どもの名前を送らない           | ADR-0011           | opt-in 後、given name と月齢は送信可。birthdate / surname / email / address / raw location は送信禁止                         |
 | 写真は外部 AI へ送らない              | ADR-0011           | opt-in 後に Anthropic Claude へ画像を送る。training 利用・保持条件は人間確認 gate                                             |
 | AI 学習不使用 / ZDR を UI で断定      | ISSUE-048          | active UI は ZDR や契約確認前の training non-use を断定しない。公式証跡は `docs/design/ai-consent-privacy-evidence.md` に記録 |
@@ -59,10 +59,12 @@ Known superseded / clarified items:
 
 Current public / anonymous exceptions:
 
-| endpoint                  | auth policy         | reason                                |
-| ------------------------- | ------------------- | ------------------------------------- |
-| `GET /v1/health`          | public              | uptime check                          |
-| `POST /v1/metrics/vitals` | bearer or anonymous | RUM beacon can be sent before sign-in |
+| endpoint                             | auth policy      | reason                                |
+| ------------------------------------ | ---------------- | ------------------------------------- |
+| `GET /v1/health`                     | public           | uptime check                          |
+| `GET /v1/me/account-deletion/status` | receipt cookie   | 退会受付結果だけを照合                |
+| `POST /v1/metrics/vitals`            | optional session | RUM beacon can be sent before sign-in |
+| `POST /v1/waitlist`                  | public           | 公開前の待機リスト登録                |
 
 Internal machine endpoints are not public / anonymous exceptions. Scheduler専用であり、ユーザーJWTの代わりに`CRON_SECRET`を必須とする。responseとログはendpoint固有のallowlistへ限定する。
 

@@ -109,7 +109,7 @@ tests/
 - 日時: `format: date-time`（RFC3339 / UTC）
 - ID: `format: uuid`
 - ページネーション: **カーソル方式**（`limit` + `cursor`）
-- 認証: `bearerAuth`（JWT）。公開エンドポイントのみ `security: []`
+- 認証: `cookieSession`（Supabase SSR Cookie。ADR-0015）。公開・匿名許容・receipt cookieのエンドポイントのみ `security: []`
 - **エラー応答は常に `application/problem+json` + `ProblemDetails` スキーマ**
 
 ---

@@ -156,9 +156,10 @@ Spectral ルール `hana-schema-upper-camel` で強制。
 
 ## 12. 認証 / 認可
 
-- ルート `security: [{ bearerAuth: [] }]` で全エンドポイント認証必須をデフォルト
+- ルート `security: [{ cookieSession: [] }]` で全エンドポイント認証必須をデフォルト
 - 公開エンドポイントのみ `security: []` で明示的にオプトアウト
-- 認可（user_id 所有権チェック）は OpenAPI には書かない。実装と契約テストで担保
+- 認可（user_id 所有権チェック）は
+  `route-auth-contract.yaml`、実装、契約テストで担保
 
 ---
 

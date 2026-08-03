@@ -2,7 +2,7 @@
 id: ISSUE-150
 title: 認証方式と全Route応答契約をOpenAPIへ一致させる
 priority: P1
-status: todo
+status: review
 size: M
 created_at: 2026-08-03
 github_issue: 320

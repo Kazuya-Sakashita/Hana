@@ -2053,6 +2053,7 @@ export interface operations {
                 content?: never;
             };
             422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     reportProductEvent: {
