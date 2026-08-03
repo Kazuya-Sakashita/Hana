@@ -2,12 +2,6 @@ name: Issue registry drift
 
 on:
   pull_request:
-    paths:
-      - 'docs/issues/**'
-      - 'scripts/issues/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/issue-registry.yml'
   schedule:
     - cron: '17 21 * * *'
   workflow_dispatch:

@@ -1,0 +1,12 @@
+{
+  "schema_version": "loop-engineer-github-controls-snapshot/v1",
+  "repository": "Kazuya-Sakashita/Hana",
+  "default_branch": "main",
+  "allow_auto_merge": false,
+  "allow_squash_merge": true,
+  "allow_merge_commit": true,
+  "allow_rebase_merge": true,
+  "delete_branch_on_merge": false,
+  "repository_rulesets": [],
+  "main_branch_protected": false
+}

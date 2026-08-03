@@ -1,0 +1,55 @@
+name: loop-engineer-merge-gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      gate_input:
+        description: Status-only ISSUE-166 gate input bound to the selected ref SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loop-engineer-merge-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  specialist-review-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify SHA-bound specialist review evidence
+        env:
+          LOOP_ENGINEER_GATE_INPUT: ${{ inputs.gate_input }}
+        run: |
+          printf '%s' "$LOOP_ENGINEER_GATE_INPUT" | pnpm loop-engineer:github-gate -- --expected-head-sha="$GITHUB_SHA" --check=specialist
+
+  merge-eligibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify SHA-bound merge eligibility evidence
+        env:
+          LOOP_ENGINEER_GATE_INPUT: ${{ inputs.gate_input }}
+        run: |
+          printf '%s' "$LOOP_ENGINEER_GATE_INPUT" | pnpm loop-engineer:github-gate -- --expected-head-sha="$GITHUB_SHA" --check=merge

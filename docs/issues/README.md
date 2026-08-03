@@ -12,7 +12,7 @@
 | status | count |
 | --- | ---: |
 | `todo` | 7 |
-| `in_progress` | 0 |
+| `in_progress` | 1 |
 | `review` | 3 |
 | `done` | 150 |
 | `blocked` | 6 |
@@ -33,7 +33,9 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 
 ## In Progress
 
-現在はありません。
+| Issue | GitHub | status | priority | size | title | blocked_by |
+| --- | ---: | --- | --- | --- | --- | --- |
+| `ISSUE-166` | `#338` | `in_progress` | P0 | M | GitHub Rulesetと安全なAuto-mergeを有効化する | - |
 
 ## Review Queue
 
@@ -224,6 +226,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-163` | `#335` | `review` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
 | `ISSUE-164` | `#336` | `review` | P1 | M | PRの自動マージ適格性を機械判定する | - |
 | `ISSUE-165` | `#337` | `review` | P0 | M | 複数専門サブエージェントの独立review gateを実装する | - |
+| `ISSUE-166` | `#338` | `in_progress` | P0 | M | GitHub Rulesetと安全なAuto-mergeを有効化する | - |
 
 ## Status Rules
 

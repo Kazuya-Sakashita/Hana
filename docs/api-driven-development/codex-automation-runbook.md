@@ -300,3 +300,7 @@ Codex は以下で止まる。
 有効化順はISSUE-164の判定、ISSUE-165のreview gate、ISSUE-166のRuleset、ISSUE-167のdry-runである。
 ISSUE-167で誤許可0件を確認し、人間がGOを出すまでも`HOLD`条件を最優先する。HOLDでないPRも、
 人間GOまではmergeを`HUMAN_REQUIRED`にする。
+
+ISSUE-166のGitHub設定契約、status-only workflow、設定前snapshot、postflight、rollbackは
+`docs/api-driven-development/loop-engineer-github-merge-controls/README.md`を正とする。Rulesetとrepository
+settingsは人間承認後だけ変更し、ISSUE-167の人間GOまではnative auto-mergeをどのPRにも予約しない。
