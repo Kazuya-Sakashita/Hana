@@ -146,6 +146,14 @@ API 変更なし:
 pnpm pr:gate
 ```
 
+ISSUE-164のマージ適格性schemaと固定reasonは
+`docs/api-driven-development/loop-engineer-merge-classifier.md`を正とする。副作用のない契約確認は
+次を実行し、`pr:gate`からも同じcommandを呼ぶ。
+
+```bash
+pnpm qa:issue164:merge-classifier -- --mode=contract
+```
+
 `pnpm pr:gate` が未導入の branch では、暫定 fallback として以下を実行する。
 ISSUE-034 merge 後は `pnpm pr:gate` を正規ゲートにする。
 
@@ -244,6 +252,7 @@ Verification after rollback:
 - `HUMAN_REQUIRED`または`HOLD`条件に該当しない
 
 追加commitが作られたら旧reviewと判定をすべて無効化し、新SHAで再実行する。
+分類器は候補を返すだけで、auto-merge予約、merge、release、deployは実行しない。
 
 ## 9. Review loop
 
