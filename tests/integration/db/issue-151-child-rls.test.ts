@@ -290,17 +290,43 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     ).resolves.toMatchObject({ name: 'synthetic-a' })
   })
 
-  it('executes the rollback and restores the forward migration on the synthetic database', async () => {
+  it('fails closed on an orphaned upgrade, then proves handoff and rollback on existing rows', async () => {
     const migrationDirectory = 'prisma/migrations/20260803031500_add_child_rls_tracer'
     const rollbackSql = readFileSync(`${migrationDirectory}/rollback.sql`, 'utf8')
     const migrationSql = readFileSync(`${migrationDirectory}/migration.sql`, 'utf8')
+    const handoffSql = readFileSync(
+      `${migrationDirectory}/upgrade-handoff-from-postgres.sql`,
+      'utf8',
+    )
+    const handoffRollbackSql = readFileSync(
+      `${migrationDirectory}/upgrade-handoff-rollback-to-postgres.sql`,
+      'utf8',
+    )
+    const orphanChildId = randomUUID()
+    const orphanUserId = randomUUID()
+    const admin = new Client({ connectionString: process.env.DATABASE_URL })
     const migrator = new Client({ connectionString: process.env.DIRECT_URL })
 
     await disconnectChildOwnerPrisma()
+    await admin.connect()
     await migrator.connect()
     try {
       await migrator.query(rollbackSql)
-      const removed = await migrator.query<{
+      await admin.query('ALTER TABLE public.children OWNER TO postgres')
+      await admin.query('ALTER TABLE public.profiles OWNER TO postgres')
+      await admin.query('ALTER TABLE public.children DROP CONSTRAINT children_user_id_fkey')
+      await admin.query(
+        `INSERT INTO public.children (
+          id, user_id, name, birthdate, created_at, updated_at
+        ) VALUES ($1, $2, 'synthetic-orphan', DATE '2025-04-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [orphanChildId, orphanUserId],
+      )
+
+      await admin.query(handoffSql)
+      await expect(migrator.query(migrationSql)).rejects.toThrow(/child_rls_preflight_orphan_owner/)
+      await migrator.query('ROLLBACK')
+
+      const failedState = await migrator.query<{
         ownerRoleCount: string
         rowSecurity: boolean
         forceRowSecurity: boolean
@@ -318,7 +344,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
         JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
         WHERE namespace.nspname = 'public' AND relation.relname = 'children'
       `)
-      expect(removed.rows[0]).toEqual({
+      expect(failedState.rows[0]).toEqual({
         ownerRoleCount: '0',
         rowSecurity: false,
         forceRowSecurity: false,
@@ -326,30 +352,87 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
         accessStatusFunction: null,
       })
 
+      await admin.query('DELETE FROM public.children WHERE id = $1', [orphanChildId])
+      await admin.query(`
+        ALTER TABLE public.children
+        ADD CONSTRAINT children_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+      `)
+
       await migrator.query(migrationSql)
-      const restored = await migrator.query<{
+      const upgraded = await migrator.query<{
+        childOwner: string
+        profileOwner: string
         ownerRoleCount: string
         rowSecurity: boolean
         forceRowSecurity: boolean
-        accessStatusFunction: string | null
+        profileSelectGranted: boolean
       }>(`
         SELECT
+          pg_get_userbyid(child_relation.relowner) AS "childOwner",
+          pg_get_userbyid(profile_relation.relowner) AS "profileOwner",
           (SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_owner')
             AS "ownerRoleCount",
-          relation.relrowsecurity AS "rowSecurity",
-          relation.relforcerowsecurity AS "forceRowSecurity",
-          to_regprocedure('public.hana_child_access_status(uuid)')::text AS "accessStatusFunction"
+          child_relation.relrowsecurity AS "rowSecurity",
+          child_relation.relforcerowsecurity AS "forceRowSecurity",
+          has_table_privilege('hana_migrator', 'public.profiles', 'SELECT')
+            AS "profileSelectGranted"
+        FROM pg_catalog.pg_class AS child_relation
+        JOIN pg_catalog.pg_namespace AS child_namespace
+          ON child_namespace.oid = child_relation.relnamespace
+        CROSS JOIN pg_catalog.pg_class AS profile_relation
+        JOIN pg_catalog.pg_namespace AS profile_namespace
+          ON profile_namespace.oid = profile_relation.relnamespace
+        WHERE child_namespace.nspname = 'public'
+          AND child_relation.relname = 'children'
+          AND profile_namespace.nspname = 'public'
+          AND profile_relation.relname = 'profiles'
+      `)
+      expect(upgraded.rows[0]).toEqual({
+        childOwner: 'hana_migrator',
+        profileOwner: 'postgres',
+        ownerRoleCount: '1',
+        rowSecurity: true,
+        forceRowSecurity: true,
+        profileSelectGranted: true,
+      })
+
+      childPrisma = getChildOwnerPrisma()
+      await expect(
+        withChildOwnerScope(userAId, (transaction) =>
+          transaction.child.findUnique({ where: { id: childAId } }),
+        ),
+      ).resolves.toMatchObject({ id: childAId, userId: userAId })
+
+      await disconnectChildOwnerPrisma()
+      await migrator.query(rollbackSql)
+      await admin.query(handoffRollbackSql)
+      const rolledBack = await admin.query<{
+        childOwner: string
+        ownerRoleCount: string
+        profileSelectGranted: boolean
+      }>(`
+        SELECT
+          pg_get_userbyid(relation.relowner) AS "childOwner",
+          (SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_owner')
+            AS "ownerRoleCount",
+          has_table_privilege('hana_migrator', 'public.profiles', 'SELECT')
+            AS "profileSelectGranted"
         FROM pg_catalog.pg_class AS relation
         JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
         WHERE namespace.nspname = 'public' AND relation.relname = 'children'
       `)
-      expect(restored.rows[0]).toEqual({
-        ownerRoleCount: '1',
-        rowSecurity: true,
-        forceRowSecurity: true,
-        accessStatusFunction: 'hana_child_access_status(uuid)',
+      expect(rolledBack.rows[0]).toEqual({
+        childOwner: 'postgres',
+        ownerRoleCount: '0',
+        profileSelectGranted: false,
       })
+
+      await admin.query(handoffSql)
+      await migrator.query(migrationSql)
     } finally {
+      await admin.end()
       await migrator.end()
     }
 

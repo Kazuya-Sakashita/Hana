@@ -57,7 +57,9 @@ migrationは変更前に次をfail closedで検査する。
 
 forward migration全体をtransactionで囲み、途中の失敗時はrole、policy、関数、grantをまとめてrollbackする。既存の`PUBLIC` grantは変更せず、tracer用roleへ必要な権限だけを追加する。
 
-rollbackは同migration directoryの`rollback.sql`を使う。先にアプリをISSUE-151以前へ戻し、その後policy、RLS、関数、grant、roleの順に外す。他のmembershipや依存objectが増えていれば`DROP ROLE`が失敗し、自動的に停止する。
+既存DBでは旧ownerの`postgres`が、別承認の`upgrade-handoff-from-postgres.sql`を先に実行する。このscriptは`profiles`のread-only preflight権限を`hana_migrator`へ付与し、`children`のownerだけを`hana_migrator`へ移す。旧owner、role属性、既存RLS、先行grantが想定と違えば変更前に停止する。合成upgrade testは既存のvalid rowを維持した適用と、orphan rowがある場合のtransactional failureを両方検証する。
+
+rollbackは先にアプリをISSUE-151以前へ戻し、同directoryの`rollback.sql`でpolicy、RLS、関数、grant、roleを外す。その後`upgrade-handoff-rollback-to-postgres.sql`で`children` ownerと`profiles` SELECT grantを元へ戻す。他のmembershipや依存objectが増えていれば途中で停止する。
 
 ## Rollout decision
 
@@ -70,10 +72,11 @@ PostgreSQL 16の合成`hana_ci`だけでmigrationを適用し、User AからUser
 このIssueでは実環境へmigrationを適用しない。次の条件が揃うまでproduction rolloutはNO-GOとする。
 
 1. `hana_migrator`と`hana_child_runtime`の資格情報をstaging/production Secret Managerへ別々に登録する
-2. home、memory、AIなど残る`children`参照をowner-scoped repositoryまたは複合resource RLSへ移す
-3. `memories`と`images`の原子的transactionに対応する複数table policyを別Issueで設計する
-4. stagingでredacted read-only preflight、1 migrationだけの承認、fresh connection postflightを行う
-5. pooler経由でrole/GUCがrequest間に残らないconcurrency testを追加する
+2. stagingの既存`children`/`profiles` ownerが`postgres`であることをredacted read-only確認し、owner handoffをDB変更として別承認する
+3. home、memory、AIなど残る`children`参照をowner-scoped repositoryまたは複合resource RLSへ移す
+4. `memories`と`images`の原子的transactionに対応する複数table policyを別Issueで設計する
+5. stagingで1 migrationだけの承認、fresh connection postflight、handoff rollback rehearsalを行う
+6. pooler経由でrole/GUCがrequest間に残らないconcurrency testを追加する
 
 ## Consequences
 
@@ -96,6 +99,8 @@ PostgreSQL 16の合成`hana_ci`だけでmigrationを適用し、User AからUser
 - `tests/unit/server/db/child-owner-scope.test.ts`
 - `tests/unit/qa/issue-151-environment.test.ts`
 - `.github/workflows/typecheck.yml`
+- `prisma/migrations/20260803031500_add_child_rls_tracer/upgrade-handoff-from-postgres.sql`
+- `prisma/migrations/20260803031500_add_child_rls_tracer/upgrade-handoff-rollback-to-postgres.sql`
 
 ## References
 

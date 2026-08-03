@@ -1,5 +1,6 @@
 -- ISSUE-151: children RLS tracer bullet.
--- This migration must be applied only after the synthetic/staging preflight in ADR-0016.
+-- Existing databases require the separately approved upgrade-handoff-from-postgres.sql first.
+-- Apply only after the synthetic/staging preflight in ADR-0016.
 
 BEGIN;
 
@@ -45,6 +46,18 @@ BEGIN
       )
   ) THEN
     RAISE EXCEPTION 'child_rls_preflight_runtime_membership_present';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    JOIN pg_catalog.pg_roles AS owner ON owner.oid = relation.relowner
+    WHERE namespace.nspname = 'public'
+      AND relation.relname = 'children'
+      AND owner.rolname = current_user
+  ) OR NOT has_table_privilege(current_user, 'public.profiles', 'SELECT') THEN
+    RAISE EXCEPTION 'child_rls_preflight_upgrade_handoff_required';
   END IF;
 
   IF EXISTS (
