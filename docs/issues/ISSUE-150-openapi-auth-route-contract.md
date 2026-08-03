@@ -2,7 +2,7 @@
 id: ISSUE-150
 title: 認証方式と全Route応答契約をOpenAPIへ一致させる
 priority: P1
-status: review
+status: done
 size: M
 created_at: 2026-08-03
 github_issue: 320
@@ -32,11 +32,11 @@ OpenAPIの認証記述、実装、全Routeの応答契約を一致させる。
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] cookie-only、Bearer-only、期限切れ、両方提示時の認証契約をADRとOpenAPIで明確にする
-- [ ] 全private Routeについて認証と所有権拒否の対応表を作り、欠落をCIで検出する
-- [ ] 全公開operationの成功応答と代表エラーについてstatus、Content-Type、schemaを検証する
-- [ ] OpenAPI破壊変更はCIを失敗させ、承認済みwaiverだけ理由と期限付きで許可する
-- [ ] 検証は合成データだけを使い、response bodyをCIログへ出さない
+- [x] cookie-only、Bearer-only、期限切れ、両方提示時の認証契約をADRとOpenAPIで明確にする
+- [x] 全private Routeについて認証と所有権拒否の対応表を作り、欠落をCIで検出する
+- [x] 全公開operationの成功応答と代表エラーについてstatus、Content-Type、schemaを検証する
+- [x] OpenAPI破壊変更はCIを失敗させ、承認済みwaiverだけ理由と期限付きで許可する
+- [x] 検証は合成データだけを使い、response bodyをCIログへ出さない
 
 ## セキュリティ・プライバシー考慮
 
