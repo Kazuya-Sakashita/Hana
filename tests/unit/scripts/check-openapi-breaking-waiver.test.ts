@@ -89,15 +89,13 @@ describe('OpenAPI breaking waiver', () => {
     expect(result.errors).toContain('GitHub PR must have the openapi-breaking-approved label')
   })
 
-  it('compares materialized files so the action container does not read Git revisions', () => {
+  it('trusts only the mounted repository when the action reads the base Git revision', () => {
     const workflow = readFileSync('.github/workflows/openapi-validate.yml', 'utf8')
 
-    expect(workflow).toContain(
-      'git show "origin/${{ github.base_ref }}:docs/openapi/openapi.yaml" > .oasdiff-base.yaml',
-    )
-    expect(workflow).toContain("base: '.oasdiff-base.yaml'")
-    expect(workflow).not.toContain(
-      "base: 'origin/${{ github.base_ref }}:docs/openapi/openapi.yaml'",
-    )
+    expect(workflow).toContain("base: 'origin/${{ github.base_ref }}:docs/openapi/openapi.yaml'")
+    expect(workflow).toContain('GIT_CONFIG_COUNT: 1')
+    expect(workflow).toContain('GIT_CONFIG_KEY_0: safe.directory')
+    expect(workflow).toContain('GIT_CONFIG_VALUE_0: /github/workspace')
+    expect(workflow).not.toContain('git config --global')
   })
 })
