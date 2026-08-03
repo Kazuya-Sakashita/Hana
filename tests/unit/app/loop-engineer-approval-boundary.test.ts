@@ -119,7 +119,7 @@ describe('ISSUE-163 Loop Engineer approval boundary', () => {
     expect(issueSource).toContain('dry-runや実際の自動マージ有効化（ISSUE-167）')
   })
 
-  it('keeps the canonical ADR lifecycle compatible with pending human approval', () => {
+  it('records an accepted policy while keeping automation activation deferred', () => {
     const developmentReadme = readFileSync(
       new URL('../../../docs/api-driven-development/README.md', import.meta.url),
       'utf8',
@@ -127,7 +127,8 @@ describe('ISSUE-163 Loop Engineer approval boundary', () => {
 
     expect(developmentReadme).toContain('Status: proposed | accepted | superseded')
     expect(developmentReadme).toContain('Activation gate:')
-    expect(adrSource).toContain('Status: proposed')
+    expect(adrSource).toContain('Status: accepted')
     expect(adrSource).toContain('Activation: deferred')
+    expect(adrSource).toContain('Human review: Security approved, Operations approved')
   })
 })

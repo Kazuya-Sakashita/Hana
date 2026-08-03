@@ -1,9 +1,10 @@
 # 0017. Loop Engineerの自動マージ適格性と人間承認境界
 
-- Status: proposed
+- Status: accepted
 - Activation: deferred
 - Date: 2026-08-03
 - Deciders: kazuya
+- Human review: Security approved, Operations approved
 - Activation gate: ISSUE-164、ISSUE-165、ISSUE-166を完了し、ISSUE-167のdry-run後に人間がGOを出すこと
 
 ## Context
