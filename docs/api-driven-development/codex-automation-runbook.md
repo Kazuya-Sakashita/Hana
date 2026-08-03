@@ -88,15 +88,16 @@ code-onlyで候補になり得る範囲:
 
 変更領域に応じて次を追加し、合計4〜6名にする。
 
-| 変更領域                                | 追加role                       |
-| --------------------------------------- | ------------------------------ |
-| Auth / ownership / account deletion     | Security / Authorization       |
-| AI / consent / prompt / output          | AI Safety / Privacy            |
-| DB / migration / RLS / query            | Database / Migration           |
-| API / OpenAPI                           | API / Contract                 |
-| UI / copy / interaction                 | UI / Accessibility             |
-| Image / Storage / cleanup               | Image Pipeline / Privacy       |
-| CI / workflow / dependency / operations | CI / Supply-chain / Operations |
+| 変更領域                                                  | 追加role                       |
+| --------------------------------------------------------- | ------------------------------ |
+| Auth / ownership / account deletion                       | Security / Authorization       |
+| AI / consent / prompt / output                            | AI Safety / Privacy            |
+| Privacy / consent / telemetry / retention / data handling | Privacy / Data Protection      |
+| DB / migration / RLS / query                              | Database / Migration           |
+| API / OpenAPI                                             | API / Contract                 |
+| UI / copy / interaction                                   | UI / Accessibility             |
+| Image / Storage / cleanup                                 | Image Pipeline / Privacy       |
+| CI / workflow / dependency / operations                   | CI / Supply-chain / Operations |
 
 並列枠が足りなければwave実行する。初回reviewerには同じIssue仕様、merge-base、最新head SHA、diffを
 渡し、他reviewerのprompt、finding、結論を見せない。reviewerはread-only・独立コンテキストとする。
@@ -107,7 +108,8 @@ Review the supplied merge-base...head SHA and return actionable findings with se
 evidence, file/line, required fix, and reviewed SHA. Return GO only when findings are zero.
 ```
 
-必要roleを確保できない場合、出力schemaが不正な場合、timeoutした場合は成功扱いせず`HOLD`にする。
+必要roleを確保できない場合、7名以上が必要な場合、出力schemaが不正な場合、timeoutした場合は、
+roleを統合して人数を減らさず`HOLD`にする。
 
 ---
 

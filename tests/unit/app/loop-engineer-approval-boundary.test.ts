@@ -45,6 +45,7 @@ describe('ISSUE-163 Loop Engineer approval boundary', () => {
       'Test / Reliability',
       'Security / Authorization',
       'AI Safety / Privacy',
+      'Privacy / Data Protection',
       'Database / Migration',
       'API / Contract',
       'UI / Accessibility',
@@ -53,6 +54,9 @@ describe('ISSUE-163 Loop Engineer approval boundary', () => {
     ]) {
       expect(adrSource).toContain(role)
     }
+
+    expect(adrSource).toContain('7名以上が必要になる場合')
+    expect(adrSource).toContain('roleを統合して人数を減らさず`HOLD`')
   })
 
   it('keeps dangerous and real-environment operations behind human approval', () => {
@@ -100,8 +104,22 @@ describe('ISSUE-163 Loop Engineer approval boundary', () => {
     }
 
     expect(issueSource).toContain('github_issue: 335')
+    expect(issueSource).toContain('status: review')
+    expect(issueSource).not.toContain('- [ ]')
     expect(issueSource).toContain('requires_human_review:')
     expect(issueSource).toContain('PR判定scriptやGitHub Actionsの実装（ISSUE-164）')
     expect(issueSource).toContain('dry-runや実際の自動マージ有効化（ISSUE-167）')
+  })
+
+  it('keeps the canonical ADR lifecycle compatible with pending human approval', () => {
+    const developmentReadme = readFileSync(
+      new URL('../../../docs/api-driven-development/README.md', import.meta.url),
+      'utf8',
+    )
+
+    expect(developmentReadme).toContain('Status: proposed | accepted | superseded')
+    expect(developmentReadme).toContain('Activation gate:')
+    expect(adrSource).toContain('Status: proposed')
+    expect(adrSource).toContain('Activation: deferred')
   })
 })

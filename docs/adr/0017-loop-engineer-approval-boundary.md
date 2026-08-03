@@ -1,6 +1,7 @@
 # 0017. Loop Engineerの自動マージ適格性と人間承認境界
 
-- Status: proposed, activation deferred
+- Status: proposed
+- Activation: deferred
 - Date: 2026-08-03
 - Deciders: kazuya
 - Activation gate: ISSUE-164、ISSUE-165、ISSUE-166を完了し、ISSUE-167のdry-run後に人間がGOを出すこと
@@ -62,19 +63,21 @@ Loop EngineerはPRを次の3状態のどれかに分類する。優先順位は
 変更領域に応じて次を追加し、合計4〜6名にする。同じreviewerへ重要な独立観点をまとめて
 人数を減らしてはならない。必要roleを確保できなければ`HOLD`とする。
 
-| 変更領域                                 | 追加role                       |
-| ---------------------------------------- | ------------------------------ |
-| Auth / ownership / account deletion      | Security / Authorization       |
-| AI / consent / prompt / generated output | AI Safety / Privacy            |
-| DB schema / migration / query / RLS      | Database / Migration           |
-| API / OpenAPI / client contract          | API / Contract                 |
-| UI / copy / interaction                  | UI / Accessibility             |
-| Image / Storage / cleanup                | Image Pipeline / Privacy       |
-| CI / workflow / dependency / operations  | CI / Supply-chain / Operations |
+| 変更領域                                                  | 追加role                       |
+| --------------------------------------------------------- | ------------------------------ |
+| Auth / ownership / account deletion                       | Security / Authorization       |
+| AI / consent / prompt / generated output                  | AI Safety / Privacy            |
+| Privacy / consent / telemetry / retention / data handling | Privacy / Data Protection      |
+| DB schema / migration / query / RLS                       | Database / Migration           |
+| API / OpenAPI / client contract                           | API / Contract                 |
+| UI / copy / interaction                                   | UI / Accessibility             |
+| Image / Storage / cleanup                                 | Image Pipeline / Privacy       |
+| CI / workflow / dependency / operations                   | CI / Supply-chain / Operations |
 
 並列枠が足りない場合はwave実行してよいが、各reviewerには同じIssue仕様、merge-base、head SHA、
 diffを渡す。初回reviewでは他reviewerのprompt、finding、結論を渡さない。reviewerはファイル編集、
-commit、push、PR変更、merge、実環境アクセスを行わない。
+commit、push、PR変更、merge、実環境アクセスを行わない。追加roleによって7名以上が必要になる場合は、
+roleを統合して人数を減らさず`HOLD`にする。
 
 ### 4. 最大3巡
 
