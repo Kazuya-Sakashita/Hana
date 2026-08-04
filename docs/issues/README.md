@@ -13,7 +13,7 @@
 | --- | ---: |
 | `todo` | 7 |
 | `in_progress` | 1 |
-| `review` | 5 |
+| `review` | 6 |
 | `done` | 150 |
 | `blocked` | 6 |
 
@@ -46,6 +46,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-165` | `#337` | `review` | P0 | M | 複数専門サブエージェントの独立review gateを実装する | - |
 | `ISSUE-168` | `#346` | `review` | P0 | M | GitHub App preflightを通常gh認証から分離する | - |
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
+| `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 
 ## Blocked Or Needs Human Decision
 
@@ -231,6 +232,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-166` | `#338` | `in_progress` | P0 | M | GitHub Rulesetと安全なAuto-mergeを有効化する | - |
 | `ISSUE-168` | `#346` | `review` | P0 | M | GitHub App preflightを通常gh認証から分離する | - |
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
+| `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 
 ## Status Rules
 
