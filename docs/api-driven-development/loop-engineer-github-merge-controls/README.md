@@ -50,11 +50,11 @@ workflowはdispatch actorが設定済みの人間またはApp botであること
 
 workflowのrun名とconcurrency名には未検証inputを含めず、main controller全体を固定名で直列化して新しいrunが古いrunをcancelする。attestationを検証した直後、候補コードを実行する前に、専用Appが5件のCheck Runを`in_progress`で新規作成する。`merge-eligibility`を最初に作るため、途中失敗や同一SHAの旧successがあっても新世代の評価中はmergeできない。
 
-各candidate jobはこの失効処理の成功へ依存する。publisherは新規Checkを追加せず、開始時に得たCheck Run IDを`PATCH`する。成功へ更新する直前に、専用Appの同一SHA / 同一名で最新の`merge-eligibility` IDが現在世代と一致すること、base/head、mergeable、OpenAPI breaking承認labelをfreshに確認する。不一致時は現在世代の5件をfailureへ更新する。100件上限のActions workflow run一覧には依存しない。
+各candidate jobはこの失効処理の成功へ依存する。publisherは新規Checkを追加せず、開始時に得たCheck Run IDを`PATCH`する。開始・確定・人間承認・waiver取消は、mainのtrusted SHAからcheckoutした`github-check-generation.ts`だけを実行する。同じcontrollerをGitHub API境界だけ差し替えたunit testで実行し、AUTO / HUMAN_REQUIRED / HOLD、部分失敗、世代更新、label取消のAPI呼出順を固定する。成功へ更新する直前に、専用Appの同一SHA / 同一名で最新の`merge-eligibility` IDが現在世代と一致すること、base/head、mergeable、OpenAPI breaking承認labelをfreshに確認する。不一致時は現在世代の5件をfailureへ更新する。100件上限のActions workflow run一覧には依存しない。
 
 `openapi-breaking-approved` labelが外された場合は、main固定の`pull_request_target` workflowが候補コードをcheckout・実行せず、専用App名義の`validate`と`merge-eligibility`をfailureで発行する。labelが再追加済み、PR headが変化済み、PRがclose済みなら古いeventは何も変更しない。
 
-候補コード上では`candidate-pr-gate`、`candidate-openapi-validate`、`candidate-issue-registry`をsecretなしで実行する。OpenAPI検査はpinしたoasdiff actionでattested base SHAとの差分を確認し、breaking時はPR labelとexact-report hashが一致する承認済みwaiverを必須にする。main上のpublisherだけが、専用App名義で次を発行する。
+候補コード上では`candidate-pr-gate`、`candidate-openapi-validate`、`candidate-issue-registry`をsecretなしで実行する。OpenAPI検査は候補側の既存reportを削除してからpinしたoasdiff actionでattested base SHAとの差分を確認し、action失敗時に新規の非空reportがなければwaiver判定へ進まない。breaking時はPR labelとexact-report hashが一致する承認済みwaiverを必須にする。main上のpublisherだけが、専用App名義で次を発行する。
 
 - `pr-gate`
 - `validate`
