@@ -156,7 +156,14 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
       jobs: Record<
         string,
         {
-          steps?: Array<{ name?: string; id?: string; uses?: string; run?: string; if?: string }>
+          steps?: Array<{
+            name?: string
+            id?: string
+            uses?: string
+            run?: string
+            if?: string
+            with?: Record<string, string | boolean>
+          }>
         }
       >
     }
@@ -180,6 +187,9 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(steps[verifyIndex]).toMatchObject({
       if: "steps.breaking.outcome == 'failure'",
       run: 'test -s oasdiff-breaking.txt',
+    })
+    expect(steps.find(({ uses }) => uses?.startsWith('pnpm/action-setup@'))?.with).toMatchObject({
+      package_json_file: 'trusted-control/package.json',
     })
   })
 
@@ -266,6 +276,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
         checkout,
       ])
       const checkoutIndex = job.steps?.findIndex(({ uses }) => uses === checkout.uses) ?? -1
+      const pnpmSetup = job.steps?.find(({ uses }) => uses?.startsWith('pnpm/action-setup@'))
       const installIndex =
         job.steps?.findIndex(
           ({ run }) => run === 'pnpm --dir trusted-control install --frozen-lockfile',
@@ -275,6 +286,9 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
         -1
       const controllerIndex =
         job.steps?.findIndex(({ run }) => run?.includes('github-check-generation.ts')) ?? -1
+      expect(pnpmSetup?.with).toMatchObject({
+        package_json_file: 'trusted-control/package.json',
+      })
       expect(checkoutIndex).toBeLessThan(installIndex)
       expect(installIndex).toBeLessThan(tokenIndex)
       expect(tokenIndex).toBeLessThan(controllerIndex)
@@ -318,6 +332,11 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(invalidate.steps?.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
       checkout,
     ])
+    expect(
+      invalidate.steps?.find(({ uses }) => uses?.startsWith('pnpm/action-setup@'))?.with,
+    ).toMatchObject({
+      package_json_file: 'trusted-control/package.json',
+    })
     expect(script).toBe(
       'pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-check-generation.ts revoke-waiver',
     )
