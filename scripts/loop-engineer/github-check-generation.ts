@@ -467,9 +467,7 @@ function createGitHubClient(): GitHubCheckGenerationClient {
   return {
     async readPullRequest(repository, prNumber) {
       const response = ghJson<PullRequestApiResponse>([`repos/${repository}/pulls/${prNumber}`])
-      const mainRef = ghJson<GitRefApiResponse>([
-        `repos/${repository}/git/ref/heads/main`,
-      ])
+      const mainRef = ghJson<GitRefApiResponse>([`repos/${repository}/git/ref/heads/main`])
       return toPullRequestSnapshot(response, mainRef)
     },
     async readLatestCheckRunIds(repository, headSha, name, dedicatedAppId) {
