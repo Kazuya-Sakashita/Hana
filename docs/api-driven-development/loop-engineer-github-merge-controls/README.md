@@ -30,7 +30,7 @@ private keyは`hana-merge-publisher`と`hana-merge-human-approval`の2つのEnvi
 
 初期導入ではdispatcherを承認済みの人間loginにする。ISSUE-167で自動dispatchを追加する場合もApp権限は増やさず、別のmain固定controllerだけを設計・reviewする。App ID、login、Environment secretの値はログ、artifact、docs、PRへ保存しない。
 
-`HUMAN_REQUIRED`の`merge-eligibility`は`hana-merge-human-approval`の承認後にだけ発行する。人間がJSONへ`approved`を書いて承認を代替する経路はない。`HOLD`にはEnvironment承認job自体を作らない。
+`HUMAN_REQUIRED`の`merge-eligibility`は新世代開始時に`in_progress`で発行し、`hana-merge-human-approval`の承認後だけ同じCheck Run IDを`success`へ更新する。人間がJSONへ`approved`を書いて承認を代替する経路はない。`HOLD`にはEnvironment承認job自体を作らない。
 
 ## Status-only attestation
 
@@ -48,7 +48,11 @@ gh workflow run loop-engineer-merge-gates.yml \
 
 workflowはdispatch actorが設定済みの人間またはApp botであることを確認し、GitHub APIからopen/non-draft/main向けPR、head SHA、base SHA、mergeable状態をfreshに照合する。追加commit、main更新、review invalidation、merge conflictは旧attestationを失効させる。
 
-同じPR / head SHAはconcurrencyで直列化し、新しいrunが古いrunをcancelする。GitHubが発行する単調増加run IDをcheckの`external_id`へ入れ、各publisherはcheck発行の直前にActions APIで同じPR / SHAの新しいrunがないこと、base/headが未変更であることを再確認する。OpenAPI breaking waiverを使う場合は承認labelが残っていることも再確認する。Environment待ちの間にmainが更新された場合や新しいHOLD runが始まった場合、旧runは成功を発行しない。
+workflowのrun名とconcurrency名には未検証inputを含めず、main controller全体を固定名で直列化して新しいrunが古いrunをcancelする。attestationを検証した直後、候補コードを実行する前に、専用Appが5件のCheck Runを`in_progress`で新規作成する。`merge-eligibility`を最初に作るため、途中失敗や同一SHAの旧successがあっても新世代の評価中はmergeできない。
+
+各candidate jobはこの失効処理の成功へ依存する。publisherは新規Checkを追加せず、開始時に得たCheck Run IDを`PATCH`する。成功へ更新する直前に、専用Appの同一SHA / 同一名で最新の`merge-eligibility` IDが現在世代と一致すること、base/head、mergeable、OpenAPI breaking承認labelをfreshに確認する。不一致時は現在世代の5件をfailureへ更新する。100件上限のActions workflow run一覧には依存しない。
+
+`openapi-breaking-approved` labelが外された場合は、main固定の`pull_request_target` workflowが候補コードをcheckout・実行せず、専用App名義の`validate`と`merge-eligibility`をfailureで発行する。labelが再追加済み、PR headが変化済み、PRがclose済みなら古いeventは何も変更しない。
 
 候補コード上では`candidate-pr-gate`、`candidate-openapi-validate`、`candidate-issue-registry`をsecretなしで実行する。OpenAPI検査はpinしたoasdiff actionでattested base SHAとの差分を確認し、breaking時はPR labelとexact-report hashが一致する承認済みwaiverを必須にする。main上のpublisherだけが、専用App名義で次を発行する。
 
@@ -93,7 +97,7 @@ Rulesetはdefault branchだけを対象にし、bypass actorは0件とする。
 1. fresh preflightを取得し、repository名、default branch、merge settings、Ruleset一覧を照合する。
 2. 専用AppがHanaだけへのselected installationで、権限がChecks write、Contents read、Metadata read、Pull requests readだけであることをreadbackする。
 3. repository secretにprivate keyがないこと、2 EnvironmentだけにEnvironment secretがあること、main branch policy、`can_admins_bypass=false`、human reviewer identity/type、self-review policyをexact readbackする。
-4. synthetic PRへmain workflowをdispatchし、5件のCheck Runが専用App ID、同一head SHA、固定名で発行されたことをreadbackする。
+4. synthetic PRへmain workflowをdispatchし、候補checkより先に5件の`in_progress` Check Runが専用App ID、同一head SHA、固定名で発行され、最終jobが同じIDを更新したことをreadbackする。
 5. App IDを埋めた`main-ruleset-disabled.template.json`からRulesetを`disabled`で作成する。
 6. 作成したRulesetをexact readbackし、対象branch、bypass 0件、rule、check名、App IDがversioned contractと一致しなければautomatic rollbackする。
 7. 同じRulesetを`active`へ更新し、fresh readbackする。
@@ -123,6 +127,8 @@ Ruleset有効化後、実ユーザーデータを含まない専用PRで次を�
 2. candidate check rerunは同じSHAだけへ反映される。
 3. review gateを作った後のmain更新でbase SHA不一致となり、再reviewが必要になる。
 4. merge conflictでは`merge-eligibility`が成功せず、Rulesetもmergeを拒否する。
+5. 同一head SHAの旧AUTO success後にHOLD / HUMAN_REQUIREDを開始し、候補実行前から旧successが使われない。
+6. OpenAPI breaking承認labelを外すと`validate`と`merge-eligibility`が専用App名義のfailureになる。
 
 結果はPR番号、SHA、固定status/reason、App ID、時刻だけをstatus-onlyで記録する。この確認PRをauto-merge予約しない。
 

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 
 const root = fileURLToPath(new URL('../../..', import.meta.url))
 
@@ -129,10 +130,11 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).toContain('repos/${GITHUB_REPOSITORY}/check-runs')
     expect(source).toContain('environment: hana-merge-human-approval')
     expect(source).toContain("merge_decision == 'HUMAN_REQUIRED'")
-    expect(source).toContain('run-name: merge-gate-pr-')
+    expect(source).toContain('run-name: loop-engineer-merge-gates-${{ github.run_id }}')
     expect(source).toContain('cancel-in-progress: true')
-    expect(source).toContain('workflow_runs[]')
-    expect(source).toContain('assert_current_generation')
+    expect(source).not.toContain('workflow_runs[]')
+    expect(source).not.toContain('/actions/workflows/')
+    expect(source).toContain('current_generation=false')
     expect(source).toContain('OPENAPI_BREAKING_DETECTED')
     expect(source).toContain('external_id=')
     expect(source).toContain('BASE_SHA')
@@ -146,6 +148,97 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).not.toContain('pnpm/action-setup@v4')
     expect(source).not.toContain('integration_id: 15368')
     expect(source).not.toContain('OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(')
+  })
+
+  it('invalidates prior same-SHA success before evaluating a new generation', () => {
+    const source = read('.github/workflows/loop-engineer-merge-gates.yml')
+    const workflow = parse(source) as {
+      'run-name': string
+      concurrency: { group: string; 'cancel-in-progress': boolean }
+      jobs: Record<
+        string,
+        {
+          needs?: string | string[]
+          outputs?: Record<string, string>
+          environment?: string
+          steps?: Array<{ name?: string; run?: string }>
+        }
+      >
+    }
+    const begin = workflow.jobs.begin_required_checks!
+    const beginScript = begin.steps?.find(({ name }) => name === 'Invalidate prior generation')?.run
+    const publishScript = workflow.jobs.publish_required_checks!.steps?.find(
+      ({ name }) => name === 'Finalize status-only checks from the dedicated App',
+    )?.run
+    const humanScript = workflow.jobs.publish_human_approved_gate!.steps?.find(
+      ({ name }) => name === 'Approve the current merge gate generation',
+    )?.run
+
+    expect(workflow['run-name']).toBe('loop-engineer-merge-gates-${{ github.run_id }}')
+    expect(workflow.concurrency).toEqual({
+      group: 'loop-engineer-merge-gates-main-controller',
+      'cancel-in-progress': true,
+    })
+    expect(
+      JSON.stringify({ runName: workflow['run-name'], concurrency: workflow.concurrency }),
+    ).not.toContain('inputs.gate_input')
+    expect(begin.environment).toBe('hana-merge-publisher')
+    expect(Object.keys(begin.outputs ?? {}).sort()).toEqual(
+      [
+        'local_registry_check_id',
+        'merge_eligibility_check_id',
+        'pr_gate_check_id',
+        'specialist_review_check_id',
+        'validate_check_id',
+      ].sort(),
+    )
+    expect(beginScript).toContain('-f status=in_progress')
+    expect(beginScript?.indexOf('merge-eligibility')).toBeLessThan(
+      beginScript?.indexOf('pr-gate') ?? -1,
+    )
+    for (const job of [
+      'candidate_pr_gate',
+      'candidate_openapi_validate',
+      'trusted_openapi_breaking',
+      'candidate_issue_registry',
+    ]) {
+      expect(workflow.jobs[job]?.needs).toEqual(['prepare', 'begin_required_checks'])
+    }
+    expect(publishScript).toContain('--method PATCH')
+    expect(publishScript).toContain('check-runs/${1}')
+    expect(publishScript).toContain('finish_check "$MERGE_ELIGIBILITY_CHECK_ID" merge-eligibility')
+    expect(publishScript).toContain('filter=latest&check_name=merge-eligibility')
+    expect(publishScript).toContain('current_generation=false')
+    expect(publishScript).not.toContain('/actions/workflows/')
+    expect(humanScript).toContain('--method PATCH')
+    expect(humanScript).toContain('check-runs/${MERGE_ELIGIBILITY_CHECK_ID}')
+  })
+
+  it('revokes dedicated-App success when a breaking waiver label is removed', () => {
+    const source = read('.github/workflows/loop-engineer-breaking-waiver-revoked.yml')
+    const workflow = parse(source) as {
+      on: { pull_request_target: { types: string[] } }
+      jobs: Record<
+        string,
+        {
+          if?: string
+          environment?: string
+          steps?: Array<{ uses?: string; run?: string }>
+        }
+      >
+    }
+    const invalidate = workflow.jobs.invalidate_breaking_waiver!
+    const script = invalidate.steps?.find(({ run }) => run !== undefined)?.run
+
+    expect(workflow.on.pull_request_target.types).toEqual(['unlabeled'])
+    expect(invalidate.if).toContain("github.event.label.name == 'openapi-breaking-approved'")
+    expect(invalidate.environment).toBe('hana-merge-publisher')
+    expect(invalidate.steps?.some(({ uses }) => uses?.startsWith('actions/checkout@'))).toBe(false)
+    expect(script).toContain('revoke_check validate')
+    expect(script).toContain('revoke_check merge-eligibility')
+    expect(script).toContain('-f conclusion=failure')
+    expect(script).not.toContain('github.event.pull_request.title')
+    expect(script).not.toContain('github.event.pull_request.body')
   })
 
   it('ships a scope-confirmed transactional apply command', () => {
