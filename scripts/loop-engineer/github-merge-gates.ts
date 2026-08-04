@@ -1,5 +1,10 @@
 import type { SpecialistReviewGateReason } from './specialist-review-gate'
 import {
+  verifyReviewRoundException,
+  type ReviewRoundExceptionAdapter,
+  type ReviewRoundExceptionProof,
+} from './github-review-round-exception'
+import {
   classifyMergeEligibility,
   type MergeClassificationInput,
   type MergeDecision,
@@ -7,8 +12,7 @@ import {
 
 type ReviewGate = MergeClassificationInput['review_gate']
 
-export type SpecialistReviewAttestation = {
-  schema_version: 'loop-engineer-review-attestation/v1'
+type SpecialistReviewAttestationBase = {
   issue_id: string
   pr_number: number
   merge_base_sha: string
@@ -20,6 +24,15 @@ export type SpecialistReviewAttestation = {
   required_roles: string[]
   review_gate: ReviewGate
 }
+
+export type SpecialistReviewAttestation = SpecialistReviewAttestationBase &
+  (
+    | { schema_version: 'loop-engineer-review-attestation/v1' }
+    | {
+        schema_version: 'loop-engineer-review-attestation/v2'
+        review_round_exception: ReviewRoundExceptionProof
+      }
+  )
 
 export type GitHubMergeGateInput = {
   schema_version: 'loop-engineer-github-gate-input/v2'
@@ -45,7 +58,7 @@ export type GitHubMergeGateEvaluation = {
 }
 
 const inputFields = ['schema_version', 'review_attestation', 'merge_input'] as const
-const attestationFields = [
+const v1AttestationFields = [
   'schema_version',
   'issue_id',
   'pr_number',
@@ -57,6 +70,15 @@ const attestationFields = [
   'reason',
   'required_roles',
   'review_gate',
+] as const
+const v2AttestationFields = [...v1AttestationFields, 'review_round_exception'] as const
+const reviewRoundExceptionFields = [
+  'schema_version',
+  'issue_id',
+  'pr_number',
+  'merge_base_sha',
+  'head_sha',
+  'max_round',
 ] as const
 const reviewGateFields = [
   'schema_version',
@@ -166,11 +188,44 @@ function sameReviewGate(left: ReviewGate, right: ReviewGate): boolean {
   )
 }
 
-function validateAttestation(raw: unknown): SpecialistReviewAttestation | string {
-  if (!isRecord(raw) || !hasExactFields(raw, attestationFields)) {
+function isReviewRoundExceptionProof(value: unknown): value is ReviewRoundExceptionProof {
+  return (
+    isRecord(value) &&
+    hasExactFields(value, reviewRoundExceptionFields) &&
+    value.schema_version === 'loop-engineer-review-round-exception/v1' &&
+    typeof value.issue_id === 'string' &&
+    /^ISSUE-\d{3}$/.test(value.issue_id) &&
+    Number.isSafeInteger(value.pr_number) &&
+    (value.pr_number as number) > 0 &&
+    isSha(value.merge_base_sha) &&
+    isSha(value.head_sha) &&
+    (value.max_round === 4 || value.max_round === 5)
+  )
+}
+
+function sameReviewRoundException(
+  left: ReviewRoundExceptionProof,
+  right: ReviewRoundExceptionProof,
+): boolean {
+  return reviewRoundExceptionFields.every((field) => left[field] === right[field])
+}
+
+function validateAttestation(
+  raw: unknown,
+  verifiedException?: ReviewRoundExceptionProof,
+): SpecialistReviewAttestation | string {
+  if (!isRecord(raw)) return 'invalid_review_attestation'
+  const expectedFields =
+    raw.schema_version === 'loop-engineer-review-attestation/v2'
+      ? v2AttestationFields
+      : v1AttestationFields
+  if (!hasExactFields(raw, expectedFields)) {
     return 'invalid_review_attestation'
   }
-  if (raw.schema_version !== 'loop-engineer-review-attestation/v1') {
+  if (
+    raw.schema_version !== 'loop-engineer-review-attestation/v1' &&
+    raw.schema_version !== 'loop-engineer-review-attestation/v2'
+  ) {
     return 'unsupported_review_attestation_schema'
   }
   if (
@@ -182,7 +237,6 @@ function validateAttestation(raw: unknown): SpecialistReviewAttestation | string
     !isSha(raw.head_sha) ||
     !Number.isInteger(raw.round) ||
     (raw.round as number) < 1 ||
-    (raw.round as number) > 3 ||
     !isUniqueStringArray(raw.change_areas) ||
     typeof raw.status !== 'string' ||
     !['pass', 'pending', 'fail'].includes(raw.status) ||
@@ -192,6 +246,25 @@ function validateAttestation(raw: unknown): SpecialistReviewAttestation | string
     !isReviewGate(raw.review_gate)
   ) {
     return 'invalid_review_attestation'
+  }
+
+  if (raw.schema_version === 'loop-engineer-review-attestation/v1') {
+    if ((raw.round as number) > 3) return 'invalid_review_attestation'
+  } else {
+    if (!verifiedException) return 'review_round_exception_not_verified'
+    if (
+      !isReviewRoundExceptionProof(raw.review_round_exception) ||
+      !sameReviewRoundException(raw.review_round_exception, verifiedException) ||
+      (raw.round as number) < 4 ||
+      (raw.round as number) > 5 ||
+      (raw.round as number) > raw.review_round_exception.max_round ||
+      raw.review_round_exception.issue_id !== raw.issue_id ||
+      raw.review_round_exception.pr_number !== raw.pr_number ||
+      raw.review_round_exception.merge_base_sha !== raw.merge_base_sha ||
+      raw.review_round_exception.head_sha !== raw.head_sha
+    ) {
+      return 'invalid_review_round_exception'
+    }
   }
 
   const attestation = raw as SpecialistReviewAttestation
@@ -225,7 +298,11 @@ function redactedFailure(reason: string): GitHubMergeGateEvaluation {
   }
 }
 
-function validateInput(rawInput: unknown, expectedHeadSha: string): GitHubMergeGateInput | string {
+function validateInput(
+  rawInput: unknown,
+  expectedHeadSha: string,
+  verifiedException?: ReviewRoundExceptionProof,
+): GitHubMergeGateInput | string {
   if (!isSha(expectedHeadSha) || !isRecord(rawInput)) return 'invalid_input'
   if (Object.keys(rawInput).some((field) => !inputFields.includes(field as never))) {
     return 'unknown_field'
@@ -234,7 +311,7 @@ function validateInput(rawInput: unknown, expectedHeadSha: string): GitHubMergeG
   if (rawInput.schema_version !== 'loop-engineer-github-gate-input/v2') {
     return 'unsupported_schema_version'
   }
-  const attestation = validateAttestation(rawInput.review_attestation)
+  const attestation = validateAttestation(rawInput.review_attestation, verifiedException)
   if (typeof attestation === 'string') return attestation
   if (!isRecord(rawInput.merge_input)) return 'invalid_input'
 
@@ -245,11 +322,12 @@ function validateInput(rawInput: unknown, expectedHeadSha: string): GitHubMergeG
   }
 }
 
-export function evaluateGitHubMergeGates(
+function evaluateGitHubMergeGatesInternal(
   rawInput: unknown,
   expectedHeadSha: string,
+  verifiedException?: ReviewRoundExceptionProof,
 ): GitHubMergeGateEvaluation {
-  const validated = validateInput(rawInput, expectedHeadSha)
+  const validated = validateInput(rawInput, expectedHeadSha, verifiedException)
   if (typeof validated === 'string') return redactedFailure(validated)
   const input = validated
   const attestation = input.review_attestation
@@ -296,4 +374,57 @@ export function evaluateGitHubMergeGates(
     },
     auto_merge_reservation: 'disabled_until_issue_167_human_go',
   }
+}
+
+export function evaluateGitHubMergeGates(
+  rawInput: unknown,
+  expectedHeadSha: string,
+): GitHubMergeGateEvaluation {
+  return evaluateGitHubMergeGatesInternal(rawInput, expectedHeadSha)
+}
+
+function reviewRoundVerificationReason(error: unknown): string {
+  if (!(error instanceof Error)) return 'review_round_exception_verification_failed'
+  const allowed = new Set([
+    'invalid_review_round_exception',
+    'invalid_repository',
+    'invalid_app_id',
+    'stale_review_round_exception',
+    'ambiguous_review_round_exception',
+    'review_round_exception_not_approved',
+  ])
+  return allowed.has(error.message) ? error.message : 'review_round_exception_verification_failed'
+}
+
+export async function evaluateGitHubMergeGatesWithReviewRoundException(
+  rawInput: unknown,
+  expectedHeadSha: string,
+  verifier: { repository: string; appId: number },
+  adapter: ReviewRoundExceptionAdapter,
+): Promise<GitHubMergeGateEvaluation> {
+  let snapshot: unknown
+  try {
+    snapshot = structuredClone(rawInput)
+  } catch {
+    return redactedFailure('invalid_input')
+  }
+  if (
+    !isRecord(snapshot) ||
+    !isRecord(snapshot.review_attestation) ||
+    snapshot.review_attestation.schema_version !== 'loop-engineer-review-attestation/v2' ||
+    !isReviewRoundExceptionProof(snapshot.review_attestation.review_round_exception)
+  ) {
+    return evaluateGitHubMergeGates(snapshot, expectedHeadSha)
+  }
+
+  const proof = snapshot.review_attestation.review_round_exception
+  try {
+    await verifyReviewRoundException(
+      { repository: verifier.repository, appId: verifier.appId, proof },
+      adapter,
+    )
+  } catch (error) {
+    return redactedFailure(reviewRoundVerificationReason(error))
+  }
+  return evaluateGitHubMergeGatesInternal(snapshot, expectedHeadSha, proof)
 }

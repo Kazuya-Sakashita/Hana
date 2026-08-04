@@ -61,6 +61,19 @@ review prompt、finding本文、PR本文、コメント本文は返さない。
 少数reviewerのfindingも全件数へ加算し、多数決で削除しない。最大3巡後もP0〜P2 findingや不一致が
 残れば`fail`のままにする。
 
+## 第4〜5巡の人間承認例外
+
+このCLIの`loop-engineer-review-input/v1`は引き続き1〜3巡だけを受け付ける。第4〜5巡をローカル入力、
+boolean、自由文、環境変数で合格に変える経路は追加しない。
+
+第4〜5巡は、ISSUE-173のmain固定GitHub workflowが保護Environmentの承認をGitHub署名付きOIDCで
+検証し、専用Appの`review-round-exception` Checkを発行した場合だけ、GitHub merge gateの
+`loop-engineer-review-attestation/v2`として評価する。例外はIssue、PR、現在のmain SHA、head SHA、
+最大巡4または5へ完全一致で束縛する。追加commitまたはmain更新で失効し、第6巡は常に拒否する。
+
+例外は再reviewを実行できる回数だけを広げる。未解決finding、timeout、必要role不足、SHA不一致、
+HOLD、CI失敗、merge conflictを合格へ上書きしない。
+
 ## Privacyと禁止データ
 
 保存・出力してよいのはIssue ID、PR番号、SHA、領域ID、role、round、finding件数、固定status／reason
@@ -76,3 +89,5 @@ pnpm qa:issue165:specialist-review -- --mode=contract
 ```
 
 contract modeは合成データだけでpass、stale SHA、少数finding、timeout、4巡目、7名以上を確認する。
+ISSUE-173の例外経路は`pnpm qa:issue173:review-round-exception`で署名、Environment、専用App、
+SHA移動、重複Check、許可上限超過を合成データだけで確認する。

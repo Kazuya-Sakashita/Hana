@@ -1,4 +1,9 @@
-import { evaluateGitHubMergeGates, type GitHubMergeGateInput } from './github-merge-gates'
+import {
+  evaluateGitHubMergeGates,
+  evaluateGitHubMergeGatesWithReviewRoundException,
+  type GitHubMergeGateInput,
+} from './github-merge-gates'
+import { createGitHubReviewRoundExceptionAdapter } from './github-review-round-exception'
 
 const maxInputBytes = 64 * 1024
 const contractHeadSha = 'b'.repeat(40)
@@ -26,6 +31,17 @@ async function readStdin(): Promise<string | null> {
 function invalidInput(): void {
   writeJson(evaluateGitHubMergeGates(null, ''))
   process.exitCode = 1
+}
+
+function hasReviewRoundException(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as { review_attestation?: unknown }).review_attestation === 'object' &&
+    (value as { review_attestation?: { schema_version?: unknown } }).review_attestation
+      ?.schema_version === 'loop-engineer-review-attestation/v2'
+  )
 }
 
 function contractInput(): GitHubMergeGateInput {
@@ -161,7 +177,18 @@ async function main(): Promise<void> {
   }
 
   try {
-    const evaluation = evaluateGitHubMergeGates(JSON.parse(document), expectedHeadSha)
+    const input = JSON.parse(document) as unknown
+    const evaluation = hasReviewRoundException(input)
+      ? await evaluateGitHubMergeGatesWithReviewRoundException(
+          input,
+          expectedHeadSha,
+          {
+            repository: process.env.GITHUB_REPOSITORY ?? '',
+            appId: Number(process.env.LOOP_ENGINEER_APP_ID ?? 0),
+          },
+          createGitHubReviewRoundExceptionAdapter(),
+        )
+      : evaluateGitHubMergeGates(input, expectedHeadSha)
     writeJson(evaluation)
     const status =
       check === 'specialist'
