@@ -78,7 +78,7 @@ jobs:
           fi
 
           set +e
-          printf '%s' "$GATE_INPUT" | pnpm loop-engineer:github-gate -- --expected-head-sha="$live_head_sha" --check=merge > "$RUNNER_TEMP/gate-evaluation.json"
+          printf '%s' "$GATE_INPUT" | pnpm --silent loop-engineer:github-gate -- --expected-head-sha="$live_head_sha" --check=merge > "$RUNNER_TEMP/gate-evaluation.json"
           gate_exit=$?
           set -e
 

@@ -127,6 +127,8 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).toContain('candidate_openapi_validate:')
     expect(source).toContain('trusted_openapi_breaking:')
     expect(source).toContain('candidate_issue_registry:')
+    expect(source).toContain('pnpm --silent loop-engineer:github-gate')
+    expect(source).not.toContain('| pnpm loop-engineer:github-gate')
     expect(source).toContain('environment: hana-merge-publisher')
     expect(controller).toContain('repos/${repository}/check-runs')
     expect(source).toContain('environment: hana-merge-human-approval')
