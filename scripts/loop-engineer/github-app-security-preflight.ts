@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 export type GitHubAppSecurityPreflightClient = {
   readMainHead(repository: string): Promise<string>
   createCheckRun(
@@ -229,6 +233,3 @@ if (isDirectExecution) {
     process.exitCode = 1
   })
 }
-import { execFileSync } from 'node:child_process'
-import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
