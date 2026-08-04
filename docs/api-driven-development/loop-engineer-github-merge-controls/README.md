@@ -45,6 +45,31 @@ repositoryがHana 1件だけであることを照合する。
 
 `HUMAN_REQUIRED`の`merge-eligibility`は新世代開始時に`in_progress`で発行し、`hana-merge-human-approval`の承認後だけ同じCheck Run IDを`success`へ更新する。人間がJSONへ`approved`を書いて承認を代替する経路はない。`HOLD`にはEnvironment承認job自体を作らない。
 
+## Review round exception
+
+専門reviewは通常3巡までとする。人間が対象を限定して第4巡または第5巡を許可するときだけ、mainの
+`loop-engineer-review-round-exception.yml`をdispatchする。
+
+```bash
+gh workflow run loop-engineer-review-round-exception.yml \
+  --ref main \
+  -f exception_input='{"schema_version":"loop-engineer-review-round-exception/v1","issue_id":"ISSUE-172","pr_number":355,"merge_base_sha":"<CURRENT_MAIN_SHA>","head_sha":"<CURRENT_PR_HEAD_SHA>","max_round":5}'
+```
+
+`prepare`は設定済みの人間dispatcher、open / non-draft / main向けPR、mergeable、現在のmain SHA、head SHAを
+freshに照合する。`approve_and_publish`だけが`hana-merge-human-approval`とjob限定の`id-token: write`を
+持つ。`id-token: write`はクラウド資源やrepositoryへの書き込み権限ではなく、GitHub OIDC tokenの要求に
+だけ使う。Checkの書き込みは既存のHana限定GitHub App tokenへ分離する。
+
+controllerはGitHub OIDCのRS256署名を公式JWKSで検証し、issuer、audience、repository / owner ID、
+workflow ref / SHA、Environment、actor / ID、ref、run ID / attempt、GitHub-hosted runner、有効時間を
+完全一致で確認する。成功後もPRと現在のmainを再取得し、専用App名義の`review-round-exception`を
+`success`へ更新する。merge gateのtrusted `prepare` jobだけがChecks readでこの証明をfreshに検証する。
+
+同じheadに別App、未完了、失敗、複数の専用App Checkがある場合、Issue / PR / main / head / 最大巡が
+1つでも異なる場合は`HOLD`にする。mainまたはheadの更新で旧証明は失効する。第6巡、未解決finding、
+CI失敗、merge conflict、Ruleset bypass、auto-merge予約はこの例外で許可しない。
+
 ## Status-only attestation
 
 workflow inputは`loop-engineer-github-gate-input/v2`だけを受け付ける。内容はIssue ID、PR番号、main SHA、head SHA、review round、change area、role、件数、固定status/reasonである。
@@ -184,5 +209,7 @@ rollback自体が失敗した場合は以後のmutationを停止し、Operations
 - <https://docs.github.com/en/rest/repos/rules>
 - <https://docs.github.com/en/rest/repos/repos>
 - <https://docs.github.com/en/rest/checks/runs>
+- <https://docs.github.com/en/actions/reference/security/oidc>
+- <https://token.actions.githubusercontent.com/.well-known/openid-configuration>
 - <https://docs.github.com/en/actions/how-tos/managing-workflow-runs-and-deployments/managing-deployments/reviewing-deployments>
 - <https://docs.github.com/en/enterprise-cloud@latest/apps/creating-github-apps/authenticating-with-a-github-app/making-authenticated-api-requests-with-a-github-app-in-a-github-actions-workflow>

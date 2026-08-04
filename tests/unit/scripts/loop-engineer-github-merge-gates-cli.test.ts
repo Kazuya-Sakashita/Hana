@@ -60,6 +60,11 @@ function runCli(args: string[], stdin = '') {
   return spawnSync(process.execPath, ['--import', 'tsx', cliPath, ...args], {
     cwd: fileURLToPath(new URL('../../..', import.meta.url)),
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      GITHUB_REPOSITORY: '',
+      LOOP_ENGINEER_APP_ID: '',
+    },
     input: stdin,
   })
 }
@@ -120,6 +125,35 @@ describe('ISSUE-166 GitHub merge gate CLI', () => {
         reason: 'ruleset_change',
       },
     })
+  })
+
+  it('routes a fourth-round attestation through live dedicated-App verification', () => {
+    const input = passingInput() as unknown as {
+      schema_version: string
+      review_attestation: Record<string, unknown>
+      merge_input: GitHubMergeGateInput['merge_input']
+    }
+    input.review_attestation.schema_version = 'loop-engineer-review-attestation/v2'
+    input.review_attestation.issue_id = 'ISSUE-172'
+    input.review_attestation.pr_number = 355
+    input.review_attestation.round = 4
+    input.review_attestation.review_round_exception = {
+      schema_version: 'loop-engineer-review-round-exception/v1',
+      issue_id: 'ISSUE-172',
+      pr_number: 355,
+      merge_base_sha: mergeBaseSha,
+      head_sha: headSha,
+      max_round: 5,
+    }
+    input.merge_input.issue_id = 'ISSUE-172'
+    input.merge_input.pr_number = 355
+
+    const result = runCli(
+      [`--expected-head-sha=${headSha}`, '--check=merge'],
+      JSON.stringify(input),
+    )
+
+    expectJsonOnlyFailure(result, 'invalid_repository')
   })
 
   it.each([
