@@ -60,9 +60,9 @@ jobs:
           pr_number="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.pr_number | select(type == "number" and . > 0 and floor == .)')"
           declared_head_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.head_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
           declared_merge_base_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.merge_base_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
-          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
+          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
           live_head_sha="$(jq -er '.head_sha' <<<"$live_pr")"
-          live_base_sha="$(jq -er '.base_sha' <<<"$live_pr")"
+          live_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
 
           if [[ "$(jq -r '.state' <<<"$live_pr")" != "open" || "$(jq -r '.draft' <<<"$live_pr")" != "false" || "$(jq -r '.base_ref' <<<"$live_pr")" != "main" ]]; then
             echo "::error::The target must be an open, non-draft PR to main."

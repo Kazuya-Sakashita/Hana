@@ -447,11 +447,14 @@ function createGitHubClient(): GitHubCheckGenerationClient {
         mergeable?: unknown
         labels?: Array<{ name?: unknown }>
       }>([`repos/${repository}/pulls/${prNumber}`])
+      const mainRef = ghJson<{ object?: { sha?: unknown } }>([
+        `repos/${repository}/git/ref/heads/main`,
+      ])
       return {
         state: String(response.state),
         draft: response.draft === true,
         base_ref: String(response.base?.ref),
-        base_sha: String(response.base?.sha),
+        base_sha: String(mainRef.object?.sha),
         head_sha: String(response.head?.sha),
         mergeable: response.mergeable === true,
         breaking_approval_label_present:

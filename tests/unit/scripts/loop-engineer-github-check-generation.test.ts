@@ -97,6 +97,7 @@ function finalizeInput(
 
 const staleCases: Array<[string, ClientOptions, boolean]> = [
   ['a moved head SHA', { pullRequest: { head_sha: 'c'.repeat(40) } }, false],
+  ['a moved main SHA', { pullRequest: { base_sha: 'd'.repeat(40) } }, false],
   ['a newer generation', { latestIds: [999] }, false],
   ['a removed breaking waiver', { pullRequest: { breaking_approval_label_present: false } }, true],
 ]

@@ -141,7 +141,10 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).toContain('OPENAPI_BREAKING_DETECTED')
     expect(controller).toContain('external_id: input.externalId')
     expect(source).toContain('BASE_SHA')
-    expect(source).toContain('.base.sha')
+    expect(source).toContain('git/ref/heads/main')
+    expect(source).not.toContain('base_sha:.base.sha')
+    expect(controller).toContain('git/ref/heads/main')
+    expect(controller).not.toContain('base_sha: String(response.base?.sha)')
     expect(source).toContain(
       'oasdiff/oasdiff-action/breaking@1c611ffb1253a72924624aa4fb662e302b3565d3',
     )
