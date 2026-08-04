@@ -341,6 +341,7 @@ function readPrivateKeyEnvironmentNames(repository: string): string[] {
 function readAutomationSecurityConfiguration(
   repository: string,
   appId: number,
+  preflightRunId: number,
 ): GitHubAutomationSecurityConfiguration {
   const variables = ghJson<{
     total_count?: number
@@ -350,35 +351,40 @@ function readAutomationSecurityConfiguration(
     total_count?: number
     secrets?: Array<{ name: string }>
   }>([`repos/${repository}/actions/secrets?per_page=100`])
-  const installations = ghJson<{
+  const mainRef = ghJson<{ object?: { sha?: string } }>([`repos/${repository}/git/ref/heads/main`])
+  const latestWorkflowRuns = ghJson<{
     total_count?: number
-    installations?: Array<{
-      id?: number
-      app_id?: number
-      repository_selection?: string
-      permissions?: Record<string, string>
-    }>
-  }>(['user/installations?per_page=100'])
-  const allInstallations = requireCompleteInventory(
-    installations.total_count,
-    installations.installations ?? [],
-    'app_installation_inventory_incomplete',
-  )
-  const matchingInstallations = allInstallations.filter(
-    (installation) => installation.app_id === appId,
-  )
-  if (matchingInstallations.length !== 1 || !matchingInstallations[0]?.id) {
-    throw new Error('dedicated_app_installation_missing')
+    workflow_runs?: Array<{ id?: number }>
+  }>([
+    `repos/${repository}/actions/workflows/loop-engineer-app-security-preflight.yml/runs?branch=main&event=workflow_dispatch&per_page=1`,
+  ])
+  if (
+    !Number.isSafeInteger(latestWorkflowRuns.total_count) ||
+    Number(latestWorkflowRuns.total_count) < 1 ||
+    latestWorkflowRuns.workflow_runs?.length !== 1
+  ) {
+    throw new Error('app_security_preflight_run_inventory_incomplete')
   }
-  const installation = matchingInstallations[0]
-  const repositories = ghJson<{
+  const workflowRun = ghJson<{
+    id?: number
+    path?: string
+    event?: string
+    head_branch?: string
+    head_sha?: string
+    status?: string
+    conclusion?: string | null
+    updated_at?: string
+  }>([`repos/${repository}/actions/runs/${preflightRunId}`])
+  const checkRunResponse = ghJson<{
     total_count?: number
-    repositories?: Array<{ full_name?: string }>
-  }>([`user/installations/${installation.id}/repositories?per_page=100`])
-  const installedRepositories = requireCompleteInventory(
-    repositories.total_count,
-    repositories.repositories ?? [],
-    'app_repository_inventory_incomplete',
+    check_runs?: Array<Record<string, unknown>>
+  }>([
+    `repos/${repository}/commits/${String(mainRef.object?.sha)}/check-runs?filter=latest&check_name=app-security-preflight&app_id=${appId}&per_page=100`,
+  ])
+  const checkRuns = requireCompleteInventory(
+    checkRunResponse.total_count,
+    checkRunResponse.check_runs ?? [],
+    'app_security_preflight_inventory_incomplete',
   )
   const allVariables = requireCompleteInventory(
     variables.total_count,
@@ -393,11 +399,36 @@ function readAutomationSecurityConfiguration(
   return {
     repository,
     app_id: appId,
-    app_repository_selection: installation.repository_selection === 'selected' ? 'selected' : 'all',
-    app_permissions: installation.permissions ?? {},
-    installed_repositories: installedRepositories.map(({ full_name: fullName }) =>
-      String(fullName),
-    ),
+    app_security_preflight: {
+      main_sha: String(mainRef.object?.sha),
+      latest_workflow_run_id: Number(latestWorkflowRuns.workflow_runs[0]?.id),
+      workflow_run: {
+        id: Number(workflowRun.id),
+        path: String(workflowRun.path),
+        event: String(workflowRun.event),
+        head_branch: String(workflowRun.head_branch),
+        head_sha: String(workflowRun.head_sha),
+        status: String(workflowRun.status),
+        conclusion: workflowRun.conclusion ?? null,
+        updated_at: String(workflowRun.updated_at),
+      },
+      check_runs: checkRuns.map((run) => {
+        const app = run.app
+        return {
+          id: Number(run.id),
+          name: String(run.name),
+          app_id:
+            typeof app === 'object' && app !== null && !Array.isArray(app)
+              ? Number((app as Record<string, unknown>).id)
+              : 0,
+          head_sha: String(run.head_sha),
+          external_id: String(run.external_id),
+          status: String(run.status),
+          conclusion: typeof run.conclusion === 'string' ? run.conclusion : null,
+          completed_at: typeof run.completed_at === 'string' ? run.completed_at : null,
+        }
+      }),
+    },
     repository_secret_names: allRepositorySecrets.map(({ name }) => name),
     private_key_environment_names: readPrivateKeyEnvironmentNames(repository),
     variables: Object.fromEntries(allVariables.map(({ name, value }) => [name, value])),
@@ -417,14 +448,17 @@ async function main(): Promise<void> {
   const confirmation = argValue(args, 'confirm-repository')
   const approval = argValue(args, 'human-approval')
   const appId = Number(argValue(args, 'app-id'))
+  const appPreflightRunId = Number(argValue(args, 'app-preflight-run-id'))
   const bootstrapHeadSha = argValue(args, 'bootstrap-head-sha')
   if (
-    args.length !== 5 ||
+    args.length !== 6 ||
     repository !== 'Kazuya-Sakashita/Hana' ||
     confirmation !== repository ||
     approval !== 'ISSUE-166' ||
     !Number.isSafeInteger(appId) ||
     appId <= 0 ||
+    !Number.isSafeInteger(appPreflightRunId) ||
+    appPreflightRunId <= 0 ||
     bootstrapHeadSha === null ||
     !/^[0-9a-f]{40}$/.test(bootstrapHeadSha)
   ) {
@@ -434,7 +468,7 @@ async function main(): Promise<void> {
   }
 
   validateGitHubAutomationSecurityConfiguration(
-    readAutomationSecurityConfiguration(repository, appId),
+    readAutomationSecurityConfiguration(repository, appId, appPreflightRunId),
   )
   const result = await applyGitHubMergeControls(
     {

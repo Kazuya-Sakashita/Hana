@@ -271,18 +271,37 @@ describe('ISSUE-166 transactional GitHub merge controls', () => {
     expect(calls).toContain('patch:rollback')
   })
 
-  it('rejects broad App permissions, all-repository install, and bypassable Environments', () => {
+  it('accepts only fresh App security preflight evidence bound to main, workflow run, and App', () => {
+    const observedAt = Date.parse('2026-08-04T10:00:00.000Z')
     const valid = {
       repository: 'Kazuya-Sakashita/Hana',
       app_id: appId,
-      app_repository_selection: 'selected' as const,
-      app_permissions: {
-        checks: 'write',
-        contents: 'read',
-        metadata: 'read',
-        pull_requests: 'read',
+      app_security_preflight: {
+        main_sha: headSha,
+        latest_workflow_run_id: 9001,
+        workflow_run: {
+          id: 9001,
+          path: '.github/workflows/loop-engineer-app-security-preflight.yml',
+          event: 'workflow_dispatch',
+          head_branch: 'main',
+          head_sha: headSha,
+          status: 'completed',
+          conclusion: 'success',
+          updated_at: '2026-08-04T09:55:00.000Z',
+        },
+        check_runs: [
+          {
+            id: 501,
+            name: 'app-security-preflight',
+            app_id: appId,
+            head_sha: headSha,
+            external_id: 'loop-engineer-app-preflight-9001',
+            status: 'completed',
+            conclusion: 'success',
+            completed_at: '2026-08-04T09:54:00.000Z',
+          },
+        ],
       },
-      installed_repositories: ['Kazuya-Sakashita/Hana'],
       repository_secret_names: [],
       private_key_environment_names: ['hana-merge-human-approval', 'hana-merge-publisher'],
       variables: {
@@ -308,36 +327,106 @@ describe('ISSUE-166 transactional GitHub merge controls', () => {
       },
     }
 
-    expect(() => validateGitHubAutomationSecurityConfiguration(valid)).not.toThrow()
+    expect(() => validateGitHubAutomationSecurityConfiguration(valid, observedAt)).not.toThrow()
+    const withCheck = (
+      check: Partial<(typeof valid.app_security_preflight.check_runs)[number]>,
+    ) => ({
+      ...valid,
+      app_security_preflight: {
+        ...valid.app_security_preflight,
+        check_runs: [{ ...valid.app_security_preflight.check_runs[0]!, ...check }],
+      },
+    })
+
     expect(() =>
-      validateGitHubAutomationSecurityConfiguration({
-        ...valid,
-        app_permissions: { ...valid.app_permissions, administration: 'write' },
-      }),
-    ).toThrow('excessive_app_permission')
+      validateGitHubAutomationSecurityConfiguration(
+        {
+          ...valid,
+          app_security_preflight: {
+            ...valid.app_security_preflight,
+            latest_workflow_run_id: 9002,
+          },
+        },
+        observedAt,
+      ),
+    ).toThrow('app_security_preflight_mismatch')
     expect(() =>
-      validateGitHubAutomationSecurityConfiguration({
-        ...valid,
-        app_repository_selection: 'all',
-      }),
-    ).toThrow('app_installation_scope_mismatch')
+      validateGitHubAutomationSecurityConfiguration(
+        {
+          ...valid,
+          app_security_preflight: {
+            ...valid.app_security_preflight,
+            workflow_run: {
+              ...valid.app_security_preflight.workflow_run,
+              updated_at: '2026-08-04T09:30:00.000Z',
+            },
+          },
+        },
+        observedAt,
+      ),
+    ).toThrow('stale_app_security_preflight')
     expect(() =>
-      validateGitHubAutomationSecurityConfiguration({
-        ...valid,
-        human_environment: { ...valid.human_environment, can_admins_bypass: true },
-      }),
+      validateGitHubAutomationSecurityConfiguration(withCheck({ app_id: appId + 1 }), observedAt),
+    ).toThrow('app_security_preflight_mismatch')
+    expect(() =>
+      validateGitHubAutomationSecurityConfiguration(
+        withCheck({ head_sha: 'c'.repeat(40) }),
+        observedAt,
+      ),
+    ).toThrow('app_security_preflight_mismatch')
+    expect(() =>
+      validateGitHubAutomationSecurityConfiguration(
+        withCheck({ conclusion: 'failure' }),
+        observedAt,
+      ),
+    ).toThrow('app_security_preflight_mismatch')
+    expect(() =>
+      validateGitHubAutomationSecurityConfiguration(
+        withCheck({ external_id: 'loop-engineer-app-preflight-9000' }),
+        observedAt,
+      ),
+    ).toThrow('app_security_preflight_mismatch')
+    expect(() =>
+      validateGitHubAutomationSecurityConfiguration(
+        {
+          ...valid,
+          app_security_preflight: {
+            ...valid.app_security_preflight,
+            check_runs: [
+              ...valid.app_security_preflight.check_runs,
+              { ...valid.app_security_preflight.check_runs[0]!, id: 502 },
+            ],
+          },
+        },
+        observedAt,
+      ),
+    ).toThrow('app_security_preflight_mismatch')
+    expect(() =>
+      validateGitHubAutomationSecurityConfiguration(
+        {
+          ...valid,
+          human_environment: { ...valid.human_environment, can_admins_bypass: true },
+        },
+        observedAt,
+      ),
     ).toThrow('environment_admin_bypass_enabled')
     expect(() =>
-      validateGitHubAutomationSecurityConfiguration({
-        ...valid,
-        human_environment: { ...valid.human_environment, required_reviewers: [] },
-      }),
+      validateGitHubAutomationSecurityConfiguration(
+        {
+          ...valid,
+          human_environment: { ...valid.human_environment, required_reviewers: [] },
+        },
+        observedAt,
+      ),
     ).toThrow('human_reviewer_mismatch')
     expect(() =>
-      validateGitHubAutomationSecurityConfiguration({
-        ...valid,
-        private_key_environment_names: [...valid.private_key_environment_names, 'production'],
-      }),
+      validateGitHubAutomationSecurityConfiguration(
+        {
+          ...valid,
+          private_key_environment_names: [...valid.private_key_environment_names, 'production'],
+        },
+        observedAt,
+      ),
     ).toThrow('private_key_environment_scope_mismatch')
   })
 

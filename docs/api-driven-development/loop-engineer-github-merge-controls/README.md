@@ -19,6 +19,7 @@ Appの作成、Hanaへのinstall、variable、secret、Environment設定は人�
 - Actions: none
 - Checks: write（固定名のCheck Run発行だけに使用）
 - Contents: read
+- Metadata: read
 - Pull requests: read
 - Administration: none
 - Secrets: none
@@ -29,6 +30,18 @@ repositoryには`LOOP_ENGINEER_APP_ID`、`LOOP_ENGINEER_DISPATCHER_LOGIN`、`LOO
 private keyは`hana-merge-publisher`と`hana-merge-human-approval`の2つのEnvironment secretへ、同じ`LOOP_ENGINEER_APP_PRIVATE_KEY`名で登録する。両Environmentはdeployment branchをmainだけに限定し、`can_admins_bypass=false`とする。publisherにはreviewerを置かず、human approvalには指定したUser reviewerを1名だけ置く。1人運用のため`prevent_self_review=false`を明示し、承認操作そのものはEnvironment履歴へ残す。
 
 初期導入ではdispatcherを承認済みの人間loginにする。ISSUE-167で自動dispatchを追加する場合もApp権限は増やさず、別のmain固定controllerだけを設計・reviewする。App ID、login、Environment secretの値はログ、artifact、docs、PRへ保存しない。
+
+通常の`gh`認証では、GitHub App user access token専用の`/user/installations`を呼ばない。Appと
+installationの実設定確認は、`hana-merge-publisher`内で専用App tokenを作る
+`loop-engineer-app-security-preflight.yml`へ分離する。このworkflowはmainの最新コードだけを実行し、
+Appの宣言権限が上記4権限だけであることと、owner全体を対象に作ったinstallation tokenから見える
+repositoryがHana 1件だけであることを照合する。
+
+確認開始時にmain SHAへ専用App名義の`app-security-preflight`を`in_progress`で作成する。成功時だけ
+同じCheck Run IDを`success`へ更新し、失敗時は`failure`へ更新する。通常の`gh`認証を使う適用CLIは、
+指定したworkflow run ID、current main SHA、専用App ID、Check Runのexternal ID、成功状態、完了時刻を
+照合する。workflowとCheckのどちらかが15分を超えて古い場合、別SHA、別App、複数Check、失敗、未完了の
+場合は設定変更前に停止する。
 
 `HUMAN_REQUIRED`の`merge-eligibility`は新世代開始時に`in_progress`で発行し、`hana-merge-human-approval`の承認後だけ同じCheck Run IDを`success`へ更新する。人間がJSONへ`approved`を書いて承認を代替する経路はない。`HOLD`にはEnvironment承認job自体を作らない。
 
@@ -95,18 +108,36 @@ Rulesetはdefault branchだけを対象にし、bypass actorは0件とする。
 適用は次の順番を変えない。途中失敗時はautomatic rollbackを実行し、fresh接続で戻り値を確認する。
 
 1. fresh preflightを取得し、repository名、default branch、merge settings、Ruleset一覧を照合する。
-2. 専用AppがHanaだけへのselected installationで、権限がChecks write、Contents read、Metadata read、Pull requests readだけであることをreadbackする。
-3. repository secretにprivate keyがないこと、2 EnvironmentだけにEnvironment secretがあること、main branch policy、`can_admins_bypass=false`、human reviewer identity/type、self-review policyをexact readbackする。
-4. synthetic PRへmain workflowをdispatchし、候補checkより先に5件の`in_progress` Check Runが専用App ID、同一head SHA、固定名で発行され、最終jobが同じIDを更新したことをreadbackする。
-5. App IDを埋めた`main-ruleset-disabled.template.json`からRulesetを`disabled`で作成する。
-6. 作成したRulesetをexact readbackし、対象branch、bypass 0件、rule、check名、App IDがversioned contractと一致しなければautomatic rollbackする。
-7. 同じRulesetを`active`へ更新し、fresh readbackする。
-8. 最後に`repository-settings.json`を適用し、native auto-mergeとsquash-onlyをfresh readbackする。
-9. GraphQLのfresh queryでopen PRのauto-merge予約が0件であることを確認する。
+2. mainを指定してApp security preflightを手動実行し、workflow run IDを控える。専用Appが宣言する権限と、installation tokenから見えるrepository全件はprotected Environment内でexact readbackする。
+3. 適用CLIがworkflow runと同じmain SHAの最新`app-security-preflight`を専用App名義で1件だけreadbackし、15分以内の成功であることを確認する。
+4. repository secretにprivate keyがないこと、2 EnvironmentだけにEnvironment secretがあること、main branch policy、`can_admins_bypass=false`、human reviewer identity/type、self-review policyをexact readbackする。
+5. synthetic PRへmain workflowをdispatchし、候補checkより先に5件の`in_progress` Check Runが専用App ID、同一head SHA、固定名で発行され、最終jobが同じIDを更新したことをreadbackする。
+6. App IDを埋めた`main-ruleset-disabled.template.json`からRulesetを`disabled`で作成する。
+7. 作成したRulesetをexact readbackし、対象branch、bypass 0件、rule、check名、App IDがversioned contractと一致しなければautomatic rollbackする。
+8. 同じRulesetを`active`へ更新し、fresh readbackする。
+9. 最後に`repository-settings.json`を適用し、native auto-mergeとsquash-onlyをfresh readbackする。
+10. GraphQLのfresh queryでopen PRのauto-merge予約が0件であることを確認する。
 
 repository settingsを先に変えない。active RulesetをいきなりPOSTしない。作成されたRuleset ID以外のactor・token・response headerは証跡へ保存しない。
 
 Security、Operations、GitHub App / Environment設定、実GitHub設定変更がすべて承認された後だけ、transaction CLIを1回実行する。repository名を2回一致させ、承認Issue、専用App ID、実ユーザーデータを含まないbootstrap PRのhead SHAを明示する。
+
+App security preflightは適用CLIの直前にmainで実行する。実行IDはAPI応答本文やsecret値と一緒に保存せず、
+この適用操作のstatus-only入力としてだけ使用する。
+
+```bash
+gh workflow run loop-engineer-app-security-preflight.yml --ref main
+gh run list \
+  --workflow=loop-engineer-app-security-preflight.yml \
+  --branch=main \
+  --event=workflow_dispatch \
+  --limit=1 \
+  --json databaseId,status,conclusion
+```
+
+表示された実行が`completed`かつ`success`であることを確認し、その`databaseId`を次の
+`APP_SECURITY_PREFLIGHT_RUN_ID`として使う。CLIでも同じ状態をfresh readbackするため、表示だけを承認根拠に
+しない。
 
 ```bash
 pnpm loop-engineer:apply-github-controls -- \
@@ -114,10 +145,11 @@ pnpm loop-engineer:apply-github-controls -- \
   --confirm-repository=Kazuya-Sakashita/Hana \
   --human-approval=ISSUE-166 \
   --app-id=<DEDICATED_APP_ID> \
+  --app-preflight-run-id=<APP_SECURITY_PREFLIGHT_RUN_ID> \
   --bootstrap-head-sha=<SYNTHETIC_PR_HEAD_SHA>
 ```
 
-CLIはvariable、App installation / permission、repository secret不在、Environment secret名、branch policy、admin bypass、reviewerをread-only確認し、fresh preflight、auto-merge予約0件、専用Appの5 checkを照合してから変更する。disabled作成後のexact readback、active化、repository settingsの順で進め、途中失敗時はRuleset disabled化と全merge settings復元をautomatic rollbackする。作成応答IDが欠落しても同名Rulesetを発見してdisabledへ戻す。出力は固定status/reasonとRuleset IDだけである。
+CLIはvariable、App security preflight、repository secret不在、Environment secret名、branch policy、admin bypass、reviewerをread-only確認し、fresh preflight、auto-merge予約0件、専用Appの5 checkを照合してから変更する。disabled作成後のexact readback、active化、repository settingsの順で進め、途中失敗時はRuleset disabled化と全merge settings復元をautomatic rollbackする。作成応答IDが欠落しても同名Rulesetを発見してdisabledへ戻す。出力は固定status/reasonとRuleset IDだけである。
 
 ## Synthetic verification
 

@@ -67,9 +67,30 @@ type EnvironmentSecurityStatus = {
 export type GitHubAutomationSecurityConfiguration = {
   repository: string
   app_id: number
-  app_repository_selection: 'all' | 'selected'
-  app_permissions: Record<string, string>
-  installed_repositories: string[]
+  app_security_preflight: {
+    main_sha: string
+    latest_workflow_run_id: number
+    workflow_run: {
+      id: number
+      path: string
+      event: string
+      head_branch: string
+      head_sha: string
+      status: string
+      conclusion: string | null
+      updated_at: string
+    }
+    check_runs: Array<{
+      id: number
+      name: string
+      app_id: number
+      head_sha: string
+      external_id: string
+      status: string
+      conclusion: string | null
+      completed_at: string | null
+    }>
+  }
   repository_secret_names: string[]
   private_key_environment_names: string[]
   variables: Record<string, string>
@@ -116,14 +137,9 @@ function sameContract(left: unknown, right: unknown): boolean {
 
 export function validateGitHubAutomationSecurityConfiguration(
   configuration: GitHubAutomationSecurityConfiguration,
+  observedAt = Date.now(),
 ): void {
   const privateKeyName = 'LOOP_ENGINEER_APP_PRIVATE_KEY'
-  const expectedPermissions = {
-    checks: 'write',
-    contents: 'read',
-    metadata: 'read',
-    pull_requests: 'read',
-  }
   if (
     !Number.isSafeInteger(configuration.app_id) ||
     configuration.app_id <= 0 ||
@@ -132,14 +148,46 @@ export function validateGitHubAutomationSecurityConfiguration(
   ) {
     throw new Error('dedicated_app_mismatch')
   }
+  const preflight = configuration.app_security_preflight
+  const workflow = preflight.workflow_run
+  const check = preflight.check_runs[0]
   if (
-    configuration.app_repository_selection !== 'selected' ||
-    !sameStringArray(configuration.installed_repositories, [configuration.repository])
+    !/^[0-9a-f]{40}$/.test(preflight.main_sha) ||
+    !Number.isSafeInteger(workflow.id) ||
+    workflow.id <= 0 ||
+    preflight.latest_workflow_run_id !== workflow.id ||
+    workflow.path !== '.github/workflows/loop-engineer-app-security-preflight.yml' ||
+    workflow.event !== 'workflow_dispatch' ||
+    workflow.head_branch !== 'main' ||
+    workflow.head_sha !== preflight.main_sha ||
+    workflow.status !== 'completed' ||
+    workflow.conclusion !== 'success' ||
+    preflight.check_runs.length !== 1 ||
+    check === undefined ||
+    !Number.isSafeInteger(check.id) ||
+    check.id <= 0 ||
+    check.name !== 'app-security-preflight' ||
+    check.app_id !== configuration.app_id ||
+    check.head_sha !== preflight.main_sha ||
+    check.external_id !== `loop-engineer-app-preflight-${workflow.id}` ||
+    check.status !== 'completed' ||
+    check.conclusion !== 'success'
   ) {
-    throw new Error('app_installation_scope_mismatch')
+    throw new Error('app_security_preflight_mismatch')
   }
-  if (!sameContract(configuration.app_permissions, expectedPermissions)) {
-    throw new Error('excessive_app_permission')
+  const workflowUpdatedAt = Date.parse(workflow.updated_at)
+  const checkCompletedAt = check.completed_at === null ? Number.NaN : Date.parse(check.completed_at)
+  const maxAgeMs = 15 * 60 * 1000
+  if (
+    !Number.isFinite(observedAt) ||
+    !Number.isFinite(workflowUpdatedAt) ||
+    !Number.isFinite(checkCompletedAt) ||
+    observedAt < workflowUpdatedAt ||
+    observedAt < checkCompletedAt ||
+    observedAt - workflowUpdatedAt > maxAgeMs ||
+    observedAt - checkCompletedAt > maxAgeMs
+  ) {
+    throw new Error('stale_app_security_preflight')
   }
   if (configuration.repository_secret_names.includes(privateKeyName)) {
     throw new Error('repository_private_key_forbidden')
