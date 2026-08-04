@@ -276,7 +276,11 @@ describe('ISSUE-166 dedicated-App check generation controller', () => {
         client,
       ),
     ).rejects.toThrow('stale_human_approval')
-    expect(calls.at(-1)).toBe('update:101:merge-eligibility:failure')
+    expect(calls).toEqual([
+      'read:pull-request',
+      'read:latest:merge-eligibility',
+      'update:101:merge-eligibility:failure',
+    ])
   })
 
   it('fails human approval after main moves', async () => {
