@@ -36,6 +36,7 @@ describe('ISSUE-168 GitHub App security preflight repository contract', () => {
     const job = workflow.jobs.preflight!
     const steps = job.steps ?? []
     const checkoutIndex = steps.findIndex(({ uses }) => uses?.startsWith('actions/checkout@'))
+    const pnpmSetup = steps.find(({ uses }) => uses?.startsWith('pnpm/action-setup@'))
     const installIndex = steps.findIndex(
       ({ run }) => run === 'pnpm --dir trusted-control install --frozen-lockfile',
     )
@@ -66,6 +67,10 @@ describe('ISSUE-168 GitHub App security preflight repository contract', () => {
         },
       },
     ])
+    expect(pnpmSetup?.with).toEqual({
+      run_install: false,
+      package_json_file: 'trusted-control/package.json',
+    })
     expect(checkoutIndex).toBeLessThan(installIndex)
     expect(installIndex).toBeLessThan(tokenIndex)
     expect(tokenIndex).toBeLessThan(controllerIndex)
