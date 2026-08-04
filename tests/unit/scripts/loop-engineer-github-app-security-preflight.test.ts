@@ -20,6 +20,8 @@ function createClient(
     permissions?: Record<string, string>
     repositories?: string[]
     failSuccessUpdate?: boolean
+    failAppRead?: boolean
+    failRepositoryRead?: boolean
   } = {},
 ) {
   const calls: string[] = []
@@ -34,6 +36,7 @@ function createClient(
     },
     async readApp(_slug) {
       calls.push('read:app')
+      if (options.failAppRead) throw new Error('github_api_failed')
       return {
         id: options.appId ?? appId,
         permissions:
@@ -48,6 +51,7 @@ function createClient(
     },
     async listInstallationRepositories() {
       calls.push('list:repositories')
+      if (options.failRepositoryRead) throw new Error('github_api_failed')
       return options.repositories ?? [repository]
     },
     async updateCheckRun(_repository, id, input) {
@@ -139,6 +143,28 @@ describe('ISSUE-168 GitHub App security preflight', () => {
       ),
     ).rejects.toThrow('github_api_failed')
     expect(calls.slice(-2)).toEqual(['update:501:success', 'update:501:failure'])
+  })
+
+  it.each([
+    ['App metadata authentication', { failAppRead: true }],
+    ['repository inventory authentication', { failRepositoryRead: true }],
+  ])('publishes a fixed failure for %s errors', async (_name, options) => {
+    const { client, calls } = createClient(options)
+
+    await expect(
+      runGitHubAppSecurityPreflight(
+        {
+          repository,
+          appId,
+          appSlug: 'hana-merge-controller',
+          trustedMainSha: mainSha,
+          workflowRunId: 9001,
+        },
+        client,
+      ),
+    ).rejects.toThrow('github_api_failed')
+    expect(calls.at(-1)).toBe('update:501:failure')
+    expect(calls).not.toContain('update:501:success')
   })
 
   it('prints only a fixed status and reason for invalid runtime input', () => {
