@@ -80,7 +80,7 @@ function rulesetChangeInput(): GitHubMergeGateInput {
   return input
 }
 
-function fourthRoundInput() {
+function exceptionRoundInput(round = 4, maxRound: 4 | 5 = 5) {
   const input = eligibleGateInput() as unknown as {
     review_attestation: Record<string, unknown>
     merge_input: GitHubMergeGateInput['merge_input']
@@ -89,21 +89,21 @@ function fourthRoundInput() {
   input.review_attestation.schema_version = 'loop-engineer-review-attestation/v2'
   input.review_attestation.issue_id = 'ISSUE-172'
   input.review_attestation.pr_number = 355
-  input.review_attestation.round = 4
+  input.review_attestation.round = round
   input.review_attestation.review_round_exception = {
     schema_version: 'loop-engineer-review-round-exception/v1',
     issue_id: 'ISSUE-172',
     pr_number: 355,
     merge_base_sha: mergeBaseSha,
     head_sha: headSha,
-    max_round: 5,
+    max_round: maxRound,
   }
   input.merge_input.issue_id = 'ISSUE-172'
   input.merge_input.pr_number = 355
   return input
 }
 
-function approvedExceptionAdapter(): ReviewRoundExceptionAdapter {
+function approvedExceptionAdapter(maxRound: 4 | 5 = 5): ReviewRoundExceptionAdapter {
   return {
     async requestOidcToken() {
       throw new Error('unexpected_oidc_request')
@@ -131,7 +131,7 @@ function approvedExceptionAdapter(): ReviewRoundExceptionAdapter {
           app_id: 424242,
           name: 'review-round-exception',
           head_sha: headSha,
-          external_id: `loop-engineer-review-round-exception/v1|ISSUE-172|355|${mergeBaseSha}|${headSha}|5`,
+          external_id: `loop-engineer-review-round-exception/v1|ISSUE-172|355|${mergeBaseSha}|${headSha}|${maxRound}`,
           status: 'completed',
           conclusion: 'success',
         },
@@ -147,25 +147,64 @@ function approvedExceptionAdapter(): ReviewRoundExceptionAdapter {
 }
 
 describe('evaluateGitHubMergeGates', () => {
-  it('accepts a fourth-round attestation only after a live dedicated-App proof verifies', async () => {
+  it.each([
+    [4, 4],
+    [4, 5],
+    [5, 5],
+  ] as const)(
+    'accepts round %s with an exact max-round %s dedicated-App proof',
+    async (round, maxRound) => {
+      await expect(
+        evaluateGitHubMergeGatesWithReviewRoundException(
+          exceptionRoundInput(round, maxRound),
+          headSha,
+          { repository: 'Kazuya-Sakashita/Hana', appId: 424242 },
+          approvedExceptionAdapter(maxRound),
+        ),
+      ).resolves.toMatchObject({
+        issue_id: 'ISSUE-172',
+        pr_number: 355,
+        head_sha: headSha,
+        specialist_review_gate: { status: 'success' },
+        merge_eligibility: { status: 'success', decision: 'AUTO_MERGE_ELIGIBLE' },
+      })
+    },
+  )
+
+  it.each([4, 5, 6])('rejects v1 round %s with the stable exceeded reason', (round) => {
+    const input = eligibleGateInput()
+    input.review_attestation.round = round
+
+    expect(evaluateGitHubMergeGates(input, headSha)).toMatchObject({
+      specialist_review_gate: { status: 'failure', reason: 'review_round_exceeded' },
+      merge_eligibility: {
+        status: 'failure',
+        decision: 'HOLD',
+        reason: 'review_round_exceeded',
+      },
+    })
+  })
+
+  it('rejects v2 round 6 even when the proof allows the maximum supported round', async () => {
     await expect(
       evaluateGitHubMergeGatesWithReviewRoundException(
-        fourthRoundInput(),
+        exceptionRoundInput(6, 5),
         headSha,
         { repository: 'Kazuya-Sakashita/Hana', appId: 424242 },
         approvedExceptionAdapter(),
       ),
     ).resolves.toMatchObject({
-      issue_id: 'ISSUE-172',
-      pr_number: 355,
-      head_sha: headSha,
-      specialist_review_gate: { status: 'success' },
-      merge_eligibility: { status: 'success', decision: 'AUTO_MERGE_ELIGIBLE' },
+      specialist_review_gate: { status: 'failure', reason: 'invalid_review_round_exception' },
+      merge_eligibility: {
+        status: 'failure',
+        decision: 'HOLD',
+        reason: 'invalid_review_round_exception',
+      },
     })
   })
 
   it('never accepts caller-supplied v2 proof through the synchronous compatibility path', () => {
-    expect(evaluateGitHubMergeGates(fourthRoundInput(), headSha)).toMatchObject({
+    expect(evaluateGitHubMergeGates(exceptionRoundInput(), headSha)).toMatchObject({
       specialist_review_gate: {
         status: 'failure',
         reason: 'review_round_exception_not_verified',
@@ -179,7 +218,7 @@ describe('evaluateGitHubMergeGates', () => {
   })
 
   it('rejects a review round above the exact human-approved maximum', async () => {
-    const input = fourthRoundInput()
+    const input = exceptionRoundInput()
     input.review_attestation.round = 5
     ;(input.review_attestation.review_round_exception as { max_round: number }).max_round = 4
 

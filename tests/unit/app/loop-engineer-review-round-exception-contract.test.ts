@@ -16,6 +16,7 @@ describe('ISSUE-173 protected review-round exception workflow', () => {
     const workflow = parse(source) as {
       'run-name': string
       on: Record<string, unknown>
+      permissions: Record<string, string>
       concurrency: { group: string; 'cancel-in-progress': boolean }
       jobs: Record<
         string,
@@ -24,6 +25,7 @@ describe('ISSUE-173 protected review-round exception workflow', () => {
           environment?: string
           permissions?: Record<string, string>
           steps?: Array<{
+            id?: string
             name?: string
             uses?: string
             run?: string
@@ -33,6 +35,7 @@ describe('ISSUE-173 protected review-round exception workflow', () => {
       >
     }
     const approval = workflow.jobs.approve_and_publish!
+    const steps = approval.steps ?? []
 
     expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
     expect(workflow['run-name']).toBe('loop-engineer-review-round-exception-${{ github.run_id }}')
@@ -43,19 +46,21 @@ describe('ISSUE-173 protected review-round exception workflow', () => {
     expect(
       JSON.stringify({ runName: workflow['run-name'], concurrency: workflow.concurrency }),
     ).not.toContain('inputs.exception_input')
-    expect(approval).toMatchObject({
-      needs: 'prepare',
-      environment: 'hana-merge-human-approval',
-      permissions: {
-        contents: 'read',
-        'id-token': 'write',
-        'pull-requests': 'read',
-      },
+    expect(workflow.permissions).toEqual({
+      contents: 'read',
+      'pull-requests': 'read',
+    })
+    expect(approval.needs).toBe('prepare')
+    expect(approval.environment).toBe('hana-merge-human-approval')
+    expect(approval.permissions).toEqual({
+      contents: 'read',
+      'id-token': 'write',
+      'pull-requests': 'read',
     })
     expect(Object.values(approval.permissions ?? {}).filter((value) => value === 'write')).toEqual([
       'write',
     ])
-    expect(approval.steps?.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+    expect(steps.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
       {
         uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
         with: {
@@ -65,19 +70,40 @@ describe('ISSUE-173 protected review-round exception workflow', () => {
         },
       },
     ])
-    expect(
-      approval.steps?.find(({ uses }) => uses?.startsWith('actions/create-github-app-token@')),
-    ).toMatchObject({
+    expect(steps.find(({ uses }) => uses?.startsWith('actions/create-github-app-token@'))).toEqual({
+      id: 'app-token',
       uses: 'actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349',
       with: {
+        'app-id': '${{ vars.LOOP_ENGINEER_APP_ID }}',
+        'private-key': '${{ secrets.LOOP_ENGINEER_APP_PRIVATE_KEY }}',
+        owner: '${{ github.repository_owner }}',
+        repositories: '${{ github.event.repository.name }}',
         'permission-checks': 'write',
         'permission-contents': 'read',
         'permission-pull-requests': 'read',
       },
     })
-    expect(approval.steps?.at(-1)?.run).toBe(
+    const checkoutIndex = steps.findIndex(({ uses }) => uses?.startsWith('actions/checkout@'))
+    const pnpmIndex = steps.findIndex(({ uses }) => uses?.startsWith('pnpm/action-setup@'))
+    const nodeIndex = steps.findIndex(({ uses }) => uses?.startsWith('actions/setup-node@'))
+    const installIndex = steps.findIndex(
+      ({ run }) => run === 'pnpm --dir trusted-control install --frozen-lockfile',
+    )
+    const tokenIndex = steps.findIndex(({ id }) => id === 'app-token')
+    const publishIndex = steps.findIndex(
+      ({ name }) => name === 'Publish the protected review-round exception proof',
+    )
+    expect([checkoutIndex, pnpmIndex, nodeIndex, installIndex, tokenIndex, publishIndex]).toEqual([
+      0, 1, 2, 3, 4, 5,
+    ])
+    expect(steps.at(-1)?.run).toBe(
       'pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-review-round-exception.ts approve',
     )
+    expect(
+      Object.entries(workflow.jobs)
+        .filter(([, job]) => job.permissions?.['id-token'] === 'write')
+        .map(([name]) => name),
+    ).toEqual(['approve_and_publish'])
     expect(source).not.toContain('github.event.pull_request.title')
     expect(source).not.toContain('github.event.pull_request.body')
     expect(source).not.toContain('actions/checkout@v4')

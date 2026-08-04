@@ -412,8 +412,22 @@ async function fetchJson(url: URL, init: RequestInit = {}): Promise<unknown> {
     if (contentLength && Number(contentLength) > 256 * 1024) {
       throw new Error('oidc_response_too_large')
     }
-    const bytes = Buffer.from(await response.arrayBuffer())
-    if (bytes.byteLength > 256 * 1024) throw new Error('oidc_response_too_large')
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('oidc_network_failed')
+    const chunks: Uint8Array[] = []
+    let totalBytes = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      totalBytes += value.byteLength
+      if (totalBytes > 256 * 1024) {
+        await reader.cancel().catch(() => undefined)
+        controller.abort()
+        throw new Error('oidc_response_too_large')
+      }
+      chunks.push(value)
+    }
+    const bytes = Buffer.concat(chunks, totalBytes)
     return JSON.parse(bytes.toString('utf8')) as unknown
   } catch (error) {
     if (error instanceof Error && /^[a-z0-9_]+$/.test(error.message)) throw error

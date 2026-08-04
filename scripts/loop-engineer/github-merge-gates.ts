@@ -249,7 +249,7 @@ function validateAttestation(
   }
 
   if (raw.schema_version === 'loop-engineer-review-attestation/v1') {
-    if ((raw.round as number) > 3) return 'invalid_review_attestation'
+    if ((raw.round as number) > 3) return 'review_round_exceeded'
   } else {
     if (!verifiedException) return 'review_round_exception_not_verified'
     if (

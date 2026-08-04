@@ -1,9 +1,10 @@
 import { generateKeyPairSync, sign } from 'node:crypto'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   approveReviewRoundException,
+  createGitHubReviewRoundExceptionAdapter,
   verifyReviewRoundException,
   type ReviewRoundExceptionAdapter,
   type ReviewRoundExceptionCheckRun,
@@ -29,6 +30,10 @@ const proof = {
   head_sha: headSha,
   max_round: 5 as const,
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function encode(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -86,9 +91,10 @@ function createClient(
     invalidSignature?: boolean
     moveMainAfterFirstRead?: boolean
     initialRuns?: ReviewRoundExceptionCheckRun[]
+    pullRequestOverrides?: Partial<ReviewRoundExceptionPullRequest>
   } = {},
 ) {
-  let pullRequest = currentPullRequest()
+  let pullRequest = { ...currentPullRequest(), ...options.pullRequestOverrides }
   let nextId = 1
   let pullRequestReads = 0
   const runs: ReviewRoundExceptionCheckRun[] = structuredClone(options.initialRuns ?? [])
@@ -137,6 +143,21 @@ function createClient(
   }
 }
 
+function approvedCheckRun(
+  overrides: Partial<ReviewRoundExceptionCheckRun> = {},
+): ReviewRoundExceptionCheckRun {
+  return {
+    id: 11,
+    app_id: appId,
+    name: 'review-round-exception',
+    head_sha: headSha,
+    external_id: `loop-engineer-review-round-exception/v1|ISSUE-172|355|${mergeBaseSha}|${headSha}|5`,
+    status: 'completed',
+    conclusion: 'success',
+    ...overrides,
+  }
+}
+
 describe('ISSUE-173 GitHub review-round exception controller', () => {
   it('publishes and verifies one dedicated-App proof bound to the live PR and main SHA', async () => {
     const { client } = createClient()
@@ -160,6 +181,59 @@ describe('ISSUE-173 GitHub review-round exception controller', () => {
     )
   })
 
+  it.each([
+    ['issuer', { iss: 'https://example.invalid' }],
+    ['audience', { aud: 'another-audience' }],
+    ['repository', { repository: 'Kazuya-Sakashita/Other' }],
+    ['repository ID', { repository_id: '1' }],
+    ['owner', { repository_owner: 'Other' }],
+    ['owner ID', { repository_owner_id: '1' }],
+    ['actor', { actor: 'Other' }],
+    ['actor ID', { actor_id: '1' }],
+    ['ref', { ref: 'refs/heads/feature' }],
+    ['workflow SHA', { workflow_sha: 'c'.repeat(40) }],
+    ['event SHA', { sha: 'c'.repeat(40) }],
+    [
+      'workflow ref',
+      {
+        workflow_ref: 'Kazuya-Sakashita/Hana/.github/workflows/other.yml@refs/heads/main',
+      },
+    ],
+    ['environment', { environment: 'unprotected' }],
+    ['event', { event_name: 'pull_request' }],
+    ['run ID', { run_id: '8001' }],
+    ['run attempt', { run_attempt: '2' }],
+    ['runner', { runner_environment: 'self-hosted' }],
+    ['subject', { sub: 'repo:Kazuya-Sakashita/Hana:ref:refs/heads/main' }],
+    ['protected ref', { ref_protected: 'false' }],
+    ['token ID', { jti: '' }],
+  ])(
+    'rejects a signed OIDC token with mismatched %s before publishing a Check',
+    async (_name, overrides) => {
+      const { client, runs } = createClient({ oidcOverrides: overrides })
+
+      await expect(
+        approveReviewRoundException({ repository, appId, runId, runAttempt, proof }, client),
+      ).rejects.toThrow('oidc_claim_mismatch')
+      expect(runs).toEqual([])
+    },
+  )
+
+  it.each([
+    ['future issued-at', { iat: now + 31 }],
+    ['stale issued-at', { iat: now - 601 }],
+    ['future not-before', { nbf: now + 31 }],
+    ['expired', { exp: now - 31 }],
+    ['overlong lifetime', { iat: now, exp: now + 601 }],
+  ])('rejects a token with %s before publishing a Check', async (_name, overrides) => {
+    const { client, runs } = createClient({ oidcOverrides: overrides })
+
+    await expect(
+      approveReviewRoundException({ repository, appId, runId, runAttempt, proof }, client),
+    ).rejects.toThrow('oidc_token_expired')
+    expect(runs).toEqual([])
+  })
+
   it('rejects a token whose GitHub OIDC signature does not verify', async () => {
     const { client } = createClient({ invalidSignature: true })
 
@@ -179,19 +253,91 @@ describe('ISSUE-173 GitHub review-round exception controller', () => {
   })
 
   it('rejects ambiguous same-App exception checks instead of choosing one', async () => {
-    const approvedRun: ReviewRoundExceptionCheckRun = {
-      id: 11,
-      app_id: appId,
-      name: 'review-round-exception',
-      head_sha: headSha,
-      external_id: `loop-engineer-review-round-exception/v1|ISSUE-172|355|${mergeBaseSha}|${headSha}|5`,
-      status: 'completed',
-      conclusion: 'success',
-    }
+    const approvedRun = approvedCheckRun()
     const { client } = createClient({ initialRuns: [approvedRun, { ...approvedRun, id: 12 }] })
 
     await expect(verifyReviewRoundException({ repository, appId, proof }, client)).rejects.toThrow(
       'ambiguous_review_round_exception',
     )
+  })
+
+  it.each([
+    [
+      'wrong App',
+      [approvedCheckRun({ app_id: appId + 1 })],
+      {},
+      'review_round_exception_not_approved',
+    ],
+    [
+      'head drift',
+      [approvedCheckRun()],
+      { head_sha: 'c'.repeat(40) },
+      'stale_review_round_exception',
+    ],
+    [
+      'main drift',
+      [approvedCheckRun()],
+      { current_main_sha: 'c'.repeat(40) },
+      'stale_review_round_exception',
+    ],
+    [
+      'in progress',
+      [approvedCheckRun({ status: 'in_progress', conclusion: null })],
+      {},
+      'review_round_exception_not_approved',
+    ],
+    [
+      'failed',
+      [approvedCheckRun({ conclusion: 'failure' })],
+      {},
+      'review_round_exception_not_approved',
+    ],
+    [
+      'missing conclusion',
+      [approvedCheckRun({ conclusion: null })],
+      {},
+      'review_round_exception_not_approved',
+    ],
+    [
+      'wrong external ID',
+      [approvedCheckRun({ external_id: 'wrong' })],
+      {},
+      'review_round_exception_not_approved',
+    ],
+    ['missing Check', [], {}, 'review_round_exception_not_approved'],
+  ] as const)(
+    'fails closed while verifying a %s proof',
+    async (_name, initialRuns, pullRequestOverrides, reason) => {
+      const { client } = createClient({
+        initialRuns: [...initialRuns],
+        pullRequestOverrides,
+      })
+
+      await expect(
+        verifyReviewRoundException({ repository, appId, proof }, client),
+      ).rejects.toThrow(reason)
+    },
+  )
+
+  it('stops reading an oversized chunked OIDC response as soon as the limit is exceeded', async () => {
+    let pulls = 0
+    let cancelled = false
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1
+        controller.enqueue(new Uint8Array(128 * 1024))
+        if (pulls === 6) controller.close()
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })))
+
+    await expect(createGitHubReviewRoundExceptionAdapter().readOidcJwks()).rejects.toThrow(
+      'oidc_response_too_large',
+    )
+    expect(pulls).toBeLessThan(6)
+    expect(cancelled).toBe(true)
   })
 })
