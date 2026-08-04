@@ -1,0 +1,390 @@
+name: loop-engineer-merge-gates
+
+run-name: loop-engineer-merge-gates-${{ github.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      gate_input:
+        description: Status-only gate attestation without review text or human approval
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: loop-engineer-merge-gates-main-controller
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      pr_number: ${{ steps.gate.outputs.pr_number }}
+      head_sha: ${{ steps.gate.outputs.head_sha }}
+      base_sha: ${{ steps.gate.outputs.base_sha }}
+      breaking_approval_label_present: ${{ steps.gate.outputs.breaking_approval_label_present }}
+      specialist_status: ${{ steps.gate.outputs.specialist_status }}
+      merge_decision: ${{ steps.gate.outputs.merge_decision }}
+      merge_reason: ${{ steps.gate.outputs.merge_reason }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: gate
+        name: Authenticate dispatcher and bind attestation to the live PR
+        env:
+          GATE_INPUT: ${{ inputs.gate_input }}
+          GH_TOKEN: ${{ github.token }}
+          LOOP_ENGINEER_DISPATCHER_LOGIN: ${{ vars.LOOP_ENGINEER_DISPATCHER_LOGIN }}
+          SENDER_TYPE: ${{ github.event.sender.type }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$LOOP_ENGINEER_DISPATCHER_LOGIN" || "$GITHUB_ACTOR" != "$LOOP_ENGINEER_DISPATCHER_LOGIN" || ( "$SENDER_TYPE" != "User" && "$SENDER_TYPE" != "Bot" ) ]]; then
+            echo "::error::Only the explicitly configured human or App dispatcher may start this workflow."
+            exit 1
+          fi
+
+          pr_number="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.pr_number | select(type == "number" and . > 0 and floor == .)')"
+          declared_head_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.head_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
+          declared_merge_base_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.merge_base_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
+          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
+          live_head_sha="$(jq -er '.head_sha' <<<"$live_pr")"
+          live_base_sha="$(jq -er '.base_sha' <<<"$live_pr")"
+
+          if [[ "$(jq -r '.state' <<<"$live_pr")" != "open" || "$(jq -r '.draft' <<<"$live_pr")" != "false" || "$(jq -r '.base_ref' <<<"$live_pr")" != "main" ]]; then
+            echo "::error::The target must be an open, non-draft PR to main."
+            exit 1
+          fi
+          if [[ "$declared_head_sha" != "$live_head_sha" || "$declared_merge_base_sha" != "$live_base_sha" ]]; then
+            echo "::error::The attestation is stale for the current PR head or main base SHA."
+            exit 1
+          fi
+          if [[ "$(jq -r '.mergeable' <<<"$live_pr")" != "true" ]]; then
+            echo "::error::The PR is conflicting or GitHub has not produced a mergeable result; rerun after resolution."
+            exit 1
+          fi
+
+          set +e
+          printf '%s' "$GATE_INPUT" | pnpm loop-engineer:github-gate -- --expected-head-sha="$live_head_sha" --check=merge > "$RUNNER_TEMP/gate-evaluation.json"
+          gate_exit=$?
+          set -e
+
+          evaluation_head_sha="$(jq -er '.head_sha | select(type == "string")' "$RUNNER_TEMP/gate-evaluation.json")"
+          evaluation_pr_number="$(jq -er '.pr_number | select(type == "number")' "$RUNNER_TEMP/gate-evaluation.json")"
+          specialist_status="$(jq -er '.specialist_review_gate.status | select(. == "success" or . == "failure")' "$RUNNER_TEMP/gate-evaluation.json")"
+          merge_decision="$(jq -er '.merge_eligibility.decision | select(. == "AUTO_MERGE_ELIGIBLE" or . == "HUMAN_REQUIRED" or . == "HOLD")' "$RUNNER_TEMP/gate-evaluation.json")"
+          merge_reason="$(jq -er '.merge_eligibility.reason | select(type == "string" and test("^[a-z0-9_]+$"))' "$RUNNER_TEMP/gate-evaluation.json")"
+          if [[ "$evaluation_head_sha" != "$live_head_sha" || "$evaluation_pr_number" != "$pr_number" ]]; then
+            echo "::error::The evaluated gate context does not match the live PR."
+            exit 1
+          fi
+          if [[ "$gate_exit" -eq 0 && "$merge_decision" != "AUTO_MERGE_ELIGIBLE" ]]; then
+            echo "::error::Only AUTO_MERGE_ELIGIBLE may exit successfully before Environment approval."
+            exit 1
+          fi
+
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$live_head_sha" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$live_base_sha" >> "$GITHUB_OUTPUT"
+          echo "breaking_approval_label_present=$(jq -r '.breaking_approval_label_present' <<<"$live_pr")" >> "$GITHUB_OUTPUT"
+          echo "specialist_status=$specialist_status" >> "$GITHUB_OUTPUT"
+          echo "merge_decision=$merge_decision" >> "$GITHUB_OUTPUT"
+          echo "merge_reason=$merge_reason" >> "$GITHUB_OUTPUT"
+
+  begin_required_checks:
+    name: begin-dedicated-app-check-generation
+    needs: prepare
+    environment: hana-merge-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      pr_gate_check_id: ${{ steps.begin.outputs.pr_gate_check_id }}
+      validate_check_id: ${{ steps.begin.outputs.validate_check_id }}
+      local_registry_check_id: ${{ steps.begin.outputs.local_registry_check_id }}
+      specialist_review_check_id: ${{ steps.begin.outputs.specialist_review_check_id }}
+      merge_eligibility_check_id: ${{ steps.begin.outputs.merge_eligibility_check_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: trusted-control
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted-control/pnpm-lock.yaml
+      - run: pnpm --dir trusted-control install --frozen-lockfile
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          private-key: ${{ secrets.LOOP_ENGINEER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+          permission-contents: read
+          permission-pull-requests: read
+      - id: begin
+        name: Begin current check generation
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+        run: pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-check-generation.ts begin
+
+  candidate_pr_gate:
+    name: candidate-pr-gate
+    needs: [prepare, begin_required_checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.head_sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm pr:gate
+
+  candidate_openapi_validate:
+    name: candidate-openapi-validate
+    needs: [prepare, begin_required_checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm openapi:lint
+      - run: pnpm openapi:bundle
+      - run: pnpm openapi:auth-contract
+      - run: pnpm openapi:response-contract
+      - run: pnpm openapi:gen
+      - run: git diff --exit-code src/lib/api/generated/
+
+  trusted_openapi_breaking:
+    name: trusted-openapi-breaking
+    needs: [prepare, begin_required_checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      breaking_detected: ${{ steps.breaking.outcome == 'failure' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: trusted-control
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted-control/pnpm-lock.yaml
+      - run: pnpm --dir trusted-control install --frozen-lockfile
+      - name: Remove any untrusted breaking report
+        run: rm -f -- oasdiff-breaking.txt
+      - name: Detect OpenAPI breaking changes against the attested main SHA
+        id: breaking
+        continue-on-error: true
+        uses: oasdiff/oasdiff-action/breaking@1c611ffb1253a72924624aa4fb662e302b3565d3
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: /github/workspace
+        with:
+          base: '${{ needs.prepare.outputs.base_sha }}:docs/openapi/openapi.yaml'
+          revision: 'docs/openapi/openapi.yaml'
+          fail-on: WARN
+          output-to-file: oasdiff-breaking.txt
+      - name: Require a freshly generated non-empty breaking report
+        if: steps.breaking.outcome == 'failure'
+        run: test -s oasdiff-breaking.txt
+      - name: Require approved exact-report waiver
+        if: steps.breaking.outcome == 'failure'
+        env:
+          OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ needs.prepare.outputs.breaking_approval_label_present }}
+        run: node trusted-control/scripts/check-openapi-breaking-waiver.mjs
+
+  candidate_issue_registry:
+    name: candidate-issue-registry
+    needs: [prepare, begin_required_checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.head_sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm issues:check
+
+  publish_required_checks:
+    name: publish-dedicated-app-checks
+    if: ${{ always() && needs.prepare.result == 'success' && needs.begin_required_checks.result == 'success' }}
+    needs:
+      [
+        prepare,
+        begin_required_checks,
+        candidate_pr_gate,
+        candidate_openapi_validate,
+        trusted_openapi_breaking,
+        candidate_issue_registry,
+      ]
+    environment: hana-merge-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: trusted-control
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted-control/pnpm-lock.yaml
+      - run: pnpm --dir trusted-control install --frozen-lockfile
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          private-key: ${{ secrets.LOOP_ENGINEER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+          permission-contents: read
+          permission-pull-requests: read
+      - name: Finalize status-only checks from the dedicated App
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          LOOP_ENGINEER_APP_ID: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          PR_GATE_CHECK_ID: ${{ needs.begin_required_checks.outputs.pr_gate_check_id }}
+          VALIDATE_CHECK_ID: ${{ needs.begin_required_checks.outputs.validate_check_id }}
+          LOCAL_REGISTRY_CHECK_ID: ${{ needs.begin_required_checks.outputs.local_registry_check_id }}
+          SPECIALIST_REVIEW_CHECK_ID: ${{ needs.begin_required_checks.outputs.specialist_review_check_id }}
+          MERGE_ELIGIBILITY_CHECK_ID: ${{ needs.begin_required_checks.outputs.merge_eligibility_check_id }}
+          SPECIALIST_STATUS: ${{ needs.prepare.outputs.specialist_status }}
+          MERGE_DECISION: ${{ needs.prepare.outputs.merge_decision }}
+          MERGE_REASON: ${{ needs.prepare.outputs.merge_reason }}
+          PR_GATE_RESULT: ${{ needs.candidate_pr_gate.result }}
+          OPENAPI_RESULT: ${{ needs.candidate_openapi_validate.result }}
+          OPENAPI_BREAKING_RESULT: ${{ needs.trusted_openapi_breaking.result }}
+          OPENAPI_BREAKING_DETECTED: ${{ needs.trusted_openapi_breaking.outputs.breaking_detected }}
+          REGISTRY_RESULT: ${{ needs.candidate_issue_registry.result }}
+        run: pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-check-generation.ts finalize
+
+  publish_human_approved_gate:
+    name: publish-human-approved-merge-gate
+    if: >-
+      ${{ needs.prepare.outputs.merge_decision == 'HUMAN_REQUIRED' &&
+          needs.publish_required_checks.result == 'success' &&
+          needs.candidate_pr_gate.result == 'success' &&
+          needs.candidate_openapi_validate.result == 'success' &&
+          needs.trusted_openapi_breaking.result == 'success' &&
+          needs.candidate_issue_registry.result == 'success' &&
+          needs.prepare.outputs.specialist_status == 'success' }}
+    needs:
+      [
+        prepare,
+        begin_required_checks,
+        candidate_pr_gate,
+        candidate_openapi_validate,
+        trusted_openapi_breaking,
+        candidate_issue_registry,
+        publish_required_checks,
+      ]
+    environment: hana-merge-human-approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: trusted-control
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted-control/pnpm-lock.yaml
+      - run: pnpm --dir trusted-control install --frozen-lockfile
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          private-key: ${{ secrets.LOOP_ENGINEER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+          permission-contents: read
+          permission-pull-requests: read
+      - name: Approve the current merge gate generation
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          LOOP_ENGINEER_APP_ID: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          MERGE_ELIGIBILITY_CHECK_ID: ${{ needs.begin_required_checks.outputs.merge_eligibility_check_id }}
+          OPENAPI_BREAKING_DETECTED: ${{ needs.trusted_openapi_breaking.outputs.breaking_detected }}
+          MERGE_REASON: ${{ needs.prepare.outputs.merge_reason }}
+        run: pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-check-generation.ts approve

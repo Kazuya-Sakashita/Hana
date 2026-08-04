@@ -3,17 +3,6 @@ name: openapi-validate
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'docs/openapi/**'
-      - 'docs/api-driven-development/openapi-breaking-waivers.yaml'
-      - 'docs/api-driven-development/route-auth-contract.yaml'
-      - 'scripts/check-openapi-breaking-waiver.mjs'
-      - 'scripts/check-route-auth-contract.mjs'
-      - 'src/lib/api/generated/**'
-      - '.spectral.yaml'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/openapi-validate.yml'
   push:
     branches: [main]
     paths:
