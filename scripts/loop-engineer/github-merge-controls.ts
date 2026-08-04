@@ -45,6 +45,7 @@ export type TrustedCheckRun = {
 
 export type GitHubMergeControlsClient = {
   readPreflight(): Promise<GitHubMergeControlsSnapshot>
+  readAutoMergeReservationCount(): Promise<number>
   readTrustedCheckRuns(headSha: string): Promise<TrustedCheckRun[]>
   findRulesetIdByName(name: string): Promise<number | null>
   createRuleset(contract: RulesetContract): Promise<number>
@@ -52,6 +53,28 @@ export type GitHubMergeControlsClient = {
   readRuleset(rulesetId: number): Promise<RulesetContract>
   patchRepositorySettings(settings: RepositoryMergeSettings): Promise<void>
   readRepositorySettings(): Promise<RepositoryMergeSettings>
+}
+
+type EnvironmentSecurityStatus = {
+  name: string
+  can_admins_bypass: boolean
+  branch_policies: string[]
+  required_reviewers: Array<{ login: string; type: 'User' | 'Team' }>
+  prevent_self_review: boolean | null
+  secret_names: string[]
+}
+
+export type GitHubAutomationSecurityConfiguration = {
+  repository: string
+  app_id: number
+  app_repository_selection: 'all' | 'selected'
+  app_permissions: Record<string, string>
+  installed_repositories: string[]
+  repository_secret_names: string[]
+  private_key_environment_names: string[]
+  variables: Record<string, string>
+  publisher_environment: EnvironmentSecurityStatus
+  human_environment: EnvironmentSecurityStatus
 }
 
 type ApplyOptions = {
@@ -89,6 +112,93 @@ function canonicalize(value: unknown): unknown {
 
 function sameContract(left: unknown, right: unknown): boolean {
   return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right))
+}
+
+export function validateGitHubAutomationSecurityConfiguration(
+  configuration: GitHubAutomationSecurityConfiguration,
+): void {
+  const privateKeyName = 'LOOP_ENGINEER_APP_PRIVATE_KEY'
+  const expectedPermissions = {
+    checks: 'write',
+    contents: 'read',
+    metadata: 'read',
+    pull_requests: 'read',
+  }
+  if (
+    !Number.isSafeInteger(configuration.app_id) ||
+    configuration.app_id <= 0 ||
+    configuration.app_id === 15368 ||
+    configuration.variables.LOOP_ENGINEER_APP_ID !== String(configuration.app_id)
+  ) {
+    throw new Error('dedicated_app_mismatch')
+  }
+  if (
+    configuration.app_repository_selection !== 'selected' ||
+    !sameStringArray(configuration.installed_repositories, [configuration.repository])
+  ) {
+    throw new Error('app_installation_scope_mismatch')
+  }
+  if (!sameContract(configuration.app_permissions, expectedPermissions)) {
+    throw new Error('excessive_app_permission')
+  }
+  if (configuration.repository_secret_names.includes(privateKeyName)) {
+    throw new Error('repository_private_key_forbidden')
+  }
+  if (
+    !sameStringArray(configuration.private_key_environment_names, [
+      'hana-merge-human-approval',
+      'hana-merge-publisher',
+    ])
+  ) {
+    throw new Error('private_key_environment_scope_mismatch')
+  }
+  const dispatcher = configuration.variables.LOOP_ENGINEER_DISPATCHER_LOGIN
+  const humanReviewer = configuration.variables.LOOP_ENGINEER_HUMAN_REVIEWER_LOGIN
+  if (
+    typeof dispatcher !== 'string' ||
+    !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(dispatcher) ||
+    typeof humanReviewer !== 'string' ||
+    !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(humanReviewer)
+  ) {
+    throw new Error('automation_identity_mismatch')
+  }
+
+  for (const environment of [
+    configuration.publisher_environment,
+    configuration.human_environment,
+  ]) {
+    if (environment.can_admins_bypass) throw new Error('environment_admin_bypass_enabled')
+    if (!sameStringArray(environment.branch_policies, ['main'])) {
+      throw new Error('environment_branch_policy_mismatch')
+    }
+    if (!sameStringArray(environment.secret_names, [privateKeyName])) {
+      throw new Error('environment_secret_mismatch')
+    }
+  }
+  if (
+    configuration.publisher_environment.name !== 'hana-merge-publisher' ||
+    configuration.publisher_environment.required_reviewers.length !== 0 ||
+    configuration.publisher_environment.prevent_self_review !== null
+  ) {
+    throw new Error('publisher_environment_mismatch')
+  }
+  const humanEnvironment = configuration.human_environment
+  if (
+    humanEnvironment.name !== 'hana-merge-human-approval' ||
+    humanEnvironment.prevent_self_review !== false ||
+    humanEnvironment.required_reviewers.length !== 1 ||
+    humanEnvironment.required_reviewers[0]?.type !== 'User' ||
+    humanEnvironment.required_reviewers[0]?.login !== humanReviewer
+  ) {
+    throw new Error('human_reviewer_mismatch')
+  }
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    [...left].sort().every((value, index) => value === [...right].sort()[index])
+  )
 }
 
 function cloneRuleset(value: unknown): RulesetContract {
@@ -156,6 +266,9 @@ export async function applyGitHubMergeControls(
 
   const livePreflight = await client.readPreflight()
   if (!sameContract(livePreflight, options.expectedPreflight)) throw new Error('preflight_drift')
+  if ((await client.readAutoMergeReservationCount()) !== 0) {
+    throw new Error('auto_merge_reservations_present')
+  }
 
   const trustedChecks = await client.readTrustedCheckRuns(options.bootstrapHeadSha)
   validateTrustedChecks(trustedChecks, options.appId)
@@ -168,8 +281,11 @@ export async function applyGitHubMergeControls(
 
   let rulesetId: number | null = null
   try {
-    rulesetId = await client.createRuleset(disabledRuleset)
-    if (!Number.isSafeInteger(rulesetId) || rulesetId <= 0) throw new Error('invalid_ruleset_id')
+    const createdRulesetId = await client.createRuleset(disabledRuleset)
+    if (!Number.isSafeInteger(createdRulesetId) || createdRulesetId <= 0) {
+      throw new Error('invalid_ruleset_id')
+    }
+    rulesetId = createdRulesetId
     if (!sameContract(await client.readRuleset(rulesetId), disabledRuleset)) {
       throw new Error('disabled_ruleset_readback_mismatch')
     }
@@ -182,6 +298,9 @@ export async function applyGitHubMergeControls(
     await client.patchRepositorySettings(options.desiredSettings)
     if (!sameContract(await client.readRepositorySettings(), options.desiredSettings)) {
       throw new Error('repository_settings_readback_mismatch')
+    }
+    if ((await client.readAutoMergeReservationCount()) !== 0) {
+      throw new Error('postflight_auto_merge_reservations_present')
     }
 
     return { status: 'applied', ruleset_id: rulesetId }
@@ -199,9 +318,11 @@ export async function applyGitHubMergeControls(
       await client.patchRepositorySettings(options.rollbackSettings)
       const rolledBackRuleset = await client.readRuleset(rulesetId)
       const rolledBackSettings = await client.readRepositorySettings()
+      const rolledBackAutoMergeReservations = await client.readAutoMergeReservationCount()
       if (
         !sameContract(rolledBackRuleset, disabledRuleset) ||
-        !sameContract(rolledBackSettings, options.rollbackSettings)
+        !sameContract(rolledBackSettings, options.rollbackSettings) ||
+        rolledBackAutoMergeReservations !== 0
       ) {
         throw new Error('rollback_readback_mismatch')
       }

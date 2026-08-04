@@ -1,5 +1,7 @@
 name: loop-engineer-merge-gates
 
+run-name: merge-gate-pr-${{ fromJSON(inputs.gate_input).review_attestation.pr_number }}-sha-${{ fromJSON(inputs.gate_input).review_attestation.head_sha }}-run-${{ github.run_id }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -9,8 +11,13 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
+
+concurrency:
+  group: merge-gate-${{ fromJSON(inputs.gate_input).review_attestation.pr_number }}-${{ fromJSON(inputs.gate_input).review_attestation.head_sha }}
+  cancel-in-progress: true
 
 jobs:
   prepare:
@@ -19,6 +26,8 @@ jobs:
     outputs:
       pr_number: ${{ steps.gate.outputs.pr_number }}
       head_sha: ${{ steps.gate.outputs.head_sha }}
+      base_sha: ${{ steps.gate.outputs.base_sha }}
+      breaking_approval_label_present: ${{ steps.gate.outputs.breaking_approval_label_present }}
       specialist_status: ${{ steps.gate.outputs.specialist_status }}
       merge_decision: ${{ steps.gate.outputs.merge_decision }}
       merge_reason: ${{ steps.gate.outputs.merge_reason }}
@@ -52,7 +61,7 @@ jobs:
           pr_number="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.pr_number | select(type == "number" and . > 0 and floor == .)')"
           declared_head_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.head_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
           declared_merge_base_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.merge_base_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
-          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable}')"
+          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
           live_head_sha="$(jq -er '.head_sha' <<<"$live_pr")"
           live_base_sha="$(jq -er '.base_sha' <<<"$live_pr")"
 
@@ -90,6 +99,8 @@ jobs:
 
           echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "head_sha=$live_head_sha" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$live_base_sha" >> "$GITHUB_OUTPUT"
+          echo "breaking_approval_label_present=$(jq -r '.breaking_approval_label_present' <<<"$live_pr")" >> "$GITHUB_OUTPUT"
           echo "specialist_status=$specialist_status" >> "$GITHUB_OUTPUT"
           echo "merge_decision=$merge_decision" >> "$GITHUB_OUTPUT"
           echo "merge_reason=$merge_reason" >> "$GITHUB_OUTPUT"
@@ -140,6 +151,52 @@ jobs:
       - run: pnpm openapi:gen
       - run: git diff --exit-code src/lib/api/generated/
 
+  trusted_openapi_breaking:
+    name: trusted-openapi-breaking
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      breaking_detected: ${{ steps.breaking.outcome == 'failure' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: trusted-control
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted-control/pnpm-lock.yaml
+      - run: pnpm --dir trusted-control install --frozen-lockfile
+      - name: Detect OpenAPI breaking changes against the attested main SHA
+        id: breaking
+        continue-on-error: true
+        uses: oasdiff/oasdiff-action/breaking@1c611ffb1253a72924624aa4fb662e302b3565d3
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: /github/workspace
+        with:
+          base: '${{ needs.prepare.outputs.base_sha }}:docs/openapi/openapi.yaml'
+          revision: 'docs/openapi/openapi.yaml'
+          fail-on: WARN
+          output-to-file: oasdiff-breaking.txt
+      - name: Require approved exact-report waiver
+        if: steps.breaking.outcome == 'failure'
+        env:
+          OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ needs.prepare.outputs.breaking_approval_label_present }}
+        run: node trusted-control/scripts/check-openapi-breaking-waiver.mjs
+
   candidate_issue_registry:
     name: candidate-issue-registry
     needs: prepare
@@ -163,7 +220,15 @@ jobs:
   publish_required_checks:
     name: publish-dedicated-app-checks
     if: ${{ always() && needs.prepare.result == 'success' }}
-    needs: [prepare, candidate_pr_gate, candidate_openapi_validate, candidate_issue_registry]
+    needs:
+      [
+        prepare,
+        candidate_pr_gate,
+        candidate_openapi_validate,
+        trusted_openapi_breaking,
+        candidate_issue_registry,
+      ]
+    environment: hana-merge-publisher
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -180,26 +245,49 @@ jobs:
       - name: Publish status-only checks from the dedicated App
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          CONTROL_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
           HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
           SPECIALIST_STATUS: ${{ needs.prepare.outputs.specialist_status }}
           MERGE_DECISION: ${{ needs.prepare.outputs.merge_decision }}
           MERGE_REASON: ${{ needs.prepare.outputs.merge_reason }}
           PR_GATE_RESULT: ${{ needs.candidate_pr_gate.result }}
           OPENAPI_RESULT: ${{ needs.candidate_openapi_validate.result }}
+          OPENAPI_BREAKING_RESULT: ${{ needs.trusted_openapi_breaking.result }}
+          OPENAPI_BREAKING_DETECTED: ${{ needs.trusted_openapi_breaking.outputs.breaking_detected }}
           REGISTRY_RESULT: ${{ needs.candidate_issue_registry.result }}
         run: |
           set -euo pipefail
+          external_id="loop-engineer-run-${GITHUB_RUN_ID}"
+          assert_current_generation() {
+            local live_pr run_prefix workflow_runs newer_runs
+            live_pr="$(GH_TOKEN="$CONTROL_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '{state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
+            if [[ "$(jq -r '.state' <<<"$live_pr")" != "open" || "$(jq -r '.draft' <<<"$live_pr")" != "false" || "$(jq -r '.base_ref' <<<"$live_pr")" != "main" || "$(jq -r '.base_sha' <<<"$live_pr")" != "$BASE_SHA" || "$(jq -r '.head_sha' <<<"$live_pr")" != "$HEAD_SHA" || "$(jq -r '.mergeable' <<<"$live_pr")" != "true" || ( "$OPENAPI_BREAKING_DETECTED" == "true" && "$(jq -r '.breaking_approval_label_present' <<<"$live_pr")" != "true" ) ]]; then
+              echo "::error::The PR head or attested main base is stale before check publication."
+              exit 1
+            fi
+            run_prefix="merge-gate-pr-${PR_NUMBER}-sha-${HEAD_SHA}-run-"
+            workflow_runs="$(GH_TOKEN="$CONTROL_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/loop-engineer-merge-gates.yml/runs?event=workflow_dispatch&per_page=100")"
+            newer_runs="$(jq --arg prefix "$run_prefix" --argjson current "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.id > $current and ((.display_title // "") | startswith($prefix)))] | length' <<<"$workflow_runs")"
+            if [[ "$newer_runs" != "0" ]]; then
+              echo "::error::A newer attestation generation exists for this PR SHA."
+              exit 1
+            fi
+          }
           conclusion() {
             if [[ "$1" == "success" ]]; then printf 'success'; else printf 'failure'; fi
           }
           publish_check() {
+            assert_current_generation
             gh api --silent --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
-              -f name="$1" -f head_sha="$HEAD_SHA" -f status=completed -f conclusion="$2" \
+              -f name="$1" -f head_sha="$HEAD_SHA" -f external_id="$external_id" -f status=completed -f conclusion="$2" \
               -f 'output[title]'="$1" -f 'output[summary]'="$3"
           }
 
           pr_gate="$(conclusion "$PR_GATE_RESULT")"
-          openapi="$(conclusion "$OPENAPI_RESULT")"
+          openapi=failure
+          if [[ "$OPENAPI_RESULT" == "success" && "$OPENAPI_BREAKING_RESULT" == "success" ]]; then openapi=success; fi
           registry="$(conclusion "$REGISTRY_RESULT")"
           specialist="$(conclusion "$SPECIALIST_STATUS")"
           publish_check pr-gate "$pr_gate" "candidate_pr_gate_${pr_gate}"
@@ -223,6 +311,7 @@ jobs:
           needs.publish_required_checks.result == 'success' &&
           needs.candidate_pr_gate.result == 'success' &&
           needs.candidate_openapi_validate.result == 'success' &&
+          needs.trusted_openapi_breaking.result == 'success' &&
           needs.candidate_issue_registry.result == 'success' &&
           needs.prepare.outputs.specialist_status == 'success' }}
     needs:
@@ -230,6 +319,7 @@ jobs:
         prepare,
         candidate_pr_gate,
         candidate_openapi_validate,
+        trusted_openapi_breaking,
         candidate_issue_registry,
         publish_required_checks,
       ]
@@ -250,16 +340,26 @@ jobs:
       - name: Revalidate the exact PR SHA after Environment approval
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          CONTROL_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
           HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          OPENAPI_BREAKING_DETECTED: ${{ needs.trusted_openapi_breaking.outputs.breaking_detected }}
           MERGE_REASON: ${{ needs.prepare.outputs.merge_reason }}
         run: |
           set -euo pipefail
-          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '{state,draft,base_ref:.base.ref,head_sha:.head.sha,mergeable}')"
-          if [[ "$(jq -r '.state' <<<"$live_pr")" != "open" || "$(jq -r '.draft' <<<"$live_pr")" != "false" || "$(jq -r '.base_ref' <<<"$live_pr")" != "main" || "$(jq -r '.head_sha' <<<"$live_pr")" != "$HEAD_SHA" || "$(jq -r '.mergeable' <<<"$live_pr")" != "true" ]]; then
+          live_pr="$(GH_TOKEN="$CONTROL_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '{state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
+          if [[ "$(jq -r '.state' <<<"$live_pr")" != "open" || "$(jq -r '.draft' <<<"$live_pr")" != "false" || "$(jq -r '.base_ref' <<<"$live_pr")" != "main" || "$(jq -r '.base_sha' <<<"$live_pr")" != "$BASE_SHA" || "$(jq -r '.head_sha' <<<"$live_pr")" != "$HEAD_SHA" || "$(jq -r '.mergeable' <<<"$live_pr")" != "true" || ( "$OPENAPI_BREAKING_DETECTED" == "true" && "$(jq -r '.breaking_approval_label_present' <<<"$live_pr")" != "true" ) ]]; then
             echo "::error::The approved PR state is stale or no longer mergeable."
             exit 1
           fi
+          run_prefix="merge-gate-pr-${PR_NUMBER}-sha-${HEAD_SHA}-run-"
+          workflow_runs="$(GH_TOKEN="$CONTROL_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/loop-engineer-merge-gates.yml/runs?event=workflow_dispatch&per_page=100")"
+          newer_runs="$(jq --arg prefix "$run_prefix" --argjson current "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.id > $current and ((.display_title // "") | startswith($prefix)))] | length' <<<"$workflow_runs")"
+          if [[ "$newer_runs" != "0" ]]; then
+            echo "::error::A newer attestation generation exists after human approval."
+            exit 1
+          fi
           gh api --silent --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
-            -f name=merge-eligibility -f head_sha="$HEAD_SHA" -f status=completed -f conclusion=success \
+            -f name=merge-eligibility -f head_sha="$HEAD_SHA" -f external_id="loop-engineer-run-${GITHUB_RUN_ID}" -f status=completed -f conclusion=success \
             -f 'output[title]'=merge-eligibility -f 'output[summary]'="human_${MERGE_REASON}_approved"

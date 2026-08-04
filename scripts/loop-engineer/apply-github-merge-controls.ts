@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import {
   applyGitHubMergeControls,
+  validateGitHubAutomationSecurityConfiguration,
+  type GitHubAutomationSecurityConfiguration,
   type GitHubMergeControlsClient,
   type GitHubMergeControlsSnapshot,
   type RepositoryMergeSettings,
@@ -43,6 +45,23 @@ function ghJson<T>(args: string[], input?: unknown): T {
 
 function ghMutation<T>(method: 'POST' | 'PUT' | 'PATCH', endpoint: string, input: unknown): T {
   return ghJson<T>(['--method', method, endpoint, '--input', '-'], input)
+}
+
+function requireCompleteInventory<T>(
+  totalCount: number | undefined,
+  items: T[],
+  reason: string,
+): T[] {
+  if (!Number.isSafeInteger(totalCount) || totalCount !== items.length) throw new Error(reason)
+  return items
+}
+
+function readAllRulesets(repository: string): Array<Record<string, unknown>> {
+  return ghJson<Array<Array<Record<string, unknown>>>>([
+    `repos/${repository}/rulesets?per_page=100`,
+    '--paginate',
+    '--slurp',
+  ]).flat()
 }
 
 function normalizeSettings(raw: Record<string, unknown>): RepositoryMergeSettings {
@@ -131,14 +150,31 @@ function branchIsProtected(repository: string): boolean {
   throw new Error('branch_protection_read_failed')
 }
 
+function readAutoMergeReservationCount(repository: string): number {
+  const [owner, name] = repository.split('/')
+  const query = `query { repository(owner: "${owner}", name: "${name}") { pullRequests(first: 100, states: OPEN) { nodes { autoMergeRequest { enabledAt } } pageInfo { hasNextPage } } } }`
+  const response = ghJson<{
+    data?: {
+      repository?: {
+        pullRequests?: {
+          nodes?: Array<{ autoMergeRequest?: unknown }>
+          pageInfo?: { hasNextPage?: boolean }
+        }
+      }
+    }
+  }>(['graphql', '-f', `query=${query}`])
+  const pullRequests = response.data?.repository?.pullRequests
+  if (!pullRequests?.nodes || pullRequests.pageInfo?.hasNextPage) {
+    throw new Error('auto_merge_reservation_read_incomplete')
+  }
+  return pullRequests.nodes.filter(({ autoMergeRequest }) => autoMergeRequest != null).length
+}
+
 function createClient(repository: string): GitHubMergeControlsClient {
   return {
     async readPreflight() {
       const repo = ghJson<Record<string, unknown>>([`repos/${repository}`])
-      const rulesets = ghJson<Array<Record<string, unknown>>>([
-        `repos/${repository}/rulesets`,
-        '--paginate',
-      ])
+      const rulesets = readAllRulesets(repository)
       return {
         schema_version: 'loop-engineer-github-controls-snapshot/v2',
         repository,
@@ -154,9 +190,12 @@ function createClient(repository: string): GitHubMergeControlsClient {
       }
     },
     async readTrustedCheckRuns(headSha) {
-      const response = ghJson<{ check_runs: Array<Record<string, unknown>> }>([
+      const responses = ghJson<Array<{ check_runs?: Array<Record<string, unknown>> }>>([
         `repos/${repository}/commits/${headSha}/check-runs?filter=latest&per_page=100`,
+        '--paginate',
+        '--slurp',
       ])
+      const checkRuns = responses.flatMap(({ check_runs: page }) => page ?? [])
       const names = new Set([
         'pr-gate',
         'validate',
@@ -164,7 +203,7 @@ function createClient(repository: string): GitHubMergeControlsClient {
         'specialist-review-gate',
         'merge-eligibility',
       ])
-      return response.check_runs
+      return checkRuns
         .filter(({ name }) => typeof name === 'string' && names.has(name))
         .map((run) => {
           const app = run?.app
@@ -183,10 +222,11 @@ function createClient(repository: string): GitHubMergeControlsClient {
           }
         })
     },
+    async readAutoMergeReservationCount() {
+      return readAutoMergeReservationCount(repository)
+    },
     async findRulesetIdByName(name) {
-      const rulesets = ghJson<Array<Record<string, unknown>>>([
-        `repos/${repository}/rulesets?per_page=100`,
-      ])
+      const rulesets = readAllRulesets(repository)
       const matches = rulesets.filter((ruleset) => ruleset.name === name)
       if (matches.length > 1) throw new Error('duplicate_ruleset_name')
       return matches.length === 1 ? Number(matches[0]!.id) : null
@@ -216,32 +256,153 @@ function createClient(repository: string): GitHubMergeControlsClient {
   }
 }
 
-function verifyConfigurationNames(repository: string, appId: number): void {
-  const variables = ghJson<{ variables: Array<{ name: string; value: string }> }>([
-    `repos/${repository}/actions/variables?per_page=100`,
-  ])
-  const secrets = ghJson<{ secrets: Array<{ name: string }> }>([
-    `repos/${repository}/actions/secrets?per_page=100`,
-  ])
-  const environment = ghJson<{ protection_rules?: Array<Record<string, unknown>> }>([
-    `repos/${repository}/environments/hana-merge-human-approval`,
-  ])
-  const configuredAppId = variables.variables.find(({ name }) => name === 'LOOP_ENGINEER_APP_ID')
-  const dispatcher = variables.variables.find(
-    ({ name }) => name === 'LOOP_ENGINEER_DISPATCHER_LOGIN',
-  )
-  const privateKey = secrets.secrets.some(({ name }) => name === 'LOOP_ENGINEER_APP_PRIVATE_KEY')
-  const requiredReviewers = environment.protection_rules?.find(
+function readEnvironmentSecurityStatus(repository: string, name: string) {
+  const environment = ghJson<{
+    can_admins_bypass?: boolean
+    deployment_branch_policy?: { custom_branch_policies?: boolean }
+    protection_rules?: Array<Record<string, unknown>>
+  }>([`repos/${repository}/environments/${name}`])
+  let branchPolicies: string[] = []
+  if (environment.deployment_branch_policy?.custom_branch_policies) {
+    const response = ghJson<{
+      total_count?: number
+      branch_policies?: Array<{ name?: string }>
+    }>([`repos/${repository}/environments/${name}/deployment-branch-policies?per_page=100`])
+    branchPolicies = requireCompleteInventory(
+      response.total_count,
+      (response.branch_policies ?? []).map(({ name: branchName }) => String(branchName)),
+      'environment_branch_policy_inventory_incomplete',
+    )
+  }
+  const environmentSecrets = ghJson<{
+    total_count?: number
+    secrets?: Array<{ name?: string }>
+  }>([`repos/${repository}/environments/${name}/secrets?per_page=100`])
+  const reviewerRule = environment.protection_rules?.find(
     ({ type }) => type === 'required_reviewers',
-  )?.reviewers
-  if (
-    Number(configuredAppId?.value) !== appId ||
-    !dispatcher?.value ||
-    !privateKey ||
-    !Array.isArray(requiredReviewers) ||
-    requiredReviewers.length === 0
-  ) {
-    throw new Error('github_app_or_environment_incomplete')
+  )
+  if (reviewerRule !== undefined && typeof reviewerRule.prevent_self_review !== 'boolean') {
+    throw new Error('invalid_environment_self_review_policy')
+  }
+  const rawReviewers = Array.isArray(reviewerRule?.reviewers) ? reviewerRule.reviewers : []
+  const requiredReviewers = rawReviewers.map((entry) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new Error('invalid_environment_reviewer')
+    }
+    const value = entry as Record<string, unknown>
+    const reviewer = value.reviewer
+    if (typeof reviewer !== 'object' || reviewer === null || Array.isArray(reviewer)) {
+      throw new Error('invalid_environment_reviewer')
+    }
+    return {
+      login: String((reviewer as Record<string, unknown>).login),
+      type: value.type === 'User' ? ('User' as const) : ('Team' as const),
+    }
+  })
+  return {
+    name,
+    can_admins_bypass: environment.can_admins_bypass !== false,
+    branch_policies: branchPolicies,
+    required_reviewers: requiredReviewers,
+    prevent_self_review:
+      reviewerRule === undefined ? null : (reviewerRule.prevent_self_review as boolean),
+    secret_names: requireCompleteInventory(
+      environmentSecrets.total_count,
+      (environmentSecrets.secrets ?? []).map(({ name: secretName }) => String(secretName)),
+      'environment_secret_inventory_incomplete',
+    ),
+  }
+}
+
+function readPrivateKeyEnvironmentNames(repository: string): string[] {
+  const response = ghJson<{
+    total_count?: number
+    environments?: Array<{ name?: string }>
+  }>([`repos/${repository}/environments?per_page=100`])
+  const environments = response.environments ?? []
+  if (response.total_count !== environments.length) {
+    throw new Error('environment_inventory_incomplete')
+  }
+  return environments
+    .map(({ name }) => String(name))
+    .filter((name) => {
+      const environmentSecrets = ghJson<{
+        total_count?: number
+        secrets?: Array<{ name?: string }>
+      }>([`repos/${repository}/environments/${encodeURIComponent(name)}/secrets?per_page=100`])
+      const secrets = environmentSecrets.secrets ?? []
+      if (environmentSecrets.total_count !== secrets.length) {
+        throw new Error('environment_secret_inventory_incomplete')
+      }
+      return secrets.some(({ name: secretName }) => secretName === 'LOOP_ENGINEER_APP_PRIVATE_KEY')
+    })
+}
+
+function readAutomationSecurityConfiguration(
+  repository: string,
+  appId: number,
+): GitHubAutomationSecurityConfiguration {
+  const variables = ghJson<{
+    total_count?: number
+    variables?: Array<{ name: string; value: string }>
+  }>([`repos/${repository}/actions/variables?per_page=100`])
+  const repositorySecrets = ghJson<{
+    total_count?: number
+    secrets?: Array<{ name: string }>
+  }>([`repos/${repository}/actions/secrets?per_page=100`])
+  const installations = ghJson<{
+    total_count?: number
+    installations?: Array<{
+      id?: number
+      app_id?: number
+      repository_selection?: string
+      permissions?: Record<string, string>
+    }>
+  }>(['user/installations?per_page=100'])
+  const allInstallations = requireCompleteInventory(
+    installations.total_count,
+    installations.installations ?? [],
+    'app_installation_inventory_incomplete',
+  )
+  const matchingInstallations = allInstallations.filter(
+    (installation) => installation.app_id === appId,
+  )
+  if (matchingInstallations.length !== 1 || !matchingInstallations[0]?.id) {
+    throw new Error('dedicated_app_installation_missing')
+  }
+  const installation = matchingInstallations[0]
+  const repositories = ghJson<{
+    total_count?: number
+    repositories?: Array<{ full_name?: string }>
+  }>([`user/installations/${installation.id}/repositories?per_page=100`])
+  const installedRepositories = requireCompleteInventory(
+    repositories.total_count,
+    repositories.repositories ?? [],
+    'app_repository_inventory_incomplete',
+  )
+  const allVariables = requireCompleteInventory(
+    variables.total_count,
+    variables.variables ?? [],
+    'repository_variable_inventory_incomplete',
+  )
+  const allRepositorySecrets = requireCompleteInventory(
+    repositorySecrets.total_count,
+    repositorySecrets.secrets ?? [],
+    'repository_secret_inventory_incomplete',
+  )
+  return {
+    repository,
+    app_id: appId,
+    app_repository_selection: installation.repository_selection === 'selected' ? 'selected' : 'all',
+    app_permissions: installation.permissions ?? {},
+    installed_repositories: installedRepositories.map(({ full_name: fullName }) =>
+      String(fullName),
+    ),
+    repository_secret_names: allRepositorySecrets.map(({ name }) => name),
+    private_key_environment_names: readPrivateKeyEnvironmentNames(repository),
+    variables: Object.fromEntries(allVariables.map(({ name, value }) => [name, value])),
+    publisher_environment: readEnvironmentSecurityStatus(repository, 'hana-merge-publisher'),
+    human_environment: readEnvironmentSecurityStatus(repository, 'hana-merge-human-approval'),
   }
 }
 
@@ -272,7 +433,9 @@ async function main(): Promise<void> {
     return
   }
 
-  verifyConfigurationNames(repository, appId)
+  validateGitHubAutomationSecurityConfiguration(
+    readAutomationSecurityConfiguration(repository, appId),
+  )
   const result = await applyGitHubMergeControls(
     {
       repository,

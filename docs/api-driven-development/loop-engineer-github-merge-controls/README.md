@@ -16,7 +16,7 @@ Hanaだけへinstallする専用GitHub Appが、mainに固定したworkflowか�
 
 Appの作成、Hanaへのinstall、variable、secret、Environment設定は人間承認後に行う。App権限は次を上限とする。
 
-- Actions: write（mainのworkflow dispatchだけに使用）
+- Actions: none
 - Checks: write（固定名のCheck Run発行だけに使用）
 - Contents: read
 - Pull requests: read
@@ -24,9 +24,13 @@ Appの作成、Hanaへのinstall、variable、secret、Environment設定は人�
 - Secrets: none
 - Ruleset bypass: none
 
-repositoryには`LOOP_ENGINEER_APP_ID`と`LOOP_ENGINEER_DISPATCHER_LOGIN`をActions variable、private keyを`LOOP_ENGINEER_APP_PRIVATE_KEY` secretとして登録する。初期導入では承認済みの人間login、ISSUE-167で自動dispatchを有効化するときだけApp bot loginへ切り替える。値はログ、artifact、docs、PRへ保存しない。
+repositoryには`LOOP_ENGINEER_APP_ID`、`LOOP_ENGINEER_DISPATCHER_LOGIN`、`LOOP_ENGINEER_HUMAN_REVIEWER_LOGIN`をActions variableとして登録する。private keyはrepository secretへ置かない。
 
-`hana-merge-human-approval` Environmentには人間reviewerを設定する。`HUMAN_REQUIRED`の`merge-eligibility`はこのEnvironment承認後にだけ発行する。dispatch元は専用Appであるため、人間がJSONへ`approved`を書いて承認を代替する経路はない。`HOLD`にはEnvironment job自体を作らない。
+private keyは`hana-merge-publisher`と`hana-merge-human-approval`の2つのEnvironment secretへ、同じ`LOOP_ENGINEER_APP_PRIVATE_KEY`名で登録する。両Environmentはdeployment branchをmainだけに限定し、`can_admins_bypass=false`とする。publisherにはreviewerを置かず、human approvalには指定したUser reviewerを1名だけ置く。1人運用のため`prevent_self_review=false`を明示し、承認操作そのものはEnvironment履歴へ残す。
+
+初期導入ではdispatcherを承認済みの人間loginにする。ISSUE-167で自動dispatchを追加する場合もApp権限は増やさず、別のmain固定controllerだけを設計・reviewする。App ID、login、Environment secretの値はログ、artifact、docs、PRへ保存しない。
+
+`HUMAN_REQUIRED`の`merge-eligibility`は`hana-merge-human-approval`の承認後にだけ発行する。人間がJSONへ`approved`を書いて承認を代替する経路はない。`HOLD`にはEnvironment承認job自体を作らない。
 
 ## Status-only attestation
 
@@ -44,7 +48,9 @@ gh workflow run loop-engineer-merge-gates.yml \
 
 workflowはdispatch actorが設定済みの人間またはApp botであることを確認し、GitHub APIからopen/non-draft/main向けPR、head SHA、base SHA、mergeable状態をfreshに照合する。追加commit、main更新、review invalidation、merge conflictは旧attestationを失効させる。
 
-候補コード上では`candidate-pr-gate`、`candidate-openapi-validate`、`candidate-issue-registry`をsecretなしで実行する。main上のpublisherだけが、専用App名義で次を発行する。
+同じPR / head SHAはconcurrencyで直列化し、新しいrunが古いrunをcancelする。GitHubが発行する単調増加run IDをcheckの`external_id`へ入れ、各publisherはcheck発行の直前にActions APIで同じPR / SHAの新しいrunがないこと、base/headが未変更であることを再確認する。OpenAPI breaking waiverを使う場合は承認labelが残っていることも再確認する。Environment待ちの間にmainが更新された場合や新しいHOLD runが始まった場合、旧runは成功を発行しない。
+
+候補コード上では`candidate-pr-gate`、`candidate-openapi-validate`、`candidate-issue-registry`をsecretなしで実行する。OpenAPI検査はpinしたoasdiff actionでattested base SHAとの差分を確認し、breaking時はPR labelとexact-report hashが一致する承認済みwaiverを必須にする。main上のpublisherだけが、専用App名義で次を発行する。
 
 - `pr-gate`
 - `validate`
@@ -85,13 +91,14 @@ Rulesetはdefault branchだけを対象にし、bypass actorは0件とする。
 適用は次の順番を変えない。途中失敗時はautomatic rollbackを実行し、fresh接続で戻り値を確認する。
 
 1. fresh preflightを取得し、repository名、default branch、merge settings、Ruleset一覧を照合する。
-2. 専用App、App bot login、Hana限定installation、secret、`hana-merge-human-approval` required reviewerをreadbackする。
-3. synthetic PRへmain workflowをdispatchし、5件のCheck Runが専用App ID、同一head SHA、固定名で発行されたことをreadbackする。
-4. App IDを埋めた`main-ruleset-disabled.template.json`からRulesetを`disabled`で作成する。
-5. 作成したRulesetをexact readbackし、対象branch、bypass 0件、rule、check名、App IDがversioned contractと一致しなければautomatic rollbackする。
-6. 同じRulesetを`active`へ更新し、fresh readbackする。
-7. 最後に`repository-settings.json`を適用し、native auto-mergeとsquash-onlyをfresh readbackする。
-8. ISSUE-167の人間GO前にauto-merge予約が0件であることを確認する。
+2. 専用AppがHanaだけへのselected installationで、権限がChecks write、Contents read、Metadata read、Pull requests readだけであることをreadbackする。
+3. repository secretにprivate keyがないこと、2 EnvironmentだけにEnvironment secretがあること、main branch policy、`can_admins_bypass=false`、human reviewer identity/type、self-review policyをexact readbackする。
+4. synthetic PRへmain workflowをdispatchし、5件のCheck Runが専用App ID、同一head SHA、固定名で発行されたことをreadbackする。
+5. App IDを埋めた`main-ruleset-disabled.template.json`からRulesetを`disabled`で作成する。
+6. 作成したRulesetをexact readbackし、対象branch、bypass 0件、rule、check名、App IDがversioned contractと一致しなければautomatic rollbackする。
+7. 同じRulesetを`active`へ更新し、fresh readbackする。
+8. 最後に`repository-settings.json`を適用し、native auto-mergeとsquash-onlyをfresh readbackする。
+9. GraphQLのfresh queryでopen PRのauto-merge予約が0件であることを確認する。
 
 repository settingsを先に変えない。active RulesetをいきなりPOSTしない。作成されたRuleset ID以外のactor・token・response headerは証跡へ保存しない。
 
@@ -106,7 +113,7 @@ pnpm loop-engineer:apply-github-controls -- \
   --bootstrap-head-sha=<SYNTHETIC_PR_HEAD_SHA>
 ```
 
-CLIはvariable / secret名とEnvironment reviewerをread-only確認し、fresh preflightと専用Appの5 checkを照合してから変更する。disabled作成後のexact readback、active化、repository settingsの順で進め、途中失敗時はRuleset disabled化と全merge settings復元をautomatic rollbackする。出力は固定status/reasonとRuleset IDだけである。
+CLIはvariable、App installation / permission、repository secret不在、Environment secret名、branch policy、admin bypass、reviewerをread-only確認し、fresh preflight、auto-merge予約0件、専用Appの5 checkを照合してから変更する。disabled作成後のexact readback、active化、repository settingsの順で進め、途中失敗時はRuleset disabled化と全merge settings復元をautomatic rollbackする。作成応答IDが欠落しても同名Rulesetを発見してdisabledへ戻す。出力は固定status/reasonとRuleset IDだけである。
 
 ## Synthetic verification
 

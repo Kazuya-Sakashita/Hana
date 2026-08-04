@@ -123,14 +123,29 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).not.toContain('permission-actions: write')
     expect(source).toContain('candidate_pr_gate:')
     expect(source).toContain('candidate_openapi_validate:')
+    expect(source).toContain('trusted_openapi_breaking:')
     expect(source).toContain('candidate_issue_registry:')
+    expect(source).toContain('environment: hana-merge-publisher')
     expect(source).toContain('repos/${GITHUB_REPOSITORY}/check-runs')
     expect(source).toContain('environment: hana-merge-human-approval')
     expect(source).toContain("merge_decision == 'HUMAN_REQUIRED'")
+    expect(source).toContain('run-name: merge-gate-pr-')
+    expect(source).toContain('cancel-in-progress: true')
+    expect(source).toContain('workflow_runs[]')
+    expect(source).toContain('assert_current_generation')
+    expect(source).toContain('OPENAPI_BREAKING_DETECTED')
+    expect(source).toContain('external_id=')
+    expect(source).toContain('BASE_SHA')
+    expect(source).toContain('.base.sha')
+    expect(source).toContain(
+      'oasdiff/oasdiff-action/breaking@1c611ffb1253a72924624aa4fb662e302b3565d3',
+    )
+    expect(source).toContain('check-openapi-breaking-waiver.mjs')
     expect(source).not.toContain('actions/checkout@v4')
     expect(source).not.toContain('actions/setup-node@v4')
     expect(source).not.toContain('pnpm/action-setup@v4')
     expect(source).not.toContain('integration_id: 15368')
+    expect(source).not.toContain('OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(')
   })
 
   it('ships a scope-confirmed transactional apply command', () => {
@@ -143,6 +158,8 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).toContain("repository !== 'Kazuya-Sakashita/Hana'")
     expect(source).toContain("approval !== 'ISSUE-166'")
     expect(source).toContain('applyGitHubMergeControls')
+    expect(source).toContain('validateGitHubAutomationSecurityConfiguration')
+    expect(source).toContain('readAutoMergeReservationCount')
     expect(source).not.toContain('console.log')
   })
 
@@ -172,7 +189,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
 
     for (const statement of [
       'Rulesetとrepository settingsの変更は`HUMAN_REQUIRED`',
-      'Actions: write',
+      'Actions: none',
       'Checks: write',
       'Contents: read',
       'Pull requests: read',
@@ -180,6 +197,10 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
       'bypass actorは0件',
       '専用GitHub App',
       'hana-merge-human-approval',
+      'hana-merge-publisher',
+      'Environment secret',
+      'can_admins_bypass',
+      'repository secretへ置かない',
       'main-ruleset-disabled.template.json',
       'fresh preflight',
       'exact readback',
