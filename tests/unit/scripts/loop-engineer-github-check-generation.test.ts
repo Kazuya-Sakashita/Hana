@@ -5,6 +5,7 @@ import {
   beginCheckGeneration,
   finalizeCheckGeneration,
   revokeBreakingWaiver,
+  toPullRequestSnapshot,
   type FinalizeCheckGenerationInput,
   type GitHubCheckGenerationClient,
   type PullRequestSnapshot,
@@ -115,6 +116,31 @@ describe('ISSUE-166 dedicated-App check generation controller', () => {
       'create:validate:in_progress:none',
       'create:local-registry:in_progress:none',
     ])
+  })
+
+  it('does not start a check generation after main moves', async () => {
+    const { client, calls } = createClient({
+      pullRequest: { base_sha: 'd'.repeat(40) },
+    })
+
+    await expect(beginCheckGeneration(beginInput, client)).rejects.toThrow('stale_generation')
+    expect(calls).toEqual(['read:pull-request'])
+  })
+
+  it('maps the current main ref SHA instead of the pull request base snapshot', () => {
+    expect(
+      toPullRequestSnapshot(
+        {
+          state: 'open',
+          draft: false,
+          base: { ref: 'main', sha: 'c'.repeat(40) },
+          head: { sha: headSha },
+          mergeable: true,
+          labels: [],
+        },
+        { object: { sha: baseSha } },
+      ).base_sha,
+    ).toBe(baseSha)
   })
 
   it('publishes AUTO success only after all four evidence checks succeed', async () => {
@@ -234,6 +260,29 @@ describe('ISSUE-166 dedicated-App check generation controller', () => {
 
   it('fails stale human approval instead of completing it successfully', async () => {
     const { client, calls } = createClient({ latestIds: [999] })
+
+    await expect(
+      approveCheckGeneration(
+        {
+          repository,
+          appId,
+          prNumber: 338,
+          headSha,
+          baseSha,
+          mergeEligibilityCheckId: checkIds.merge_eligibility_check_id,
+          openapiBreakingDetected: false,
+          mergeReason: 'human_gate_required',
+        },
+        client,
+      ),
+    ).rejects.toThrow('stale_human_approval')
+    expect(calls.at(-1)).toBe('update:101:merge-eligibility:failure')
+  })
+
+  it('fails human approval after main moves', async () => {
+    const { client, calls } = createClient({
+      pullRequest: { base_sha: 'd'.repeat(40) },
+    })
 
     await expect(
       approveCheckGeneration(

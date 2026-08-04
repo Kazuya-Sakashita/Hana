@@ -22,6 +22,33 @@ export type PullRequestSnapshot = {
   breaking_approval_label_present: boolean
 }
 
+type PullRequestApiResponse = {
+  state?: unknown
+  draft?: unknown
+  base?: { ref?: unknown; sha?: unknown }
+  head?: { sha?: unknown }
+  mergeable?: unknown
+  labels?: Array<{ name?: unknown }>
+}
+
+type GitRefApiResponse = { object?: { sha?: unknown } }
+
+export function toPullRequestSnapshot(
+  response: PullRequestApiResponse,
+  mainRef: GitRefApiResponse,
+): PullRequestSnapshot {
+  return {
+    state: String(response.state),
+    draft: response.draft === true,
+    base_ref: String(response.base?.ref),
+    base_sha: String(mainRef.object?.sha),
+    head_sha: String(response.head?.sha),
+    mergeable: response.mergeable === true,
+    breaking_approval_label_present:
+      response.labels?.some((label) => label.name === 'openapi-breaking-approved') === true,
+  }
+}
+
 type CreateCheckRunInput = {
   name: CheckName
   headSha: string
@@ -439,27 +466,11 @@ function ghVoid(args: string[], input: unknown): void {
 function createGitHubClient(): GitHubCheckGenerationClient {
   return {
     async readPullRequest(repository, prNumber) {
-      const response = ghJson<{
-        state?: unknown
-        draft?: unknown
-        base?: { ref?: unknown; sha?: unknown }
-        head?: { sha?: unknown }
-        mergeable?: unknown
-        labels?: Array<{ name?: unknown }>
-      }>([`repos/${repository}/pulls/${prNumber}`])
-      const mainRef = ghJson<{ object?: { sha?: unknown } }>([
+      const response = ghJson<PullRequestApiResponse>([`repos/${repository}/pulls/${prNumber}`])
+      const mainRef = ghJson<GitRefApiResponse>([
         `repos/${repository}/git/ref/heads/main`,
       ])
-      return {
-        state: String(response.state),
-        draft: response.draft === true,
-        base_ref: String(response.base?.ref),
-        base_sha: String(mainRef.object?.sha),
-        head_sha: String(response.head?.sha),
-        mergeable: response.mergeable === true,
-        breaking_approval_label_present:
-          response.labels?.some((label) => label.name === 'openapi-breaking-approved') === true,
-      }
+      return toPullRequestSnapshot(response, mainRef)
     },
     async readLatestCheckRunIds(repository, headSha, name, dedicatedAppId) {
       const response = ghJson<{
