@@ -20,6 +20,10 @@ concurrency:
 
 jobs:
   prepare:
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -48,6 +52,7 @@ jobs:
         env:
           GATE_INPUT: ${{ inputs.gate_input }}
           GH_TOKEN: ${{ github.token }}
+          LOOP_ENGINEER_APP_ID: ${{ vars.LOOP_ENGINEER_APP_ID }}
           LOOP_ENGINEER_DISPATCHER_LOGIN: ${{ vars.LOOP_ENGINEER_DISPATCHER_LOGIN }}
           SENDER_TYPE: ${{ github.event.sender.type }}
         run: |
@@ -78,7 +83,7 @@ jobs:
           fi
 
           set +e
-          printf '%s' "$GATE_INPUT" | pnpm loop-engineer:github-gate -- --expected-head-sha="$live_head_sha" --check=merge > "$RUNNER_TEMP/gate-evaluation.json"
+          printf '%s' "$GATE_INPUT" | pnpm --silent loop-engineer:github-gate -- --expected-head-sha="$live_head_sha" --check=merge > "$RUNNER_TEMP/gate-evaluation.json"
           gate_exit=$?
           set -e
 

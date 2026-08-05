@@ -80,11 +80,21 @@ diffを渡す。初回reviewでは他reviewerのprompt、finding、結論を渡�
 commit、push、PR変更、merge、実環境アクセスを行わない。追加roleによって7名以上が必要になる場合は、
 roleを統合して人数を減らさず`HOLD`にする。
 
-### 4. 最大3巡
+### 4. 通常最大3巡と限定例外
 
 1巡は、1つのhead SHAに対して必要reviewer全員が確認を完了する単位である。修正commit後は新しい
 SHAで全必要reviewをやり直す。3巡目の終了時にactionable finding、判断不一致、情報不足、timeout、
 schema違反、検証不能が1つでも残れば`HOLD`とする。多数決で少数意見を消さない。
+
+人間が追加修正・再reviewを明示的に許可する場合だけ、第4巡または第5巡までの限定例外を認める。
+例外はISSUE-173のmain固定workflowで`hana-merge-human-approval`を通り、GitHub署名付きOIDCの
+repository、workflow、Environment、actor、run、main SHAを検証した後、Hana限定の専用GitHub Appが
+`review-round-exception` Check Runを発行する。merge gateはIssue ID、PR番号、現在のmain SHA、head SHA、
+許可した最大巡、App ID、Check状態をfreshに完全一致で確認する。
+
+caller入力のboolean、自由文、ローカルファイル、通常のGitHub Actions Appのjob、OIDC未検証の証明は
+承認にならない。mainまたはheadが動いた場合、Checkが複数・未完了・失敗・別Appの場合、許可上限を
+超えた場合は`HOLD`とする。第6巡以降の例外、Ruleset bypass、未解決findingの上書きは認めない。
 
 ### 5. HUMAN_REQUIRED
 
@@ -117,7 +127,8 @@ rollback、最新SHA条件を満たすコード変更は`AUTO_MERGE_ELIGIBLE`候
 
 - acceptance criteria未完了、unrelated diff、merge conflict、必須CIの未完了または失敗
 - review対象SHA不一致、追加commit後のstale review、reviewer不足、timeout、出力schema違反
-- actionable finding残存、reviewer間の判断不一致、3巡超過
+- actionable finding残存、reviewer間の判断不一致、3巡超過かつ有効なISSUE-173例外なし
+- review例外の対象不一致、期限切れ、別App、未完了、失敗、重複、承認上限超過
 - risk分類、rollback、必要な仕様、実環境との分離証拠が不足
 - 未知のlabel、field、変更領域、外部影響、認可境界
 - PII、secret、実画像情報、prompt、生成本文の露出疑い
@@ -180,5 +191,6 @@ ISSUE-167で具体化する。
 - ISSUE-165 / GitHub Issue #337
 - ISSUE-166 / GitHub Issue #338
 - ISSUE-167 / GitHub Issue #339
+- ISSUE-173 / GitHub Issue #356
 - `docs/api-driven-development/codex-automation-runbook.md`
 - `AGENTS.md`
