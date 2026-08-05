@@ -1,0 +1,165 @@
+name: loop-engineer-review-lineage-supersession
+
+run-name: loop-engineer-review-lineage-supersession-${{ github.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      supersession_input:
+        description: Status-only terminal HOLD supersession request
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: loop-engineer-review-lineage-supersession-controller
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      review_lineage_id: ${{ steps.request.outputs.review_lineage_id }}
+      predecessor_issue_id: ${{ steps.request.outputs.predecessor_issue_id }}
+      predecessor_issue_number: ${{ steps.request.outputs.predecessor_issue_number }}
+      predecessor_pr_number: ${{ steps.request.outputs.predecessor_pr_number }}
+      predecessor_head_sha: ${{ steps.request.outputs.predecessor_head_sha }}
+      successor_issue_id: ${{ steps.request.outputs.successor_issue_id }}
+      successor_issue_number: ${{ steps.request.outputs.successor_issue_number }}
+      successor_pr_number: ${{ steps.request.outputs.successor_pr_number }}
+      base_sha: ${{ steps.request.outputs.base_sha }}
+      head_sha: ${{ steps.request.outputs.head_sha }}
+      finding_ids_json: ${{ steps.request.outputs.finding_ids_json }}
+      succession: ${{ steps.request.outputs.succession }}
+      review_round: ${{ steps.request.outputs.review_round }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          persist-credentials: false
+      - id: request
+        name: Authenticate and bind the supersession request to both live PRs
+        env:
+          SUPERSESSION_INPUT: ${{ inputs.supersession_input }}
+          GH_TOKEN: ${{ github.token }}
+          LOOP_ENGINEER_DISPATCHER_LOGIN: ${{ vars.LOOP_ENGINEER_DISPATCHER_LOGIN }}
+          SENDER_TYPE: ${{ github.event.sender.type }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$LOOP_ENGINEER_DISPATCHER_LOGIN" || "$GITHUB_ACTOR" != "$LOOP_ENGINEER_DISPATCHER_LOGIN" || "$SENDER_TYPE" != "User" ]]; then
+            echo "::error::Only the configured human dispatcher may request a terminal HOLD supersession."
+            exit 1
+          fi
+
+          printf '%s' "$SUPERSESSION_INPUT" | jq -e '
+            type == "object" and
+            (keys | sort) == ["finding_ids", "head_sha", "merge_base_sha", "predecessor_head_sha", "predecessor_issue_id", "predecessor_issue_number", "predecessor_pr_number", "review_lineage_id", "review_round", "schema_version", "succession", "successor_issue_id", "successor_issue_number", "successor_pr_number"]
+          ' >/dev/null
+          schema_version="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.schema_version | select(. == "loop-engineer-review-lineage-supersession/v1")')"
+          review_lineage_id="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.review_lineage_id | select(. == "lineage-issue-172")')"
+          predecessor_issue_id="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.predecessor_issue_id | select(. == "ISSUE-172")')"
+          predecessor_issue_number="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.predecessor_issue_number | select(. == 354)')"
+          predecessor_pr_number="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.predecessor_pr_number | select(. == 355)')"
+          predecessor_head_sha="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.predecessor_head_sha | select(. == "2f0eaf7ee713bfd140269720a7d593e8f007c5a7")')"
+          successor_issue_id="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.successor_issue_id | select(. == "ISSUE-175")')"
+          successor_issue_number="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.successor_issue_number | select(. == 359)')"
+          successor_pr_number="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.successor_pr_number | select(type == "number" and . > 0 and floor == .)')"
+          declared_base_sha="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.merge_base_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
+          declared_head_sha="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.head_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
+          finding_ids_json="$(printf '%s' "$SUPERSESSION_INPUT" | jq -ec '.finding_ids | select(. == ["gh_cli_pagination_contract", "main_sha_race", "status_metadata_allowlist"])')"
+          succession="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.succession | select(. == 1)')"
+          review_round="$(printf '%s' "$SUPERSESSION_INPUT" | jq -er '.review_round | select(type == "number" and . >= 1 and . <= 5 and floor == .)')"
+          test "$schema_version" = "loop-engineer-review-lineage-supersession/v1"
+
+          predecessor="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${predecessor_pr_number}" --jq '{state,merged:(.merged_at != null),base_ref:.base.ref,head_sha:.head.sha}')"
+          successor="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${successor_pr_number}" --jq '{state,draft,base_ref:.base.ref,head_sha:.head.sha,mergeable}')"
+          predecessor_closing_issues="$(gh api graphql -f 'query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:10){nodes{number repository{nameWithOwner}}pageInfo{hasNextPage}}}}}' -F owner="${GITHUB_REPOSITORY%%/*}" -F name="${GITHUB_REPOSITORY##*/}" -F number="$predecessor_pr_number" --jq 'if .data.repository.pullRequest.closingIssuesReferences.pageInfo.hasNextPage then error("too_many_closing_issues") else [.data.repository.pullRequest.closingIssuesReferences.nodes[]|{repository:.repository.nameWithOwner,number}] end')"
+          successor_closing_issues="$(gh api graphql -f 'query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:10){nodes{number repository{nameWithOwner}}pageInfo{hasNextPage}}}}}' -F owner="${GITHUB_REPOSITORY%%/*}" -F name="${GITHUB_REPOSITORY##*/}" -F number="$successor_pr_number" --jq 'if .data.repository.pullRequest.closingIssuesReferences.pageInfo.hasNextPage then error("too_many_closing_issues") else [.data.repository.pullRequest.closingIssuesReferences.nodes[]|{repository:.repository.nameWithOwner,number}] end')"
+          live_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$(jq -r '.state' <<<"$predecessor")" != "closed" || "$(jq -r '.merged' <<<"$predecessor")" != "false" || "$(jq -r '.base_ref' <<<"$predecessor")" != "main" || "$(jq -r '.head_sha' <<<"$predecessor")" != "$predecessor_head_sha" ]] || ! jq -e --arg repository "$GITHUB_REPOSITORY" --argjson number "$predecessor_issue_number" 'length == 1 and .[0] == {repository:$repository,number:$number}' <<<"$predecessor_closing_issues" >/dev/null; then
+            echo "::error::The predecessor PR must be frozen closed and unmerged at the registered head SHA."
+            exit 1
+          fi
+          if [[ "$(jq -r '.state' <<<"$successor")" != "open" || "$(jq -r '.draft' <<<"$successor")" != "false" || "$(jq -r '.base_ref' <<<"$successor")" != "main" || "$(jq -r '.mergeable' <<<"$successor")" != "true" ]] || ! jq -e --arg repository "$GITHUB_REPOSITORY" --argjson number "$successor_issue_number" 'length == 1 and .[0] == {repository:$repository,number:$number}' <<<"$successor_closing_issues" >/dev/null; then
+            echo "::error::The successor must be an open, mergeable, non-draft PR to main."
+            exit 1
+          fi
+          if [[ "$declared_base_sha" != "$live_base_sha" || "$declared_head_sha" != "$(jq -r '.head_sha' <<<"$successor")" ]]; then
+            echo "::error::The supersession request is stale for the current successor head or main SHA."
+            exit 1
+          fi
+
+          echo "review_lineage_id=$review_lineage_id" >> "$GITHUB_OUTPUT"
+          echo "predecessor_issue_id=$predecessor_issue_id" >> "$GITHUB_OUTPUT"
+          echo "predecessor_issue_number=$predecessor_issue_number" >> "$GITHUB_OUTPUT"
+          echo "predecessor_pr_number=$predecessor_pr_number" >> "$GITHUB_OUTPUT"
+          echo "predecessor_head_sha=$predecessor_head_sha" >> "$GITHUB_OUTPUT"
+          echo "successor_issue_id=$successor_issue_id" >> "$GITHUB_OUTPUT"
+          echo "successor_issue_number=$successor_issue_number" >> "$GITHUB_OUTPUT"
+          echo "successor_pr_number=$successor_pr_number" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$live_base_sha" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$declared_head_sha" >> "$GITHUB_OUTPUT"
+          echo "finding_ids_json=$finding_ids_json" >> "$GITHUB_OUTPUT"
+          echo "succession=$succession" >> "$GITHUB_OUTPUT"
+          echo "review_round=$review_round" >> "$GITHUB_OUTPUT"
+
+  approve_and_publish:
+    needs: prepare
+    environment: hana-merge-human-approval
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: trusted-control
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+          package_json_file: trusted-control/package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted-control/pnpm-lock.yaml
+      - run: pnpm --dir trusted-control install --frozen-lockfile
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          private-key: ${{ secrets.LOOP_ENGINEER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+          permission-contents: read
+          permission-pull-requests: read
+      - name: Publish the protected review lineage supersession proof
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_STATUS_TOKEN: ${{ github.token }}
+          LOOP_ENGINEER_APP_ID: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          REVIEW_LINEAGE_ID: ${{ needs.prepare.outputs.review_lineage_id }}
+          PREDECESSOR_ISSUE_ID: ${{ needs.prepare.outputs.predecessor_issue_id }}
+          PREDECESSOR_ISSUE_NUMBER: ${{ needs.prepare.outputs.predecessor_issue_number }}
+          PREDECESSOR_PR_NUMBER: ${{ needs.prepare.outputs.predecessor_pr_number }}
+          PREDECESSOR_HEAD_SHA: ${{ needs.prepare.outputs.predecessor_head_sha }}
+          SUCCESSOR_ISSUE_ID: ${{ needs.prepare.outputs.successor_issue_id }}
+          SUCCESSOR_ISSUE_NUMBER: ${{ needs.prepare.outputs.successor_issue_number }}
+          SUCCESSOR_PR_NUMBER: ${{ needs.prepare.outputs.successor_pr_number }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+          FINDING_IDS_JSON: ${{ needs.prepare.outputs.finding_ids_json }}
+          SUCCESSION: ${{ needs.prepare.outputs.succession }}
+          REVIEW_ROUND: ${{ needs.prepare.outputs.review_round }}
+        run: pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-review-lineage-supersession.ts approve

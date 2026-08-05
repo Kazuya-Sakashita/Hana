@@ -96,6 +96,32 @@ caller入力のboolean、自由文、ローカルファイル、通常のGitHub 
 承認にならない。mainまたはheadが動いた場合、Checkが複数・未完了・失敗・別Appの場合、許可上限を
 超えた場合は`HOLD`とする。第6巡以降の例外、Ruleset bypass、未解決findingの上書きは認めない。
 
+### 4.1 Terminal HOLD後の後継
+
+第6巡または限定例外の上限へ到達したIssue / PRはTerminal HOLDとし、Issue番号、PR、branch、commitの
+載せ替えだけでreviewをRound 1へ戻してはならない。旧Issue / PRはmerge gateで
+`terminal_review_limit`へ固定し、後継証明が発行されてもmerge可能にしない。
+
+旧設計を廃棄して実質的に再設計する場合だけ、ISSUE-174の登録済み`review_lineage_id`に対して1回の
+後継を認める。旧PRが登録headのままclosed / unmergedであること、未解決findingが後継の受け入れ条件へ
+完全に引き継がれていること、旧review / Check / 例外証跡を再利用しないことを確認する。保護Environment、
+GitHub署名付きOIDC、専用Appの`review-lineage-supersession` Checkを、旧 / 新Issue、旧 / 新PR、現在の
+main / head、固定finding、succession番号へ束縛する。
+
+旧Issueまたは旧PRの片方だけを載せ替えた場合もTerminal HOLDとする。GitHub Issue #354 / #359とPRの
+同一repositoryのclosing relationをstatus-onlyで固定し、旧head上の専用App登録Checkで後継PRを1件に
+限定する。lineage未完了中は旧PRと登録済み後継PRの運用コードpath、commit / 全体diffのstable patch IDが
+重なる候補へ、Issue番号を変えても後継証明を必須とする。Issue台帳だけの共通更新はpath一致から除外する。
+初回はRound 1だけを許可し、成功済み証明を
+再発行せず、登録済み後継PRの新headに対してのみ1巡ずつ進める。別Appの同名Checkが混在した場合もHOLDする。
+登録Checkが重複、未完了、不正schemaの場合も未登録へ戻さずHOLDし、後継完了はHanaの`main`へmerge
+された場合だけ認める。
+
+後継は通常のRound 1から全reviewをやり直し、通常3巡、ISSUE-173例外最大5巡、第6巡禁止を維持する。
+後継もTerminal HOLDへ到達した場合、2回目の後継、別lineageへの付け替え、caller自己申告による再開は
+認めない。詳細schemaと手順は`docs/api-driven-development/loop-engineer-review-lineage-supersession.md`
+を正とする。
+
 ### 5. HUMAN_REQUIRED
 
 次は自動mergeまたは自動実行しない。人間承認は対象、環境、手順、rollbackを限定して取得する。

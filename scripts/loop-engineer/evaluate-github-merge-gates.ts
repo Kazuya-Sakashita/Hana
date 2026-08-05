@@ -1,8 +1,9 @@
 import {
   evaluateGitHubMergeGates,
-  evaluateGitHubMergeGatesWithReviewRoundException,
+  evaluateGitHubMergeGatesWithProtectedProofs,
   type GitHubMergeGateInput,
 } from './github-merge-gates'
+import { createGitHubReviewLineageSupersessionAdapter } from './github-review-lineage-supersession'
 import { createGitHubReviewRoundExceptionAdapter } from './github-review-round-exception'
 
 const maxInputBytes = 64 * 1024
@@ -33,14 +34,16 @@ function invalidInput(): void {
   process.exitCode = 1
 }
 
-function hasReviewRoundException(value: unknown): boolean {
+function hasProtectedProof(value: unknown): boolean {
   return (
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
-    typeof (value as { review_attestation?: unknown }).review_attestation === 'object' &&
-    (value as { review_attestation?: { schema_version?: unknown } }).review_attestation
-      ?.schema_version === 'loop-engineer-review-attestation/v2'
+    ((value as { schema_version?: unknown }).schema_version ===
+      'loop-engineer-github-gate-input/v3' ||
+      (typeof (value as { review_attestation?: unknown }).review_attestation === 'object' &&
+        (value as { review_attestation?: { schema_version?: unknown } }).review_attestation
+          ?.schema_version === 'loop-engineer-review-attestation/v2'))
   )
 }
 
@@ -158,14 +161,26 @@ async function main(): Promise<void> {
   }
   const expectedHeadShaArg = args.find((arg) => arg.startsWith('--expected-head-sha='))
   const checkArg = args.find((arg) => arg.startsWith('--check='))
-  if (args.length !== 2 || !expectedHeadShaArg || !checkArg) {
+  const reviewLineageRequiredArg = args.find((arg) => arg.startsWith('--review-lineage-required='))
+  if (
+    (args.length !== 2 && args.length !== 3) ||
+    !expectedHeadShaArg ||
+    !checkArg ||
+    (args.length === 3 && !reviewLineageRequiredArg)
+  ) {
     invalidInput()
     return
   }
 
   const expectedHeadSha = expectedHeadShaArg.slice('--expected-head-sha='.length)
   const check = checkArg.slice('--check='.length)
+  const reviewLineageRequired =
+    reviewLineageRequiredArg?.slice('--review-lineage-required='.length) ?? 'false'
   if (!['specialist', 'merge'].includes(check)) {
+    invalidInput()
+    return
+  }
+  if (!['true', 'false'].includes(reviewLineageRequired)) {
     invalidInput()
     return
   }
@@ -178,17 +193,22 @@ async function main(): Promise<void> {
 
   try {
     const input = JSON.parse(document) as unknown
-    const evaluation = hasReviewRoundException(input)
-      ? await evaluateGitHubMergeGatesWithReviewRoundException(
-          input,
-          expectedHeadSha,
-          {
-            repository: process.env.GITHUB_REPOSITORY ?? '',
-            appId: Number(process.env.LOOP_ENGINEER_APP_ID ?? 0),
-          },
-          createGitHubReviewRoundExceptionAdapter(),
-        )
-      : evaluateGitHubMergeGates(input, expectedHeadSha)
+    const evaluation =
+      hasProtectedProof(input) || reviewLineageRequired === 'true'
+        ? await evaluateGitHubMergeGatesWithProtectedProofs(
+            input,
+            expectedHeadSha,
+            {
+              repository: process.env.GITHUB_REPOSITORY ?? '',
+              appId: Number(process.env.LOOP_ENGINEER_APP_ID ?? 0),
+            },
+            {
+              reviewRound: createGitHubReviewRoundExceptionAdapter(),
+              reviewLineage: createGitHubReviewLineageSupersessionAdapter(),
+            },
+            reviewLineageRequired === 'true',
+          )
+        : evaluateGitHubMergeGates(input, expectedHeadSha)
     writeJson(evaluation)
     const status =
       check === 'specialist'

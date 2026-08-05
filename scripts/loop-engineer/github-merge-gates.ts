@@ -5,6 +5,15 @@ import {
   type ReviewRoundExceptionProof,
 } from './github-review-round-exception'
 import {
+  isTerminalReviewHold,
+  parseReviewLineageSupersessionProof,
+  reviewLineageRequiresSupersession,
+  sameReviewLineageSupersession,
+  verifyReviewLineageSupersession,
+  type ReviewLineageSupersessionAdapter,
+  type ReviewLineageSupersessionProof,
+} from './github-review-lineage-supersession'
+import {
   classifyMergeEligibility,
   type MergeClassificationInput,
   type MergeDecision,
@@ -34,11 +43,19 @@ export type SpecialistReviewAttestation = SpecialistReviewAttestationBase &
       }
   )
 
-export type GitHubMergeGateInput = {
-  schema_version: 'loop-engineer-github-gate-input/v2'
+type GitHubMergeGateInputBase = {
   review_attestation: SpecialistReviewAttestation
   merge_input: MergeClassificationInput
 }
+
+export type GitHubMergeGateInput = GitHubMergeGateInputBase &
+  (
+    | { schema_version: 'loop-engineer-github-gate-input/v2' }
+    | {
+        schema_version: 'loop-engineer-github-gate-input/v3'
+        review_lineage_supersession: ReviewLineageSupersessionProof
+      }
+  )
 
 export type GitHubMergeGateEvaluation = {
   schema_version: 'loop-engineer-github-gate-evaluation/v2'
@@ -57,7 +74,8 @@ export type GitHubMergeGateEvaluation = {
   auto_merge_reservation: 'disabled_until_issue_167_human_go'
 }
 
-const inputFields = ['schema_version', 'review_attestation', 'merge_input'] as const
+const v2InputFields = ['schema_version', 'review_attestation', 'merge_input'] as const
+const v3InputFields = [...v2InputFields, 'review_lineage_supersession'] as const
 const v1AttestationFields = [
   'schema_version',
   'issue_id',
@@ -302,32 +320,72 @@ function validateInput(
   rawInput: unknown,
   expectedHeadSha: string,
   verifiedException?: ReviewRoundExceptionProof,
+  verifiedSupersession?: ReviewLineageSupersessionProof,
 ): GitHubMergeGateInput | string {
   if (!isSha(expectedHeadSha) || !isRecord(rawInput)) return 'invalid_input'
+  const inputFields =
+    rawInput.schema_version === 'loop-engineer-github-gate-input/v3' ? v3InputFields : v2InputFields
   if (Object.keys(rawInput).some((field) => !inputFields.includes(field as never))) {
     return 'unknown_field'
   }
   if (inputFields.some((field) => !Object.hasOwn(rawInput, field))) return 'invalid_input'
-  if (rawInput.schema_version !== 'loop-engineer-github-gate-input/v2') {
+  if (
+    rawInput.schema_version !== 'loop-engineer-github-gate-input/v2' &&
+    rawInput.schema_version !== 'loop-engineer-github-gate-input/v3'
+  ) {
     return 'unsupported_schema_version'
+  }
+  if (
+    isRecord(rawInput.review_attestation) &&
+    typeof rawInput.review_attestation.issue_id === 'string' &&
+    Number.isSafeInteger(rawInput.review_attestation.pr_number) &&
+    isTerminalReviewHold(
+      rawInput.review_attestation.issue_id,
+      rawInput.review_attestation.pr_number as number,
+    )
+  ) {
+    return 'terminal_review_limit'
   }
   const attestation = validateAttestation(rawInput.review_attestation, verifiedException)
   if (typeof attestation === 'string') return attestation
   if (!isRecord(rawInput.merge_input)) return 'invalid_input'
 
-  return {
-    schema_version: 'loop-engineer-github-gate-input/v2',
-    review_attestation: attestation,
-    merge_input: rawInput.merge_input as MergeClassificationInput,
+  const requiresSupersession = reviewLineageRequiresSupersession(attestation.issue_id)
+  if (requiresSupersession) {
+    if (rawInput.schema_version !== 'loop-engineer-github-gate-input/v3' || !verifiedSupersession) {
+      return 'review_lineage_supersession_not_verified'
+    }
+    const proof = parseReviewLineageSupersessionProof(rawInput.review_lineage_supersession)
+    if (
+      !proof ||
+      !sameReviewLineageSupersession(proof, verifiedSupersession) ||
+      proof.successor_issue_id !== attestation.issue_id ||
+      proof.successor_pr_number !== attestation.pr_number ||
+      proof.merge_base_sha !== attestation.merge_base_sha ||
+      proof.head_sha !== attestation.head_sha ||
+      proof.review_round !== attestation.round
+    ) {
+      return 'invalid_review_lineage_supersession'
+    }
+  } else if (rawInput.schema_version === 'loop-engineer-github-gate-input/v3') {
+    return 'invalid_review_lineage_supersession'
   }
+
+  return { ...rawInput, review_attestation: attestation } as GitHubMergeGateInput
 }
 
 function evaluateGitHubMergeGatesInternal(
   rawInput: unknown,
   expectedHeadSha: string,
   verifiedException?: ReviewRoundExceptionProof,
+  verifiedSupersession?: ReviewLineageSupersessionProof,
 ): GitHubMergeGateEvaluation {
-  const validated = validateInput(rawInput, expectedHeadSha, verifiedException)
+  const validated = validateInput(
+    rawInput,
+    expectedHeadSha,
+    verifiedException,
+    verifiedSupersession,
+  )
   if (typeof validated === 'string') return redactedFailure(validated)
   const input = validated
   const attestation = input.review_attestation
@@ -427,4 +485,93 @@ export async function evaluateGitHubMergeGatesWithReviewRoundException(
     return redactedFailure(reviewRoundVerificationReason(error))
   }
   return evaluateGitHubMergeGatesInternal(snapshot, expectedHeadSha, proof)
+}
+
+function reviewLineageVerificationReason(error: unknown): string {
+  if (!(error instanceof Error)) return 'review_lineage_supersession_verification_failed'
+  const allowed = new Set([
+    'invalid_review_lineage_supersession',
+    'invalid_repository',
+    'invalid_app_id',
+    'stale_review_lineage_supersession',
+    'ambiguous_review_lineage_supersession',
+    'review_lineage_check_app_mismatch',
+    'review_lineage_supersession_not_approved',
+  ])
+  return allowed.has(error.message)
+    ? error.message
+    : 'review_lineage_supersession_verification_failed'
+}
+
+export async function evaluateGitHubMergeGatesWithProtectedProofs(
+  rawInput: unknown,
+  expectedHeadSha: string,
+  verifier: { repository: string; appId: number },
+  adapters: {
+    reviewRound: ReviewRoundExceptionAdapter
+    reviewLineage: ReviewLineageSupersessionAdapter
+  },
+  reviewLineageRequired = false,
+): Promise<GitHubMergeGateEvaluation> {
+  let snapshot: unknown
+  try {
+    snapshot = structuredClone(rawInput)
+  } catch {
+    return redactedFailure('invalid_input')
+  }
+  if (!isRecord(snapshot) || !isRecord(snapshot.review_attestation)) {
+    return evaluateGitHubMergeGates(snapshot, expectedHeadSha)
+  }
+  if (
+    typeof snapshot.review_attestation.issue_id === 'string' &&
+    Number.isSafeInteger(snapshot.review_attestation.pr_number) &&
+    isTerminalReviewHold(
+      snapshot.review_attestation.issue_id,
+      snapshot.review_attestation.pr_number as number,
+    )
+  ) {
+    return redactedFailure('terminal_review_limit')
+  }
+  if (reviewLineageRequired && snapshot.schema_version !== 'loop-engineer-github-gate-input/v3') {
+    return redactedFailure('review_lineage_supersession_not_verified')
+  }
+
+  let verifiedException: ReviewRoundExceptionProof | undefined
+  if (snapshot.review_attestation.schema_version === 'loop-engineer-review-attestation/v2') {
+    const proof = snapshot.review_attestation.review_round_exception
+    if (!isReviewRoundExceptionProof(proof)) {
+      return redactedFailure('invalid_review_round_exception')
+    }
+    try {
+      await verifyReviewRoundException(
+        { repository: verifier.repository, appId: verifier.appId, proof },
+        adapters.reviewRound,
+      )
+      verifiedException = proof
+    } catch (error) {
+      return redactedFailure(reviewRoundVerificationReason(error))
+    }
+  }
+
+  let verifiedSupersession: ReviewLineageSupersessionProof | undefined
+  if (snapshot.schema_version === 'loop-engineer-github-gate-input/v3') {
+    const proof = parseReviewLineageSupersessionProof(snapshot.review_lineage_supersession)
+    if (!proof) return redactedFailure('invalid_review_lineage_supersession')
+    try {
+      await verifyReviewLineageSupersession(
+        { repository: verifier.repository, appId: verifier.appId, proof },
+        adapters.reviewLineage,
+      )
+      verifiedSupersession = proof
+    } catch (error) {
+      return redactedFailure(reviewLineageVerificationReason(error))
+    }
+  }
+
+  return evaluateGitHubMergeGatesInternal(
+    snapshot,
+    expectedHeadSha,
+    verifiedException,
+    verifiedSupersession,
+  )
 }
