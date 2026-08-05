@@ -15,6 +15,7 @@
 - **開発スタイル**: API 駆動開発 + Issue 駆動開発
 - **Codex Skill**: `$hana-development`（Hana の Issue 着手・レビュー・PR 準備で使う）
 - **Codex 自動開発 Runbook**: `docs/api-driven-development/codex-automation-runbook.md`
+- **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない）
 
 ### Claude Code から Codex への読み替え
 
@@ -39,6 +40,7 @@
 6. **destructive な操作は事前確認**。`rm -rf`, `git push --force`, `db:reset`, ブランチ削除など。
 7. **不確実なら止まる**。3回失敗したら一度報告。同じコマンドをループしない。
 8. **1 Issue 1 PR**。混入禁止。
+9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
 
 ---
 

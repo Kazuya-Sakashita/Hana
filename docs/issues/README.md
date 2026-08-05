@@ -12,8 +12,8 @@
 | status | count |
 | --- | ---: |
 | `todo` | 6 |
-| `in_progress` | 0 |
-| `review` | 1 |
+| `in_progress` | 1 |
+| `review` | 8 |
 | `done` | 150 |
 | `blocked` | 6 |
 
@@ -32,13 +32,22 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 
 ## In Progress
 
-現在はありません。
+| Issue | GitHub | status | priority | size | title | blocked_by |
+| --- | ---: | --- | --- | --- | --- | --- |
+| `ISSUE-166` | `#338` | `in_progress` | P0 | M | GitHub Rulesetと安全なAuto-mergeを有効化する | - |
 
 ## Review Queue
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
 | `ISSUE-151` | `#321` | `review` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
+| `ISSUE-163` | `#335` | `review` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
+| `ISSUE-164` | `#336` | `review` | P1 | M | PRの自動マージ適格性を機械判定する | - |
+| `ISSUE-165` | `#337` | `review` | P0 | M | 複数専門サブエージェントの独立review gateを実装する | - |
+| `ISSUE-168` | `#346` | `review` | P0 | M | GitHub App preflightを通常gh認証から分離する | - |
+| `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
+| `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
+| `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
 
 ## Blocked Or Needs Human Decision
 
@@ -218,6 +227,14 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-152, ISSUE-159, ISSUE-161 |
 | `ISSUE-161` | `#328` | `blocked` | P0 | S | AI vendorのdata-handling attestationを確定する | - |
 | `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-152, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161 |
+| `ISSUE-163` | `#335` | `review` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
+| `ISSUE-164` | `#336` | `review` | P1 | M | PRの自動マージ適格性を機械判定する | - |
+| `ISSUE-165` | `#337` | `review` | P0 | M | 複数専門サブエージェントの独立review gateを実装する | - |
+| `ISSUE-166` | `#338` | `in_progress` | P0 | M | GitHub Rulesetと安全なAuto-mergeを有効化する | - |
+| `ISSUE-168` | `#346` | `review` | P0 | M | GitHub App preflightを通常gh認証から分離する | - |
+| `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
+| `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
+| `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
 
 ## Status Rules
 

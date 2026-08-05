@@ -13,6 +13,7 @@
 - **PRD**: `Hana_PRD_v1.md`（プロダクト仕様の正本）
 - **API 仕様の正本**: `docs/openapi/openapi.yaml`（**Single Source of Truth**）
 - **開発スタイル**: API 駆動開発 + Issue 駆動開発
+- **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない）
 
 ---
 
