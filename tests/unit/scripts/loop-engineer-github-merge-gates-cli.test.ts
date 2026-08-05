@@ -153,7 +153,53 @@ describe('ISSUE-166 GitHub merge gate CLI', () => {
       JSON.stringify(input),
     )
 
+    expectJsonOnlyFailure(result, 'terminal_review_limit')
+  })
+
+  it('routes a terminal-HOLD successor through live lineage proof verification', () => {
+    const input = passingInput() as unknown as {
+      schema_version: string
+      review_attestation: Record<string, unknown>
+      merge_input: GitHubMergeGateInput['merge_input']
+      review_lineage_supersession?: Record<string, unknown>
+    }
+    input.schema_version = 'loop-engineer-github-gate-input/v3'
+    input.review_attestation.issue_id = 'ISSUE-175'
+    input.review_attestation.pr_number = 361
+    input.merge_input.issue_id = 'ISSUE-175'
+    input.merge_input.pr_number = 361
+    input.review_lineage_supersession = {
+      schema_version: 'loop-engineer-review-lineage-supersession/v1',
+      review_lineage_id: 'lineage-issue-172',
+      predecessor_issue_id: 'ISSUE-172',
+      predecessor_issue_number: 354,
+      predecessor_pr_number: 355,
+      predecessor_head_sha: '2f0eaf7ee713bfd140269720a7d593e8f007c5a7',
+      successor_issue_id: 'ISSUE-175',
+      successor_issue_number: 359,
+      successor_pr_number: 361,
+      merge_base_sha: mergeBaseSha,
+      head_sha: headSha,
+      finding_ids: ['gh_cli_pagination_contract', 'main_sha_race', 'status_metadata_allowlist'],
+      succession: 1,
+      review_round: 1,
+    }
+
+    const result = runCli(
+      [`--expected-head-sha=${headSha}`, '--check=merge'],
+      JSON.stringify(input),
+    )
+
     expectJsonOnlyFailure(result, 'invalid_repository')
+  })
+
+  it('requires a protected lineage proof for a trusted patch-id match', () => {
+    const result = runCli(
+      [`--expected-head-sha=${headSha}`, '--check=merge', '--review-lineage-required=true'],
+      JSON.stringify(passingInput()),
+    )
+
+    expectJsonOnlyFailure(result, 'review_lineage_supersession_not_verified')
   })
 
   it.each([

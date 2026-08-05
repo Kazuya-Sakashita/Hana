@@ -270,6 +270,20 @@ Verification after rollback:
 修正commit後はfresh contextで全必要reviewをやり直す。3巡目終了時にactionable finding、
 判断不一致、情報不足、検証不能、reviewer不足が残れば`HOLD`にする。
 
+### 9.1 Terminal HOLDと後継
+
+第6巡または承認済み最大巡へ到達したIssue / PRはTerminal HOLDである。新Issue、新PR、新branchへの
+載せ替えだけでは再開しない。ISSUE-174の登録lineageに限り、旧PRのclosed / unmerged、固定findingの
+完全な引継ぎ、旧証跡の非再利用、保護Environmentと署名付きOIDC、専用App Checkを確認した後、1回だけ
+実質的な再設計をRound 1から開始できる。旧Issue / PRは引き続き`terminal_review_limit`でHOLDとする。
+
+旧Issueまたは旧PRの片方だけを変えた入力もHOLDとする。同一repositoryの旧 / 新closing Issue、旧head上の
+後継登録Check、旧 / 登録済み後継との変更pathとstable patch IDをtrusted mainで確認する。成功済み証明を
+再発行せず、初回Round 1から新headごとに1巡ずつ進める。
+
+後継も上限へ到達した場合は停止し、2回目の後継を作らない。入力schema、発行手順、rollbackは
+`loop-engineer-review-lineage-supersession.md`を正とする。
+
 ---
 
 ## 10. Stop / Block Rules

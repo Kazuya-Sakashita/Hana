@@ -23,6 +23,7 @@ jobs:
     permissions:
       checks: read
       contents: read
+      issues: read
       pull-requests: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -38,6 +39,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: main
+          fetch-depth: 0
           persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
@@ -52,6 +54,7 @@ jobs:
         env:
           GATE_INPUT: ${{ inputs.gate_input }}
           GH_TOKEN: ${{ github.token }}
+          GITHUB_STATUS_TOKEN: ${{ github.token }}
           LOOP_ENGINEER_APP_ID: ${{ vars.LOOP_ENGINEER_APP_ID }}
           LOOP_ENGINEER_DISPATCHER_LOGIN: ${{ vars.LOOP_ENGINEER_DISPATCHER_LOGIN }}
           SENDER_TYPE: ${{ github.event.sender.type }}
@@ -68,6 +71,8 @@ jobs:
           live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
           live_head_sha="$(jq -er '.head_sha' <<<"$live_pr")"
           live_base_sha="$(jq -er '.base_sha' <<<"$live_pr")"
+          predecessor_head_sha="2f0eaf7ee713bfd140269720a7d593e8f007c5a7"
+          predecessor_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/355" --jq '.base.sha')"
 
           if [[ "$(jq -r '.state' <<<"$live_pr")" != "open" || "$(jq -r '.draft' <<<"$live_pr")" != "false" || "$(jq -r '.base_ref' <<<"$live_pr")" != "main" ]]; then
             echo "::error::The target must be an open, non-draft PR to main."
@@ -82,8 +87,86 @@ jobs:
             exit 1
           fi
 
+          git fetch --no-tags origin "$predecessor_base_sha" "$predecessor_head_sha" "$live_head_sha" >/dev/null 2>&1
+          : > "$RUNNER_TEMP/predecessor-patch-ids"
+          : > "$RUNNER_TEMP/candidate-patch-ids"
+          while read -r commit_sha; do
+            git show --format= --patch "$commit_sha" | git patch-id --stable | cut -d' ' -f1 >> "$RUNNER_TEMP/predecessor-patch-ids"
+          done < <(git rev-list --no-merges "$predecessor_base_sha..$predecessor_head_sha")
+          while read -r commit_sha; do
+            git show --format= --patch "$commit_sha" | git patch-id --stable | cut -d' ' -f1 >> "$RUNNER_TEMP/candidate-patch-ids"
+          done < <(git rev-list --no-merges "$live_base_sha..$live_head_sha")
+          git diff "$predecessor_base_sha" "$predecessor_head_sha" | git patch-id --stable | cut -d' ' -f1 >> "$RUNNER_TEMP/predecessor-patch-ids"
+          git diff "$live_base_sha" "$live_head_sha" | git patch-id --stable | cut -d' ' -f1 >> "$RUNNER_TEMP/candidate-patch-ids"
+          git diff --name-only "$predecessor_base_sha" "$predecessor_head_sha" | sed '/^docs\/issues\//d' | sort -u > "$RUNNER_TEMP/predecessor-paths"
+          git diff --name-only "$live_base_sha" "$live_head_sha" | sed '/^docs\/issues\//d' | sort -u > "$RUNNER_TEMP/candidate-paths"
+          sort -u "$RUNNER_TEMP/predecessor-patch-ids" -o "$RUNNER_TEMP/predecessor-patch-ids"
+          sort -u "$RUNNER_TEMP/candidate-patch-ids" -o "$RUNNER_TEMP/candidate-patch-ids"
+          comm -12 "$RUNNER_TEMP/predecessor-patch-ids" "$RUNNER_TEMP/candidate-patch-ids" > "$RUNNER_TEMP/shared-terminal-patch-ids"
+          comm -12 "$RUNNER_TEMP/predecessor-paths" "$RUNNER_TEMP/candidate-paths" > "$RUNNER_TEMP/shared-terminal-paths"
+          original_terminal_match=false
+          if [[ "$live_head_sha" == "$predecessor_head_sha" || -s "$RUNNER_TEMP/shared-terminal-patch-ids" ]]; then
+            original_terminal_match=true
+          fi
+
+          registration_inventory="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${predecessor_head_sha}/check-runs?filter=all&check_name=review-lineage-registration&per_page=100" --jq '{total_count,runs:[.check_runs[]|{app_id:.app.id,name,head_sha,external_id,status,conclusion}]}')"
+          registered_successor_pr=""
+          registered_successor_base=""
+          registered_successor_head=""
+          registration_conclusion=""
+          lineage_resolved=false
+          registration_total_count="$(jq -er '.total_count | select(type == "number" and floor == . and . >= 0)' <<<"$registration_inventory")"
+          registration_run_count="$(jq -er '.runs | length' <<<"$registration_inventory")"
+          if [[ "$registration_total_count" != "$registration_run_count" ]]; then
+            echo "::error::The review lineage registration inventory is incomplete."
+            exit 1
+          fi
+          if [[ "$registration_total_count" -gt 0 ]]; then
+            if [[ "$registration_total_count" -ne 1 ]]; then
+              echo "::error::The review lineage registration inventory is ambiguous."
+              exit 1
+            fi
+            if ! registration_record="$(jq -ec --arg app "$LOOP_ENGINEER_APP_ID" '.runs[0] | select((.app_id | tostring) == $app and .name == "review-lineage-registration" and .head_sha == "2f0eaf7ee713bfd140269720a7d593e8f007c5a7" and .status == "completed" and (.conclusion == "success" or .conclusion == "failure"))' <<<"$registration_inventory")"; then
+              echo "::error::The review lineage registration is untrusted or incomplete."
+              exit 1
+            fi
+            registration_external_id="$(jq -er '.external_id' <<<"$registration_record")"
+            registration_conclusion="$(jq -er '.conclusion' <<<"$registration_record")"
+            registration_pattern='^loop-engineer-review-lineage-registration/v1\|([0-9]+)\|([1-5])\|([0-9a-f]{40})\|([0-9a-f]{40})\|([0-9a-f]{64})$'
+            if [[ ! "$registration_external_id" =~ $registration_pattern ]]; then
+              echo "::error::The review lineage registration external ID is invalid."
+              exit 1
+            fi
+            registered_successor_pr="${BASH_REMATCH[1]}"
+            registered_successor_base="${BASH_REMATCH[3]}"
+            registered_successor_head="${BASH_REMATCH[4]}"
+            registered_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${registered_successor_pr}" --jq '{merged:(.merged_at != null),head_sha:.head.sha,base_ref:.base.ref,base_repository:.base.repo.full_name}')"
+            registered_closing_issues="$(gh api graphql -f 'query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:10){nodes{number repository{nameWithOwner}}pageInfo{hasNextPage}}}}}' -F owner="${GITHUB_REPOSITORY%%/*}" -F name="${GITHUB_REPOSITORY##*/}" -F number="$registered_successor_pr" --jq 'if .data.repository.pullRequest.closingIssuesReferences.pageInfo.hasNextPage then error("too_many_closing_issues") else [.data.repository.pullRequest.closingIssuesReferences.nodes[]|{repository:.repository.nameWithOwner,number}] end')"
+            if [[ "$registration_conclusion" == "success" && "$(jq -r '.merged' <<<"$registered_pr")" == "true" && "$(jq -r '.head_sha' <<<"$registered_pr")" == "$registered_successor_head" && "$(jq -r '.base_ref' <<<"$registered_pr")" == "main" && "$(jq -r '.base_repository' <<<"$registered_pr")" == "$GITHUB_REPOSITORY" ]] && jq -e --arg repository "$GITHUB_REPOSITORY" 'length == 1 and .[0] == {repository:$repository,number:359}' <<<"$registered_closing_issues" >/dev/null; then
+              lineage_resolved=true
+            fi
+          fi
+
+          if [[ -n "$registered_successor_head" && "$lineage_resolved" != "true" ]]; then
+            git fetch --no-tags origin "$registered_successor_base" "$registered_successor_head" >/dev/null 2>&1
+            while read -r commit_sha; do
+              git show --format= --patch "$commit_sha" | git patch-id --stable | cut -d' ' -f1 >> "$RUNNER_TEMP/predecessor-patch-ids"
+            done < <(git rev-list --no-merges "$registered_successor_base..$registered_successor_head")
+            git diff "$registered_successor_base" "$registered_successor_head" | git patch-id --stable | cut -d' ' -f1 >> "$RUNNER_TEMP/predecessor-patch-ids"
+            git diff --name-only "$registered_successor_base" "$registered_successor_head" | sed '/^docs\/issues\//d' >> "$RUNNER_TEMP/predecessor-paths"
+            sort -u "$RUNNER_TEMP/predecessor-patch-ids" -o "$RUNNER_TEMP/predecessor-patch-ids"
+            sort -u "$RUNNER_TEMP/predecessor-paths" -o "$RUNNER_TEMP/predecessor-paths"
+            comm -12 "$RUNNER_TEMP/predecessor-patch-ids" "$RUNNER_TEMP/candidate-patch-ids" > "$RUNNER_TEMP/shared-terminal-patch-ids"
+            comm -12 "$RUNNER_TEMP/predecessor-paths" "$RUNNER_TEMP/candidate-paths" > "$RUNNER_TEMP/shared-terminal-paths"
+          fi
+
+          review_lineage_required=false
+          if [[ "$original_terminal_match" == "true" || ( "$lineage_resolved" != "true" && ( "$pr_number" == "$registered_successor_pr" || -s "$RUNNER_TEMP/shared-terminal-patch-ids" || -s "$RUNNER_TEMP/shared-terminal-paths" ) ) ]]; then
+            review_lineage_required=true
+          fi
+
           set +e
-          printf '%s' "$GATE_INPUT" | pnpm --silent loop-engineer:github-gate -- --expected-head-sha="$live_head_sha" --check=merge > "$RUNNER_TEMP/gate-evaluation.json"
+          printf '%s' "$GATE_INPUT" | pnpm --silent loop-engineer:github-gate -- --expected-head-sha="$live_head_sha" --check=merge --review-lineage-required="$review_lineage_required" > "$RUNNER_TEMP/gate-evaluation.json"
           gate_exit=$?
           set -e
 

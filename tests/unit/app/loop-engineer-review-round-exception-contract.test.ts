@@ -128,6 +128,7 @@ describe('ISSUE-173 protected review-round exception workflow', () => {
     expect(prepare.permissions).toEqual({
       checks: 'read',
       contents: 'read',
+      issues: 'read',
       'pull-requests': 'read',
     })
     expect(gate?.env).toMatchObject({

@@ -41,6 +41,7 @@
 7. **不確実なら止まる**。3回失敗したら一度報告。同じコマンドをループしない。
 8. **1 Issue 1 PR**。混入禁止。
 9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
+10. **Terminal HOLDは番号変更で解除しない**。後継はISSUE-174の登録lineage、closed / unmergedの旧PR、固定finding、保護Environment、GitHub署名付きOIDC、専用App Checkが完全一致する1回だけを許可する。旧Issue / PRは常にHOLDとし、後継も上限へ達した場合は再後継を認めない。
 
 ---
 

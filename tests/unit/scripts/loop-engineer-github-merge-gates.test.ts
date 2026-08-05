@@ -87,19 +87,19 @@ function exceptionRoundInput(round = 4, maxRound: 4 | 5 = 5) {
     schema_version: string
   }
   input.review_attestation.schema_version = 'loop-engineer-review-attestation/v2'
-  input.review_attestation.issue_id = 'ISSUE-172'
-  input.review_attestation.pr_number = 355
+  input.review_attestation.issue_id = 'ISSUE-170'
+  input.review_attestation.pr_number = 351
   input.review_attestation.round = round
   input.review_attestation.review_round_exception = {
     schema_version: 'loop-engineer-review-round-exception/v1',
-    issue_id: 'ISSUE-172',
-    pr_number: 355,
+    issue_id: 'ISSUE-170',
+    pr_number: 351,
     merge_base_sha: mergeBaseSha,
     head_sha: headSha,
     max_round: maxRound,
   }
-  input.merge_input.issue_id = 'ISSUE-172'
-  input.merge_input.pr_number = 355
+  input.merge_input.issue_id = 'ISSUE-170'
+  input.merge_input.pr_number = 351
   return input
 }
 
@@ -131,7 +131,7 @@ function approvedExceptionAdapter(maxRound: 4 | 5 = 5): ReviewRoundExceptionAdap
           app_id: 424242,
           name: 'review-round-exception',
           head_sha: headSha,
-          external_id: `loop-engineer-review-round-exception/v1|ISSUE-172|355|${mergeBaseSha}|${headSha}|${maxRound}`,
+          external_id: `loop-engineer-review-round-exception/v1|ISSUE-170|351|${mergeBaseSha}|${headSha}|${maxRound}`,
           status: 'completed',
           conclusion: 'success',
         },
@@ -162,8 +162,8 @@ describe('evaluateGitHubMergeGates', () => {
           approvedExceptionAdapter(maxRound),
         ),
       ).resolves.toMatchObject({
-        issue_id: 'ISSUE-172',
-        pr_number: 355,
+        issue_id: 'ISSUE-170',
+        pr_number: 351,
         head_sha: headSha,
         specialist_review_gate: { status: 'success' },
         merge_eligibility: { status: 'success', decision: 'AUTO_MERGE_ELIGIBLE' },
@@ -236,7 +236,7 @@ describe('evaluateGitHubMergeGates', () => {
                 app_id: 424242,
                 name: 'review-round-exception',
                 head_sha: headSha,
-                external_id: `loop-engineer-review-round-exception/v1|ISSUE-172|355|${mergeBaseSha}|${headSha}|4`,
+                external_id: `loop-engineer-review-round-exception/v1|ISSUE-170|351|${mergeBaseSha}|${headSha}|4`,
                 status: 'completed',
                 conclusion: 'success',
               },
