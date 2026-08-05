@@ -6,7 +6,9 @@ import {
   approveReviewLineageSupersession,
   issue172Lineage,
   parseReviewLineageSupersessionProof,
+  reviewLineageRegistrationCheckName,
   reviewLineageRegistrationExternalId,
+  reviewLineageSupersessionCheckName,
   reviewLineageSupersessionExternalId,
   verifyReviewLineageSupersession,
   type ReviewLineageCheckRun,
@@ -116,13 +118,35 @@ function createAdapter(
     successorOverrides?: Partial<ReviewLineagePullRequest>
     moveSuccessorAfterFirstPair?: boolean
     initialRuns?: ReviewLineageCheckRun[]
+    failAfterMutation?: {
+      method: 'create' | 'update'
+      name: string
+      status: string
+      conclusion: string | null
+    }
   } = {},
 ) {
   let oldPullRequest = { ...predecessor(), ...options.predecessorOverrides }
   let newPullRequest = { ...successor(), ...options.successorOverrides }
   let pullRequestReads = 0
   let nextId = 1
+  let mutationFailed = false
   const runs = structuredClone(options.initialRuns ?? [])
+  const failAfterMutation = (
+    method: 'create' | 'update',
+    input: { name: string; status: string; conclusion: string | null },
+  ) => {
+    if (
+      !mutationFailed &&
+      options.failAfterMutation?.method === method &&
+      options.failAfterMutation.name === input.name &&
+      options.failAfterMutation.status === input.status &&
+      options.failAfterMutation.conclusion === input.conclusion
+    ) {
+      mutationFailed = true
+      throw new Error('github_api_failed')
+    }
+  }
   const adapter: ReviewLineageSupersessionAdapter = {
     async requestOidcToken(requestedAudience) {
       if (requestedAudience !== audience) throw new Error('invalid_oidc_audience')
@@ -153,12 +177,14 @@ function createAdapter(
     async createCheckRun(_repository, input) {
       const run = { id: nextId++, app_id: appId, ...input }
       runs.push(run)
+      failAfterMutation('create', input)
       return { id: run.id }
     },
     async updateCheckRun(_repository, checkId, input) {
       const run = runs.find(({ id }) => id === checkId)
       if (!run) throw new Error('github_api_failed')
       Object.assign(run, input)
+      failAfterMutation('update', input)
     },
   }
   return {
@@ -230,6 +256,76 @@ describe('ISSUE-174 review lineage supersession controller', () => {
     expect(runs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ status: 'completed', conclusion: 'failure' }),
+      ]),
+    )
+  })
+
+  it.each([
+    {
+      boundary: 'registration creation',
+      failure: {
+        method: 'create' as const,
+        name: reviewLineageRegistrationCheckName,
+        status: 'in_progress',
+        conclusion: null,
+      },
+    },
+    {
+      boundary: 'proof creation',
+      failure: {
+        method: 'create' as const,
+        name: reviewLineageSupersessionCheckName,
+        status: 'in_progress',
+        conclusion: null,
+      },
+    },
+    {
+      boundary: 'proof completion',
+      failure: {
+        method: 'update' as const,
+        name: reviewLineageSupersessionCheckName,
+        status: 'completed',
+        conclusion: 'success',
+      },
+    },
+    {
+      boundary: 'registration completion',
+      failure: {
+        method: 'update' as const,
+        name: reviewLineageRegistrationCheckName,
+        status: 'completed',
+        conclusion: 'success',
+      },
+    },
+  ])('recovers the same exact round after a $boundary failure', async ({ failure }) => {
+    const { adapter, runs } = createAdapter({ failAfterMutation: failure })
+
+    await expect(
+      approveReviewLineageSupersession({ repository, appId, runId, runAttempt, proof }, adapter),
+    ).rejects.toThrow('github_api_failed')
+    await expect(
+      verifyReviewLineageSupersession({ repository, appId, proof }, adapter),
+    ).rejects.toThrow('review_lineage_supersession_not_approved')
+
+    await expect(
+      approveReviewLineageSupersession({ repository, appId, runId, runAttempt, proof }, adapter),
+    ).resolves.toEqual({ status: 'approved', succession: 1 })
+    await expect(
+      verifyReviewLineageSupersession({ repository, appId, proof }, adapter),
+    ).resolves.toEqual({ status: 'approved', succession: 1 })
+    expect(runs).toHaveLength(2)
+    expect(runs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: reviewLineageRegistrationCheckName,
+          status: 'completed',
+          conclusion: 'success',
+        }),
+        expect.objectContaining({
+          name: reviewLineageSupersessionCheckName,
+          status: 'completed',
+          conclusion: 'success',
+        }),
       ]),
     )
   })

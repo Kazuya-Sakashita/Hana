@@ -324,18 +324,64 @@ function requireRegistrationProgression(
   if (reviewLineageRegistrationExternalId(registeredProof) !== run.external_id) {
     throw new Error('invalid_review_lineage_registration')
   }
-  const retryFailedRound =
-    run.conclusion === 'failure' && registration.reviewRound === proof.review_round
-  const nextRoundAndNewHead =
-    run.conclusion === 'success' &&
-    registration.reviewRound + 1 === proof.review_round &&
-    registration.headSha !== proof.head_sha
-  if (!retryFailedRound && !nextRoundAndNewHead) {
-    throw new Error('invalid_review_lineage_round_progression')
-  }
-  if (run.status !== 'completed' || !['success', 'failure'].includes(run.conclusion ?? '')) {
+  const completedFailure = run.status === 'completed' && run.conclusion === 'failure'
+  const completedSuccess = run.status === 'completed' && run.conclusion === 'success'
+  const incomplete = run.status === 'in_progress' && run.conclusion === null
+  if (!completedFailure && !completedSuccess && !incomplete) {
     throw new Error('ambiguous_review_lineage_supersession')
   }
+  const retryExactRound =
+    (completedFailure || incomplete) &&
+    registration.reviewRound === proof.review_round &&
+    run.external_id === reviewLineageRegistrationExternalId(proof)
+  const nextRoundAndNewHead =
+    completedSuccess &&
+    registration.reviewRound + 1 === proof.review_round &&
+    registration.headSha !== proof.head_sha
+  if (!retryExactRound && !nextRoundAndNewHead) {
+    throw new Error('invalid_review_lineage_round_progression')
+  }
+}
+
+function requireRetryableSupersessionRun(
+  run: ReviewLineageCheckRun,
+  registration: ReviewLineageCheckRun | undefined,
+  proof: ReviewLineageSupersessionProof,
+): { alreadySucceeded: boolean } {
+  if (
+    !registration ||
+    run.head_sha !== proof.head_sha ||
+    run.external_id !== reviewLineageSupersessionExternalId(proof)
+  ) {
+    throw new Error('review_lineage_supersession_reused')
+  }
+  if (run.status === 'completed' && run.conclusion === 'success') {
+    return { alreadySucceeded: true }
+  }
+  if (
+    (run.status === 'completed' && run.conclusion === 'failure') ||
+    (run.status === 'in_progress' && run.conclusion === null)
+  ) {
+    return { alreadySucceeded: false }
+  }
+  throw new Error('ambiguous_review_lineage_supersession')
+}
+
+async function completeCheckAsFailure(
+  adapter: ReviewLineageSupersessionAdapter,
+  repository: string,
+  checkId: number,
+  name: string,
+  externalId: string,
+): Promise<void> {
+  try {
+    await adapter.updateCheckRun(repository, checkId, {
+      name,
+      external_id: externalId,
+      status: 'completed',
+      conclusion: 'failure',
+    })
+  } catch {}
 }
 
 function decodeJwtPart(value: string): Record<string, unknown> {
@@ -544,65 +590,57 @@ export async function approveReviewLineageSupersession(
   }
 
   const requestedExternalId = reviewLineageSupersessionExternalId(input.proof)
-  const checkId =
-    runs[0]?.id ??
-    (
-      await adapter.createCheckRun(input.repository, {
-        name: reviewLineageSupersessionCheckName,
-        head_sha: input.proof.head_sha,
-        external_id: requestedExternalId,
-        status: 'in_progress',
-        conclusion: null,
-      })
-    ).id
-  if (!Number.isSafeInteger(checkId) || checkId <= 0) throw new Error('invalid_check_id')
-  if (runs[0]) {
-    if (
-      runs[0].head_sha !== input.proof.head_sha ||
-      (runs[0].external_id !== requestedExternalId &&
-        registrations[0]?.external_id === registrationExternalId)
-    ) {
-      throw new Error('review_lineage_supersession_reused')
-    }
-    await adapter.updateCheckRun(input.repository, checkId, {
-      name: reviewLineageSupersessionCheckName,
-      external_id: requestedExternalId,
-      status: 'in_progress',
-      conclusion: null,
-    })
-  }
-
+  const existingProofState = runs[0]
+    ? requireRetryableSupersessionRun(runs[0], registrations[0], input.proof)
+    : { alreadySucceeded: false }
+  let checkId = runs[0]?.id
   try {
+    if (checkId === undefined) {
+      checkId = (
+        await adapter.createCheckRun(input.repository, {
+          name: reviewLineageSupersessionCheckName,
+          head_sha: input.proof.head_sha,
+          external_id: requestedExternalId,
+          status: 'in_progress',
+          conclusion: null,
+        })
+      ).id
+    }
+    if (!Number.isSafeInteger(checkId) || checkId <= 0) throw new Error('invalid_check_id')
     requireCurrentLineage(await readBoundPullRequests(input, adapter), input.proof)
-  } catch {
-    await adapter.updateCheckRun(input.repository, checkId, {
-      name: reviewLineageSupersessionCheckName,
-      external_id: requestedExternalId,
-      status: 'completed',
-      conclusion: 'failure',
-    })
-    if (!registrations[0]) {
-      await adapter.updateCheckRun(input.repository, registrationId, {
-        name: reviewLineageRegistrationCheckName,
-        external_id: registrationExternalId,
+    if (!existingProofState.alreadySucceeded) {
+      await adapter.updateCheckRun(input.repository, checkId, {
+        name: reviewLineageSupersessionCheckName,
+        external_id: requestedExternalId,
         status: 'completed',
-        conclusion: 'failure',
+        conclusion: 'success',
       })
     }
-    throw new Error('stale_review_lineage_supersession')
+    await adapter.updateCheckRun(input.repository, registrationId, {
+      name: reviewLineageRegistrationCheckName,
+      external_id: registrationExternalId,
+      status: 'completed',
+      conclusion: 'success',
+    })
+  } catch (error) {
+    if (Number.isSafeInteger(checkId) && (checkId ?? 0) > 0) {
+      await completeCheckAsFailure(
+        adapter,
+        input.repository,
+        checkId!,
+        reviewLineageSupersessionCheckName,
+        requestedExternalId,
+      )
+    }
+    await completeCheckAsFailure(
+      adapter,
+      input.repository,
+      registrationId,
+      reviewLineageRegistrationCheckName,
+      registrationExternalId,
+    )
+    throw error
   }
-  await adapter.updateCheckRun(input.repository, checkId, {
-    name: reviewLineageSupersessionCheckName,
-    external_id: requestedExternalId,
-    status: 'completed',
-    conclusion: 'success',
-  })
-  await adapter.updateCheckRun(input.repository, registrationId, {
-    name: reviewLineageRegistrationCheckName,
-    external_id: registrationExternalId,
-    status: 'completed',
-    conclusion: 'success',
-  })
   return { status: 'approved', succession: 1 }
 }
 
