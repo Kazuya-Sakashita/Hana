@@ -2,7 +2,7 @@
 id: ISSUE-182
 title: children RLS role作成membershipを決定論化する
 priority: P0
-status: review
+status: blocked
 size: S
 created_at: 2026-08-07
 github_issue: 369
@@ -46,7 +46,7 @@ OpenAPIの公開契約と生成API型は変更しない。
 - [x] `createrole_self_grant='set, inherit'`の接続でもmigrationが期待するschema owner membership optionを作る
 - [x] migration適用後にruntime attestationとowner CRUDが成功する
 - [x] fresh PostgreSQL 16、`pnpm openapi:lint`、`pnpm openapi:gen`、`pnpm pr:gate`が成功する
-- [x] 最新head SHAの独立専門reviewとGitHub checksがすべて成功する
+- [ ] 最新head SHAの独立専門reviewとGitHub checksがすべて成功する
 - [x] 実環境migration、cutover、auto-mergeを実行しない
 
 ## セキュリティ・プライバシー考慮
@@ -59,3 +59,8 @@ OpenAPIの公開契約と生成API型は変更しない。
 - PR #368 / GitHub Issue #367
 - ADR-0016
 - ADR-0017
+
+## 後継
+
+PR #370は第3巡の専門reviewで証跡不整合と実DB三値テスト不足が見つかりTerminal HOLD。
+残存findingと検証済み実装はISSUE-183 / GitHub Issue #371へ引き継ぐ。

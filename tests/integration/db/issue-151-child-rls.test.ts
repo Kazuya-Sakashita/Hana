@@ -539,6 +539,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     const orphanChildId = randomUUID()
     const orphanUserId = randomUUID()
     const ownerCrudChildId = randomUUID()
+    const missingAccessChildId = randomUUID()
     const inheritedRuntimeRole = 'issue_181_runtime_parameter_group'
     const admin = new Client({ connectionString: process.env.DATABASE_URL })
     const schemaOwner = new Client({ connectionString: process.env.DIRECT_URL })
@@ -863,6 +864,17 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
             setOption: false,
           },
         ],
+      })
+
+      const accessStatuses = await withChildOwnerScope(userAId, async (transaction) => ({
+        owned: await childAccessStatus(transaction, childAId),
+        foreign: await childAccessStatus(transaction, childBId),
+        missing: await childAccessStatus(transaction, missingAccessChildId),
+      }))
+      expect(accessStatuses).toEqual({
+        owned: 'owned',
+        foreign: 'foreign',
+        missing: 'missing',
       })
 
       const ownerCrud = await withChildOwnerScope(userCId, async (transaction) => {

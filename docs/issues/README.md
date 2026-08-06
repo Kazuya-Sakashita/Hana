@@ -15,7 +15,7 @@
 | `in_progress` | 1 |
 | `review` | 8 |
 | `done` | 150 |
-| `blocked` | 9 |
+| `blocked` | 10 |
 
 ## Codex Ready Queue
 
@@ -47,7 +47,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
-| `ISSUE-182` | `#369` | `review` | P0 | S | children RLS role作成membershipを決定論化する | - |
+| `ISSUE-183` | `#371` | `review` | P0 | S | children access statusの実DB証跡をexact-SHA境界へ同期する | - |
 
 ## Blocked Or Needs Human Decision
 
@@ -62,6 +62,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-152, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161 |
 | `ISSUE-180` | `#365` | `blocked` | P0 | M+ | children RLS rollout境界とmigration復旧をhardeningする | - |
 | `ISSUE-181` | `#367` | `blocked` | P0 | S | children RLSのtarget guardとparameter ACLをfail closedにする | - |
+| `ISSUE-182` | `#369` | `blocked` | P0 | S | children RLS role作成membershipを決定論化する | - |
 
 ## All Issues
 
@@ -240,7 +241,8 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
 | `ISSUE-180` | `#365` | `blocked` | P0 | M+ | children RLS rollout境界とmigration復旧をhardeningする | - |
 | `ISSUE-181` | `#367` | `blocked` | P0 | S | children RLSのtarget guardとparameter ACLをfail closedにする | - |
-| `ISSUE-182` | `#369` | `review` | P0 | S | children RLS role作成membershipを決定論化する | - |
+| `ISSUE-182` | `#369` | `blocked` | P0 | S | children RLS role作成membershipを決定論化する | - |
+| `ISSUE-183` | `#371` | `review` | P0 | S | children access statusの実DB証跡をexact-SHA境界へ同期する | - |
 
 ## Status Rules
 
