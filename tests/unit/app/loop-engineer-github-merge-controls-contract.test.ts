@@ -153,6 +153,100 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).not.toContain('OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(')
   })
 
+  it('requires exact-head PostgreSQL evidence for database change areas', () => {
+    const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
+      jobs: Record<
+        string,
+        {
+          outputs?: Record<string, string>
+          services?: Record<
+            string,
+            {
+              image?: string
+              env?: Record<string, string>
+              options?: string
+            }
+          >
+          env?: Record<string, string>
+          steps?: Array<{
+            id?: string
+            name?: string
+            run?: string
+            if?: string
+            env?: Record<string, string>
+          }>
+        }
+      >
+    }
+    const prepare = workflow.jobs.prepare!
+    const gateScript = prepare.steps?.find(({ id }) => id === 'gate')?.run ?? ''
+    const candidate = workflow.jobs.candidate_pr_gate!
+    const steps = candidate.steps ?? []
+    const databaseCondition = "needs.prepare.outputs.database_evidence_required == 'true'"
+    const databaseRuns = [
+      'pnpm qa:issue123:db-bootstrap',
+      'pnpm qa:issue151:db-bootstrap',
+      'pnpm db:migrate:deploy',
+      'pnpm qa:issue151:child-rls-db',
+    ]
+    const classificationGuard = steps.find(
+      ({ name }) => name === 'Require trusted database evidence classification',
+    )
+
+    expect(prepare.outputs?.database_evidence_required).toBe(
+      '${{ steps.gate.outputs.database_evidence_required }}',
+    )
+    expect(gateScript).toContain(
+      'any(.review_attestation.change_areas[]; . == "database" or . == "migration-code" or . == "real-db-migration")',
+    )
+    expect(gateScript).toContain(
+      'echo "database_evidence_required=$database_evidence_required" >> "$GITHUB_OUTPUT"',
+    )
+    expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
+      gateScript.indexOf('database_evidence_required='),
+    )
+    expect(candidate.services?.postgres?.image).toBe(
+      'postgres:16.14@sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b',
+    )
+    expect(candidate.services?.postgres?.env).toEqual({
+      POSTGRES_DB: 'hana_ci',
+      POSTGRES_PASSWORD: 'hana-admin',
+      POSTGRES_USER: 'hana_admin',
+    })
+    expect(candidate.services?.postgres?.options).toContain('pg_isready -U hana_admin -d hana_ci')
+    expect(candidate.env).toMatchObject({
+      DATABASE_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+      DIRECT_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+      CHILD_DATABASE_URL:
+        'postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci',
+      CHILD_OWNER_SCOPE_MODE: 'route',
+    })
+    expect(classificationGuard).toMatchObject({
+      env: {
+        DATABASE_EVIDENCE_REQUIRED: '${{ needs.prepare.outputs.database_evidence_required }}',
+      },
+    })
+    expect(classificationGuard?.run).toContain('true|false')
+    expect(classificationGuard?.run).toContain('exit 1')
+
+    const databaseIndexes = databaseRuns.map((run) => steps.findIndex((step) => step.run === run))
+    for (const [index, run] of databaseRuns.entries()) {
+      expect(steps[databaseIndexes[index]!]).toMatchObject({ run, if: databaseCondition })
+    }
+    for (const run of ['pnpm db:migrate:deploy', 'pnpm qa:issue151:child-rls-db']) {
+      expect(steps.find((step) => step.run === run)?.env).toEqual({
+        DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+      })
+    }
+    expect(databaseIndexes.every((index) => index >= 0)).toBe(true)
+    expect(databaseIndexes).toEqual([...databaseIndexes].sort((left, right) => left - right))
+    const installIndex = steps.findIndex(({ run }) => run === 'pnpm install --frozen-lockfile')
+    const prGateIndex = steps.findIndex(({ run }) => run === 'pnpm pr:gate')
+    expect(installIndex).toBeLessThan(databaseIndexes[0]!)
+    expect(databaseIndexes.at(-1)).toBeLessThan(prGateIndex)
+    expect(steps[prGateIndex]?.if).toBeUndefined()
+  })
+
   it('accepts an OpenAPI waiver only for a freshly generated non-empty report', () => {
     const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
       jobs: Record<

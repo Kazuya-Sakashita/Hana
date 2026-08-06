@@ -34,6 +34,7 @@ jobs:
       specialist_status: ${{ steps.gate.outputs.specialist_status }}
       merge_decision: ${{ steps.gate.outputs.merge_decision }}
       merge_reason: ${{ steps.gate.outputs.merge_reason }}
+      database_evidence_required: ${{ steps.gate.outputs.database_evidence_required }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -101,6 +102,12 @@ jobs:
             exit 1
           fi
 
+          database_evidence_required="$(printf '%s' "$GATE_INPUT" | jq -r 'any(.review_attestation.change_areas[]; . == "database" or . == "migration-code" or . == "real-db-migration")')"
+          if [[ "$database_evidence_required" != "true" && "$database_evidence_required" != "false" ]]; then
+            echo "::error::The database evidence requirement could not be derived from the validated attestation."
+            exit 1
+          fi
+
           echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "head_sha=$live_head_sha" >> "$GITHUB_OUTPUT"
           echo "base_sha=$live_base_sha" >> "$GITHUB_OUTPUT"
@@ -108,6 +115,7 @@ jobs:
           echo "specialist_status=$specialist_status" >> "$GITHUB_OUTPUT"
           echo "merge_decision=$merge_decision" >> "$GITHUB_OUTPUT"
           echo "merge_reason=$merge_reason" >> "$GITHUB_OUTPUT"
+          echo "database_evidence_required=$database_evidence_required" >> "$GITHUB_OUTPUT"
 
   begin_required_checks:
     name: begin-dedicated-app-check-generation
@@ -161,7 +169,45 @@ jobs:
     needs: [prepare, begin_required_checks]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.14@sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b
+        env:
+          POSTGRES_DB: hana_ci
+          POSTGRES_PASSWORD: hana-admin
+          POSTGRES_USER: hana_admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hana_admin -d hana_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-dummy-service-role-key
+      DATABASE_URL: postgresql://hana_admin:hana-admin@localhost:5432/hana_ci
+      DIRECT_URL: postgresql://hana_admin:hana-admin@localhost:5432/hana_ci
+      CHILD_DATABASE_URL: postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci
+      CHILD_OWNER_SCOPE_MODE: route
+      ANTHROPIC_API_KEY: ci-dummy-anthropic-key
+      AI_MODEL: claude-haiku-4-5
+      HANA_SYNTHETIC_E2E: '1'
     steps:
+      - name: Require trusted database evidence classification
+        env:
+          DATABASE_EVIDENCE_REQUIRED: ${{ needs.prepare.outputs.database_evidence_required }}
+        run: |
+          case "$DATABASE_EVIDENCE_REQUIRED" in
+            true|false) ;;
+            *)
+              echo "::error::Trusted database evidence classification is missing or invalid."
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ needs.prepare.outputs.head_sha }}
@@ -174,6 +220,22 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Bootstrap Supabase roles in local PostgreSQL
+        if: needs.prepare.outputs.database_evidence_required == 'true'
+        run: pnpm qa:issue123:db-bootstrap
+      - name: Bootstrap separated schema owner and child runtime roles
+        if: needs.prepare.outputs.database_evidence_required == 'true'
+        run: pnpm qa:issue151:db-bootstrap
+      - name: Apply database migrations for child authorization evidence
+        if: needs.prepare.outputs.database_evidence_required == 'true'
+        env:
+          DIRECT_URL: postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci
+        run: pnpm db:migrate:deploy
+      - name: Verify child owner RLS boundary
+        if: needs.prepare.outputs.database_evidence_required == 'true'
+        env:
+          DIRECT_URL: postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci
+        run: pnpm qa:issue151:child-rls-db
       - run: pnpm pr:gate
 
   candidate_openapi_validate:
