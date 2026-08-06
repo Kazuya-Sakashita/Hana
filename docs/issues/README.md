@@ -13,9 +13,9 @@
 | --- | ---: |
 | `todo` | 6 |
 | `in_progress` | 1 |
-| `review` | 9 |
+| `review` | 8 |
 | `done` | 150 |
-| `blocked` | 6 |
+| `blocked` | 7 |
 
 ## Codex Ready Queue
 
@@ -40,7 +40,6 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
-| `ISSUE-151` | `#321` | `review` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-163` | `#335` | `review` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
 | `ISSUE-164` | `#336` | `review` | P1 | M | PRの自動マージ適格性を機械判定する | - |
 | `ISSUE-165` | `#337` | `review` | P0 | M | 複数専門サブエージェントの独立review gateを実装する | - |
@@ -55,6 +54,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
 | `ISSUE-105` | `#234` | `blocked` | P0 | S | staging preflight を実行し公開前 traffic の Go/Hold を判定する | - |
+| `ISSUE-151` | `#321` | `blocked` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |
 | `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-152, ISSUE-159, ISSUE-161 |
@@ -216,7 +216,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-148` | `#318` | `done` | P0 | S | 未構成環境のmaintenance scheduleを明示的にHOLDする | - |
 | `ISSUE-149` | `#319` | `done` | P1 | M | Issue台帳とGitHub状態のdriftをCIで防ぐ | - |
 | `ISSUE-150` | `#320` | `done` | P1 | M | 認証方式と全Route応答契約をOpenAPIへ一致させる | - |
-| `ISSUE-151` | `#321` | `review` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
+| `ISSUE-151` | `#321` | `blocked` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
 | `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |

@@ -4,7 +4,12 @@ import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
 import { type ChildPersistenceScope, withChildPersistence } from '@/server/db/child-persistence'
 import { toChildResponse } from '@/features/children/view-models/child'
-import { isUuid, parseChildUpdate, readJsonBody } from '@/features/children/server/parse'
+import {
+  isUuid,
+  parseChildUpdate,
+  parseJsonBodyText,
+  readJsonBodyText,
+} from '@/features/children/server/parse'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,11 +46,11 @@ export async function PUT(request: Request, { params }: Params) {
   try {
     const user = await requireUser()
     const { childId } = await params
+    const bodyText = await readJsonBodyText(request)
 
     const updated = await withChildPersistence(user.id, async (scope) => {
       const child = await loadChild(scope, childId, user.id)
-      const raw = await readJsonBody(request)
-      const patch = parseChildUpdate(raw)
+      const patch = parseChildUpdate(parseJsonBodyText(bodyText))
       return scope.transaction.child.update({
         where: { id: child.id },
         data: {

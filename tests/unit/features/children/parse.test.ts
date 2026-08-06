@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblemError } from '@/lib/api/error'
-import { isUuid, parseChildCreate, parseChildUpdate } from '@/features/children/server/parse'
+import {
+  isUuid,
+  parseChildCreate,
+  parseChildUpdate,
+  parseJsonBodyText,
+} from '@/features/children/server/parse'
 
 afterEach(() => vi.useRealTimers())
 
@@ -103,6 +108,16 @@ describe('parseChildUpdate', () => {
 
   it('rejects invalid name type', () => {
     expectValidationError(() => parseChildUpdate({ name: 123 }), 'body.name')
+  })
+})
+
+describe('parseJsonBodyText', () => {
+  it('parses buffered JSON after authorization', () => {
+    expect(parseJsonBodyText('{"name":"synthetic"}')).toEqual({ name: 'synthetic' })
+  })
+
+  it('normalizes malformed buffered JSON to validation_error', () => {
+    expectValidationError(() => parseJsonBodyText('{'), 'body')
   })
 })
 

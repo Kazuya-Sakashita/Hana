@@ -2,7 +2,7 @@
 id: ISSUE-151
 title: DB least-privilegeとRLSのtracer bulletを実装する
 priority: P1
-status: review
+status: blocked
 size: M
 created_at: 2026-08-03
 github_issue: 321
@@ -47,3 +47,9 @@ owner-scoped resourceでrequest-scoped DB roleとRLSを証明し、Phase 2の採
 
 - GitHub Issue #321
 - ADR-0007
+
+## 後継
+
+PR #341は第5巡の専門レビューでTerminal HOLDとなり、mergeせず終了する。
+残存findingと実装はISSUE-180 / GitHub #365 / PR #366へ引き継ぐ。
+GitHub Issue #321は後継PRから自動closeせず、ISSUE-180 merge後にsupersededとして状態を同期する。

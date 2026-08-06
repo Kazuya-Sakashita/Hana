@@ -270,6 +270,46 @@ describe('PUT /v1/children/{childId}', () => {
     expect(mocks.childUpdate).not.toHaveBeenCalled()
   })
 
+  it('buffers a slow update body before opening the database transaction', async () => {
+    authed()
+    mocks.childFindFirst.mockResolvedValue(childRow)
+    mocks.childUpdate.mockResolvedValue(childRow)
+    let releaseBody: ((value: string) => void) | undefined
+    const request = new Request('http://localhost/', { method: 'PUT', body: '{}' })
+    vi.spyOn(request, 'text').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseBody = resolve
+        }),
+    )
+
+    const responsePromise = PUT(request, ctx(CHILD_ID))
+    await vi.waitFor(() => expect(releaseBody).toBeTypeOf('function'))
+    expect(mocks.withChildPersistence).not.toHaveBeenCalled()
+
+    releaseBody?.('{"name":"changed"}')
+    const response = await responsePromise
+    expect(response.status).toBe(200)
+  })
+
+  it('returns 403 before parsing malformed JSON for a foreign child', async () => {
+    authed()
+    mocks.childFindFirst.mockResolvedValue(null)
+    mocks.accessStatus.mockResolvedValue('foreign')
+
+    const res = await PUT(
+      new Request('http://localhost/', {
+        method: 'PUT',
+        body: '{',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      ctx(CHILD_ID),
+    )
+
+    expect(res.status).toBe(403)
+    expect(mocks.childUpdate).not.toHaveBeenCalled()
+  })
+
   it.each([
     [{ name: '   ' }, 'body.name'],
     [{ birthdate: '2026-02-31' }, 'body.birthdate'],
