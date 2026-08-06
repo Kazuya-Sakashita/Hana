@@ -9,7 +9,7 @@
 
 - **認証**: Supabase Auth (Apple + Google、SNS-only)
 - **セッション**: Supabase の cookie (`@supabase/ssr`)
-- **認可**: Route Handler 層に集約 (RLS は Phase 2)
+- **認可**: Route Handler 層が既定。`children` CRUDだけPhase 2 RLS tracerを併用 (ADR-0016)
 - **profile**: `auth.users` と 1:1 の `public.profiles` テーブル (lazy 作成)
 
 ---
@@ -67,6 +67,8 @@ export async function POST(req: Request) {
 
 他人のリソースを扱う場合は `requireOwnership(currentUserId, resourceUserId)`。
 不一致なら 403 `forbidden` を throw する。
+
+`/v1/children`の通常CRUDは`withChildPersistence()`へ集約し、RouteからDB clientを直接importしない。`CHILD_OWNER_SCOPE_MODE`の未設定または`route`では、従来のRoute所有権条件を維持する。人間承認済みのcutoverで`rls`を設定した場合だけ、`CHILD_DATABASE_URL`の非特権接続と`withChildOwnerScope()`を二次防御に使う。`rls`の設定不備やruntime検証失敗時は特権接続へfallbackしない。tracer外のresourceは従来どおりRoute Handlerの所有権条件を正とする。
 
 ### 403 vs 404 の使い分け
 
@@ -151,6 +153,8 @@ Cookie、Bearer、OAuth codeの値はログやテスト失敗メッセージへ�
 - [ ] `service_role` key を `NEXT_PUBLIC_*` に置いていない
 - [ ] OAuth callback の `code` / `state` をログに出していない
 - [ ] 404 vs 403 ポリシーを守っている (存在の有無を漏らさない)
+- [ ] `children` CRUDは`withChildPersistence()`内で所有権条件を維持し、RouteからDB clientを直接使っていない
+- [ ] `CHILD_OWNER_SCOPE_MODE=rls`は承認済みcutoverだけで使い、失敗時に`route`へ自動fallbackしていない
 
 ---
 
@@ -159,6 +163,7 @@ Cookie、Bearer、OAuth codeの値はログやテスト失敗メッセージへ�
 - ADR-0004 (Supabase 採用)
 - ADR-0006 (Supabase Auth + SNS-only)
 - ADR-0007 (RLS Phase 2)
+- ADR-0016 (`children` request-scoped DB role / RLS tracer)
 - `docs/api-driven-development/error-format.md` (`reason` の付け方、403 vs 404)
 - `docs/api-driven-development/api-client.md` (API クライアント設計)
 - `CLAUDE.md` §7 (PII / ログ)

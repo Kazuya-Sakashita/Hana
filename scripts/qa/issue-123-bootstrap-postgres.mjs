@@ -1,21 +1,14 @@
 import pg from 'pg'
+import { checkedSyntheticPostgresConfig } from './synthetic-postgres-target.mjs'
 
 const { Client } = pg
 const REQUIRED_ROLES = ['anon', 'authenticated']
 
-function assertSafeTarget(connectionString) {
-  const url = new URL(connectionString)
-  if (!['localhost', '127.0.0.1'].includes(url.hostname)) {
-    throw new Error('local_database_required')
-  }
-}
-
 async function run() {
   const connectionString = process.env.DIRECT_URL
-  if (!connectionString) throw new Error('direct_url_required')
-  assertSafeTarget(connectionString)
+  const connectionConfig = checkedSyntheticPostgresConfig(connectionString, 'DIRECT_URL')
 
-  const client = new Client({ connectionString })
+  const client = new Client(connectionConfig)
   try {
     await client.connect()
     for (const role of REQUIRED_ROLES) {

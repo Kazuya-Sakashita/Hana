@@ -19,6 +19,8 @@ const KNOWN_OWNERSHIP_STRATEGIES = new Set([
   'session_user_filter',
   'session_user_assignment',
   'explicit_owner_check',
+  'database_owner_scope',
+  'staged_owner_scope',
   'user_scoped_storage_key',
   'reservation_and_image_owner_check',
   'explicit_image_owner_check',
@@ -58,9 +60,25 @@ function normalizeEvidenceText(value) {
 
 export function collectMethodEvidence(source, method, fileName = 'route.ts') {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true)
+  const localFunctions = new Map()
   let handler
 
   for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
+      localFunctions.set(statement.name.text, statement.body)
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer &&
+          (ts.isArrowFunction(declaration.initializer) ||
+            ts.isFunctionExpression(declaration.initializer))
+        ) {
+          localFunctions.set(declaration.name.text, declaration.initializer.body)
+        }
+      }
+    }
     if (
       ts.isFunctionDeclaration(statement) &&
       statement.name?.text === method &&
@@ -81,11 +99,19 @@ export function collectMethodEvidence(source, method, fileName = 'route.ts') {
   }
 
   const evidence = new Set()
+  const visitedHelpers = new Set()
   if (!handler) return evidence
 
   function visit(node) {
     if (ts.isCallExpression(node)) {
       evidence.add(`call:${normalizeEvidenceText(node.expression.getText(sourceFile))}`)
+      if (ts.isIdentifier(node.expression)) {
+        const helper = localFunctions.get(node.expression.text)
+        if (helper && !visitedHelpers.has(node.expression.text)) {
+          visitedHelpers.add(node.expression.text)
+          visit(helper)
+        }
+      }
     }
     if (ts.isPropertyAccessExpression(node)) {
       evidence.add(`member:${normalizeEvidenceText(node.getText(sourceFile))}`)

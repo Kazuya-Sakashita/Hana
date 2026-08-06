@@ -27,8 +27,22 @@ export interface ChildUpdateInput {
 }
 
 export async function readJsonBody(request: Request): Promise<unknown> {
+  return parseJsonBodyText(await readJsonBodyText(request))
+}
+
+export async function readJsonBodyText(request: Request): Promise<string> {
   try {
-    return await request.json()
+    return await request.text()
+  } catch {
+    throw problems.validation([
+      { path: 'body', reason: 'invalid_json', message: 'JSON が不正です' },
+    ])
+  }
+}
+
+export function parseJsonBodyText(body: string): unknown {
+  try {
+    return JSON.parse(body) as unknown
   } catch {
     throw problems.validation([
       { path: 'body', reason: 'invalid_json', message: 'JSON が不正です' },

@@ -67,6 +67,22 @@ describe('route authentication contract', () => {
     expect(result.operationCount).toBe(24)
   })
 
+  it('accepts the staged children ownership strategy', () => {
+    const { openapi, contract } = fixture()
+    const staged = {
+      ...contract,
+      operations: {
+        ...contract.operations,
+        'GET /private': {
+          ...contract.operations['GET /private'],
+          ownership_strategy: 'staged_owner_scope',
+        },
+      },
+    }
+
+    expect(validateAuthContract(openapi, staged).errors).toEqual([])
+  })
+
   it('detects an operation missing from the matrix', () => {
     const { openapi, contract } = fixture()
     const contractWithMissingOperation = {
@@ -136,6 +152,21 @@ describe('route authentication contract', () => {
 
     expect(collectMethodEvidence(source, 'GET').has('call:requireUser')).toBe(false)
     expect(collectMethodEvidence(source, 'POST').has('call:requireUser')).toBe(true)
+  })
+
+  it('collects ownership evidence only from helpers reachable by the method', () => {
+    const source = `
+      async function loadOwned() { await childAccessStatus(); throw problems.forbidden() }
+      async function unrelated() { await privilegedBypass() }
+      export async function GET() { await loadOwned(); return new Response(null) }
+      export async function POST() { await requireUser(); return new Response(null) }
+    `
+
+    const getEvidence = collectMethodEvidence(source, 'GET')
+    expect(getEvidence.has('call:childAccessStatus')).toBe(true)
+    expect(getEvidence.has('call:problems.forbidden')).toBe(true)
+    expect(getEvidence.has('call:privilegedBypass')).toBe(false)
+    expect(collectMethodEvidence(source, 'POST').has('call:childAccessStatus')).toBe(false)
   })
 
   it('accepts a documented 422 ownership denial only when it has evidence', () => {

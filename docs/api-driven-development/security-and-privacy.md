@@ -54,7 +54,7 @@ Known superseded / clarified items:
 - Route Handler は最初に `requireUser()` を呼ぶ。公開・匿名許容 endpoint は OpenAPI に明示する。
 - 非公開の`/internal/*`定期運用endpointはADR-0007のmachine認証例外とし、`CRON_SECRET`をconstant-timeで照合する。未設定・欠落・不一致は404でfail closedにし、OpenAPIへ公開しない。
 - private resource access は `requireOwnership(currentUserId, resourceUserId)` 相当の所有権確認を通す。
-- RLS は Phase 2。MVP は Route Handler 層の認可とテストで担保する。
+- RLS はPhase 2。ADR-0016の`children` CRUD tracerはdefault-offで、`CHILD_OWNER_SCOPE_MODE=rls`の人間承認済みcutoverだけ非特権専用接続とrequest-scoped roleを併用する。未設定または`route`と他resourceはRoute Handler層の認可とテストで担保する。
 - 403 / 404 の扱いは `docs/api-driven-development/error-format.md` §7 に従う。
 
 Current public / anonymous exceptions:
@@ -151,7 +151,7 @@ ProblemDetails may expose `detail` to users, but server logs should branch on st
 
 | risk                                           | why accepted for MVP                                        | mitigation                                                                            |
 | ---------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| RLS not enabled                                | keeps Prisma / Route Handler implementation simple          | ownership tests, code review, future RLS ADR                                          |
+| RLS is only a `children` CRUD tracer           | multi-resource transactions need a broader role design      | dedicated runtime role, ADR-0016 NO-GO gate, ownership tests, staged follow-up        |
 | EXIF removal depends on client path            | server hook adds storage download / transform / upload cost | Canvas re-encode, AI/image human review                                               |
 | upload signed URL TTL is Supabase default      | SDK does not expose TTL control                             | private bucket, storage_key validation, confirm ownership                             |
 | orphan uploaded files                          | upload and confirm are intentionally separate               | future cleanup job, no public URL                                                     |

@@ -47,7 +47,7 @@ describe('ISSUE-105 staging preflight hold state', () => {
   })
 
   it('syncs the blocked state into the issue index', () => {
-    expect(issueIndexSource).toContain('| `blocked` | 6 |')
+    expect(issueIndexSource).toContain('| `blocked` | 10 |')
     expect(issueIndexSource).toContain('| `ISSUE-105` | `#234` | `blocked` |')
     expect(issueIndexSource).toContain(
       'staging preflight を実行し公開前 traffic の Go/Hold を判定する',

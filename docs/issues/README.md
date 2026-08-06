@@ -11,17 +11,16 @@
 
 | status | count |
 | --- | ---: |
-| `todo` | 7 |
+| `todo` | 6 |
 | `in_progress` | 1 |
-| `review` | 7 |
+| `review` | 8 |
 | `done` | 150 |
-| `blocked` | 6 |
+| `blocked` | 10 |
 
 ## Codex Ready Queue
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
-| `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
 | `ISSUE-155` | `#323` | `todo` | P0 | M | confirmed cleanupへlease・backoff・dead-letterを追加する | - |
 | `ISSUE-156` | `#324` | `todo` | P1 | M | Critical pathのcoverage・mutation gateを導入する | - |
@@ -48,17 +47,22 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
+| `ISSUE-183` | `#371` | `review` | P0 | S | children access statusの実DB証跡をexact-SHA境界へ同期する | - |
 
 ## Blocked Or Needs Human Decision
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
 | `ISSUE-105` | `#234` | `blocked` | P0 | S | staging preflight を実行し公開前 traffic の Go/Hold を判定する | - |
+| `ISSUE-151` | `#321` | `blocked` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |
 | `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-152, ISSUE-159, ISSUE-161 |
 | `ISSUE-161` | `#328` | `blocked` | P0 | S | AI vendorのdata-handling attestationを確定する | - |
 | `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-152, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161 |
+| `ISSUE-180` | `#365` | `blocked` | P0 | M+ | children RLS rollout境界とmigration復旧をhardeningする | - |
+| `ISSUE-181` | `#367` | `blocked` | P0 | S | children RLSのtarget guardとparameter ACLをfail closedにする | - |
+| `ISSUE-182` | `#369` | `blocked` | P0 | S | children RLS role作成membershipを決定論化する | - |
 
 ## All Issues
 
@@ -215,7 +219,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-148` | `#318` | `done` | P0 | S | 未構成環境のmaintenance scheduleを明示的にHOLDする | - |
 | `ISSUE-149` | `#319` | `done` | P1 | M | Issue台帳とGitHub状態のdriftをCIで防ぐ | - |
 | `ISSUE-150` | `#320` | `done` | P1 | M | 認証方式と全Route応答契約をOpenAPIへ一致させる | - |
-| `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
+| `ISSUE-151` | `#321` | `blocked` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
 | `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |
@@ -235,6 +239,10 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
+| `ISSUE-180` | `#365` | `blocked` | P0 | M+ | children RLS rollout境界とmigration復旧をhardeningする | - |
+| `ISSUE-181` | `#367` | `blocked` | P0 | S | children RLSのtarget guardとparameter ACLをfail closedにする | - |
+| `ISSUE-182` | `#369` | `blocked` | P0 | S | children RLS role作成membershipを決定論化する | - |
+| `ISSUE-183` | `#371` | `review` | P0 | S | children access statusの実DB証跡をexact-SHA境界へ同期する | - |
 
 ## Status Rules
 

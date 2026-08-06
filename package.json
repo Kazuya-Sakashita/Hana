@@ -58,6 +58,8 @@
     "qa:issue147:compat-trigger-removal-db": "ISSUE_147_DATABASE_QA=1 vitest run tests/integration/db/issue-139-ai-generation-lifecycle-db.test.ts",
     "qa:issue143:image-races": "node scripts/qa/issue-143-image-races.mjs",
     "qa:issue148:maintenance-workflows": "vitest run tests/unit/workflows/maintenance-schedule-workflows.test.ts",
+    "qa:issue151:db-bootstrap": "ISSUE_151_DATABASE_QA=1 node scripts/qa/issue-151-bootstrap-postgres.mjs",
+    "qa:issue151:child-rls-db": "ISSUE_151_DATABASE_QA=1 vitest run tests/integration/db/issue-151-child-rls.test.ts",
     "backfill:issue137:images": "tsx scripts/maintenance/issue-137-sanitize-existing-images.ts",
     "qa:issue082:lp-app-visual-parity": "node scripts/qa/issue-082-lp-app-visual-parity-contract.cjs",
     "openapi:lint": "redocly lint docs/openapi/openapi.yaml && spectral lint --ruleset .spectral.yaml docs/openapi/openapi.yaml",

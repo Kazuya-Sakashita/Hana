@@ -35,6 +35,8 @@ Supabase のダッシュボードで以下の値を取得します。
 | ------------------------------- | --------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                  | Settings → Database → Connection string → **URI (pgbouncer/pooler)** モード (port 6543) |
 | `DIRECT_URL`                    | Settings → Database → Connection string → **Direct connection** モード (port 5432)      |
+| `CHILD_DATABASE_URL`            | ISSUE-151 rollout承認後の`hana_child_runtime`専用接続。承認前は設定しない               |
+| `CHILD_OWNER_SCOPE_MODE`        | `route`（既定）または承認済みcutover時だけ`rls`。URLの有無だけでは切り替わらない        |
 | `NEXT_PUBLIC_SUPABASE_URL`      | プロジェクト top → **Connect** ボタン または Settings → API → Project URL               |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Settings → API → **anon (public)** key                                                  |
 | `SUPABASE_SERVICE_ROLE_KEY`     | Settings → API → **service_role** key (サーバ専用)                                      |
@@ -55,6 +57,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NODE_ENV=development
+CHILD_OWNER_SCOPE_MODE=route
 ```
 
 > ✅ `.env.local` は `.gitignore` 対象です (`.gitignore` で `.env*` が除外されています)。コミットされません。
@@ -82,6 +85,15 @@ Already in sync, no schema change or pending migration was found.
 ---
 
 ## よくあるエラー
+
+### `invalid_child_owner_scope_mode`
+
+- `CHILD_OWNER_SCOPE_MODE`は未設定、`route`、`rls`だけを受け付ける。通常は`route`を使う。
+
+### `child_database_url_required_for_rls` / `invalid_child_runtime_session`
+
+- `rls`を指定したが専用URLがない、または実際の接続role・runtime/owner属性・双方向membership topology・role/database設定・membership経由を含む実効parameter権限・初期`session_replication_role`がADR-0016と一致しない。
+- 特権接続へのfallbackは行わない。`docs/runbooks/child-rls-cutover.md`に従ってcutoverを停止する。
 
 ### `PrismaConfigEnvError: Cannot resolve environment variable: DIRECT_URL`
 
