@@ -16,7 +16,7 @@ ISSUE-180はcutover機構と合成検証だけを提供する。ADR-0016の実�
 1. dual-path appを`route`でdeployし、children CRUD smokeを行う。
 2. 専用secretを配置する。URLやpasswordをlog、Issue、PRへ貼らない。
 3. 非superuser schema ownerとcleanな`hana_child_runtime`をredacted read-only preflightで確認する。runtimeの双方向membership、role/database設定、runtime・PUBLIC・request ownerへmembership経由を含む実効parameter権限、全databaseの直接ACLを列挙し、対象DBへのgrant不可`CONNECT`以外が0件であることを含む。`hana_child_owner`は安全なrole属性と親roleなしを保ち、memberが明示option付きのruntimeとPostgreSQL 16が自動付与するschema ownerの管理用membershipだけであることも確認する。
-4. 書込みを停止し、承認された1 migrationを適用する。
+4. 書込みを停止し、`createrole_self_grant`をtransaction-localで空へ固定する承認済みmigrationを適用する。接続sessionの既定値を証跡として信頼しない。
 5. fresh connectionでruntime attestation、owner CRUD、foreign拒否、commit/rollback後のrole/GUCを確認する。
 6. appは`route`のままrollback rehearsalを行い、Prisma履歴がcleanであることを確認する。
 7. stagingだけ`rls`へ変更し、smokeとpool concurrencyを行う。

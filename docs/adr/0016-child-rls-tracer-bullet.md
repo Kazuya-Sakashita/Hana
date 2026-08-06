@@ -28,7 +28,7 @@ ADR-0007はMVPの認可をRoute Handlerへ集約し、RLSをPhase 2へ延期し�
 1. `withChildPersistence()`が全children CRUDを受け、RouteはDB clientを直接importしない
 2. `CHILD_OWNER_SCOPE_MODE`の未設定または`route`は、既存の`DATABASE_URL`と明示的`userId`条件を使う
 3. `rls`だけが専用`CHILD_DATABASE_URL`と`withChildOwnerScope()`を使い、設定やattestation失敗時に`route`へfallbackしない
-4. migrationで`hana_child_owner`を`NOLOGIN`、`NOINHERIT`、`NOBYPASSRLS`として作る
+4. migrationでtransaction-localの`createrole_self_grant`を空へ固定してから、`hana_child_owner`を`NOLOGIN`、`NOINHERIT`、`NOBYPASSRLS`として作る
 5. 非superuserの`hana_child_runtime`には`SET ROLE`のためのmembershipだけを明示option付きで与え、`hana_child_owner`は親roleを持たずruntimeと自動付与されるschema owner以外のmemberを持たない
 6. 既存table ownerがmigrationと限定`SECURITY DEFINER`関数を所有し、通常runtimeの資格情報から分離する
 7. `withChildOwnerScope(userId, operation)`はtransaction内で実際の`session_user`、runtime/owner role属性、双方向membership、初期GUCを検証してから`SET LOCAL ROLE`とtransaction-local GUCを設定する
@@ -61,7 +61,7 @@ migrationは変更前に次をfail closedで検査する。
 - `children`へRLSや既存policyが先行導入されていない
 - 同名roleまたは関数が存在しない（未知のgrantやmembershipを再利用しない）
 
-forward migration全体をtransactionで囲み、lock/statement timeoutと対象tableの書込みlockを設定する。途中の失敗時はrole、policy、関数、grantをまとめてrollbackする。既存の`PUBLIC` grantは変更せず、tracer用roleへ必要な権限だけを追加する。
+forward migration全体をtransactionで囲み、lock/statement timeout、`createrole_self_grant=''`、対象tableの書込みlockをtransaction-localで設定する。role作成者のsession既定値にかかわらずschema ownerの自動membershipを`ADMIN TRUE / INHERIT FALSE / SET FALSE`へ決定論化し、途中の失敗時はrole、policy、関数、grantをまとめてrollbackする。既存の`PUBLIC` grantは変更せず、tracer用roleへ必要な権限だけを追加する。
 
 既存DBでは、`children`と`profiles`を所有する既存の`postgres`接続で同じmigrationを実行する。hosted Supabaseの`postgres`はsuperuserではないため、合成DBもcluster adminとは別の非superuser `postgres`をschema ownerとして作る。owner移管や一時grantは行わない。orphan検査を含む全preflightを最初の変更より前に実行し、合成upgrade testは失敗時にowner、ACL、RLS、role、関数がすべて不変であることを比較する。
 

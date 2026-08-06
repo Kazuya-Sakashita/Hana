@@ -144,6 +144,7 @@ describe('child owner DB scope', () => {
     const workflow = readFileSync('.github/workflows/typecheck.yml', 'utf8')
 
     expect(migration.trimStart()).toContain('BEGIN;')
+    expect(migration).toContain("SET LOCAL createrole_self_grant = ''")
     expect(migration).toContain('child_rls_preflight_schema_owner_role_required')
     expect(migration).toContain('child_rls_preflight_schema_owner_required')
     expect(migration).toContain('child_rls_preflight_runtime_role_required')

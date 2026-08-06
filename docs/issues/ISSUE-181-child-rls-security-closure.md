@@ -2,7 +2,7 @@
 id: ISSUE-181
 title: children RLSのtarget guardとparameter ACLをfail closedにする
 priority: P0
-status: review
+status: blocked
 size: S
 created_at: 2026-08-06
 github_issue: 367
@@ -60,6 +60,7 @@ guardは接続URLの値を出力せず固定reasonだけで停止する。検証
 ## 参考
 
 - GitHub Issue #367
+- PR #368は第3巡implementation-correctnessで`createrole_self_grant`依存が見つかりTerminal HOLD。ISSUE-182 / GitHub Issue #369へ引き継ぐ
 - PR #366 / GitHub Issue #365
 - ADR-0016
 - ADR-0017

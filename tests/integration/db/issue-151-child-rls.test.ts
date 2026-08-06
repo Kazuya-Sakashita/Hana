@@ -649,6 +649,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     await admin.connect()
     await schemaOwner.connect()
     try {
+      await schemaOwner.query("SET createrole_self_grant = 'set, inherit'")
       const appliedHistory = await readMigrationHistory(schemaOwner)
       expect(appliedHistory).toHaveLength(1)
       expect(appliedHistory[0]).toMatchObject({
@@ -833,6 +834,34 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
         currentUserFunction: 'hana_current_user_id()',
         accessStatusFunction: 'hana_child_access_status(uuid)',
         accessStatusFunctionOwner: 'postgres',
+      })
+      await expect(
+        schemaOwner.query<{
+          member: string
+          adminOption: boolean
+          inheritOption: boolean
+          setOption: boolean
+        }>(`
+          SELECT
+            member_role.rolname AS member,
+            membership.admin_option AS "adminOption",
+            membership.inherit_option AS "inheritOption",
+            membership.set_option AS "setOption"
+          FROM pg_catalog.pg_auth_members AS membership
+          JOIN pg_catalog.pg_roles AS granted_role ON granted_role.oid = membership.roleid
+          JOIN pg_catalog.pg_roles AS member_role ON member_role.oid = membership.member
+          WHERE granted_role.rolname = 'hana_child_owner'
+            AND member_role.rolname = 'postgres'
+        `),
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            member: 'postgres',
+            adminOption: true,
+            inheritOption: false,
+            setOption: false,
+          },
+        ],
       })
 
       childPrisma = getChildOwnerPrisma()
