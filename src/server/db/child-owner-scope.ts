@@ -50,7 +50,7 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
         SELECT 1
         FROM pg_catalog.pg_parameter_acl AS parameter
         CROSS JOIN LATERAL aclexplode(parameter.paracl) AS acl
-        WHERE acl.grantee = runtime.oid
+        WHERE acl.grantee IN (0, runtime.oid, owner.oid)
       ) AS "parameterAclClean",
       current_setting('session_replication_role') = 'origin'
         AS "sessionReplicationOrigin",
@@ -74,7 +74,9 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
           AND membership.set_option
       ) AS "validOwnerMembership"
     FROM pg_catalog.pg_roles AS runtime
+    CROSS JOIN pg_catalog.pg_roles AS owner
     WHERE runtime.rolname = session_user
+      AND owner.rolname = 'hana_child_owner'
   `
   const session = rows[0]
   if (

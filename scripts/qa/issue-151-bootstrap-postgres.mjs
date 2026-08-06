@@ -1,24 +1,17 @@
 import pg from 'pg'
+import { checkedSyntheticPostgresConfig } from './synthetic-postgres-target.mjs'
 
 const { Client } = pg
 const ROLE_NAMES = ['postgres', 'hana_child_runtime']
 
-function assertSafeTarget(connectionString) {
+async function run() {
+  const connectionString = process.env.DIRECT_URL
   if (process.env.ISSUE_151_DATABASE_QA !== '1') {
     throw new Error('issue_151_database_qa_opt_in_required')
   }
-  const url = new URL(connectionString)
-  if (!['localhost', '127.0.0.1'].includes(url.hostname) || url.pathname !== '/hana_ci') {
-    throw new Error('local_hana_ci_database_required')
-  }
-}
+  const connectionConfig = checkedSyntheticPostgresConfig(connectionString, 'DIRECT_URL')
 
-async function run() {
-  const connectionString = process.env.DIRECT_URL
-  if (!connectionString) throw new Error('direct_url_required')
-  assertSafeTarget(connectionString)
-
-  const client = new Client({ connectionString })
+  const client = new Client(connectionConfig)
   try {
     await client.connect()
     const existing = await client.query(

@@ -2,7 +2,7 @@
 id: ISSUE-180
 title: children RLS rollout境界とmigration復旧をhardeningする
 priority: P0
-status: review
+status: blocked
 size: M+
 created_at: 2026-08-06
 github_issue: 365
@@ -68,3 +68,8 @@ runtime検証とmigration検証は固定reason IDでfail closedにし、mutation
 - PR #341 / GitHub Issue #321
 - ADR-0016
 - ADR-0017
+
+## 後継
+
+PR #366は第3巡security reviewで追加findingが発生したため、mergeせず終了する。
+target guardと実効parameter ACLのclosureはISSUE-181 / GitHub #367へ引き継ぐ。

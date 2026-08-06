@@ -70,7 +70,7 @@ BEGIN
     SELECT 1
     FROM pg_catalog.pg_parameter_acl AS parameter
     CROSS JOIN LATERAL aclexplode(parameter.paracl) AS acl
-    WHERE acl.grantee = runtime_role_oid
+    WHERE acl.grantee IN (0, runtime_role_oid)
   ) THEN
     RAISE EXCEPTION 'child_rls_preflight_runtime_parameter_acl_present';
   END IF;

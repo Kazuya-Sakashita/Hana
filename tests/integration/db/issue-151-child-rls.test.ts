@@ -269,6 +269,37 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     }
   })
 
+  it('rejects parameter privileges inherited from PUBLIC or the request owner role', async () => {
+    const admin = new Client({ connectionString: process.env.DATABASE_URL })
+    await disconnectChildOwnerPrisma()
+    await admin.connect()
+    try {
+      for (const grantee of ['PUBLIC', 'hana_child_owner']) {
+        await admin.query(`GRANT SET ON PARAMETER session_replication_role TO ${grantee}`)
+        try {
+          await expect(
+            withChildOwnerScope(userAId, (transaction) =>
+              transaction.child.findUnique({ where: { id: childAId } }),
+            ),
+          ).rejects.toThrow('invalid_child_runtime_session')
+        } finally {
+          await disconnectChildOwnerPrisma()
+          await admin.query(`REVOKE SET ON PARAMETER session_replication_role FROM ${grantee}`)
+        }
+      }
+    } finally {
+      await disconnectChildOwnerPrisma()
+      await admin
+        .query('REVOKE SET ON PARAMETER session_replication_role FROM PUBLIC')
+        .catch(() => undefined)
+      await admin
+        .query('REVOKE SET ON PARAMETER session_replication_role FROM hana_child_owner')
+        .catch(() => undefined)
+      await admin.end()
+      childPrisma = getChildOwnerPrisma()
+    }
+  })
+
   it('resets the role and request user on the same connection after commit', async () => {
     const before = await readSessionState(childPrisma)
     const inside = await withChildOwnerScope(userAId, (transaction) =>
@@ -496,7 +527,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
             SELECT count(*)::integer
             FROM pg_catalog.pg_parameter_acl AS parameter
             CROSS JOIN LATERAL aclexplode(parameter.paracl) AS acl
-            WHERE acl.grantee = runtime.oid
+            WHERE acl.grantee IN (0, runtime.oid)
           ) AS "parameterAclCount",
           (
             SELECT count(*)::integer
@@ -592,6 +623,18 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
       await expect(readRuntimeRiskState(admin)).resolves.toEqual(parameterAclState)
       await admin.query('REVOKE SET ON PARAMETER session_replication_role FROM hana_child_runtime')
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(cleanRuntimeRiskState)
+
+      await admin.query('GRANT SET ON PARAMETER session_replication_role TO PUBLIC')
+      const publicParameterAclState = await readRuntimeRiskState(admin)
+      expect(publicParameterAclState.parameterAclCount).toBe(1)
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_runtime_parameter_acl_present/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(publicParameterAclState)
+      await admin.query('REVOKE SET ON PARAMETER session_replication_role FROM PUBLIC')
       await expect(readRuntimeRiskState(admin)).resolves.toEqual(cleanRuntimeRiskState)
 
       await admin.query('GRANT CONNECT ON DATABASE postgres TO hana_child_runtime')

@@ -44,6 +44,46 @@ describe('ISSUE-151 database QA environment', () => {
         DIRECT_URL: 'postgresql://hana_admin:hana-admin@127.0.0.1:55451/hana_ci',
       },
     ],
+    [
+      'DATABASE_URL host override',
+      {
+        ...safeEnvironment,
+        DATABASE_URL: `${safeEnvironment.DATABASE_URL}?host=db.example.com`,
+      },
+    ],
+    [
+      'DATABASE_URL port override',
+      { ...safeEnvironment, DATABASE_URL: `${safeEnvironment.DATABASE_URL}?port=6543` },
+    ],
+    [
+      'DIRECT_URL host override',
+      { ...safeEnvironment, DIRECT_URL: `${safeEnvironment.DIRECT_URL}?host=db.example.com` },
+    ],
+    [
+      'DIRECT_URL port override',
+      { ...safeEnvironment, DIRECT_URL: `${safeEnvironment.DIRECT_URL}?port=6543` },
+    ],
+    [
+      'CHILD_DATABASE_URL host override',
+      {
+        ...safeEnvironment,
+        CHILD_DATABASE_URL: `${safeEnvironment.CHILD_DATABASE_URL}?host=db.example.com`,
+      },
+    ],
+    [
+      'CHILD_DATABASE_URL port override',
+      {
+        ...safeEnvironment,
+        CHILD_DATABASE_URL: `${safeEnvironment.CHILD_DATABASE_URL}?port=6543`,
+      },
+    ],
+    [
+      'socket target override',
+      {
+        ...safeEnvironment,
+        DIRECT_URL: `${safeEnvironment.DIRECT_URL}?host=%2Fvar%2Frun%2Fpostgresql`,
+      },
+    ],
   ])('rejects %s', (_label, environment) => {
     expect(() => assertIssue151DatabaseQaEnvironment(environment)).toThrow()
   })
