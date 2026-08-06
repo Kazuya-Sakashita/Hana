@@ -22,11 +22,20 @@ export function checkedSyntheticPostgresConfig(value, name) {
   }
   if (url.pathname !== '/hana_ci') throw new Error(`${reasonPrefix}_hana_ci_required`)
 
+  const port = Number(url.port || '5432')
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${reasonPrefix}_port_required`)
+  }
+  const user = decodeURIComponent(url.username)
+  const password = decodeURIComponent(url.password)
+  if (!user) throw new Error(`${reasonPrefix}_user_required`)
+  if (!password) throw new Error(`${reasonPrefix}_password_required`)
+
   return {
     host: url.hostname,
-    port: Number(url.port || '5432'),
+    port,
     database: 'hana_ci',
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
+    user,
+    password,
   }
 }

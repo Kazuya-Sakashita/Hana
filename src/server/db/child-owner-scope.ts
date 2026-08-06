@@ -25,11 +25,21 @@ type ChildRuntimeSession = {
   rowSecurityOn: boolean
   requestScopeClean: boolean
   membershipCount: number
+  ownerParentMembershipCount: number
+  ownerMemberCount: number
   validOwnerMembership: boolean
+  validOwnerSchemaOwnerMembership: boolean
 }
 
 async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Promise<void> {
   const rows = await transaction.$queryRaw<ChildRuntimeSession[]>`
+    WITH schema_owner AS (
+      SELECT relation.relowner AS oid
+      FROM pg_catalog.pg_class AS relation
+      JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+      WHERE namespace.nspname = 'public'
+        AND relation.relname = 'children'
+    )
     SELECT
       session_user::text AS "sessionUser",
       current_user::text AS "currentUser",
@@ -49,8 +59,10 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
       NOT EXISTS (
         SELECT 1
         FROM pg_catalog.pg_parameter_acl AS parameter
-        CROSS JOIN LATERAL aclexplode(parameter.paracl) AS acl
-        WHERE acl.grantee IN (0, runtime.oid, owner.oid)
+        WHERE has_parameter_privilege(runtime.oid, parameter.parname, 'SET')
+          OR has_parameter_privilege(runtime.oid, parameter.parname, 'ALTER SYSTEM')
+          OR has_parameter_privilege(owner.oid, parameter.parname, 'SET')
+          OR has_parameter_privilege(owner.oid, parameter.parname, 'ALTER SYSTEM')
       ) AS "parameterAclClean",
       current_setting('session_replication_role') = 'origin'
         AS "sessionReplicationOrigin",
@@ -62,6 +74,16 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
         FROM pg_catalog.pg_auth_members AS membership
         WHERE membership.member = runtime.oid
       ) AS "membershipCount",
+      (
+        SELECT count(*)::integer
+        FROM pg_catalog.pg_auth_members AS membership
+        WHERE membership.member = owner.oid
+      ) AS "ownerParentMembershipCount",
+      (
+        SELECT count(*)::integer
+        FROM pg_catalog.pg_auth_members AS membership
+        WHERE membership.roleid = owner.oid
+      ) AS "ownerMemberCount",
       EXISTS (
         SELECT 1
         FROM pg_catalog.pg_auth_members AS membership
@@ -72,9 +94,19 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
           AND NOT membership.admin_option
           AND NOT membership.inherit_option
           AND membership.set_option
-      ) AS "validOwnerMembership"
+      ) AS "validOwnerMembership",
+      EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_auth_members AS membership
+        WHERE membership.member = schema_owner.oid
+          AND membership.roleid = owner.oid
+          AND membership.admin_option
+          AND NOT membership.inherit_option
+          AND NOT membership.set_option
+      ) AS "validOwnerSchemaOwnerMembership"
     FROM pg_catalog.pg_roles AS runtime
     CROSS JOIN pg_catalog.pg_roles AS owner
+    CROSS JOIN schema_owner
     WHERE runtime.rolname = session_user
       AND owner.rolname = 'hana_child_owner'
   `
@@ -97,7 +129,10 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
     !session.rowSecurityOn ||
     !session.requestScopeClean ||
     session.membershipCount !== 1 ||
-    !session.validOwnerMembership
+    session.ownerParentMembershipCount !== 0 ||
+    session.ownerMemberCount !== 2 ||
+    !session.validOwnerMembership ||
+    !session.validOwnerSchemaOwnerMembership
   ) {
     throw new Error('invalid_child_runtime_session')
   }

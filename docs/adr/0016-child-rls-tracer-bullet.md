@@ -29,7 +29,7 @@ ADR-0007はMVPの認可をRoute Handlerへ集約し、RLSをPhase 2へ延期し�
 2. `CHILD_OWNER_SCOPE_MODE`の未設定または`route`は、既存の`DATABASE_URL`と明示的`userId`条件を使う
 3. `rls`だけが専用`CHILD_DATABASE_URL`と`withChildOwnerScope()`を使い、設定やattestation失敗時に`route`へfallbackしない
 4. migrationで`hana_child_owner`を`NOLOGIN`、`NOINHERIT`、`NOBYPASSRLS`として作る
-5. 非superuserの`hana_child_runtime`には`SET ROLE`のためのmembershipだけを明示option付きで与える
+5. 非superuserの`hana_child_runtime`には`SET ROLE`のためのmembershipだけを明示option付きで与え、`hana_child_owner`は親roleを持たずruntimeと自動付与されるschema owner以外のmemberを持たない
 6. 既存table ownerがmigrationと限定`SECURITY DEFINER`関数を所有し、通常runtimeの資格情報から分離する
 7. `withChildOwnerScope(userId, operation)`はtransaction内で実際の`session_user`、role属性、membership、初期GUCを検証してから`SET LOCAL ROLE`とtransaction-local GUCを設定する
 8. `children_owner_scope` policyが`user_id = hana_current_user_id()`を`USING`と`WITH CHECK`の両方で要求する
@@ -55,7 +55,8 @@ migrationは変更前に次をfail closedで検査する。
 
 - 実行roleが非superuserで、`children`と`profiles`の既存ownerであり、`CREATEROLE`、`BYPASSRLS`、`public` schemaの`USAGE, CREATE`を持つ
 - `hana_child_runtime`が`NOINHERIT`、`NOBYPASSRLS`のlogin roleで、先行membershipを持たない
-- `hana_child_runtime`がrole-level / database固有設定、runtime・PUBLIC・request ownerへ有効なparameter ACL、application object ownership、許可外database ACL、`public`内の直接ACL、default ACL、policy targetを持たない。database直接ACLは対象DBへのgrant不可`CONNECT`だけを許可し、他DBへの直接ACLは拒否する
+- `hana_child_runtime`がrole-level / database固有設定、runtime・PUBLIC・request ownerへmembership経由を含む実効parameter権限、application object ownership、許可外database ACL、`public`内の直接ACL、default ACL、policy targetを持たない。database直接ACLは対象DBへのgrant不可`CONNECT`だけを許可し、他DBへの直接ACLは拒否する
+- `hana_child_owner`が親roleを持たず、memberは明示option付きの`hana_child_runtime`とPostgreSQL 16がrole作成者へ自動付与する管理用membershipだけである
 - owner profileが存在しない既存childがない
 - `children`へRLSや既存policyが先行導入されていない
 - 同名roleまたは関数が存在しない（未知のgrantやmembershipを再利用しない）

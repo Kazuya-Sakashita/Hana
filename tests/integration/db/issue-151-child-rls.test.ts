@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { Client } from 'pg'
 import { assertIssue151DatabaseQaEnvironment } from '../../support/issue-151-environment'
@@ -78,6 +78,8 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
         runtimeCanSetRole: boolean
         runtimeMembershipCount: number
         runtimeMembershipExact: boolean
+        ownerMemberCount: number
+        schemaOwnerMembershipExact: boolean
         childSelectGranted: boolean
         runtimeDirectChildSelectGranted: boolean
         profileSelectGranted: boolean
@@ -118,6 +120,20 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
             AND NOT membership.inherit_option
             AND membership.set_option
         ) AS "runtimeMembershipExact",
+        (
+          SELECT count(*)::integer
+          FROM pg_catalog.pg_auth_members AS membership
+          WHERE membership.roleid = owner.oid
+        ) AS "ownerMemberCount",
+        EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_auth_members AS membership
+          WHERE membership.member = schema_owner.oid
+            AND membership.roleid = owner.oid
+            AND membership.admin_option
+            AND NOT membership.inherit_option
+            AND NOT membership.set_option
+        ) AS "schemaOwnerMembershipExact",
         has_table_privilege('hana_child_owner', 'public.children', 'SELECT')
           AS "childSelectGranted",
         has_table_privilege('hana_child_runtime', 'public.children', 'SELECT')
@@ -164,6 +180,8 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       runtimeCanSetRole: true,
       runtimeMembershipCount: 1,
       runtimeMembershipExact: true,
+      ownerMemberCount: 2,
+      schemaOwnerMembershipExact: true,
       childSelectGranted: true,
       runtimeDirectChildSelectGranted: false,
       profileSelectGranted: false,
@@ -271,6 +289,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
 
   it('rejects parameter privileges inherited from PUBLIC or the request owner role', async () => {
     const admin = new Client({ connectionString: process.env.DATABASE_URL })
+    const inheritedRole = 'issue_181_parameter_group'
     await disconnectChildOwnerPrisma()
     await admin.connect()
     try {
@@ -287,8 +306,25 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
           await admin.query(`REVOKE SET ON PARAMETER session_replication_role FROM ${grantee}`)
         }
       }
+
+      await admin.query(`CREATE ROLE ${inheritedRole} NOLOGIN`)
+      await admin.query(`GRANT SET ON PARAMETER session_replication_role TO ${inheritedRole}`)
+      await admin.query(`
+        GRANT ${inheritedRole} TO hana_child_owner
+        WITH ADMIN FALSE, INHERIT TRUE, SET FALSE
+      `)
+      const operation = vi.fn()
+      await expect(withChildOwnerScope(userAId, operation)).rejects.toThrow(
+        'invalid_child_runtime_session',
+      )
+      expect(operation).not.toHaveBeenCalled()
     } finally {
       await disconnectChildOwnerPrisma()
+      await admin.query(`REVOKE ${inheritedRole} FROM hana_child_owner`).catch(() => undefined)
+      await admin
+        .query(`REVOKE SET ON PARAMETER session_replication_role FROM ${inheritedRole}`)
+        .catch(() => undefined)
+      await admin.query(`DROP ROLE IF EXISTS ${inheritedRole}`).catch(() => undefined)
       await admin
         .query('REVOKE SET ON PARAMETER session_replication_role FROM PUBLIC')
         .catch(() => undefined)
@@ -442,6 +478,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     const migrationSql = readFileSync(`${migrationDirectory}/migration.sql`, 'utf8')
     const orphanChildId = randomUUID()
     const orphanUserId = randomUUID()
+    const inheritedRuntimeRole = 'issue_181_runtime_parameter_group'
     const admin = new Client({ connectionString: process.env.DATABASE_URL })
     const schemaOwner = new Client({ connectionString: process.env.DIRECT_URL })
 
@@ -635,6 +672,44 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
       await expect(readRuntimeRiskState(admin)).resolves.toEqual(publicParameterAclState)
       await admin.query('REVOKE SET ON PARAMETER session_replication_role FROM PUBLIC')
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(cleanRuntimeRiskState)
+
+      await admin.query(`CREATE ROLE ${inheritedRuntimeRole} NOLOGIN`)
+      await admin.query(
+        `GRANT SET ON PARAMETER session_replication_role TO ${inheritedRuntimeRole}`,
+      )
+      await admin.query(`
+        GRANT ${inheritedRuntimeRole} TO hana_child_runtime
+        WITH ADMIN FALSE, INHERIT TRUE, SET FALSE
+      `)
+      await expect(
+        admin.query<{ effective: boolean }>(`
+          SELECT has_parameter_privilege(
+            'hana_child_runtime',
+            'session_replication_role',
+            'SET'
+          ) AS effective
+        `),
+      ).resolves.toMatchObject({ rows: [{ effective: true }] })
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_runtime_parameter_acl_present/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+      await expect(
+        admin.query<{ effective: boolean }>(`
+          SELECT has_parameter_privilege(
+            'hana_child_runtime',
+            'session_replication_role',
+            'SET'
+          ) AS effective
+        `),
+      ).resolves.toMatchObject({ rows: [{ effective: true }] })
+      await admin.query(`REVOKE ${inheritedRuntimeRole} FROM hana_child_runtime`)
+      await admin.query(
+        `REVOKE SET ON PARAMETER session_replication_role FROM ${inheritedRuntimeRole}`,
+      )
+      await admin.query(`DROP ROLE ${inheritedRuntimeRole}`)
       await expect(readRuntimeRiskState(admin)).resolves.toEqual(cleanRuntimeRiskState)
 
       await admin.query('GRANT CONNECT ON DATABASE postgres TO hana_child_runtime')

@@ -37,7 +37,10 @@ const validRuntimeSession = {
   rowSecurityOn: true,
   requestScopeClean: true,
   membershipCount: 1,
+  ownerParentMembershipCount: 0,
+  ownerMemberCount: 2,
   validOwnerMembership: true,
+  validOwnerSchemaOwnerMembership: true,
 }
 
 beforeEach(() => {
@@ -59,7 +62,8 @@ describe('child owner DB scope', () => {
 
     expect(mocks.executeRawUnsafe).toHaveBeenCalledWith('SET LOCAL ROLE hana_child_owner')
     const [attestationQuery] = mocks.queryRaw.mock.calls[0] as [TemplateStringsArray]
-    expect(attestationQuery.join(' ')).toContain('acl.grantee IN (0, runtime.oid, owner.oid)')
+    expect(attestationQuery.join(' ')).toContain('has_parameter_privilege(runtime.oid')
+    expect(attestationQuery.join(' ')).toContain('has_parameter_privilege(owner.oid')
     const [queryParts, parameter] = mocks.queryRaw.mock.calls[1] as [TemplateStringsArray, string]
     expect(queryParts.join('?')).toContain("set_config('hana.current_user_id', ?")
     expect(parameter).toBe(USER_ID)
@@ -82,6 +86,9 @@ describe('child owner DB scope', () => {
     ['databaseConfigClean', false],
     ['parameterAclClean', false],
     ['sessionReplicationOrigin', false],
+    ['ownerParentMembershipCount', 1],
+    ['ownerMemberCount', 3],
+    ['validOwnerSchemaOwnerMembership', false],
   ] as const)('fails closed before SET ROLE when %s is unsafe', async (field, value) => {
     const operation = vi.fn()
     mocks.queryRaw.mockResolvedValue([{ ...validRuntimeSession, [field]: value }])
@@ -138,7 +145,7 @@ describe('child owner DB scope', () => {
     expect(migration).toContain('child_rls_preflight_runtime_role_required')
     expect(migration).toContain('child_rls_preflight_runtime_database_setting_present')
     expect(migration).toContain('child_rls_preflight_runtime_parameter_acl_present')
-    expect(migration).toContain('acl.grantee IN (0, runtime_role_oid)')
+    expect(migration).toContain('has_parameter_privilege(runtime_role_oid')
     expect(migration).toContain('child_rls_preflight_runtime_object_owner_present')
     expect(migration).toContain('child_rls_preflight_runtime_direct_acl_present')
     expect(migration).toContain('child_rls_preflight_orphan_owner')
