@@ -538,6 +538,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     const migrationSql = readFileSync(`${migrationDirectory}/migration.sql`, 'utf8')
     const orphanChildId = randomUUID()
     const orphanUserId = randomUUID()
+    const ownerCrudChildId = randomUUID()
     const inheritedRuntimeRole = 'issue_181_runtime_parameter_group'
     const admin = new Client({ connectionString: process.env.DATABASE_URL })
     const schemaOwner = new Client({ connectionString: process.env.DIRECT_URL })
@@ -863,6 +864,38 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
           },
         ],
       })
+
+      const ownerCrud = await withChildOwnerScope(userCId, async (transaction) => {
+        const created = await transaction.child.create({
+          data: {
+            id: ownerCrudChildId,
+            userId: userCId,
+            name: 'synthetic-owner-created',
+            birthdate: new Date('2025-05-01T00:00:00Z'),
+          },
+        })
+        const read = await transaction.child.findUniqueOrThrow({
+          where: { id: ownerCrudChildId },
+        })
+        const updated = await transaction.child.update({
+          where: { id: ownerCrudChildId },
+          data: { name: 'synthetic-owner-updated' },
+        })
+        const deleted = await transaction.child.delete({ where: { id: ownerCrudChildId } })
+        return {
+          createdName: created.name,
+          readName: read.name,
+          updatedName: updated.name,
+          deletedName: deleted.name,
+        }
+      })
+      expect(ownerCrud).toEqual({
+        createdName: 'synthetic-owner-created',
+        readName: 'synthetic-owner-created',
+        updatedName: 'synthetic-owner-updated',
+        deletedName: 'synthetic-owner-updated',
+      })
+      await expect(prisma.child.findUnique({ where: { id: ownerCrudChildId } })).resolves.toBeNull()
 
       childPrisma = getChildOwnerPrisma()
       await expect(
