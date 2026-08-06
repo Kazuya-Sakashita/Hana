@@ -23,7 +23,7 @@ PR #366の第3巡security reviewで検出した合成DB target検証とparameter
 - PostgreSQL URLのquery parameterによるhost、port、socket overrideを合成DB guardで拒否する
 - role bootstrapは検証済みauthorityから作った明示Client configだけを使う
 - migration preflightでruntimeとPUBLICのparameter ACLをfail closedで拒否する
-- runtime attestationでruntime、PUBLIC、`hana_child_owner`の継承を含む実効parameter権限を拒否し、ownerのmembership topologyを固定する
+- runtime attestationでruntime、PUBLIC、`hana_child_owner`の継承を含む実効parameter権限を拒否し、runtime/ownerのrole属性と双方向membership topologyを固定する
 - PostgreSQL 16 synthetic test、unit test、ADR、runbook、rollback evidenceを同期する
 - PR #366の検証済み実装を引き継ぐ
 
@@ -49,7 +49,7 @@ OpenAPIの公開契約と生成API型は変更しない。
 - [x] `DATABASE_URL`、`DIRECT_URL`、`CHILD_DATABASE_URL`のquery parameter overrideをmutation前に拒否する
 - [x] bootstrapがURL文字列を再解釈せず、検証済み明示Client configへ接続する
 - [x] migration preflightがruntime/PUBLICの継承を含む実効parameter権限を変更前に拒否し、DB状態を不変に保つ
-- [x] runtime attestationがruntime/PUBLIC/owner roleの継承を含む実効parameter権限、不正なowner membership、`session_replication_role != origin`を処理前に拒否する
+- [x] runtime attestationがruntime/PUBLIC/owner roleの継承を含む実効parameter権限、不正なruntime/owner属性・双方向membership、`session_replication_role != origin`を処理前に拒否する
 - [x] 合成PostgreSQL 16、`pnpm openapi:lint`、`pnpm openapi:gen`、`pnpm pr:gate`が成功する
 - [ ] 最新head SHAで最大3巡以内の独立専門レビューがすべてGOとなる
 

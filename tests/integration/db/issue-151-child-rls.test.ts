@@ -191,6 +191,66 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     })
   })
 
+  it('rejects unsafe request owner role attributes before invoking the operation', async () => {
+    const admin = new Client({ connectionString: process.env.DATABASE_URL })
+    await disconnectChildOwnerPrisma()
+    await admin.connect()
+    try {
+      await admin.query('ALTER ROLE hana_child_owner BYPASSRLS')
+      const operation = vi.fn()
+      await expect(withChildOwnerScope(userAId, operation)).rejects.toThrow(
+        'invalid_child_runtime_session',
+      )
+      expect(operation).not.toHaveBeenCalled()
+    } finally {
+      await disconnectChildOwnerPrisma()
+      await admin.query('ALTER ROLE hana_child_owner NOBYPASSRLS').catch(() => undefined)
+      await admin.end().catch(() => undefined)
+    }
+
+    await expect(withChildOwnerScope(userAId, async () => 'restored')).resolves.toBe('restored')
+  })
+
+  it('rejects a runtime member that can transitively set the request owner role', async () => {
+    const admin = new Client({ connectionString: process.env.DATABASE_URL })
+    const memberRole = 'issue_181_runtime_member_probe'
+    await disconnectChildOwnerPrisma()
+    await admin.connect()
+    try {
+      await admin.query(`
+        CREATE ROLE ${memberRole}
+          LOGIN PASSWORD 'synthetic-runtime-member'
+          NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+      `)
+      await admin.query(`
+        GRANT hana_child_runtime TO ${memberRole}
+        WITH ADMIN FALSE, INHERIT FALSE, SET TRUE
+      `)
+      await expect(
+        admin.query<{ canSetOwner: boolean }>(`
+          SELECT pg_has_role(
+            '${memberRole}',
+            'hana_child_owner',
+            'SET'
+          ) AS "canSetOwner"
+        `),
+      ).resolves.toMatchObject({ rows: [{ canSetOwner: true }] })
+
+      const operation = vi.fn()
+      await expect(withChildOwnerScope(userAId, operation)).rejects.toThrow(
+        'invalid_child_runtime_session',
+      )
+      expect(operation).not.toHaveBeenCalled()
+    } finally {
+      await disconnectChildOwnerPrisma()
+      await admin.query(`REVOKE hana_child_runtime FROM ${memberRole}`).catch(() => undefined)
+      await admin.query(`DROP ROLE IF EXISTS ${memberRole}`).catch(() => undefined)
+      await admin.end().catch(() => undefined)
+    }
+
+    await expect(withChildOwnerScope(userAId, async () => 'restored')).resolves.toBe('restored')
+  })
+
   async function readSessionState(client: PrismaClient | Prisma.TransactionClient) {
     const [state] = await client.$queryRaw<
       Array<{

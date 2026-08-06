@@ -25,6 +25,8 @@ type ChildRuntimeSession = {
   rowSecurityOn: boolean
   requestScopeClean: boolean
   membershipCount: number
+  memberCount: number
+  ownerProfileValid: boolean
   ownerParentMembershipCount: number
   ownerMemberCount: number
   validOwnerMembership: boolean
@@ -74,6 +76,19 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
         FROM pg_catalog.pg_auth_members AS membership
         WHERE membership.member = runtime.oid
       ) AS "membershipCount",
+      (
+        SELECT count(*)::integer
+        FROM pg_catalog.pg_auth_members AS membership
+        WHERE membership.roleid = runtime.oid
+      ) AS "memberCount",
+      NOT owner.rolcanlogin
+        AND NOT owner.rolsuper
+        AND NOT owner.rolcreatedb
+        AND NOT owner.rolcreaterole
+        AND NOT owner.rolinherit
+        AND NOT owner.rolreplication
+        AND NOT owner.rolbypassrls
+        AS "ownerProfileValid",
       (
         SELECT count(*)::integer
         FROM pg_catalog.pg_auth_members AS membership
@@ -129,6 +144,8 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
     !session.rowSecurityOn ||
     !session.requestScopeClean ||
     session.membershipCount !== 1 ||
+    session.memberCount !== 0 ||
+    !session.ownerProfileValid ||
     session.ownerParentMembershipCount !== 0 ||
     session.ownerMemberCount !== 2 ||
     !session.validOwnerMembership ||
