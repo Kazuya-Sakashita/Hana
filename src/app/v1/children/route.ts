@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client'
 import { requireUser } from '@/server/auth/current-user'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
-import { withChildOwnerScope } from '@/server/db/child-owner-scope'
+import { withChildPersistence } from '@/server/db/child-persistence'
 import { toChildResponse } from '@/features/children/view-models/child'
 import { parseChildCreate, readJsonBody } from '@/features/children/server/parse'
 
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const user = await requireUser()
-    const children = await withChildOwnerScope(user.id, (transaction) =>
+    const children = await withChildPersistence(user.id, ({ transaction }) =>
       transaction.child.findMany({
         where: { userId: user.id, deletedAt: null },
         orderBy: { createdAt: 'asc' },
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const input = parseChildCreate(raw)
 
     try {
-      const child = await withChildOwnerScope(user.id, async (transaction) => {
+      const child = await withChildPersistence(user.id, async ({ transaction }) => {
         const existing = await transaction.child.findFirst({
           where: { userId: user.id, deletedAt: null },
           select: { id: true },

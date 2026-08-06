@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   childFindMany: vi.fn(),
   childCreate: vi.fn(),
   childUpdate: vi.fn(),
-  withChildOwnerScope: vi.fn(),
-  childAccessStatus: vi.fn(),
+  withChildPersistence: vi.fn(),
+  accessStatus: vi.fn(),
 }))
 
 const scopedTransaction = {
@@ -40,9 +40,8 @@ vi.mock('@/server/db/prisma', () => ({
   },
 }))
 
-vi.mock('@/server/db/child-owner-scope', () => ({
-  withChildOwnerScope: mocks.withChildOwnerScope,
-  childAccessStatus: mocks.childAccessStatus,
+vi.mock('@/server/db/child-persistence', () => ({
+  withChildPersistence: mocks.withChildPersistence,
 }))
 
 import { GET, POST } from '@/app/v1/children/route'
@@ -73,13 +72,16 @@ const childRow = {
 function authed() {
   mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
   mocks.profileFindUnique.mockResolvedValue(profileRow)
-  mocks.withChildOwnerScope.mockImplementation(
+  mocks.withChildPersistence.mockImplementation(
     async (
       _userId: string,
-      operation: (transaction: typeof scopedTransaction) => Promise<unknown>,
-    ) => operation(scopedTransaction),
+      operation: (scope: {
+        transaction: typeof scopedTransaction
+        accessStatus: typeof mocks.accessStatus
+      }) => Promise<unknown>,
+    ) => operation({ transaction: scopedTransaction, accessStatus: mocks.accessStatus }),
   )
-  mocks.childAccessStatus.mockResolvedValue('missing')
+  mocks.accessStatus.mockResolvedValue('missing')
 }
 
 function unauthed() {
@@ -215,7 +217,7 @@ describe('GET /v1/children/{childId}', () => {
   it('returns 403 when child belongs to another user', async () => {
     authed()
     mocks.childFindFirst.mockResolvedValue(null)
-    mocks.childAccessStatus.mockResolvedValue('foreign')
+    mocks.accessStatus.mockResolvedValue('foreign')
     const res = await GET_BY_ID(new Request('http://localhost/'), ctx(CHILD_ID))
     expect(res.status).toBe(403)
     const body = (await res.json()) as { reason: string }
@@ -237,7 +239,7 @@ describe('PUT /v1/children/{childId}', () => {
   it('returns 403 when child belongs to another user', async () => {
     authed()
     mocks.childFindFirst.mockResolvedValue(null)
-    mocks.childAccessStatus.mockResolvedValue('foreign')
+    mocks.accessStatus.mockResolvedValue('foreign')
     const res = await PUT(
       new Request('http://localhost/', {
         method: 'PUT',
@@ -246,6 +248,24 @@ describe('PUT /v1/children/{childId}', () => {
       }),
       ctx(CHILD_ID),
     )
+    expect(res.status).toBe(403)
+    expect(mocks.childUpdate).not.toHaveBeenCalled()
+  })
+
+  it('checks ownership before validating a foreign child update body', async () => {
+    authed()
+    mocks.childFindFirst.mockResolvedValue(null)
+    mocks.accessStatus.mockResolvedValue('foreign')
+
+    const res = await PUT(
+      new Request('http://localhost/', {
+        method: 'PUT',
+        body: JSON.stringify({ name: '   ' }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      ctx(CHILD_ID),
+    )
+
     expect(res.status).toBe(403)
     expect(mocks.childUpdate).not.toHaveBeenCalled()
   })

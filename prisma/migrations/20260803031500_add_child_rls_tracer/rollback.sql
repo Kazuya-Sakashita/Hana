@@ -1,4 +1,7 @@
--- Apply as the unchanged schema owner after rolling the app back.
+-- Apply as the unchanged schema owner only under the ISSUE-180 recovery runbook.
+-- A successful Prisma migration remains applied in _prisma_migrations after this SQL.
+-- prisma migrate deploy will not reapply it; production rollback requires a new
+-- compensating forward migration and separate human approval.
 BEGIN;
 
 REVOKE EXECUTE ON FUNCTION public.hana_child_access_status(uuid) FROM hana_child_owner;

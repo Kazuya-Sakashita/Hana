@@ -33,6 +33,7 @@ jobs:
       DATABASE_URL: postgresql://hana_admin:hana-admin@localhost:5432/hana_ci
       DIRECT_URL: postgresql://hana_admin:hana-admin@localhost:5432/hana_ci
       CHILD_DATABASE_URL: postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci
+      CHILD_OWNER_SCOPE_MODE: route
       ANTHROPIC_API_KEY: ci-dummy-anthropic-key
       AI_MODEL: claude-haiku-4-5
       HANA_SYNTHETIC_E2E: '1'

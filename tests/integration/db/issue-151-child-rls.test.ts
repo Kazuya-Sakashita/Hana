@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Prisma, PrismaClient } from '@prisma/client'
@@ -14,6 +15,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
   let disconnectChildOwnerPrisma: typeof import('@/server/db/child-owner-prisma').disconnectChildOwnerPrisma
   let withChildOwnerScope: typeof import('@/server/db/child-owner-scope').withChildOwnerScope
   let childAccessStatus: typeof import('@/server/db/child-owner-scope').childAccessStatus
+  let withChildPersistence: typeof import('@/server/db/child-persistence').withChildPersistence
 
   const userAId = randomUUID()
   const userBId = randomUUID()
@@ -27,6 +29,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       await import('@/server/db/child-owner-prisma'))
     childPrisma = getChildOwnerPrisma()
     ;({ withChildOwnerScope, childAccessStatus } = await import('@/server/db/child-owner-scope'))
+    ;({ withChildPersistence } = await import('@/server/db/child-persistence'))
 
     await prisma.profile.createMany({
       data: [{ id: userAId }, { id: userBId }],
@@ -72,6 +75,8 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
         forceRowSecurity: boolean
         policyPresent: boolean
         runtimeCanSetRole: boolean
+        runtimeMembershipCount: number
+        runtimeMembershipExact: boolean
         childSelectGranted: boolean
         runtimeDirectChildSelectGranted: boolean
         profileSelectGranted: boolean
@@ -98,6 +103,20 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
             AND policy.polname = 'children_owner_scope'
         ) AS "policyPresent",
         pg_has_role('hana_child_runtime', 'hana_child_owner', 'SET') AS "runtimeCanSetRole",
+        (
+          SELECT count(*)::integer
+          FROM pg_catalog.pg_auth_members AS membership
+          WHERE membership.member = runtime.oid
+        ) AS "runtimeMembershipCount",
+        EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_auth_members AS membership
+          WHERE membership.member = runtime.oid
+            AND membership.roleid = owner.oid
+            AND NOT membership.admin_option
+            AND NOT membership.inherit_option
+            AND membership.set_option
+        ) AS "runtimeMembershipExact",
         has_table_privilege('hana_child_owner', 'public.children', 'SELECT')
           AS "childSelectGranted",
         has_table_privilege('hana_child_runtime', 'public.children', 'SELECT')
@@ -142,6 +161,8 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       forceRowSecurity: true,
       policyPresent: true,
       runtimeCanSetRole: true,
+      runtimeMembershipCount: 1,
+      runtimeMembershipExact: true,
       childSelectGranted: true,
       runtimeDirectChildSelectGranted: false,
       profileSelectGranted: false,
@@ -169,6 +190,54 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     if (!state) throw new Error('issue_151_session_state_missing')
     return state
   }
+
+  it('keeps a provisioned secret on the route path until RLS mode is explicit', async () => {
+    const previousMode = process.env.CHILD_OWNER_SCOPE_MODE
+    try {
+      delete process.env.CHILD_OWNER_SCOPE_MODE
+      const routeState = await withChildPersistence(userAId, ({ transaction }) =>
+        readSessionState(transaction),
+      )
+      expect(routeState).toMatchObject({
+        currentUser: 'hana_admin',
+        currentRole: 'hana_admin',
+        requestUserId: null,
+      })
+
+      process.env.CHILD_OWNER_SCOPE_MODE = 'rls'
+      const rlsState = await withChildPersistence(userAId, ({ transaction }) =>
+        readSessionState(transaction),
+      )
+      expect(rlsState).toMatchObject({
+        currentUser: 'hana_child_owner',
+        currentRole: 'hana_child_owner',
+        requestUserId: userAId,
+      })
+    } finally {
+      if (previousMode === undefined) delete process.env.CHILD_OWNER_SCOPE_MODE
+      else process.env.CHILD_OWNER_SCOPE_MODE = previousMode
+    }
+  })
+
+  it('rejects a privileged credential even when RLS mode and a URL are present', async () => {
+    const runtimeUrl = process.env.CHILD_DATABASE_URL
+    const schemaOwnerUrl = process.env.DIRECT_URL
+    if (!runtimeUrl || !schemaOwnerUrl) throw new Error('issue_180_database_url_missing')
+
+    await disconnectChildOwnerPrisma()
+    process.env.CHILD_DATABASE_URL = schemaOwnerUrl
+    try {
+      await expect(
+        withChildOwnerScope(userAId, (transaction) =>
+          transaction.child.findUnique({ where: { id: childAId } }),
+        ),
+      ).rejects.toThrow('invalid_child_runtime_session')
+    } finally {
+      await disconnectChildOwnerPrisma()
+      process.env.CHILD_DATABASE_URL = runtimeUrl
+      childPrisma = getChildOwnerPrisma()
+    }
+  })
 
   it('resets the role and request user on the same connection after commit', async () => {
     const before = await readSessionState(childPrisma)
@@ -345,10 +414,38 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       return state
     }
 
+    async function readMigrationHistory(client: Client) {
+      const result = await client.query<{
+        migrationName: string
+        checksum: string
+        finishedAt: string
+        rolledBackAt: string | null
+        appliedStepsCount: number
+      }>(`
+        SELECT
+          migration_name AS "migrationName",
+          checksum,
+          finished_at::text AS "finishedAt",
+          rolled_back_at::text AS "rolledBackAt",
+          applied_steps_count AS "appliedStepsCount"
+        FROM public._prisma_migrations
+        WHERE migration_name = '20260803031500_add_child_rls_tracer'
+      `)
+      return result.rows
+    }
+
     await disconnectChildOwnerPrisma()
     await admin.connect()
     await schemaOwner.connect()
     try {
+      const appliedHistory = await readMigrationHistory(schemaOwner)
+      expect(appliedHistory).toHaveLength(1)
+      expect(appliedHistory[0]).toMatchObject({
+        migrationName: '20260803031500_add_child_rls_tracer',
+        rolledBackAt: null,
+        appliedStepsCount: 1,
+      })
+
       await schemaOwner.query(rollbackSql)
       const baseline = await readMigrationState(schemaOwner)
       expect(baseline).toMatchObject({
@@ -361,6 +458,41 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
         accessStatusFunction: null,
         accessStatusFunctionOwner: null,
       })
+
+      execFileSync('pnpm', ['db:migrate:deploy'], {
+        cwd: process.cwd(),
+        env: { ...process.env, DIRECT_URL: process.env.DIRECT_URL },
+        stdio: 'ignore',
+      })
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+      await expect(readMigrationHistory(schemaOwner)).resolves.toEqual(appliedHistory)
+
+      await admin.query('GRANT SELECT ON TABLE public.children TO hana_child_runtime')
+      const directAclState = await readMigrationState(schemaOwner)
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_runtime_direct_acl_present/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(directAclState)
+      await admin.query('REVOKE SELECT ON TABLE public.children FROM hana_child_runtime')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+
+      await admin.query('CREATE TABLE public.issue_180_runtime_owned_probe (id integer)')
+      await admin.query(
+        'ALTER TABLE public.issue_180_runtime_owned_probe OWNER TO hana_child_runtime',
+      )
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_runtime_object_owner_present/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(
+        admin.query<{ owner: string }>(`
+          SELECT pg_get_userbyid(relation.relowner) AS owner
+          FROM pg_catalog.pg_class AS relation
+          WHERE relation.oid = 'public.issue_180_runtime_owned_probe'::regclass
+        `),
+      ).resolves.toMatchObject({ rows: [{ owner: 'hana_child_runtime' }] })
+      await admin.query('DROP TABLE public.issue_180_runtime_owned_probe')
 
       await admin.query('ALTER TABLE public.children DROP CONSTRAINT children_user_id_fkey')
       await admin.query(
@@ -407,6 +539,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       await schemaOwner.query(rollbackSql)
       await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
       await schemaOwner.query(migrationSql)
+      await expect(readMigrationHistory(schemaOwner)).resolves.toEqual(appliedHistory)
     } finally {
       await admin.end()
       await schemaOwner.end()

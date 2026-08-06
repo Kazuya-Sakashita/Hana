@@ -20,6 +20,7 @@ const KNOWN_OWNERSHIP_STRATEGIES = new Set([
   'session_user_assignment',
   'explicit_owner_check',
   'database_owner_scope',
+  'staged_owner_scope',
   'user_scoped_storage_key',
   'reservation_and_image_owner_check',
   'explicit_image_owner_check',

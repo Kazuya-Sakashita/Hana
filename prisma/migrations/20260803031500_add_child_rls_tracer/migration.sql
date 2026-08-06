@@ -4,7 +4,12 @@
 
 BEGIN;
 
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
 DO $$
+DECLARE
+  runtime_role_oid oid;
 BEGIN
   IF NOT EXISTS (
     SELECT 1
@@ -43,9 +48,15 @@ BEGIN
       AND NOT rolinherit
       AND NOT rolreplication
       AND NOT rolbypassrls
+      AND COALESCE(cardinality(rolconfig), 0) = 0
   ) THEN
     RAISE EXCEPTION 'child_rls_preflight_runtime_role_required';
   END IF;
+
+  SELECT oid
+  INTO runtime_role_oid
+  FROM pg_catalog.pg_roles
+  WHERE rolname = 'hana_child_runtime';
 
   IF EXISTS (
     SELECT 1
@@ -59,6 +70,102 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'child_rls_preflight_runtime_membership_present';
   END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_database AS database
+    WHERE database.datname = current_database()
+      AND database.datdba = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace AS namespace
+    WHERE namespace.nspname = 'public'
+      AND namespace.nspowner = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'public'
+      AND relation.relowner = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'public'
+      AND procedure.proowner = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_type AS type
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = type.typnamespace
+    WHERE namespace.nspname = 'public'
+      AND type.typowner = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_default_acl AS default_acl
+    WHERE default_acl.defaclrole = runtime_role_oid
+  ) THEN
+    RAISE EXCEPTION 'child_rls_preflight_runtime_object_owner_present';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_database AS database
+    CROSS JOIN LATERAL aclexplode(database.datacl) AS acl
+    WHERE database.datname = current_database()
+      AND acl.grantee = runtime_role_oid
+      AND (acl.privilege_type <> 'CONNECT' OR acl.is_grantable)
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace AS namespace
+    CROSS JOIN LATERAL aclexplode(namespace.nspacl) AS acl
+    WHERE namespace.nspname = 'public'
+      AND acl.grantee = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    CROSS JOIN LATERAL aclexplode(relation.relacl) AS acl
+    WHERE namespace.nspname = 'public'
+      AND acl.grantee = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_attribute AS attribute
+    JOIN pg_catalog.pg_class AS relation ON relation.oid = attribute.attrelid
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    CROSS JOIN LATERAL aclexplode(attribute.attacl) AS acl
+    WHERE namespace.nspname = 'public'
+      AND acl.grantee = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    CROSS JOIN LATERAL aclexplode(procedure.proacl) AS acl
+    WHERE namespace.nspname = 'public'
+      AND acl.grantee = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_type AS type
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = type.typnamespace
+    CROSS JOIN LATERAL aclexplode(type.typacl) AS acl
+    WHERE namespace.nspname = 'public'
+      AND acl.grantee = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_default_acl AS default_acl
+    CROSS JOIN LATERAL aclexplode(default_acl.defaclacl) AS acl
+    WHERE acl.grantee = runtime_role_oid
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_policy AS policy
+    JOIN pg_catalog.pg_class AS relation ON relation.oid = policy.polrelid
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'public'
+      AND runtime_role_oid = ANY(policy.polroles)
+  ) THEN
+    RAISE EXCEPTION 'child_rls_preflight_runtime_direct_acl_present';
+  END IF;
+
+  LOCK TABLE public.profiles, public.children IN ACCESS EXCLUSIVE MODE;
 
   IF EXISTS (
     SELECT 1
@@ -111,7 +218,8 @@ CREATE ROLE hana_child_owner
   NOREPLICATION
   NOBYPASSRLS;
 
-GRANT hana_child_owner TO hana_child_runtime;
+GRANT hana_child_owner TO hana_child_runtime
+  WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
 GRANT USAGE ON SCHEMA public TO hana_child_owner;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.children TO hana_child_owner;
 

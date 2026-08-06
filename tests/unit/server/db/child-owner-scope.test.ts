@@ -20,6 +20,22 @@ import { childAccessStatus, withChildOwnerScope } from '@/server/db/child-owner-
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const CHILD_ID = '4a2c89b6-1234-4d8e-9abc-fedcba987654'
+const validRuntimeSession = {
+  sessionUser: 'hana_child_runtime',
+  currentUser: 'hana_child_runtime',
+  canLogin: true,
+  superuser: false,
+  createDatabase: false,
+  createRole: false,
+  inherits: false,
+  replication: false,
+  bypassRls: false,
+  configClean: true,
+  rowSecurityOn: true,
+  requestScopeClean: true,
+  membershipCount: 1,
+  validOwnerMembership: true,
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -34,14 +50,27 @@ beforeEach(() => {
 describe('child owner DB scope', () => {
   it('sets a fixed local role and parameterized request user inside one transaction', async () => {
     const operation = vi.fn().mockResolvedValue('ok')
+    mocks.queryRaw.mockResolvedValueOnce([validRuntimeSession]).mockResolvedValueOnce([])
 
     await expect(withChildOwnerScope(USER_ID, operation)).resolves.toBe('ok')
 
     expect(mocks.executeRawUnsafe).toHaveBeenCalledWith('SET LOCAL ROLE hana_child_owner')
-    const [queryParts, parameter] = mocks.queryRaw.mock.calls[0] as [TemplateStringsArray, string]
+    const [queryParts, parameter] = mocks.queryRaw.mock.calls[1] as [TemplateStringsArray, string]
     expect(queryParts.join('?')).toContain("set_config('hana.current_user_id', ?")
     expect(parameter).toBe(USER_ID)
     expect(operation).toHaveBeenCalledWith(transactionClient)
+  })
+
+  it('fails closed before SET ROLE when the authenticated runtime is not exact', async () => {
+    const operation = vi.fn()
+    mocks.queryRaw.mockResolvedValue([{ ...validRuntimeSession, sessionUser: 'postgres' }])
+
+    await expect(withChildOwnerScope(USER_ID, operation)).rejects.toThrow(
+      'invalid_child_runtime_session',
+    )
+
+    expect(mocks.executeRawUnsafe).not.toHaveBeenCalled()
+    expect(operation).not.toHaveBeenCalled()
   })
 
   it('rejects an invalid user scope before opening a transaction', async () => {
@@ -69,9 +98,10 @@ describe('child owner DB scope', () => {
   it('keeps normal child CRUD routes off the privileged Prisma client', () => {
     for (const file of ['src/app/v1/children/route.ts', 'src/app/v1/children/[childId]/route.ts']) {
       const source = readFileSync(file, 'utf8')
-      expect(source).toContain("from '@/server/db/child-owner-scope'")
+      expect(source).toContain("from '@/server/db/child-persistence'")
       expect(source).not.toContain("from '@/server/db/prisma'")
       expect(source).not.toContain("from '@/server/db/child-owner-prisma'")
+      expect(source).not.toContain("from '@/server/db/child-owner-scope'")
     }
   })
 
@@ -85,12 +115,14 @@ describe('child owner DB scope', () => {
     expect(migration).toContain('child_rls_preflight_schema_owner_role_required')
     expect(migration).toContain('child_rls_preflight_schema_owner_required')
     expect(migration).toContain('child_rls_preflight_runtime_role_required')
+    expect(migration).toContain('child_rls_preflight_runtime_object_owner_present')
+    expect(migration).toContain('child_rls_preflight_runtime_direct_acl_present')
     expect(migration).toContain('child_rls_preflight_orphan_owner')
     expect(migration).toContain('child_rls_preflight_role_already_exists')
     expect(migration).toContain('child_rls_preflight_existing_function')
     expect(migration).toContain('CREATE ROLE hana_child_owner')
     expect(migration).toContain('NOBYPASSRLS')
-    expect(migration).toContain('GRANT hana_child_owner TO hana_child_runtime')
+    expect(migration).toContain('WITH ADMIN FALSE, INHERIT FALSE, SET TRUE')
     expect(migration).not.toContain('ALTER TABLE public.children OWNER TO')
     expect(migration).not.toContain('ALTER FUNCTION public.hana_child_access_status(uuid) OWNER TO')
     expect(migration).toContain('ENABLE ROW LEVEL SECURITY')

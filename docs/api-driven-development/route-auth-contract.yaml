@@ -79,9 +79,9 @@ operations:
     source: src/app/v1/children/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: database_owner_scope
+    ownership_strategy: staged_owner_scope
     ownership_evidence:
-      - call:withChildOwnerScope
+      - call:withChildPersistence
       - property:userId=user.id
     ownership_denials: []
 
@@ -90,9 +90,9 @@ operations:
     source: src/app/v1/children/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: database_owner_scope
+    ownership_strategy: staged_owner_scope
     ownership_evidence:
-      - call:withChildOwnerScope
+      - call:withChildPersistence
       - property:userId=user.id
     ownership_denials: []
 
@@ -101,16 +101,16 @@ operations:
     source: src/app/v1/children/[childId]/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: database_owner_scope
+    ownership_strategy: staged_owner_scope
     ownership_evidence:
-      - call:withChildOwnerScope
-      - call:childAccessStatus
+      - call:withChildPersistence
+      - call:scope.accessStatus
       - call:problems.forbidden
     ownership_denials:
       - case: child_owned_by_another_user
         status: 403
         evidence:
-          - call:childAccessStatus
+          - call:scope.accessStatus
           - call:problems.forbidden
 
   'PUT /children/{childId}':
@@ -118,16 +118,16 @@ operations:
     source: src/app/v1/children/[childId]/route.ts
     access: private
     guard: requireUser
-    ownership_strategy: database_owner_scope
+    ownership_strategy: staged_owner_scope
     ownership_evidence:
-      - call:withChildOwnerScope
-      - call:childAccessStatus
+      - call:withChildPersistence
+      - call:scope.accessStatus
       - call:problems.forbidden
     ownership_denials:
       - case: child_owned_by_another_user
         status: 403
         evidence:
-          - call:childAccessStatus
+          - call:scope.accessStatus
           - call:problems.forbidden
 
   'POST /uploads/presigned-url':

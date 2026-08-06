@@ -13,7 +13,7 @@
 | --- | ---: |
 | `todo` | 6 |
 | `in_progress` | 1 |
-| `review` | 8 |
+| `review` | 9 |
 | `done` | 150 |
 | `blocked` | 6 |
 
@@ -48,6 +48,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
+| `ISSUE-180` | `#365` | `review` | P0 | M+ | children RLS rollout境界とmigration復旧をhardeningする | - |
 
 ## Blocked Or Needs Human Decision
 
@@ -235,6 +236,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
+| `ISSUE-180` | `#365` | `review` | P0 | M+ | children RLS rollout境界とmigration復旧をhardeningする | - |
 
 ## Status Rules
 

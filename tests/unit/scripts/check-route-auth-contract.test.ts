@@ -67,6 +67,22 @@ describe('route authentication contract', () => {
     expect(result.operationCount).toBe(24)
   })
 
+  it('accepts the staged children ownership strategy', () => {
+    const { openapi, contract } = fixture()
+    const staged = {
+      ...contract,
+      operations: {
+        ...contract.operations,
+        'GET /private': {
+          ...contract.operations['GET /private'],
+          ownership_strategy: 'staged_owner_scope',
+        },
+      },
+    }
+
+    expect(validateAuthContract(openapi, staged).errors).toEqual([])
+  })
+
   it('detects an operation missing from the matrix', () => {
     const { openapi, contract } = fixture()
     const contractWithMissingOperation = {
