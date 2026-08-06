@@ -31,6 +31,9 @@ const validRuntimeSession = {
   replication: false,
   bypassRls: false,
   configClean: true,
+  databaseConfigClean: true,
+  parameterAclClean: true,
+  sessionReplicationOrigin: true,
   rowSecurityOn: true,
   requestScopeClean: true,
   membershipCount: 1,
@@ -64,6 +67,22 @@ describe('child owner DB scope', () => {
   it('fails closed before SET ROLE when the authenticated runtime is not exact', async () => {
     const operation = vi.fn()
     mocks.queryRaw.mockResolvedValue([{ ...validRuntimeSession, sessionUser: 'postgres' }])
+
+    await expect(withChildOwnerScope(USER_ID, operation)).rejects.toThrow(
+      'invalid_child_runtime_session',
+    )
+
+    expect(mocks.executeRawUnsafe).not.toHaveBeenCalled()
+    expect(operation).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['databaseConfigClean', false],
+    ['parameterAclClean', false],
+    ['sessionReplicationOrigin', false],
+  ] as const)('fails closed before SET ROLE when %s is unsafe', async (field, value) => {
+    const operation = vi.fn()
+    mocks.queryRaw.mockResolvedValue([{ ...validRuntimeSession, [field]: value }])
 
     await expect(withChildOwnerScope(USER_ID, operation)).rejects.toThrow(
       'invalid_child_runtime_session',
@@ -115,6 +134,8 @@ describe('child owner DB scope', () => {
     expect(migration).toContain('child_rls_preflight_schema_owner_role_required')
     expect(migration).toContain('child_rls_preflight_schema_owner_required')
     expect(migration).toContain('child_rls_preflight_runtime_role_required')
+    expect(migration).toContain('child_rls_preflight_runtime_database_setting_present')
+    expect(migration).toContain('child_rls_preflight_runtime_parameter_acl_present')
     expect(migration).toContain('child_rls_preflight_runtime_object_owner_present')
     expect(migration).toContain('child_rls_preflight_runtime_direct_acl_present')
     expect(migration).toContain('child_rls_preflight_orphan_owner')

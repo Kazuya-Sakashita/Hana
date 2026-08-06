@@ -50,7 +50,7 @@ OpenAPIの公開契約と生成API型は変更しない。
 - [x] cutover未設定または`route`でchildren CRUDが既存の所有権契約を保ち、`CHILD_DATABASE_URL`未設定でも500にならない
 - [x] `rls`では専用URL欠落と誤ったruntime資格情報を処理前に拒否し、特権経路へfallbackしない
 - [x] RLS有効時にUser AからUser BへのSELECT、UPDATE、DELETE、INSERTをDB層で拒否する
-- [x] runtimeに直接ACLまたはapplication object ownershipがあるmigration preflightを拒否し、DB状態を不変に保つ
+- [x] runtimeにrole/database設定、parameter ACL、許可外database/public直接ACL、またはapplication object ownershipがあるmigration preflightを拒否し、DB状態を不変に保つ
 - [x] rollback/reapplyリハーサルが`_prisma_migrations`の状態と`db:migrate:deploy`のno-opを明示して最終状態を検証する
 - [x] 既存のforeign 403 / missing 404契約、PII非出力、Route先頭の認証を回帰させない
 - [x] `pnpm openapi:lint`、`pnpm openapi:gen`、`pnpm pr:gate`、合成DB検証が成功する

@@ -19,6 +19,9 @@ type ChildRuntimeSession = {
   replication: boolean
   bypassRls: boolean
   configClean: boolean
+  databaseConfigClean: boolean
+  parameterAclClean: boolean
+  sessionReplicationOrigin: boolean
   rowSecurityOn: boolean
   requestScopeClean: boolean
   membershipCount: number
@@ -38,6 +41,19 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
       runtime.rolreplication AS "replication",
       runtime.rolbypassrls AS "bypassRls",
       COALESCE(cardinality(runtime.rolconfig), 0) = 0 AS "configClean",
+      NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_db_role_setting AS database_setting
+        WHERE database_setting.setrole = runtime.oid
+      ) AS "databaseConfigClean",
+      NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_parameter_acl AS parameter
+        CROSS JOIN LATERAL aclexplode(parameter.paracl) AS acl
+        WHERE acl.grantee = runtime.oid
+      ) AS "parameterAclClean",
+      current_setting('session_replication_role') = 'origin'
+        AS "sessionReplicationOrigin",
       current_setting('row_security') = 'on' AS "rowSecurityOn",
       NULLIF(current_setting('hana.current_user_id', true), '') IS NULL
         AS "requestScopeClean",
@@ -73,6 +89,9 @@ async function assertChildRuntimeSession(transaction: ChildOwnerTransaction): Pr
     session.replication ||
     session.bypassRls ||
     !session.configClean ||
+    !session.databaseConfigClean ||
+    !session.parameterAclClean ||
+    !session.sessionReplicationOrigin ||
     !session.rowSecurityOn ||
     !session.requestScopeClean ||
     session.membershipCount !== 1 ||

@@ -55,7 +55,7 @@ migrationは変更前に次をfail closedで検査する。
 
 - 実行roleが非superuserで、`children`と`profiles`の既存ownerであり、`CREATEROLE`、`BYPASSRLS`、`public` schemaの`USAGE, CREATE`を持つ
 - `hana_child_runtime`が`NOINHERIT`、`NOBYPASSRLS`のlogin roleで、先行membershipを持たない
-- `hana_child_runtime`がrole-level設定、application object ownership、許可外database ACL、`public`内の直接ACL、default ACL、policy targetを持たない
+- `hana_child_runtime`がrole-level / database固有設定、parameter ACL、application object ownership、許可外database ACL、`public`内の直接ACL、default ACL、policy targetを持たない。database直接ACLは対象DBへのgrant不可`CONNECT`だけを許可し、他DBへの直接ACLは拒否する
 - owner profileが存在しない既存childがない
 - `children`へRLSや既存policyが先行導入されていない
 - 同名roleまたは関数が存在しない（未知のgrantやmembershipを再利用しない）

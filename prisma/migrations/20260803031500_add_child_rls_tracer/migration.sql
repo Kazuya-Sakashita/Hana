@@ -60,6 +60,23 @@ BEGIN
 
   IF EXISTS (
     SELECT 1
+    FROM pg_catalog.pg_db_role_setting AS database_setting
+    WHERE database_setting.setrole = runtime_role_oid
+  ) THEN
+    RAISE EXCEPTION 'child_rls_preflight_runtime_database_setting_present';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_parameter_acl AS parameter
+    CROSS JOIN LATERAL aclexplode(parameter.paracl) AS acl
+    WHERE acl.grantee = runtime_role_oid
+  ) THEN
+    RAISE EXCEPTION 'child_rls_preflight_runtime_parameter_acl_present';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
     FROM pg_catalog.pg_auth_members AS membership
     WHERE membership.member = (
       SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'hana_child_runtime'
@@ -74,8 +91,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM pg_catalog.pg_database AS database
-    WHERE database.datname = current_database()
-      AND database.datdba = runtime_role_oid
+    WHERE database.datdba = runtime_role_oid
   ) OR EXISTS (
     SELECT 1
     FROM pg_catalog.pg_namespace AS namespace
@@ -111,9 +127,12 @@ BEGIN
     SELECT 1
     FROM pg_catalog.pg_database AS database
     CROSS JOIN LATERAL aclexplode(database.datacl) AS acl
-    WHERE database.datname = current_database()
-      AND acl.grantee = runtime_role_oid
-      AND (acl.privilege_type <> 'CONNECT' OR acl.is_grantable)
+    WHERE acl.grantee = runtime_role_oid
+      AND (
+        database.datname <> current_database()
+        OR acl.privilege_type <> 'CONNECT'
+        OR acl.is_grantable
+      )
   ) OR EXISTS (
     SELECT 1
     FROM pg_catalog.pg_namespace AS namespace

@@ -19,6 +19,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
 
   const userAId = randomUUID()
   const userBId = randomUUID()
+  const userCId = randomUUID()
   const childAId = randomUUID()
   const childBId = randomUUID()
 
@@ -32,7 +33,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     ;({ withChildPersistence } = await import('@/server/db/child-persistence'))
 
     await prisma.profile.createMany({
-      data: [{ id: userAId }, { id: userBId }],
+      data: [{ id: userAId }, { id: userBId }, { id: userCId }],
     })
     await prisma.child.createMany({
       data: [
@@ -54,7 +55,7 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
 
   afterAll(async () => {
     if (!prisma) return
-    await prisma.profile.deleteMany({ where: { id: { in: [userAId, userBId] } } })
+    await prisma.profile.deleteMany({ where: { id: { in: [userAId, userBId, userCId] } } })
     await disconnectChildOwnerPrisma?.()
     await prisma.$disconnect()
   })
@@ -239,6 +240,35 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
     }
   })
 
+  it('rejects unsafe database settings and parameter privileges before setting owner scope', async () => {
+    const admin = new Client({ connectionString: process.env.DATABASE_URL })
+    await disconnectChildOwnerPrisma()
+    await admin.connect()
+    try {
+      await admin.query('GRANT SET ON PARAMETER session_replication_role TO hana_child_runtime')
+      await admin.query(`
+        ALTER ROLE hana_child_runtime IN DATABASE hana_ci
+        SET session_replication_role = 'replica'
+      `)
+
+      await expect(
+        withChildOwnerScope(userAId, (transaction) =>
+          transaction.child.findUnique({ where: { id: childAId } }),
+        ),
+      ).rejects.toThrow('invalid_child_runtime_session')
+    } finally {
+      await disconnectChildOwnerPrisma()
+      await admin
+        .query('ALTER ROLE hana_child_runtime IN DATABASE hana_ci RESET ALL')
+        .catch(() => undefined)
+      await admin
+        .query('REVOKE SET ON PARAMETER session_replication_role FROM hana_child_runtime')
+        .catch(() => undefined)
+      await admin.end()
+      childPrisma = getChildOwnerPrisma()
+    }
+  })
+
   it('resets the role and request user on the same connection after commit', async () => {
     const before = await readSessionState(childPrisma)
     const inside = await withChildOwnerScope(userAId, (transaction) =>
@@ -320,18 +350,34 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
   })
 
   it('rejects inserting a row for another owner', async () => {
+    const deniedChildId = randomUUID()
     await expect(
-      withChildOwnerScope(userAId, (transaction) =>
-        transaction.child.create({
-          data: {
-            id: randomUUID(),
-            userId: userBId,
-            name: 'synthetic-denied-insert',
-            birthdate: new Date('2025-03-01T00:00:00Z'),
-          },
-        }),
+      withChildOwnerScope(
+        userAId,
+        (transaction) =>
+          transaction.$executeRaw`
+          INSERT INTO public.children (id, user_id, name, birthdate, updated_at)
+          VALUES (
+            ${deniedChildId}::uuid,
+            ${userCId}::uuid,
+            'synthetic-denied-insert',
+            DATE '2025-03-01',
+            CURRENT_TIMESTAMP
+          )
+        `,
       ),
-    ).rejects.toThrow()
+    ).rejects.toMatchObject({
+      code: 'P2010',
+      meta: expect.objectContaining({
+        driverAdapterError: expect.objectContaining({
+          cause: expect.objectContaining({
+            code: '42501',
+            message: expect.stringContaining('row-level security policy'),
+          }),
+        }),
+      }),
+    })
+    await expect(prisma.child.findUnique({ where: { id: deniedChildId } })).resolves.toBeNull()
   })
 
   it('cannot read tables outside the tracer resource grant', async () => {
@@ -434,6 +480,43 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       return result.rows
     }
 
+    async function readRuntimeRiskState(client: Client) {
+      const result = await client.query<{
+        databaseSettingCount: number
+        parameterAclCount: number
+        riskyDatabaseAclCount: number
+      }>(`
+        SELECT
+          (
+            SELECT count(*)::integer
+            FROM pg_catalog.pg_db_role_setting AS database_setting
+            WHERE database_setting.setrole = runtime.oid
+          ) AS "databaseSettingCount",
+          (
+            SELECT count(*)::integer
+            FROM pg_catalog.pg_parameter_acl AS parameter
+            CROSS JOIN LATERAL aclexplode(parameter.paracl) AS acl
+            WHERE acl.grantee = runtime.oid
+          ) AS "parameterAclCount",
+          (
+            SELECT count(*)::integer
+            FROM pg_catalog.pg_database AS database
+            CROSS JOIN LATERAL aclexplode(database.datacl) AS acl
+            WHERE acl.grantee = runtime.oid
+              AND (
+                database.datname <> current_database()
+                OR acl.privilege_type <> 'CONNECT'
+                OR acl.is_grantable
+              )
+          ) AS "riskyDatabaseAclCount"
+        FROM pg_catalog.pg_roles AS runtime
+        WHERE runtime.rolname = 'hana_child_runtime'
+      `)
+      const state = result.rows[0]
+      if (!state) throw new Error('issue_180_runtime_risk_state_missing')
+      return state
+    }
+
     await disconnectChildOwnerPrisma()
     await admin.connect()
     await schemaOwner.connect()
@@ -476,6 +559,52 @@ describe.skipIf(!qaEnabled)('ISSUE-151 child RLS on synthetic PostgreSQL', () =>
       await expect(readMigrationState(schemaOwner)).resolves.toEqual(directAclState)
       await admin.query('REVOKE SELECT ON TABLE public.children FROM hana_child_runtime')
       await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+
+      const cleanRuntimeRiskState = await readRuntimeRiskState(admin)
+      expect(cleanRuntimeRiskState).toEqual({
+        databaseSettingCount: 0,
+        parameterAclCount: 0,
+        riskyDatabaseAclCount: 0,
+      })
+
+      await admin.query(`
+        ALTER ROLE hana_child_runtime IN DATABASE hana_ci
+        SET statement_timeout = '30s'
+      `)
+      const databaseSettingState = await readRuntimeRiskState(admin)
+      expect(databaseSettingState.databaseSettingCount).toBe(1)
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_runtime_database_setting_present/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(databaseSettingState)
+      await admin.query('ALTER ROLE hana_child_runtime IN DATABASE hana_ci RESET ALL')
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(cleanRuntimeRiskState)
+
+      await admin.query('GRANT SET ON PARAMETER session_replication_role TO hana_child_runtime')
+      const parameterAclState = await readRuntimeRiskState(admin)
+      expect(parameterAclState.parameterAclCount).toBe(1)
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_runtime_parameter_acl_present/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(parameterAclState)
+      await admin.query('REVOKE SET ON PARAMETER session_replication_role FROM hana_child_runtime')
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(cleanRuntimeRiskState)
+
+      await admin.query('GRANT CONNECT ON DATABASE postgres TO hana_child_runtime')
+      const otherDatabaseAclState = await readRuntimeRiskState(admin)
+      expect(otherDatabaseAclState.riskyDatabaseAclCount).toBe(1)
+      await expect(schemaOwner.query(migrationSql)).rejects.toThrow(
+        /child_rls_preflight_runtime_direct_acl_present/,
+      )
+      await schemaOwner.query('ROLLBACK')
+      await expect(readMigrationState(schemaOwner)).resolves.toEqual(baseline)
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(otherDatabaseAclState)
+      await admin.query('REVOKE CONNECT ON DATABASE postgres FROM hana_child_runtime')
+      await expect(readRuntimeRiskState(admin)).resolves.toEqual(cleanRuntimeRiskState)
 
       await admin.query('CREATE TABLE public.issue_180_runtime_owned_probe (id integer)')
       await admin.query(

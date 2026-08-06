@@ -92,7 +92,7 @@ Already in sync, no schema change or pending migration was found.
 
 ### `child_database_url_required_for_rls` / `invalid_child_runtime_session`
 
-- `rls`を指定したが専用URLがない、または実際の接続role・属性・membershipがADR-0016と一致しない。
+- `rls`を指定したが専用URLがない、または実際の接続role・属性・membership・role/database設定・parameter ACL・初期`session_replication_role`がADR-0016と一致しない。
 - 特権接続へのfallbackは行わない。`docs/runbooks/child-rls-cutover.md`に従ってcutoverを停止する。
 
 ### `PrismaConfigEnvError: Cannot resolve environment variable: DIRECT_URL`
