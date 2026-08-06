@@ -46,7 +46,7 @@ OpenAPIの公開契約と生成API型は変更しない。
 - [x] `createrole_self_grant='set, inherit'`の接続でもmigrationが期待するschema owner membership optionを作る
 - [x] migration適用後にruntime attestationとowner CRUDが成功する
 - [x] fresh PostgreSQL 16、`pnpm openapi:lint`、`pnpm openapi:gen`、`pnpm pr:gate`が成功する
-- [ ] 最新head SHAの独立専門reviewとGitHub checksがすべて成功する
+- [x] 最新head SHAの独立専門reviewとGitHub checksがすべて成功する
 - [x] 実環境migration、cutover、auto-mergeを実行しない
 
 ## セキュリティ・プライバシー考慮
