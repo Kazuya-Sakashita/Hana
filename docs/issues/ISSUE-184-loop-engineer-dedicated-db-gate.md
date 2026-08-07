@@ -73,7 +73,7 @@ OpenAPI、migration、Storage、アプリruntimeには影響しない。
 migrationは重複して取り込まない。後続PR #372のcandidate headはschemaとmigrationだけを供給し、
 base SHAからcheckoutしたtrusted harnessがrole bootstrap、trusted Prisma CLIによるcandidate migration、
 exact policy/ACL/role graphとowned/foreign/missing・owner CRUD・runtime直アクセス境界の直接検証を行う。
-WITH CHECK改変、runtime直INSERT policy、authenticatedへのfunction EXECUTE、unscoped view、推移SET ROLEの敵対的改変でもfail-closedを確認する。candidateとtrusted-controlは兄弟directoryへ分離し、
+WITH CHECK改変、runtime直INSERT policy、authenticatedへのfunction EXECUTE、public/別schemaの所有者権限view、別schemaのSECURITY DEFINER関数、default ACL、推移SET ROLEの敵対的改変でもfail-closedを確認する。candidateとtrusted-controlは兄弟directoryへ分離し、
 candidate dependency installとpackage scriptはDB証跡の後に実行し、
 candidate側のQA scriptやpackage scriptをno-op化しても成功へ迂回できない。
 

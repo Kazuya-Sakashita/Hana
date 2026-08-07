@@ -79,6 +79,7 @@ async function run() {
   const runtime = new Client({ connectionString: childDatabaseUrl })
   const extraPolicy = `issue_184_${randomUUID().replaceAll('-', '')}`
   const parentRole = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const exposedView = `issue_184_${randomUUID().replaceAll('-', '')}`
   const routineSchema = `issue_184_${randomUUID().replaceAll('-', '')}`
   const routineName = `issue_184_${randomUUID().replaceAll('-', '')}`
   const viewSchema = `issue_184_${randomUUID().replaceAll('-', '')}`
@@ -91,6 +92,10 @@ async function run() {
   try {
     await Promise.all([admin.connect(), schemaOwner.connect(), runtime.connect()])
     runVerifier(verifierEnvironment, 0, pass)
+    const schemaOwnerDatabaseCreate = await admin.query(`
+      SELECT NOT has_database_privilege('postgres', current_database(), 'CREATE') AS denied
+    `)
+    requireTrue(schemaOwnerDatabaseCreate.rows[0]?.denied)
 
     await schemaOwner.query(
       `
@@ -171,6 +176,140 @@ async function run() {
     }
     runVerifier(verifierEnvironment, 0, pass)
 
+    await admin.query(`CREATE SCHEMA ${routineSchema} AUTHORIZATION postgres`)
+    await transaction(schemaOwner, [
+      `
+        CREATE FUNCTION ${routineSchema}.${routineName}()
+        RETURNS SETOF uuid
+        LANGUAGE sql
+        STABLE
+        SECURITY DEFINER
+        SET search_path = pg_catalog
+        AS $function$
+          SELECT child.id FROM public.children AS child ORDER BY child.id
+        $function$
+      `,
+      `REVOKE ALL ON FUNCTION ${routineSchema}.${routineName}() FROM PUBLIC`,
+      `GRANT USAGE ON SCHEMA ${routineSchema} TO hana_child_runtime`,
+      `GRANT EXECUTE ON FUNCTION ${routineSchema}.${routineName}() TO hana_child_runtime`,
+    ])
+    try {
+      const mutation = await admin.query(
+        `
+          SELECT routine.prosecdef
+            AND pg_get_userbyid(routine.proowner) = 'postgres'
+            AND routine.proconfig = ARRAY['search_path=pg_catalog']::text[]
+            AND has_function_privilege('hana_child_runtime', routine.oid, 'EXECUTE')
+            AS present
+          FROM pg_catalog.pg_proc AS routine
+          WHERE routine.oid = to_regprocedure($1)
+        `,
+        [`${routineSchema}.${routineName}()`],
+      )
+      requireTrue(mutation.rows[0]?.present)
+      const exposed = await runtime.query(
+        `
+          SELECT count(*)::integer AS count
+          FROM ${routineSchema}.${routineName}() AS exposed(id)
+          WHERE id = ANY($1::uuid[])
+        `,
+        [[ownerChildId, foreignChildId]],
+      )
+      requireTrue(exposed.rows[0]?.count === 2)
+      runVerifier(verifierEnvironment, 1, fail)
+    } finally {
+      await admin.query(`DROP SCHEMA IF EXISTS ${routineSchema} CASCADE`)
+    }
+    const routineRestored = await admin.query(
+      'SELECT to_regnamespace($1) IS NULL AND to_regprocedure($2) IS NULL AS restored',
+      [routineSchema, `${routineSchema}.${routineName}()`],
+    )
+    requireTrue(routineRestored.rows[0]?.restored)
+    runVerifier(verifierEnvironment, 0, pass)
+
+    await admin.query(`CREATE SCHEMA ${viewSchema} AUTHORIZATION postgres`)
+    await transaction(schemaOwner, [
+      `CREATE VIEW ${viewSchema}.${viewName} AS SELECT * FROM public.children`,
+      `GRANT USAGE ON SCHEMA ${viewSchema} TO hana_child_owner`,
+      `GRANT SELECT ON TABLE ${viewSchema}.${viewName} TO hana_child_owner`,
+    ])
+    try {
+      const mutation = await admin.query(
+        `
+          SELECT relation.relkind = 'v'
+            AND pg_get_userbyid(relation.relowner) = 'postgres'
+            AND NOT COALESCE(relation.reloptions, '{}') @> ARRAY['security_invoker=true']
+            AND has_table_privilege('hana_child_owner', relation.oid, 'SELECT')
+            AS present
+          FROM pg_catalog.pg_class AS relation
+          WHERE relation.oid = to_regclass($1)
+        `,
+        [`${viewSchema}.${viewName}`],
+      )
+      requireTrue(mutation.rows[0]?.present)
+      await runtime.query('BEGIN')
+      try {
+        await runtime.query('SET LOCAL ROLE hana_child_owner')
+        await runtime.query("SELECT set_config('hana.current_user_id', $1, true)", [ownerId])
+        const direct = await runtime.query(
+          'SELECT count(*)::integer AS count FROM public.children WHERE id = ANY($1::uuid[])',
+          [[ownerChildId, foreignChildId]],
+        )
+        const exposed = await runtime.query(
+          `
+            SELECT count(*)::integer AS count
+            FROM ${viewSchema}.${viewName}
+            WHERE id = ANY($1::uuid[])
+          `,
+          [[ownerChildId, foreignChildId]],
+        )
+        requireTrue(direct.rows[0]?.count === 1 && exposed.rows[0]?.count === 2)
+      } finally {
+        await runtime.query('ROLLBACK').catch(() => undefined)
+      }
+      runVerifier(verifierEnvironment, 1, fail)
+    } finally {
+      await admin.query(`DROP SCHEMA IF EXISTS ${viewSchema} CASCADE`)
+    }
+    const viewRestored = await admin.query(
+      'SELECT to_regnamespace($1) IS NULL AND to_regclass($2) IS NULL AS restored',
+      [viewSchema, `${viewSchema}.${viewName}`],
+    )
+    requireTrue(viewRestored.rows[0]?.restored)
+    runVerifier(verifierEnvironment, 0, pass)
+
+    await schemaOwner.query(
+      'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO authenticated',
+    )
+    try {
+      const mutation = await admin.query(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_default_acl AS default_acl
+          CROSS JOIN LATERAL pg_catalog.aclexplode(default_acl.defaclacl) AS acl
+          JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+          WHERE default_acl.defaclrole = 'postgres'::regrole
+            AND default_acl.defaclnamespace = 'public'::regnamespace
+            AND grantee.rolname = 'authenticated'
+            AND acl.privilege_type = 'SELECT'
+        ) AS present
+      `)
+      requireTrue(mutation.rows[0]?.present)
+      runVerifier(verifierEnvironment, 1, fail)
+    } finally {
+      await schemaOwner.query(
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM authenticated',
+      )
+    }
+    const defaultAclRestored = await admin.query(`
+      SELECT NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_default_acl
+      ) AS restored
+    `)
+    requireTrue(defaultAclRestored.rows[0]?.restored)
+    runVerifier(verifierEnvironment, 0, pass)
+
     await transaction(admin, [
       'GRANT INSERT ON TABLE public.children TO hana_child_runtime',
       `CREATE POLICY ${extraPolicy} ON public.children FOR INSERT TO hana_child_runtime WITH CHECK (true)`,
@@ -220,9 +359,31 @@ async function run() {
       ])
     }
     runVerifier(verifierEnvironment, 0, pass)
+    await schemaOwner.query('DELETE FROM public.children WHERE id = ANY($1::uuid[])', [
+      [ownerChildId, foreignChildId],
+    ])
+    await schemaOwner.query('DELETE FROM public.profiles WHERE id = ANY($1::uuid[])', [
+      [ownerId, foreignOwnerId],
+    ])
+    runVerifier(verifierEnvironment, 0, pass)
     process.stdout.write('ISSUE-184 trusted child RLS adversarial checks: PASS\n')
   } finally {
-    await admin.end().catch(() => undefined)
+    await admin.query(`DROP VIEW IF EXISTS public.${exposedView}`).catch(() => undefined)
+    await admin.query(`DROP SCHEMA IF EXISTS ${routineSchema} CASCADE`).catch(() => undefined)
+    await admin.query(`DROP SCHEMA IF EXISTS ${viewSchema} CASCADE`).catch(() => undefined)
+    await schemaOwner
+      .query('DELETE FROM public.children WHERE id = ANY($1::uuid[])', [
+        [ownerChildId, foreignChildId],
+      ])
+      .catch(() => undefined)
+    await schemaOwner
+      .query('DELETE FROM public.profiles WHERE id = ANY($1::uuid[])', [[ownerId, foreignOwnerId]])
+      .catch(() => undefined)
+    await Promise.all([
+      admin.end().catch(() => undefined),
+      schemaOwner.end().catch(() => undefined),
+      runtime.end().catch(() => undefined),
+    ])
   }
 }
 

@@ -423,7 +423,7 @@ async function verifyAuthorizationSurface(admin) {
     },
   ])
 
-  const riskyDefaultAcl = await admin.query(`
+  const defaultAcl = await admin.query(`
     SELECT
       owner.rolname AS owner,
       COALESCE(namespace.nspname, '') AS schema,
@@ -436,12 +436,10 @@ async function verifyAuthorizationSurface(admin) {
     LEFT JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = default_acl.defaclnamespace
     CROSS JOIN LATERAL pg_catalog.aclexplode(default_acl.defaclacl) AS acl
     LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
-    WHERE acl.grantee = 0
-      OR grantee.rolname IN ('hana_child_owner', 'hana_child_runtime')
     ORDER BY owner.rolname, namespace.nspname, default_acl.defaclobjtype,
       COALESCE(grantee.rolname, 'PUBLIC'), acl.privilege_type
   `)
-  requireExactRows(riskyDefaultAcl.rows, [])
+  requireExactRows(defaultAcl.rows, [])
 
   const derivedRelations = await admin.query(`
     WITH RECURSIVE view_edges AS (
