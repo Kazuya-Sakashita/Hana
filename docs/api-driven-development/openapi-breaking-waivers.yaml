@@ -1,3 +1,12 @@
 version: 1
 approval_label: openapi-breaking-approved
-waivers: []
+waivers:
+  - id: issue-152-pii-safe-telemetry-v2
+    issue: ISSUE-152
+    reason: ProductEventのactor拘束とWeb VitalsのPII-safe v2への原子的切替を承認する
+    approved_by: Kazuya-Sakashita
+    approved_at: '2026-08-07T13:45:05Z'
+    expires_on: '2026-08-21'
+    scope: openapi-breaking-report
+    status: approved
+    report_sha256: c35e6d1a25be6160730c1f09db217b2c92b1392540e7f061aeb149693ba1b8bf

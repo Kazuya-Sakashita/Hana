@@ -1,8 +1,8 @@
 # 0018. Telemetry requestをPII-safe v2へ原子的に切り替える
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-07
-- Deciders: human approval required
+- Deciders: Kazuya-Sakashita
 - Related: ISSUE-152 / GitHub Issue #322
 
 ## Context
@@ -44,7 +44,8 @@ release unitで切り替える必要がある。
 3. 人間が`openapi-breaking-approved` labelを付与する。
 4. api-contract / security-authorization / privacy-data-protectionを含む最新SHA reviewを全件GOにする。
 
-上記が揃うまで本ADRはproposedであり、PRはHOLDである。
+上記のbreaking scopeは2026-08-07に`Kazuya-Sakashita`が明示承認した。exact-report waiver、
+保護label、最新SHAの専門reviewとCIのいずれかが欠けた場合は、引き続きPRをHOLDする。
 
 ## Rollback
 
