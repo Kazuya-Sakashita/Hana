@@ -15,7 +15,14 @@ interface WorkflowStep {
 
 interface Workflow {
   name?: string
-  jobs?: Record<string, { steps?: WorkflowStep[] }>
+  permissions?: Record<string, string>
+  jobs?: Record<
+    string,
+    {
+      services?: Record<string, { image?: string }>
+      steps?: WorkflowStep[]
+    }
+  >
 }
 
 const workflow = parse(readFileSync('.github/workflows/typecheck.yml', 'utf8')) as Workflow
@@ -28,13 +35,45 @@ describe('ISSUE-140 authenticated browser CI contract', () => {
     expect(prGateSteps).toContainEqual(
       expect.objectContaining({
         if: 'failure()',
-        uses: 'actions/upload-artifact@v4',
+        uses: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
         with: expect.objectContaining({
           'retention-days': 7,
           path: expect.stringContaining('test-failed-*.png'),
         }),
       }),
     )
+  })
+
+  it('pins CI dependencies and does not persist checkout credentials', () => {
+    expect(workflow.permissions).toEqual({ contents: 'read' })
+    expect(workflow.jobs?.['pr-gate']?.services?.postgres?.image).toBe(
+      'postgres:16.14@sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b',
+    )
+    const checkout = {
+      uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+      with: { 'persist-credentials': false },
+    }
+    expect(prGateSteps.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+      checkout,
+    ])
+    expect(
+      prGateSteps.some(
+        ({ uses }) => uses === 'pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1',
+      ),
+    ).toBe(true)
+    expect(
+      prGateSteps.some(
+        ({ uses }) => uses === 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',
+      ),
+    ).toBe(true)
+    expect(
+      prGateSteps.some(
+        ({ uses }) => uses === 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+      ),
+    ).toBe(true)
+    for (const { uses } of prGateSteps.filter(({ uses }) => uses !== undefined)) {
+      expect(uses).toMatch(/^[^@\s]+@[0-9a-f]{40}$/)
+    }
   })
 
   it('serializes Chromium and disables trace/video capture', () => {

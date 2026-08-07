@@ -111,7 +111,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     const controller = read('scripts/loop-engineer/github-check-generation.ts')
 
     expect(source).toContain('workflow_dispatch:')
-    expect(source).toContain('ref: main')
+    expect(source).toContain('ref: ${{ github.sha }}')
     expect(source).toContain('LOOP_ENGINEER_DISPATCHER_LOGIN')
     expect(source).toContain('github.event.sender.type')
     expect(source).toContain('LOOP_ENGINEER_APP_ID')
@@ -151,6 +151,222 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).not.toContain('pnpm/action-setup@v4')
     expect(source).not.toContain('integration_id: 15368')
     expect(source).not.toContain('OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(')
+  })
+
+  it('pins every controller action to an immutable commit SHA', () => {
+    const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
+      jobs: Record<string, { steps?: Array<{ uses?: string }> }>
+    }
+    const actionReferences = Object.values(workflow.jobs).flatMap((job) =>
+      (job.steps ?? []).flatMap(({ uses }) => (uses ? [uses] : [])),
+    )
+
+    expect(actionReferences.length).toBeGreaterThan(0)
+    for (const actionReference of actionReferences) {
+      expect(actionReference).toMatch(/^[^@\s]+@[0-9a-f]{40}$/)
+    }
+  })
+
+  it('requires exact-head PostgreSQL evidence for database change areas', () => {
+    const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
+      jobs: Record<
+        string,
+        {
+          'timeout-minutes'?: number
+          outputs?: Record<string, string>
+          services?: Record<
+            string,
+            {
+              image?: string
+              env?: Record<string, string>
+              options?: string
+            }
+          >
+          env?: Record<string, string>
+          steps?: Array<{
+            id?: string
+            name?: string
+            uses?: string
+            run?: string
+            if?: string
+            env?: Record<string, string>
+            with?: Record<string, string | boolean>
+          }>
+        }
+      >
+    }
+    const prepare = workflow.jobs.prepare!
+    const gateScript = prepare.steps?.find(({ id }) => id === 'gate')?.run ?? ''
+    const candidate = workflow.jobs.candidate_pr_gate!
+    const steps = candidate.steps ?? []
+    const publisher = workflow.jobs.publish_required_checks!
+    const databaseCondition = "needs.prepare.outputs.database_evidence_required == 'true'"
+    const databaseRuns = [
+      'node trusted-control/scripts/qa/issue-123-bootstrap-postgres.mjs',
+      'node trusted-control/scripts/loop-engineer/bootstrap-child-rls-evidence.mjs',
+      'pnpm --dir trusted-control exec prisma migrate deploy --config scripts/loop-engineer/candidate-prisma.config.ts',
+      'node trusted-control/scripts/loop-engineer/verify-child-rls-evidence.mjs',
+      'node trusted-control/scripts/loop-engineer/test-child-rls-evidence-fail-closed.mjs',
+    ]
+    const classificationGuard = steps.find(
+      ({ name }) => name === 'Require trusted database evidence classification',
+    )
+    const trustedPrepareCheckout = {
+      uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+      with: {
+        ref: '${{ github.sha }}',
+        'persist-credentials': false,
+      },
+    }
+
+    expect(prepare.steps?.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+      trustedPrepareCheckout,
+    ])
+    expect(prepare.outputs?.database_evidence_required).toBe(
+      '${{ steps.gate.outputs.database_evidence_required }}',
+    )
+    expect(gateScript).toContain(
+      'any(.review_attestation.change_areas[]; . == "database" or . == "migration-code" or . == "real-db-migration")',
+    )
+    expect(gateScript).toContain(
+      'echo "database_evidence_required=$database_evidence_required" >> "$GITHUB_OUTPUT"',
+    )
+    expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
+      gateScript.indexOf('database_evidence_required='),
+    )
+    expect(gateScript).toContain('git/commits/${live_base_sha}')
+    expect(gateScript).toContain('git/commits/${live_head_sha}')
+    expect(gateScript).toContain('select(.sha == $expected_commit_sha)')
+    expect(gateScript).toContain('git/trees/${base_tree_sha}?recursive=1')
+    expect(gateScript).toContain('git/trees/${head_tree_sha}?recursive=1')
+    expect(gateScript).not.toContain('git/trees/${live_base_sha}?recursive=1')
+    expect(gateScript).not.toContain('git/trees/${live_head_sha}?recursive=1')
+    expect(gateScript).toContain('loop-engineer-database-evidence-tree-input/v2')
+    expect(gateScript).not.toContain('/pulls/${pr_number}/files')
+    expect(gateScript).toContain('evaluate-database-evidence-paths.ts')
+    expect(gateScript).toContain('"$GITHUB_SHA" != "$live_base_sha"')
+    expect(gateScript).toContain(
+      '"$trusted_database_diff_required" == "true" || "$attested_database_area_required" == "true"',
+    )
+    expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
+      gateScript.indexOf('git/commits/${live_base_sha}'),
+    )
+    expect(gateScript.indexOf('git/commits/${live_head_sha}')).toBeLessThan(
+      gateScript.indexOf('git/trees/${head_tree_sha}?recursive=1'),
+    )
+    expect(gateScript.indexOf('git/trees/${head_tree_sha}?recursive=1')).toBeLessThan(
+      gateScript.indexOf('evaluate-database-evidence-paths.ts'),
+    )
+    expect(candidate['timeout-minutes']).toBe(25)
+    expect(candidate.services?.postgres?.image).toBe(
+      'postgres:16.14@sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b',
+    )
+    expect(candidate.services?.postgres?.env).toEqual({
+      POSTGRES_DB: 'hana_ci',
+      POSTGRES_PASSWORD: 'hana-admin',
+      POSTGRES_USER: 'hana_admin',
+    })
+    expect(candidate.services?.postgres?.options).toContain('pg_isready -U hana_admin -d hana_ci')
+    expect(candidate.env).not.toHaveProperty('DATABASE_URL')
+    expect(candidate.env).not.toHaveProperty('DIRECT_URL')
+    expect(candidate.env).not.toHaveProperty('CHILD_DATABASE_URL')
+    expect(candidate.env).not.toHaveProperty('CHILD_OWNER_SCOPE_MODE')
+    expect(classificationGuard).toMatchObject({
+      env: {
+        DATABASE_EVIDENCE_REQUIRED: '${{ needs.prepare.outputs.database_evidence_required }}',
+      },
+    })
+    expect(classificationGuard?.run).toContain('true|false')
+    expect(classificationGuard?.run).toContain('exit 1')
+
+    const candidateCheckout = {
+      uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+      with: {
+        ref: '${{ needs.prepare.outputs.head_sha }}',
+        path: 'candidate',
+        'persist-credentials': false,
+      },
+    }
+    const trustedCheckout = {
+      uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+      with: {
+        ref: '${{ needs.prepare.outputs.base_sha }}',
+        path: 'trusted-control',
+        'persist-credentials': false,
+      },
+    }
+    expect(steps.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+      candidateCheckout,
+      trustedCheckout,
+    ])
+
+    const databaseIndexes = databaseRuns.map((run) => steps.findIndex((step) => step.run === run))
+    for (const [index, run] of databaseRuns.entries()) {
+      expect(steps[databaseIndexes[index]!]).toMatchObject({ run, if: databaseCondition })
+    }
+    expect(steps.find((step) => step.run === databaseRuns[2])?.env).toEqual({
+      DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+      HANA_CANDIDATE_ROOT: '${{ github.workspace }}/candidate',
+    })
+    expect(steps.find((step) => step.run === databaseRuns[1])?.env).toEqual({
+      DIRECT_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+      HANA_SYNTHETIC_POSTGRES_PORT: '5432',
+    })
+    expect(steps.find((step) => step.run === databaseRuns[3])?.env).toEqual({
+      DATABASE_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+      DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+      CHILD_DATABASE_URL:
+        'postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci',
+      HANA_SYNTHETIC_POSTGRES_PORT: '5432',
+    })
+    expect(steps.find((step) => step.run === databaseRuns[4])?.env).toEqual(
+      steps.find((step) => step.run === databaseRuns[3])?.env,
+    )
+    expect(databaseIndexes.every((index) => index >= 0)).toBe(true)
+    expect(databaseIndexes).toEqual([...databaseIndexes].sort((left, right) => left - right))
+    const trustedInstallIndex = steps.findIndex(
+      ({ run }) => run === 'pnpm --dir trusted-control install --frozen-lockfile --ignore-scripts',
+    )
+    const candidateInstallIndex = steps.findIndex(
+      ({ run }) => run === 'pnpm --dir candidate install --frozen-lockfile',
+    )
+    const candidateCheckoutIndex = steps.findIndex(
+      (step) => JSON.stringify(step) === JSON.stringify(candidateCheckout),
+    )
+    const trustedCheckoutIndex = steps.findIndex(
+      (step) => JSON.stringify(step) === JSON.stringify(trustedCheckout),
+    )
+    const prGateSteps = steps.filter(({ run }) => run === 'pnpm --dir candidate pr:gate')
+    expect(candidateCheckoutIndex).toBeLessThan(trustedCheckoutIndex)
+    expect(trustedCheckoutIndex).toBeLessThan(trustedInstallIndex)
+    expect(trustedInstallIndex).toBeLessThan(databaseIndexes[0]!)
+    expect(databaseIndexes.at(-1)).toBeLessThan(candidateInstallIndex)
+    expect(prGateSteps).toHaveLength(2)
+    expect(prGateSteps).toContainEqual(
+      expect.objectContaining({
+        name: 'Run PR gate with database integration enabled',
+        if: databaseCondition,
+        env: expect.objectContaining({
+          DATABASE_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+          DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+          CHILD_DATABASE_URL:
+            'postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci',
+        }),
+      }),
+    )
+    expect(prGateSteps).toContainEqual({
+      name: 'Run PR gate without database integration',
+      if: "needs.prepare.outputs.database_evidence_required == 'false'",
+      run: 'pnpm --dir candidate pr:gate',
+    })
+    expect(candidateInstallIndex).toBeLessThan(
+      steps.findIndex(({ name }) => name === 'Run PR gate with database integration enabled'),
+    )
+    expect(
+      publisher.steps?.find(
+        ({ name }) => name === 'Finalize status-only checks from the dedicated App',
+      )?.env?.PR_GATE_RESULT,
+    ).toBe('${{ needs.candidate_pr_gate.result }}')
   })
 
   it('accepts an OpenAPI waiver only for a freshly generated non-empty report', () => {
