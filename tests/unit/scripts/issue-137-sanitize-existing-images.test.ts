@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_UPLOAD_FILE_SIZE } from '@/features/uploads/server/image-limits'
-import { readResponseWithLimit } from '../../../scripts/maintenance/issue-137-sanitize-existing-images'
+import {
+  readResponseWithLimit,
+  STORAGE_FENCE_TIMEOUT_MS,
+  storageReplacementOptions,
+  TRANSACTION_TIMEOUT_MS,
+} from '../../../scripts/maintenance/issue-137-sanitize-existing-images'
 
 describe('ISSUE-137 existing image maintenance script', () => {
   it('reads a bounded response', async () => {
@@ -32,5 +37,14 @@ describe('ISSUE-137 existing image maintenance script', () => {
     )
 
     await expect(readResponseWithLimit(response)).rejects.toThrow('source_too_large')
+  })
+
+  it('bounds Storage work inside the transaction fence and never recreates a deleted object', () => {
+    expect(STORAGE_FENCE_TIMEOUT_MS).toBeLessThan(TRANSACTION_TIMEOUT_MS)
+    expect(storageReplacementOptions('image/jpeg')).toEqual({
+      contentType: 'image/jpeg',
+      cacheControl: '300',
+      upsert: false,
+    })
   })
 })
