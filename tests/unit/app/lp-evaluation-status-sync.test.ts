@@ -22,8 +22,9 @@ const nextRecommendation = evaluationSource.slice(
 describe('ISSUE-097 LP evaluation status sync', () => {
   it('marks relevance and trust-detail gaps as resolved by ISSUE-093', () => {
     expect(evaluationSource).toContain('LP-P1-02')
-    expect(evaluationSource).toContain('対応済み。ISSUE-093 で hero 支持文')
+    expect(evaluationSource).toContain('対応済み。ISSUE-093のhero支持文')
     expect(evaluationSource).toContain('relevance pills')
+    expect(evaluationSource).toContain('写真から始める')
     expect(evaluationSource).toContain('LP-P1-05')
     expect(evaluationSource).toContain('対応済み。ISSUE-093 で `/privacy`')
     expect(evaluationSource).toContain('停止・削除 anchor')

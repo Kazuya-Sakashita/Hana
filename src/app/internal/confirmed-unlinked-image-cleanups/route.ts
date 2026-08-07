@@ -1,6 +1,10 @@
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
-import { runConfirmedUnlinkedCleanup } from '@/features/uploads/server/confirmed-unlinked-cleanup'
+import {
+  CONFIRMED_UNLINKED_CLEANUP_MINIMUM_ITEM_BUDGET_MS,
+  CONFIRMED_UNLINKED_CLEANUP_ROUTE_BUDGET_MS,
+  runConfirmedUnlinkedCleanup,
+} from '@/features/uploads/server/confirmed-unlinked-cleanup'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
@@ -25,6 +29,7 @@ export async function POST(request: Request) {
   if (!authorized(request)) return toProblemResponse(problems.notFound())
 
   try {
+    const deadlineAt = Date.now() + CONFIRMED_UNLINKED_CLEANUP_ROUTE_BUDGET_MS
     const result = await runConfirmedUnlinkedCleanup(
       prisma,
       {
@@ -43,6 +48,8 @@ export async function POST(request: Request) {
       {
         apply: process.env.CONFIRMED_UNLINKED_CLEANUP_APPLY === 'confirmed',
         limit: 3,
+        deadlineAt,
+        minimumItemBudgetMs: CONFIRMED_UNLINKED_CLEANUP_MINIMUM_ITEM_BUDGET_MS,
       },
     )
     return NextResponse.json(result)

@@ -19,11 +19,11 @@
 
 | 項目        | 反映内容                                                                                                 |
 | ----------- | -------------------------------------------------------------------------------------------------------- |
-| LP 化       | Hero、Before / After、30秒 flow、product preview、trust、final CTA を持つ静的 HTML を作成                |
+| LP 化       | Hero、Before / After、記録 flow、product preview、trust、final CTA を持つ静的 HTML を作成                |
 | CV 導線     | 公開前検証の Primary CTA を `待機リストに登録する` に変更し、`POST /v1/waitlist` の契約へ接続            |
-| 記録価値    | ISSUE-073 で synthetic safe asset と `写真のみ → 写真 + title → 写真 + 短い本文` の3段 proof を追加      |
+| 記録価値    | ISSUE-073の写真単体は比較素材と明示し、保存経路は`写真 + title → 任意の短い本文`として示す               |
 | Hero 構図   | ISSUE-074 で 2 台の phone mock を削り、Hero の主役を単一の keepsake preview に整理                       |
-| AI 同意     | `同意していれば下書きを待つ` とし、AI を使わず保存できることを flow と trust に明示                      |
+| AI 同意     | AI下書きと手動入力を同格の選択肢とし、AIを使わず保存できることをflowとtrustに明示                        |
 | Trust copy  | 保持期間、学習利用、削除保証などの未確認 claim は断定しない構成に調整                                    |
 | A11y        | H1 1つ、decorative image の空 alt、gallery alt、focus-visible、reduced motion、viewport、44px 対応を確認 |
 | Performance | 1.9MB PNG 参照を LP 用 WebP 約58KBへ差し替え                                                             |
@@ -56,21 +56,21 @@
 
 ### P0
 
-| ID       | 課題                                   | Why                                                                                            | 完了条件                                                                                                                               |
-| -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| LP-P0-01 | 実行可能な CV 導線を設計する           | 静的 prototype の Store 準備表示だけでは、LP 目的の DL / 事前登録検証にならない                | 対応済み。ISSUE-072 で `待機リストに登録する` を primary CTA とし、`POST /v1/waitlist` と公開 `/lp` に接続                             |
-| LP-P0-02 | Before / After を本物の価値証拠にする  | PRD は「写真のみ → 写真＋文章」で差別化を見せる前提。写真のみとの差分を 3 秒で見せる必要がある | 対応済み。ISSUE-073 で synthetic safe asset と、人間レビュー済み synthetic 例を `写真のみ → 写真 + title → 写真 + 短い本文` として追加 |
-| LP-P0-03 | Public trust copy の人間レビューを通す | AI、保持、学習、削除 claim は信頼を左右する。未確認の断定は No-Go                              | 対応済み。ISSUE-075 で公開前検証 copy の Privacy / Legal Human Review を完了                                                           |
+| ID       | 課題                                   | Why                                                                                  | 完了条件                                                                                                             |
+| -------- | -------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| LP-P0-01 | 実行可能な CV 導線を設計する           | 静的 prototype の Store 準備表示だけでは、LP 目的の DL / 事前登録検証にならない      | 対応済み。ISSUE-072 で `待機リストに登録する` を primary CTA とし、`POST /v1/waitlist` と公開 `/lp` に接続           |
+| LP-P0-02 | Before / After を本物の価値証拠にする  | 写真単体は比較素材であり、保存には短い見出しが必要。確認済み機能との差分を明確にする | 対応済み。ISSUE-073のsynthetic safe assetを、比較素材の写真単体から`写真 + title → 任意の短い本文`への変化として明示 |
+| LP-P0-03 | Public trust copy の人間レビューを通す | AI、保持、学習、削除 claim は信頼を左右する。未確認の断定は No-Go                    | 対応済み。ISSUE-075 で公開前検証 copy の Privacy / Legal Human Review を完了                                         |
 
 ### P1
 
-| ID       | 課題                                              | Why                                                                                  | 完了条件                                                                                                                          |
-| -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| LP-P1-01 | Hero composition を 1 strong visual anchor に絞る | 背景、Hana、phone mock、CTA、trust row が同時に立ち、Quiet Heirloom の静けさが薄まる | 対応済み。ISSUE-074 で Hero の主役を単一の keepsake preview に整理し、phone mock と hero 内 trust row の競合を削除                |
-| LP-P1-02 | 「書けない親」の痛みを first view に少し上げる    | Brand は美しいが、忙しい親が「自分のことだ」と感じる Relevance が弱い                | 対応済み。ISSUE-093 で hero 支持文と relevance pills を追加し、寝かしつけ後 / 写真だけの日 / あとで直せる文脈を first view に配置 |
-| LP-P1-03 | 実ブラウザ QA を行う                              | 静的検査だけでは、重なり、折返し、focus order、touch target は判断しにくい           | 対応済み。390 / 430 / 768 / 1280px で redacted app QA を行い、横 overflow、focus、contrast、LCP 目安を確認                        |
-| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針               | 対応済み。ISSUE-099 で文字なし・人物なし・実写真なしの公開用 keepsake WebP asset を追加し、公開 `/lp` の主要ビジュアルへ接続      |
-| LP-P1-05 | Trust 詳細への導線を設計する                      | 安心材料はあるが、詳しく確認する場所が LP から見えない                               | 対応済み。ISSUE-093 で `/privacy` の取得情報 / 利用目的 / 停止・削除 anchor へ進める導線を追加                                    |
+| ID       | 課題                                              | Why                                                                                  | 完了条件                                                                                                                     |
+| -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| LP-P1-01 | Hero composition を 1 strong visual anchor に絞る | 背景、Hana、phone mock、CTA、trust row が同時に立ち、Quiet Heirloom の静けさが薄まる | 対応済み。ISSUE-074 で Hero の主役を単一の keepsake preview に整理し、phone mock と hero 内 trust row の競合を削除           |
+| LP-P1-02 | 「書けない親」の痛みを first view に少し上げる    | Brand は美しいが、忙しい親が「自分のことだ」と感じる Relevance が弱い                | 対応済み。ISSUE-093のhero支持文と、寝かしつけ後 / 写真から始める / あとで直せるrelevance pillsをfirst viewに配置             |
+| LP-P1-03 | 実ブラウザ QA を行う                              | 静的検査だけでは、重なり、折返し、focus order、touch target は判断しにくい           | 対応済み。390 / 430 / 768 / 1280px で redacted app QA を行い、横 overflow、focus、contrast、LCP 目安を確認                   |
+| LP-P1-04 | 画像 asset を公開用に作る                         | 既存 concept image は mood evidence で、画像内コピーを正本にしない方針               | 対応済み。ISSUE-099 で文字なし・人物なし・実写真なしの公開用 keepsake WebP asset を追加し、公開 `/lp` の主要ビジュアルへ接続 |
+| LP-P1-05 | Trust 詳細への導線を設計する                      | 安心材料はあるが、詳しく確認する場所が LP から見えない                               | 対応済み。ISSUE-093 で `/privacy` の取得情報 / 利用目的 / 停止・削除 anchor へ進める導線を追加                               |
 
 ### P2
 
