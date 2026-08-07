@@ -21,9 +21,9 @@ database変更を含むPRでは、attested exact head SHAに対するchildren所
 
 ## スコープ (What)
 
-- exact base/head Git treeのtrusted path分類と検証済みreview attestationのchange areaから実DB証跡の要否を導出する
+- exact base/head Git treeのMarkdown限定免除分類と検証済みreview attestationのchange areaから実DB証跡の要否を導出する
 - main固定controllerの候補jobでpin済みPostgreSQL 16を起動する
-- database変更ではbootstrap、migration、children RLS実DBテストを`pnpm pr:gate`より先に実行する
+- database変更ではbase SHAのtrusted harnessからbootstrap、candidate migration、children RLS実DB検証を`pnpm pr:gate`より先に実行する
 - 標準`pr-gate` workflowのPostgreSQL imageと使用Actionを完全SHAへ固定する
 - controller配線とsupply-chain固定をworkflow contract testで検証する
 
@@ -46,10 +46,12 @@ OpenAPI、migration、Storage、アプリruntimeには影響しない。
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [x] exact base/head Git treeのDB-sensitive pathまたは検証済みDB change areaがあるとき実DB証跡を必須にする
+- [x] exact base/head Git treeで明示Markdown以外の変更または検証済みDB change areaがあるとき実DB証跡を必須にする
 - [x] DB証跡要否の欠落または不正値をcandidate jobでfail-closedにする
-- [x] pin済みPostgreSQL上でbootstrap、migration、children RLS実DBテストを順に実行する
-- [x] DB証跡スクリプトの欠落、失敗、timeout時は専用Appの`pr-gate`を成功させない
+- [x] pin済みPostgreSQL上でtrusted bootstrap、candidate migration、trusted children RLS実DB検証を順に実行する
+- [x] trusted scriptの欠落、artifact境界違反、失敗、timeout時は専用Appの`pr-gate`を成功させない
+- [x] candidate package scriptのno-op化、alias rewiring、未知実行可能path、symlink artifactで証跡を迂回できない
+- [x] DB証跡不要のcandidateではDB接続envを`pnpm pr:gate`へ渡さない
 - [x] 標準`pr-gate`を最小権限、checkout credential非保持、Action完全SHA固定にする
 - [x] workflow contract testと`pnpm pr:gate`が成功する
 - [x] 合成fixtureだけを使用し、実DB、secret、実ユーザーデータへアクセスしない
@@ -66,16 +68,20 @@ OpenAPI、migration、Storage、アプリruntimeには影響しない。
 
 ## Bootstrap sequence
 
-このPRはmain固定controllerを先に導入し、ISSUE-151のscriptとmigrationは重複して取り込まない。
-後続PR #372のcandidate headが`qa:issue151:db-bootstrap`と`qa:issue151:child-rls-db`を提供し、
-このcontrollerが同じhead上で4段階の実DB証跡を実行する。scriptがないDB-sensitive candidateは
-専用Appの`pr-gate`をfailureにし、#372より先へ進めない。
+このPRはmain固定controllerと最小のtrusted DB harnessを先に導入し、ISSUE-151のproduct codeや
+migrationは重複して取り込まない。後続PR #372のcandidate headはschemaとmigrationだけを供給し、
+base SHAからcheckoutしたtrusted harnessがrole bootstrap、trusted Prisma CLIによるcandidate migration、
+catalogとowned/foreign/missing境界の直接検証を行う。candidateとtrusted-controlは兄弟directoryへ分離し、
+candidate dependency installとpackage scriptはDB証跡の後に実行し、
+candidate側のQA scriptやpackage scriptをno-op化しても成功へ迂回できない。
 
 ## セキュリティ・プライバシー考慮
 
-DB要否は自由文やcaller booleanではなく、既存gate evaluatorが検証したstatus-only attestationから導出する。
-未知、欠落、誤分類は`HOLD`とし、workflow input、log、artifactへreview本文、secret、実ユーザー情報を渡さない。
-PostgreSQLは合成credentialと専用DBだけを使い、production migrationの人間承認境界を変更しない。
+DB要否は自由文やcaller booleanではなく、既存gate evaluatorが検証したstatus-only attestationとtrusted tree分類から導出する。
+明示Markdown以外は安全側に倒し、alias/build設定、未知実行可能path、symlink、checkout外artifact、欠落、誤分類は`HOLD`とする。
+trusted installはcandidateのpackage設定とinstall scriptを評価せず、workflow input、log、artifactへreview本文、secret、実ユーザー情報を渡さない。
+PostgreSQLは固定したlocalhost、専用DB名、合成credentialだけを使う。DB証跡不要のcandidateには
+DB接続envを渡さず、CIによるDB suiteの暗黙有効化を防ぐ。production migrationの人間承認境界は変更しない。
 
 ## Rollback
 

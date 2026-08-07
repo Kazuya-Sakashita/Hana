@@ -2,26 +2,7 @@ const maxInputBytes = 32 * 1024 * 1024
 const maxTreeEntries = 100_000
 const inputFields = ['schema_version', 'base_sha', 'head_sha', 'base_tree', 'head_tree'] as const
 
-const exactDatabaseSensitivePaths = new Set([
-  '.env.example',
-  'package.json',
-  'pnpm-lock.yaml',
-  'prisma.config.ts',
-  'tests/e2e/support/database.ts',
-])
-
-const databaseSensitivePrefixes = [
-  'database/',
-  'db/',
-  'migrations/',
-  'prisma/',
-  'scripts/maintenance/',
-  'scripts/qa/',
-  'src/',
-  'supabase/',
-  'tests/integration/',
-  'tests/support/',
-]
+const exactDocumentationPaths = new Set(['AGENTS.md', 'CLAUDE.md', 'Hana_PRD_v1.md', 'README.md'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -73,11 +54,8 @@ function readFileTree(value: unknown, expectedSha: string): Map<string, string> 
   return files
 }
 
-function isDatabaseSensitivePath(path: string): boolean {
-  return (
-    exactDatabaseSensitivePaths.has(path) ||
-    databaseSensitivePrefixes.some((prefix) => path.startsWith(prefix))
-  )
+function requiresDatabaseEvidence(path: string): boolean {
+  return !(exactDocumentationPaths.has(path) || (path.startsWith('docs/') && path.endsWith('.md')))
 }
 
 async function readStdin(): Promise<string | null> {
@@ -135,7 +113,7 @@ async function main(): Promise<void> {
       return
     }
 
-    process.stdout.write(`${changedPaths.some(isDatabaseSensitivePath) ? 'true' : 'false'}\n`)
+    process.stdout.write(`${changedPaths.some(requiresDatabaseEvidence) ? 'true' : 'false'}\n`)
   } catch {
     failClosed()
   }

@@ -202,10 +202,10 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     const publisher = workflow.jobs.publish_required_checks!
     const databaseCondition = "needs.prepare.outputs.database_evidence_required == 'true'"
     const databaseRuns = [
-      'pnpm qa:issue123:db-bootstrap',
-      'pnpm qa:issue151:db-bootstrap',
-      'pnpm db:migrate:deploy',
-      'pnpm qa:issue151:child-rls-db',
+      'node trusted-control/scripts/qa/issue-123-bootstrap-postgres.mjs',
+      'node trusted-control/scripts/loop-engineer/bootstrap-child-rls-evidence.mjs',
+      'pnpm --dir trusted-control exec prisma migrate deploy --config scripts/loop-engineer/candidate-prisma.config.ts',
+      'node trusted-control/scripts/loop-engineer/verify-child-rls-evidence.mjs',
     ]
     const classificationGuard = steps.find(
       ({ name }) => name === 'Require trusted database evidence classification',
@@ -258,13 +258,10 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
       POSTGRES_USER: 'hana_admin',
     })
     expect(candidate.services?.postgres?.options).toContain('pg_isready -U hana_admin -d hana_ci')
-    expect(candidate.env).toMatchObject({
-      DATABASE_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
-      DIRECT_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
-      CHILD_DATABASE_URL:
-        'postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci',
-      CHILD_OWNER_SCOPE_MODE: 'route',
-    })
+    expect(candidate.env).not.toHaveProperty('DATABASE_URL')
+    expect(candidate.env).not.toHaveProperty('DIRECT_URL')
+    expect(candidate.env).not.toHaveProperty('CHILD_DATABASE_URL')
+    expect(candidate.env).not.toHaveProperty('CHILD_OWNER_SCOPE_MODE')
     expect(classificationGuard).toMatchObject({
       env: {
         DATABASE_EVIDENCE_REQUIRED: '${{ needs.prepare.outputs.database_evidence_required }}',
@@ -277,31 +274,82 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
       uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
       with: {
         ref: '${{ needs.prepare.outputs.head_sha }}',
+        path: 'candidate',
+        'persist-credentials': false,
+      },
+    }
+    const trustedCheckout = {
+      uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+      with: {
+        ref: '${{ needs.prepare.outputs.base_sha }}',
+        path: 'trusted-control',
         'persist-credentials': false,
       },
     }
     expect(steps.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
       candidateCheckout,
+      trustedCheckout,
     ])
 
     const databaseIndexes = databaseRuns.map((run) => steps.findIndex((step) => step.run === run))
     for (const [index, run] of databaseRuns.entries()) {
       expect(steps[databaseIndexes[index]!]).toMatchObject({ run, if: databaseCondition })
     }
-    for (const run of ['pnpm db:migrate:deploy', 'pnpm qa:issue151:child-rls-db']) {
-      expect(steps.find((step) => step.run === run)?.env).toEqual({
-        DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
-      })
-    }
+    expect(steps.find((step) => step.run === databaseRuns[2])?.env).toEqual({
+      DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+      HANA_CANDIDATE_ROOT: '${{ github.workspace }}/candidate',
+    })
+    expect(steps.find((step) => step.run === databaseRuns[1])?.env).toEqual({
+      DIRECT_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+      HANA_SYNTHETIC_POSTGRES_PORT: '5432',
+    })
+    expect(steps.find((step) => step.run === databaseRuns[3])?.env).toEqual({
+      DATABASE_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+      DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+      CHILD_DATABASE_URL:
+        'postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci',
+      HANA_SYNTHETIC_POSTGRES_PORT: '5432',
+    })
     expect(databaseIndexes.every((index) => index >= 0)).toBe(true)
     expect(databaseIndexes).toEqual([...databaseIndexes].sort((left, right) => left - right))
-    const installIndex = steps.findIndex(({ run }) => run === 'pnpm install --frozen-lockfile')
-    const prGateIndex = steps.findIndex(({ run }) => run === 'pnpm pr:gate')
-    const checkoutIndex = steps.findIndex(({ uses }) => uses === candidateCheckout.uses)
-    expect(checkoutIndex).toBeLessThan(installIndex)
-    expect(installIndex).toBeLessThan(databaseIndexes[0]!)
-    expect(databaseIndexes.at(-1)).toBeLessThan(prGateIndex)
-    expect(steps[prGateIndex]?.if).toBeUndefined()
+    const trustedInstallIndex = steps.findIndex(
+      ({ run }) => run === 'pnpm --dir trusted-control install --frozen-lockfile --ignore-scripts',
+    )
+    const candidateInstallIndex = steps.findIndex(
+      ({ run }) => run === 'pnpm --dir candidate install --frozen-lockfile',
+    )
+    const candidateCheckoutIndex = steps.findIndex(
+      (step) => JSON.stringify(step) === JSON.stringify(candidateCheckout),
+    )
+    const trustedCheckoutIndex = steps.findIndex(
+      (step) => JSON.stringify(step) === JSON.stringify(trustedCheckout),
+    )
+    const prGateSteps = steps.filter(({ run }) => run === 'pnpm --dir candidate pr:gate')
+    expect(candidateCheckoutIndex).toBeLessThan(trustedCheckoutIndex)
+    expect(trustedCheckoutIndex).toBeLessThan(trustedInstallIndex)
+    expect(trustedInstallIndex).toBeLessThan(databaseIndexes[0]!)
+    expect(databaseIndexes.at(-1)).toBeLessThan(candidateInstallIndex)
+    expect(prGateSteps).toHaveLength(2)
+    expect(prGateSteps).toContainEqual(
+      expect.objectContaining({
+        name: 'Run PR gate with database integration enabled',
+        if: databaseCondition,
+        env: expect.objectContaining({
+          DATABASE_URL: 'postgresql://hana_admin:hana-admin@localhost:5432/hana_ci',
+          DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+          CHILD_DATABASE_URL:
+            'postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci',
+        }),
+      }),
+    )
+    expect(prGateSteps).toContainEqual({
+      name: 'Run PR gate without database integration',
+      if: "needs.prepare.outputs.database_evidence_required == 'false'",
+      run: 'pnpm --dir candidate pr:gate',
+    })
+    expect(candidateInstallIndex).toBeLessThan(
+      steps.findIndex(({ name }) => name === 'Run PR gate with database integration enabled'),
+    )
     expect(
       publisher.steps?.find(
         ({ name }) => name === 'Finalize status-only checks from the dedicated App',

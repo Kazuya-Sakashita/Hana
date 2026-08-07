@@ -56,6 +56,12 @@ describe('ISSUE-184 trusted database evidence tree classifier', () => {
     'scripts/qa/issue-151-bootstrap-postgres.mjs',
     'tests/integration/v1/children.test.ts',
     'package.json',
+    'tsconfig.json',
+    'next.config.ts',
+    '.github/workflows/database.yml',
+    'scripts/new-database-runner.mjs',
+    'docs/runtime/database-adapter.ts',
+    'public/database-config.js',
   ])('requires database evidence when exact trees change %s', (path) => {
     expectClassification(input([blob(path, '1'.repeat(40))], [blob(path, '2'.repeat(40))]), 'true')
   })
@@ -70,7 +76,7 @@ describe('ISSUE-184 trusted database evidence tree classifier', () => {
     )
   })
 
-  it('does not require successor-only scripts for the governance prerequisite diff', () => {
+  it('fails closed for executable governance and test paths that are not explicit documentation', () => {
     expectClassification(
       input(
         [blob('docs/readme.md', '1'.repeat(40))],
@@ -84,7 +90,23 @@ describe('ISSUE-184 trusted database evidence tree classifier', () => {
           ),
         ],
       ),
-      'false',
+      'true',
+    )
+  })
+
+  it('cannot bypass evidence by rewiring a database import outside src', () => {
+    expectClassification(
+      input(
+        [
+          blob('tsconfig.json', '1'.repeat(40)),
+          blob('docs/runtime/database-adapter.ts', '2'.repeat(40)),
+        ],
+        [
+          blob('tsconfig.json', '3'.repeat(40)),
+          blob('docs/runtime/database-adapter.ts', '4'.repeat(40)),
+        ],
+      ),
+      'true',
     )
   })
 
@@ -95,6 +117,26 @@ describe('ISSUE-184 trusted database evidence tree classifier', () => {
         [blob('docs/issues/ISSUE-184-loop-engineer-dedicated-db-gate.md', '2'.repeat(40))],
       ),
       'false',
+    )
+  })
+
+  it.each(['AGENTS.md', 'CLAUDE.md', 'Hana_PRD_v1.md', 'README.md'])(
+    'allows the reviewed root documentation path %s',
+    (path) => {
+      expectClassification(
+        input([blob(path, '1'.repeat(40))], [blob(path, '2'.repeat(40))]),
+        'false',
+      )
+    },
+  )
+
+  it('requires evidence for non-Markdown files under docs', () => {
+    expectClassification(
+      input(
+        [blob('docs/api-driven-development/policy.json', '1'.repeat(40))],
+        [blob('docs/api-driven-development/policy.json', '2'.repeat(40))],
+      ),
+      'true',
     )
   })
 
