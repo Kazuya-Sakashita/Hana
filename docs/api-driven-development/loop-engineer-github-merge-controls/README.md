@@ -92,7 +92,7 @@ workflowのrun名とconcurrency名には未検証inputを含めず、main contro
 
 `openapi-breaking-approved` labelが外された場合は、main固定の`pull_request_target` workflowが候補コードをcheckout・実行せず、専用App名義の`validate`と`merge-eligibility`をfailureで発行する。labelが再追加済み、PR headが変化済み、PRがclose済みなら古いeventは何も変更しない。
 
-候補コード上では`candidate-pr-gate`、`candidate-openapi-validate`、`candidate-issue-registry`をsecretなしで実行する。検証済みattestationのchange areaに`database`、`migration-code`、`real-db-migration`のいずれかが含まれる場合、`candidate-pr-gate`はattested exact head SHAをcheckoutし、digest固定したPostgreSQL 16の合成DB上でISSUE-123 bootstrap、ISSUE-151 role分離bootstrap、migration、children RLS実DBテスト、`pnpm pr:gate`の順に実行する。要否判定の欠落・不正、script欠落、step失敗、timeoutはいずれも専用Appの`pr-gate`を成功させない。change areaの未知・欠落・過少申告は`HOLD`とし、reviewとclassifierのstatus-only証跡を前提にする。
+候補コード上では`candidate-pr-gate`、`candidate-openapi-validate`、`candidate-issue-registry`をsecretなしで実行する。main固定prepareはGitHub APIからattested exact base/headの全変更pathを取得し、PRの`changed_files`件数と一致しなければ停止する。trusted path分類がDB-sensitiveと判定した場合、または検証済みattestationのchange areaに`database`、`migration-code`、`real-db-migration`のいずれかが含まれる場合、`candidate-pr-gate`はattested exact head SHAをcheckoutし、digest固定したPostgreSQL 16の合成DB上でISSUE-123 bootstrap、ISSUE-151 role分離bootstrap、migration、children RLS実DBテスト、`pnpm pr:gate`の順に実行する。要否判定の欠落・不正、変更pathの欠落・重複・不正、script欠落、step失敗、timeoutはいずれも専用Appの`pr-gate`を成功させない。callerがDB change areaを過少申告してもtrusted path分類を無効化できない。
 
 このcontrollerは常にmainから`--ref main`でdispatchし、PR branch上のworkflowをcontrollerとして実行しない。DB変更PRはこのcontrollerがmainへ入るまで`HOLD`とし、main更新後はbase/headと全証跡をfreshに取得し直す。ここで使うDBは合成fixtureだけであり、productionまたはstaging DBのmigration・cutoverに必要な人間承認とは分離する。
 

@@ -49,10 +49,13 @@ describe('ISSUE-140 authenticated browser CI contract', () => {
     expect(workflow.jobs?.['pr-gate']?.services?.postgres?.image).toBe(
       'postgres:16.14@sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b',
     )
-    expect(prGateSteps).toContainEqual({
+    const checkout = {
       uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
       with: { 'persist-credentials': false },
-    })
+    }
+    expect(prGateSteps.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+      checkout,
+    ])
     expect(
       prGateSteps.some(
         ({ uses }) => uses === 'pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1',
@@ -68,7 +71,9 @@ describe('ISSUE-140 authenticated browser CI contract', () => {
         ({ uses }) => uses === 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
       ),
     ).toBe(true)
-    expect(prGateSteps.some(({ uses }) => uses?.endsWith('@v4'))).toBe(false)
+    for (const { uses } of prGateSteps.filter(({ uses }) => uses !== undefined)) {
+      expect(uses).toMatch(/^[^@\s]+@[0-9a-f]{40}$/)
+    }
   })
 
   it('serializes Chromium and disables trace/video capture', () => {

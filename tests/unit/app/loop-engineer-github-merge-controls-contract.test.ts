@@ -111,7 +111,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     const controller = read('scripts/loop-engineer/github-check-generation.ts')
 
     expect(source).toContain('workflow_dispatch:')
-    expect(source).toContain('ref: main')
+    expect(source).toContain('ref: ${{ github.sha }}')
     expect(source).toContain('LOOP_ENGINEER_DISPATCHER_LOGIN')
     expect(source).toContain('github.event.sender.type')
     expect(source).toContain('LOOP_ENGINEER_APP_ID')
@@ -158,6 +158,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
       jobs: Record<
         string,
         {
+          'timeout-minutes'?: number
           outputs?: Record<string, string>
           services?: Record<
             string,
@@ -171,9 +172,11 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
           steps?: Array<{
             id?: string
             name?: string
+            uses?: string
             run?: string
             if?: string
             env?: Record<string, string>
+            with?: Record<string, string | boolean>
           }>
         }
       >
@@ -182,6 +185,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     const gateScript = prepare.steps?.find(({ id }) => id === 'gate')?.run ?? ''
     const candidate = workflow.jobs.candidate_pr_gate!
     const steps = candidate.steps ?? []
+    const publisher = workflow.jobs.publish_required_checks!
     const databaseCondition = "needs.prepare.outputs.database_evidence_required == 'true'"
     const databaseRuns = [
       'pnpm qa:issue123:db-bootstrap',
@@ -192,7 +196,17 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     const classificationGuard = steps.find(
       ({ name }) => name === 'Require trusted database evidence classification',
     )
+    const trustedPrepareCheckout = {
+      uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+      with: {
+        ref: '${{ github.sha }}',
+        'persist-credentials': false,
+      },
+    }
 
+    expect(prepare.steps?.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+      trustedPrepareCheckout,
+    ])
     expect(prepare.outputs?.database_evidence_required).toBe(
       '${{ steps.gate.outputs.database_evidence_required }}',
     )
@@ -205,6 +219,22 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
       gateScript.indexOf('database_evidence_required='),
     )
+    expect(gateScript).toContain('changed_files')
+    expect(gateScript).toContain('gh api --paginate')
+    expect(gateScript).toContain('listed_changed_files')
+    expect(gateScript).toContain('declared_changed_files')
+    expect(gateScript).toContain('evaluate-database-evidence-paths.ts')
+    expect(gateScript).toContain('"$GITHUB_SHA" != "$live_base_sha"')
+    expect(gateScript).toContain(
+      '"$trusted_database_diff_required" == "true" || "$attested_database_area_required" == "true"',
+    )
+    expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
+      gateScript.indexOf('gh api --paginate'),
+    )
+    expect(gateScript.indexOf('gh api --paginate')).toBeLessThan(
+      gateScript.indexOf('evaluate-database-evidence-paths.ts'),
+    )
+    expect(candidate['timeout-minutes']).toBe(25)
     expect(candidate.services?.postgres?.image).toBe(
       'postgres:16.14@sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b',
     )
@@ -229,6 +259,17 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(classificationGuard?.run).toContain('true|false')
     expect(classificationGuard?.run).toContain('exit 1')
 
+    const candidateCheckout = {
+      uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+      with: {
+        ref: '${{ needs.prepare.outputs.head_sha }}',
+        'persist-credentials': false,
+      },
+    }
+    expect(steps.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+      candidateCheckout,
+    ])
+
     const databaseIndexes = databaseRuns.map((run) => steps.findIndex((step) => step.run === run))
     for (const [index, run] of databaseRuns.entries()) {
       expect(steps[databaseIndexes[index]!]).toMatchObject({ run, if: databaseCondition })
@@ -242,9 +283,16 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(databaseIndexes).toEqual([...databaseIndexes].sort((left, right) => left - right))
     const installIndex = steps.findIndex(({ run }) => run === 'pnpm install --frozen-lockfile')
     const prGateIndex = steps.findIndex(({ run }) => run === 'pnpm pr:gate')
+    const checkoutIndex = steps.findIndex(({ uses }) => uses === candidateCheckout.uses)
+    expect(checkoutIndex).toBeLessThan(installIndex)
     expect(installIndex).toBeLessThan(databaseIndexes[0]!)
     expect(databaseIndexes.at(-1)).toBeLessThan(prGateIndex)
     expect(steps[prGateIndex]?.if).toBeUndefined()
+    expect(
+      publisher.steps?.find(
+        ({ name }) => name === 'Finalize status-only checks from the dedicated App',
+      )?.env?.PR_GATE_RESULT,
+    ).toBe('${{ needs.candidate_pr_gate.result }}')
   })
 
   it('accepts an OpenAPI waiver only for a freshly generated non-empty report', () => {

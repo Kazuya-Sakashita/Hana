@@ -21,7 +21,7 @@ database変更を含むPRでは、attested exact head SHAに対するchildren所
 
 ## スコープ (What)
 
-- 検証済みreview attestationのchange areaから実DB証跡の要否を導出する
+- exact base/headのtrusted path分類と検証済みreview attestationのchange areaから実DB証跡の要否を導出する
 - main固定controllerの候補jobでpin済みPostgreSQL 16を起動する
 - database変更ではbootstrap、migration、children RLS実DBテストを`pnpm pr:gate`より先に実行する
 - 標準`pr-gate` workflowのPostgreSQL imageと使用Actionを完全SHAへ固定する
@@ -46,7 +46,7 @@ OpenAPI、migration、Storage、アプリruntimeには影響しない。
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [x] 検証済みchange areaが`database`、`migration-code`、`real-db-migration`のときだけ実DB証跡を必須にする
+- [x] exact base/headのDB-sensitive pathまたは検証済みDB change areaがあるとき実DB証跡を必須にする
 - [x] DB証跡要否の欠落または不正値をcandidate jobでfail-closedにする
 - [x] pin済みPostgreSQL上でbootstrap、migration、children RLS実DBテストを順に実行する
 - [x] DB証跡スクリプトの欠落、失敗、timeout時は専用Appの`pr-gate`を成功させない

@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
@@ -66,7 +66,7 @@ jobs:
           pr_number="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.pr_number | select(type == "number" and . > 0 and floor == .)')"
           declared_head_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.head_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
           declared_merge_base_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.merge_base_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
-          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
+          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,changed_files,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
           live_head_sha="$(jq -er '.head_sha' <<<"$live_pr")"
           live_base_sha="$(jq -er '.base_sha' <<<"$live_pr")"
 
@@ -74,7 +74,7 @@ jobs:
             echo "::error::The target must be an open, non-draft PR to main."
             exit 1
           fi
-          if [[ "$declared_head_sha" != "$live_head_sha" || "$declared_merge_base_sha" != "$live_base_sha" ]]; then
+          if [[ "$declared_head_sha" != "$live_head_sha" || "$declared_merge_base_sha" != "$live_base_sha" || "$GITHUB_SHA" != "$live_base_sha" ]]; then
             echo "::error::The attestation is stale for the current PR head or main base SHA."
             exit 1
           fi
@@ -102,12 +102,28 @@ jobs:
             exit 1
           fi
 
-          database_evidence_required="$(printf '%s' "$GATE_INPUT" | jq -r 'any(.review_attestation.change_areas[]; . == "database" or . == "migration-code" or . == "real-db-migration")')"
-          if [[ "$database_evidence_required" != "true" && "$database_evidence_required" != "false" ]]; then
-            echo "::error::The database evidence requirement could not be derived from the validated attestation."
+          declared_changed_files="$(jq -er '.changed_files | select(type == "number" and . > 0 and floor == .)' <<<"$live_pr")"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/files?per_page=100" |
+            jq -sce '[.[][] | .filename] | if all(.[]; type == "string") then . else error("invalid changed file response") end' \
+              > "$RUNNER_TEMP/pull-request-files.json"
+          listed_changed_files="$(jq -er 'length' "$RUNNER_TEMP/pull-request-files.json")"
+          if [[ "$listed_changed_files" != "$declared_changed_files" ]]; then
+            echo "::error::The complete exact-head pull request file list could not be verified."
             exit 1
           fi
 
+          trusted_database_diff_required="$(pnpm --silent exec tsx scripts/loop-engineer/evaluate-database-evidence-paths.ts < "$RUNNER_TEMP/pull-request-files.json")"
+          attested_database_area_required="$(printf '%s' "$GATE_INPUT" | jq -r 'any(.review_attestation.change_areas[]; . == "database" or . == "migration-code" or . == "real-db-migration")')"
+          for evidence_required in "$trusted_database_diff_required" "$attested_database_area_required"; do
+            if [[ "$evidence_required" != "true" && "$evidence_required" != "false" ]]; then
+              echo "::error::A database evidence classification is missing or invalid."
+              exit 1
+            fi
+          done
+          database_evidence_required=false
+          if [[ "$trusted_database_diff_required" == "true" || "$attested_database_area_required" == "true" ]]; then
+            database_evidence_required=true
+          fi
           echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "head_sha=$live_head_sha" >> "$GITHUB_OUTPUT"
           echo "base_sha=$live_base_sha" >> "$GITHUB_OUTPUT"
