@@ -102,6 +102,7 @@ production telemetry activationをHoldにする。
 - 合成browser E2Eは5 / 5 PASS。Memory `Idempotency-Key`、3段階ProductEventの同一`flow_id`、全204 ack、DB truthの相関を確認した
 - 最新`oasdiff breaking`は19件（error 14 / warning 5）、GitHub Actionと同じ改行正規化後のexact report SHA-256は`b44a1678c98362151a61d0d7ebbdf64c7eabc678e2e0b41dd3d5f9f319a99a8e`
 - 2026-08-07T22:10:52Zに`Kazuya-Sakashita`が上記19件のexact reportだけを明示承認し、旧16件waiverを`superseded`、最新waiverを期限2026-08-21で記録した
+- PR #378へ`openapi-breaking-approved` labelを復元し、labelを含む最新workflow eventでwaiverを検証する
 - 第1巡はcommit `1814d03`をsecurity / privacy / analyticsの3名が独立reviewし、3 / 6 / 5件のactionable findingで全員HOLD
 - 第2巡はcommit `bcbfd06`を6つの必須roleが独立reviewし、重複を除く所見を修正した
 - 第3巡はcommit `a4c54da`を6つの必須roleが独立reviewし、privacy以外のactionable findingを修正した
