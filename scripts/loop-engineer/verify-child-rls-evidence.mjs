@@ -392,13 +392,16 @@ async function verifyAuthorizationSurface(admin) {
     },
   ])
 
-  const securityDefinerRoutines = await admin.query(`
+  const applicationRoutines = await admin.query(`
     SELECT
       routine.oid::regprocedure::text AS signature,
       routine.prokind AS kind,
+      routine.prosecdef AS "securityDefiner",
       routine.provolatile AS volatility,
       routine.proisstrict AS strict,
       routine.proparallel AS parallel,
+      routine.proleakproof AS leakproof,
+      routine.proretset AS "returnsSet",
       routine.prorettype::regtype::text AS "returnType",
       language.lanname AS language,
       routine.proconfig AS config,
@@ -411,52 +414,157 @@ async function verifyAuthorizationSurface(admin) {
         WHERE acl.grantee = 0
           AND acl.privilege_type = 'EXECUTE'
       ) AS "publicExecute",
+      has_function_privilege('anon', routine.oid, 'EXECUTE') AS "anonymousExecute",
+      has_function_privilege('authenticated', routine.oid, 'EXECUTE') AS "authenticatedExecute",
       has_function_privilege('hana_child_runtime', routine.oid, 'EXECUTE') AS "runtimeExecute",
       has_function_privilege('hana_child_owner', routine.oid, 'EXECUTE') AS "ownerExecute",
+      ARRAY(
+        SELECT concat_ws(
+          '|',
+          CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
+          pg_catalog.pg_get_userbyid(acl.grantor),
+          acl.privilege_type,
+          acl.is_grantable::text
+        )
+        FROM pg_catalog.aclexplode(
+          COALESCE(routine.proacl, pg_catalog.acldefault('f', routine.proowner))
+        ) AS acl
+        ORDER BY
+          CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
+          pg_catalog.pg_get_userbyid(acl.grantor),
+          acl.privilege_type,
+          acl.is_grantable
+      ) AS acl,
       routine.prosrc AS source
     FROM pg_catalog.pg_proc AS routine
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = routine.pronamespace
     JOIN pg_catalog.pg_language AS language ON language.oid = routine.prolang
     WHERE namespace.nspname !~ '^pg_'
       AND namespace.nspname <> 'information_schema'
-      AND routine.prosecdef
     ORDER BY routine.oid::regprocedure::text
   `)
   requireExactRows(
-    securityDefinerRoutines.rows.map((row) => ({ ...row, source: row.source?.trim() })),
+    applicationRoutines.rows.map((row) => ({ ...row, source: row.source?.trim() })),
     [
       {
         signature: 'public.hana_child_access_status(uuid)',
         kind: 'f',
+        securityDefiner: true,
         volatility: 's',
         strict: false,
         parallel: 'u',
+        leakproof: false,
+        returnsSet: false,
         returnType: 'text',
         language: 'sql',
         config: ['search_path=pg_catalog'],
         owner: 'postgres',
         publicExecute: false,
+        anonymousExecute: false,
+        authenticatedExecute: false,
         runtimeExecute: false,
         ownerExecute: true,
+        acl: ['hana_child_owner|postgres|EXECUTE|false', 'postgres|postgres|EXECUTE|false'],
         source: expectedAccessStatusSource,
+      },
+      {
+        signature: 'public.hana_current_user_id()',
+        kind: 'f',
+        securityDefiner: false,
+        volatility: 's',
+        strict: false,
+        parallel: 'u',
+        leakproof: false,
+        returnsSet: false,
+        returnType: 'uuid',
+        language: 'plpgsql',
+        config: ['search_path=pg_catalog'],
+        owner: 'postgres',
+        publicExecute: false,
+        anonymousExecute: false,
+        authenticatedExecute: false,
+        runtimeExecute: false,
+        ownerExecute: true,
+        acl: ['hana_child_owner|postgres|EXECUTE|false', 'postgres|postgres|EXECUTE|false'],
+        source: expectedCurrentUserSource,
       },
       {
         signature: 'public.purge_expired_product_events()',
         kind: 'f',
+        securityDefiner: true,
         volatility: 'v',
         strict: false,
         parallel: 'u',
+        leakproof: false,
+        returnsSet: false,
         returnType: 'bigint',
         language: 'plpgsql',
         config: ['search_path=public'],
         owner: 'postgres',
         publicExecute: false,
+        anonymousExecute: false,
+        authenticatedExecute: false,
         runtimeExecute: false,
         ownerExecute: false,
+        acl: ['postgres|postgres|EXECUTE|false'],
         source: expectedPurgeProductEventsSource,
       },
     ],
   )
+
+  const applicationTriggers = await admin.query(`
+    SELECT
+      namespace.nspname AS schema,
+      relation.relname AS relation,
+      trigger.tgname AS trigger,
+      trigger.tgenabled AS enabled,
+      trigger.tgtype AS type,
+      trigger_function.oid::regprocedure::text AS function,
+      pg_catalog.pg_get_triggerdef(trigger.oid, false) AS definition
+    FROM pg_catalog.pg_trigger AS trigger
+    JOIN pg_catalog.pg_class AS relation ON relation.oid = trigger.tgrelid
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    JOIN pg_catalog.pg_proc AS trigger_function ON trigger_function.oid = trigger.tgfoid
+    WHERE NOT trigger.tgisinternal
+      AND namespace.nspname !~ '^pg_'
+      AND namespace.nspname <> 'information_schema'
+    ORDER BY namespace.nspname, relation.relname, trigger.tgname
+  `)
+  requireExactRows(applicationTriggers.rows, [])
+
+  const applicationRoutineDependencies = await admin.query(`
+    SELECT
+      routine.oid::regprocedure::text AS routine,
+      dependency.classid::regclass::text AS "dependentClass",
+      pg_catalog.pg_describe_object(
+        dependency.classid,
+        dependency.objid,
+        dependency.objsubid
+      ) AS dependent,
+      dependency.deptype AS type
+    FROM pg_catalog.pg_depend AS dependency
+    JOIN pg_catalog.pg_proc AS routine ON routine.oid = dependency.refobjid
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+    WHERE dependency.refclassid = 'pg_catalog.pg_proc'::regclass
+      AND namespace.nspname !~ '^pg_'
+      AND namespace.nspname <> 'information_schema'
+    ORDER BY routine.oid::regprocedure::text, dependency.classid::regclass::text,
+      dependent, dependency.deptype
+  `)
+  requireExactRows(applicationRoutineDependencies.rows, [
+    {
+      routine: 'public.hana_current_user_id()',
+      dependentClass: 'pg_policy',
+      dependent: 'policy children_owner_scope on table public.children',
+      type: 'n',
+    },
+    {
+      routine: 'public.hana_current_user_id()',
+      dependentClass: 'pg_policy',
+      dependent: 'policy children_owner_scope on table public.children',
+      type: 'n',
+    },
+  ])
 
   const schemaAccess = await admin.query(`
     WITH target_roles AS (

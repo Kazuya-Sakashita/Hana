@@ -51,7 +51,7 @@ OpenAPI、migration、Storage、アプリruntimeには影響しない。
 - [x] pin済みPostgreSQL上でtrusted bootstrap、candidate migration、trusted children RLS実DB検証を順に実行する
 - [x] trusted scriptの欠落、artifact境界違反、失敗、timeout時は専用Appの`pr-gate`を成功させない
 - [x] candidate package scriptのno-op化、alias rewiring、未知実行可能path、symlink artifactで証跡を迂回できない
-- [x] policy述語・function ACL・全非system role catalog/membership・間接view/SECURITY DEFINER露出の改変をexact catalogとランダムfixture CRUDで拒否し、敵対的DB改変でverifierのfail-closedを実証する
+- [x] policy述語・function ACL・全非system role catalog/membership・全非system routine/user trigger・実行依存・間接viewの改変をexact catalogとランダムfixture CRUDで拒否し、敵対的DB改変でverifierのfail-closedを実証する
 - [x] DB証跡不要のcandidateではDB接続envを`pnpm pr:gate`へ渡さない
 - [x] 標準`pr-gate`を最小権限、checkout credential非保持、Action完全SHA固定にする
 - [x] workflow contract testと`pnpm pr:gate`が成功する
@@ -73,7 +73,7 @@ OpenAPI、migration、Storage、アプリruntimeには影響しない。
 migrationは重複して取り込まない。後続PR #372のcandidate headはschemaとmigrationだけを供給し、
 base SHAからcheckoutしたtrusted harnessがrole bootstrap、trusted Prisma CLIによるcandidate migration、
 exact policy/ACL/role graphとowned/foreign/missing・owner CRUD・runtime直アクセス境界の直接検証を行う。
-WITH CHECK改変、runtime直INSERT policy、追加LOGIN+BYPASSRLS role、authenticatedへのfunction EXECUTE、public/別schemaの所有者権限view、別schemaのSECURITY DEFINER関数、default ACL、推移SET ROLEの敵対的改変でもfail-closedを確認する。candidateとtrusted-controlは兄弟directoryへ分離し、
+WITH CHECK改変、runtime直INSERT policy、追加LOGIN+BYPASSRLS role、authenticatedへのfunction EXECUTE、public/別schemaの所有者権限view、別schemaのSECURITY DEFINER関数、権限剥奪済みSECURITY INVOKER triggerによる遅延権限変更、default ACL、推移SET ROLEの敵対的改変でもfail-closedを確認する。candidateとtrusted-controlは兄弟directoryへ分離し、
 candidate dependency installとpackage scriptはDB証跡の後に実行し、
 candidate側のQA scriptやpackage scriptをno-op化しても成功へ迂回できない。
 

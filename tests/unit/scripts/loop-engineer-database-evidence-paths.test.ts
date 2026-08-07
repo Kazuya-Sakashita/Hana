@@ -12,18 +12,26 @@ const headCommitSha = 'b'.repeat(40)
 const baseTreeSha = 'c'.repeat(40)
 const headTreeSha = 'd'.repeat(40)
 
-function blob(path: string, sha: string) {
-  return { path, mode: '100644', type: 'blob', sha }
+type TreeEntry = {
+  path: string
+  mode: string
+  type: string
+  sha: string
 }
 
-function tree(sha: string, entries: Array<ReturnType<typeof blob>>) {
+function entry(path: string, sha: string, mode: string, type: string): TreeEntry {
+  return { path, mode, type, sha }
+}
+
+function blob(path: string, sha: string): TreeEntry {
+  return entry(path, sha, '100644', 'blob')
+}
+
+function tree(sha: string, entries: TreeEntry[]) {
   return { sha, truncated: false, tree: entries }
 }
 
-function input(
-  baseEntries: Array<ReturnType<typeof blob>>,
-  headEntries: Array<ReturnType<typeof blob>>,
-) {
+function input(baseEntries: TreeEntry[], headEntries: TreeEntry[]) {
   return {
     schema_version: 'loop-engineer-database-evidence-tree-input/v2',
     base_commit_sha: baseCommitSha,
@@ -124,6 +132,56 @@ describe('ISSUE-184 trusted database evidence tree classifier', () => {
     )
   })
 
+  it.each([
+    ['symlink', '120000', 'blob'],
+    ['executable blob', '100755', 'blob'],
+    ['submodule commit', '160000', 'commit'],
+  ])('requires database evidence for a documentation %s entry', (_label, mode, type) => {
+    expectClassification(
+      input(
+        [entry('docs/operations.md', '1'.repeat(40), mode, type)],
+        [entry('docs/operations.md', '2'.repeat(40), mode, type)],
+      ),
+      'true',
+    )
+  })
+
+  it('requires database evidence for a regular documentation blob changed to a symlink', () => {
+    expectClassification(
+      input(
+        [blob('docs/operations.md', '1'.repeat(40))],
+        [entry('docs/operations.md', '2'.repeat(40), '120000', 'blob')],
+      ),
+      'true',
+    )
+  })
+
+  it('requires database evidence for a regular documentation blob changed to a tree', () => {
+    expectClassification(
+      input(
+        [blob('docs/operations.md', '1'.repeat(40))],
+        [entry('docs/operations.md', '2'.repeat(40), '040000', 'tree')],
+      ),
+      'true',
+    )
+  })
+
+  it('ignores parent tree SHA changes for an ordinary documentation blob change', () => {
+    expectClassification(
+      input(
+        [
+          entry('docs', '1'.repeat(40), '040000', 'tree'),
+          blob('docs/operations.md', '2'.repeat(40)),
+        ],
+        [
+          entry('docs', '3'.repeat(40), '040000', 'tree'),
+          blob('docs/operations.md', '4'.repeat(40)),
+        ],
+      ),
+      'false',
+    )
+  })
+
   it.each(['AGENTS.md', 'CLAUDE.md', 'Hana_PRD_v1.md', 'README.md'])(
     'allows the reviewed root documentation path %s',
     (path) => {
@@ -178,6 +236,14 @@ describe('ISSUE-184 trusted database evidence tree classifier', () => {
       ...input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '2'.repeat(40))]),
       schema_version: 'loop-engineer-database-evidence-tree-input/v1',
     },
+    input(
+      [blob('docs/a.md', '1'.repeat(40))],
+      [entry('docs/a.md', '2'.repeat(40), '100600', 'blob')],
+    ),
+    input(
+      [blob('docs/a.md', '1'.repeat(40))],
+      [entry('docs/a.md', '2'.repeat(40), '100644', 'commit')],
+    ),
     input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '1'.repeat(40))]),
   ])('fails closed for malformed, truncated, or unchanged tree input %#', (value) => {
     const result = classify(value)

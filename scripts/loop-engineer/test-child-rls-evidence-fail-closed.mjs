@@ -85,6 +85,9 @@ async function run() {
   const routineName = `issue_184_${randomUUID().replaceAll('-', '')}`
   const viewSchema = `issue_184_${randomUUID().replaceAll('-', '')}`
   const viewName = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const dormantTrigger = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const dormantTriggerFunction = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const dormantPolicy = `issue_184_${randomUUID().replaceAll('-', '')}`
   const ownerId = randomUUID()
   const foreignOwnerId = randomUUID()
   const ownerChildId = randomUUID()
@@ -380,6 +383,109 @@ async function run() {
     }
     runVerifier(verifierEnvironment, 0, pass)
 
+    await transaction(schemaOwner, [
+      `
+        CREATE FUNCTION public.${dormantTriggerFunction}()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        VOLATILE
+        SECURITY INVOKER
+        SET search_path = pg_catalog
+        AS $function$
+        BEGIN
+          EXECUTE 'GRANT INSERT ON TABLE public.children TO hana_child_runtime';
+          EXECUTE 'CREATE POLICY ${dormantPolicy} ON public.children FOR INSERT TO hana_child_runtime WITH CHECK (true)';
+          RETURN NULL;
+        END
+        $function$
+      `,
+      `REVOKE ALL ON FUNCTION public.${dormantTriggerFunction}() FROM PUBLIC`,
+      `
+        CREATE TRIGGER ${dormantTrigger}
+        AFTER UPDATE ON public.profiles
+        FOR EACH STATEMENT
+        EXECUTE FUNCTION public.${dormantTriggerFunction}()
+      `,
+    ])
+    try {
+      const dormantMutation = await admin.query(
+        `
+          SELECT
+            NOT routine.prosecdef
+              AND NOT EXISTS (
+                SELECT 1
+                FROM pg_catalog.aclexplode(
+                  COALESCE(routine.proacl, pg_catalog.acldefault('f', routine.proowner))
+                ) AS acl
+                WHERE acl.grantee = 0
+                  AND acl.privilege_type = 'EXECUTE'
+              )
+              AND NOT has_function_privilege('hana_child_runtime', routine.oid, 'EXECUTE')
+              AND NOT has_function_privilege('hana_child_owner', routine.oid, 'EXECUTE')
+              AND trigger.tgrelid = 'public.profiles'::regclass
+              AND NOT trigger.tgisinternal
+              AS present
+          FROM pg_catalog.pg_proc AS routine
+          JOIN pg_catalog.pg_trigger AS trigger ON trigger.tgfoid = routine.oid
+          WHERE routine.oid = to_regprocedure($1)
+            AND trigger.tgname = $2
+        `,
+        [`public.${dormantTriggerFunction}()`, dormantTrigger],
+      )
+      requireTrue(dormantMutation.rows[0]?.present)
+      runVerifier(verifierEnvironment, 1, fail)
+
+      await schemaOwner.query(
+        'UPDATE public.profiles SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [ownerId],
+      )
+      const armedMutation = await admin.query(
+        `
+          SELECT
+            has_table_privilege('hana_child_runtime', 'public.children', 'INSERT')
+              AND EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_policy AS policy
+                WHERE policy.polrelid = 'public.children'::regclass
+                  AND policy.polname = $1
+              ) AS present
+        `,
+        [dormantPolicy],
+      )
+      requireTrue(armedMutation.rows[0]?.present)
+      runVerifier(verifierEnvironment, 1, fail)
+    } finally {
+      await transaction(schemaOwner, [
+        `DROP TRIGGER IF EXISTS ${dormantTrigger} ON public.profiles`,
+        `DROP FUNCTION IF EXISTS public.${dormantTriggerFunction}()`,
+        `DROP POLICY IF EXISTS ${dormantPolicy} ON public.children`,
+        'REVOKE INSERT ON TABLE public.children FROM hana_child_runtime',
+      ])
+    }
+    const dormantRestored = await admin.query(
+      `
+        SELECT
+          to_regprocedure($1) IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pg_catalog.pg_trigger AS trigger
+              WHERE trigger.tgrelid = 'public.profiles'::regclass
+                AND trigger.tgname = $2
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pg_catalog.pg_policy AS policy
+              WHERE policy.polrelid = 'public.children'::regclass
+                AND policy.polname = $3
+            )
+            AND NOT has_table_privilege('hana_child_runtime', 'public.children', 'INSERT')
+            AS restored
+      `,
+      [`public.${dormantTriggerFunction}()`, dormantTrigger, dormantPolicy],
+    )
+    requireTrue(dormantRestored.rows[0]?.restored)
+    runVerifier(verifierEnvironment, 0, pass)
+
     await transaction(admin, [
       `CREATE ROLE ${parentRole} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION BYPASSRLS`,
       `GRANT ${parentRole} TO hana_child_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
@@ -424,6 +530,18 @@ async function run() {
     await admin.query(`DROP VIEW IF EXISTS public.${exposedView}`).catch(() => undefined)
     await admin.query(`DROP SCHEMA IF EXISTS ${routineSchema} CASCADE`).catch(() => undefined)
     await admin.query(`DROP SCHEMA IF EXISTS ${viewSchema} CASCADE`).catch(() => undefined)
+    await schemaOwner
+      .query(`DROP TRIGGER IF EXISTS ${dormantTrigger} ON public.profiles`)
+      .catch(() => undefined)
+    await schemaOwner
+      .query(`DROP FUNCTION IF EXISTS public.${dormantTriggerFunction}()`)
+      .catch(() => undefined)
+    await schemaOwner
+      .query(`DROP POLICY IF EXISTS ${dormantPolicy} ON public.children`)
+      .catch(() => undefined)
+    await schemaOwner
+      .query('REVOKE INSERT ON TABLE public.children FROM hana_child_runtime')
+      .catch(() => undefined)
     await schemaOwner
       .query('DELETE FROM public.children WHERE id = ANY($1::uuid[])', [
         [ownerChildId, foreignChildId],
