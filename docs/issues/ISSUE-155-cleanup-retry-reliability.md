@@ -2,7 +2,7 @@
 id: ISSUE-155
 title: confirmed cleanupへlease・backoff・dead-letterを追加する
 priority: P0
-status: todo
+status: review
 size: M
 created_at: 2026-08-03
 github_issue: 323
@@ -25,6 +25,14 @@ confirmed後に記録へ紐付かなかった画像cleanupを安全に再試行�
 - 合成PostgreSQL/Storageでの同時実行・回復検証
 - countと固定reasonだけのmetrics/log
 
+## 影響範囲
+
+- `images`のconfirmed cleanup状態とmigration
+- confirmed未紐付け画像cleanup workerと内部cron応答
+- 合成PostgreSQL/Storage QAと運用Runbook
+
+OpenAPI、公開API、実Storage、production/staging DBには影響しない。
+
 ## やらないこと (Out of Scope)
 
 - 実環境migration適用
@@ -32,12 +40,27 @@ confirmed後に記録へ紐付かなかった画像cleanupを安全に再試行�
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [ ] attempts、next attempt、claim token、lease、固定failure reasonの状態契約を定義する
-- [ ] 一時失敗はbackoff付きで再試行し、上限到達後はdead-letterへ移る
-- [ ] poison itemが同じbatchの他候補を塞がない
-- [ ] 同時実行、lease失効、Storage失敗、回復を合成PostgreSQLとStorageで検証する
-- [ ] metricsとログは件数と固定reasonだけを出し、画像ID、URL、storage keyを出さない
-- [ ] 実環境migration適用は別の人間承認まで行わない
+- [x] attempts、next attempt、claim token、lease、固定failure reasonの状態契約を定義する
+- [x] 一時失敗はbackoff付きで再試行し、上限到達後はdead-letterへ移る
+- [x] poison itemが同じbatchの他候補を塞がない
+- [x] 同時実行、lease失効、Storage失敗、回復を合成PostgreSQLとStorageで検証する
+- [x] metricsとログは件数と固定reasonだけを出し、画像ID、URL、storage keyを出さない
+- [x] 実環境migration適用は別の人間承認まで行わない
+
+## 検証結果
+
+- `pnpm qa:issue155:cleanup-db`: 合成PostgreSQL/Storageで9テスト成功
+- `pnpm pr:gate`: format、lint、Issue/OpenAPI契約、typecheck、全体test、build成功
+- production/staging DB migrationおよび実Storage applyは未実施
+
+## 専門レビュー
+
+- Round 1 reliability: HOLD（lease失効、queue飢餓、実行deadline）
+- Round 1 database: HOLD（lease失効、状態制約、migration運用、index）
+- Round 2 reliability: PASS
+- Round 2 database: HOLD（keyset cursorのDB/JavaScript日時精度差）
+- Round 3 reliability: PASS（actionable finding 0件）
+- Round 3 database: PASS（actionable finding 0件）
 
 ## セキュリティ・プライバシー考慮
 
@@ -46,3 +69,4 @@ confirmed後に記録へ紐付かなかった画像cleanupを安全に再試行�
 ## 参考
 
 - GitHub Issue #323
+- `docs/runbooks/confirmed-unlinked-image-cleanup.md`

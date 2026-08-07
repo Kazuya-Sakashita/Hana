@@ -13,3 +13,15 @@ export async function lockImageAccess(
     `
   }
 }
+
+export async function tryLockImageAccess(
+  transaction: Prisma.TransactionClient,
+  imageId: string,
+): Promise<boolean> {
+  const rows = await transaction.$queryRaw<Array<{ locked: boolean }>>`
+    SELECT pg_try_advisory_xact_lock(
+      hashtextextended(${`${IMAGE_LOCK_PREFIX}${imageId}`}, 0)
+    ) AS locked
+  `
+  return rows[0]?.locked === true
+}
