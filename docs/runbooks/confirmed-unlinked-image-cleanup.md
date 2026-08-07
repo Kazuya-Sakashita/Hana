@@ -45,8 +45,9 @@ DBへ保存できるfailure reasonは次の固定値だけとする。
 - `invalid_storage_key`
 
 Storageへ書き込む処理とcleanupは、`upload-storage`、`image`の順で同じadvisory lockを取得する。
-cleanupは同じstorage keyの先行writer完了後にclaimし、形式または所有者prefixが不正なkeyはStorageへ
-渡さず`invalid_storage_key`でdead-letter化する。
+cleanupはbusyなstorage keyを待たずにskipし、後続候補を処理する。backfillのStorage requestはDB
+transactionより短い共通期限で中止し、削除済みobjectを再作成しないnon-upsert更新に限定する。形式または
+所有者prefixが不正なkeyはStorageへ渡さず`invalid_storage_key`でdead-letter化する。
 
 endpointが返すfailure countも上記と`claim_failed`、`retry_state_unavailable`だけに限定する。
 生の例外、Storageレスポンス、画像識別子は保存・返却しない。

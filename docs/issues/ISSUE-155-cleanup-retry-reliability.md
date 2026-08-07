@@ -64,6 +64,8 @@ OpenAPI、公開API、実Storage、production/staging DBには影響しない。
 - Merge gate Round 1 image: HOLD（同じstorage keyへの先行writerとの直列化）
 - Merge gate Round 1 privacy: HOLD（storage key形式・所有者prefixの検証）
 - 対応: 共通storage lock順序、backfill fencing、不正keyのStorage非接触dead-letter、合成競合テストを追加
+- Merge gate Round 2: HOLD（storage lockの非blocking化、backfill期限、合成DB suiteの必須CI化）
+- 対応: try-lock、期限付きnon-upsert backfill、CI時の合成DB自動実行、決定的な競合fixtureを追加
 
 ## セキュリティ・プライバシー考慮
 

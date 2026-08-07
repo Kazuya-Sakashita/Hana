@@ -18,7 +18,13 @@ import { lockImageAccess } from '../../src/features/uploads/server/image-access-
 const BATCH_SIZE = 25
 const BUCKET = 'images'
 const DOWNLOAD_TTL_SECONDS = 60
+export const STORAGE_FENCE_TIMEOUT_MS = 45_000
+export const TRANSACTION_TIMEOUT_MS = 60_000
 const SUPPORTED_TYPES = new Set<SanitizableImageMime>(['image/jpeg', 'image/png', 'image/webp'])
+
+export function storageReplacementOptions(contentType: string) {
+  return { contentType, cacheControl: '300', upsert: false } as const
+}
 
 dotenv.config({ path: '.env.local', quiet: true })
 dotenv.config({ quiet: true })
@@ -61,11 +67,8 @@ export async function executeBackfill(apply: boolean) {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: requiredEnvironment('DATABASE_URL') }),
   })
-  const storage = createClient(
-    requiredEnvironment('NEXT_PUBLIC_SUPABASE_URL'),
-    requiredEnvironment('SUPABASE_SERVICE_ROLE_KEY'),
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  ).storage.from(BUCKET)
+  const storageUrl = requiredEnvironment('NEXT_PUBLIC_SUPABASE_URL')
+  const serviceRoleKey = requiredEnvironment('SUPABASE_SERVICE_ROLE_KEY')
 
   try {
     return await runExistingImageBackfill(apply, {
@@ -80,6 +83,19 @@ export async function executeBackfill(apply: boolean) {
       sanitizeAndMark: async (image: ExistingImageCandidate) =>
         prisma.$transaction(
           async (transaction) => {
+            const fenceSignal = AbortSignal.timeout(STORAGE_FENCE_TIMEOUT_MS)
+            const storage = createClient(storageUrl, serviceRoleKey, {
+              auth: { autoRefreshToken: false, persistSession: false },
+              global: {
+                fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+                  fetch(input, {
+                    ...init,
+                    signal: init?.signal
+                      ? AbortSignal.any([init.signal, fenceSignal])
+                      : fenceSignal,
+                  }),
+              },
+            }).storage.from(BUCKET)
             await acquireUploadStorageLock(transaction, image.storageKey)
             await lockImageAccess(transaction, [image.id])
             const current = await transaction.image.findUnique({ where: { id: image.id } })
@@ -97,18 +113,20 @@ export async function executeBackfill(apply: boolean) {
             const signed = await storage.createSignedUrl(current.storageKey, DOWNLOAD_TTL_SECONDS)
             if (signed.error || !signed.data?.signedUrl) throw new Error('signed_url_failed')
             const source = await readResponseWithLimit(
-              await fetch(signed.data.signedUrl, { signal: AbortSignal.timeout(15_000) }),
+              await fetch(signed.data.signedUrl, {
+                signal: AbortSignal.any([fenceSignal, AbortSignal.timeout(15_000)]),
+              }),
             )
             const sanitized = await sanitizeExistingImageBuffer(
               source,
               current.contentType as SanitizableImageMime,
             )
             if (sanitized.reencoded) {
-              const replacement = await storage.update(current.storageKey, sanitized.buffer, {
-                contentType: sanitized.contentType,
-                cacheControl: '300',
-                upsert: true,
-              })
+              const replacement = await storage.update(
+                current.storageKey,
+                sanitized.buffer,
+                storageReplacementOptions(sanitized.contentType),
+              )
               if (replacement.error) throw new Error('storage_update_failed')
             }
             const updated = await transaction.image.updateMany({
@@ -123,7 +141,7 @@ export async function executeBackfill(apply: boolean) {
             })
             return updated.count === 1
           },
-          { maxWait: 3_000, timeout: 60_000 },
+          { maxWait: 3_000, timeout: TRANSACTION_TIMEOUT_MS },
         ),
     })
   } finally {

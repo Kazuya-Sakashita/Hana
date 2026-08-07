@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma, type Image, type PrismaClient } from '@prisma/client'
 import { lockImageAccess, tryLockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { deriveVariantKey } from '@/features/uploads/server/signed-url'
-import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
+import { tryAcquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
 import { isValidStorageKey, storageKeyBelongsToUser } from '@/features/uploads/server/storage-key'
 
 export const CONFIRMED_UNLINKED_RETENTION_MS = 48 * 60 * 60 * 1000
@@ -177,7 +177,9 @@ async function claimImage(
         select: { storageKey: true },
       })
       if (!candidate) return null
-      await acquireUploadStorageLock(transaction, candidate.storageKey)
+      if (!(await tryAcquireUploadStorageLock(transaction, candidate.storageKey))) {
+        return { kind: 'busy' }
+      }
       if (!(await tryLockImageAccess(transaction, imageId))) return { kind: 'busy' }
       const image = await transaction.image.findUnique({ where: { id: imageId } })
       if (!image || !isDueForClaim(image, now, cutoff, staleClaimBefore)) return null

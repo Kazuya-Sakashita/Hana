@@ -13,20 +13,34 @@ import { deriveVariantKey } from '@/features/uploads/server/signed-url'
 import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
 import { userIdHash } from '@/features/uploads/server/storage-key'
 
-const qaEnabled = process.env.ISSUE_155_CLEANUP_QA === '1'
 const NOW = new Date('2026-08-07T12:00:00.000Z')
 const userId = '00000000-0000-4000-8000-000000000155'
 
-function assertSyntheticDatabase(environment: NodeJS.ProcessEnv): void {
-  if (environment.ISSUE_155_CLEANUP_QA !== '1') throw new Error('qa_opt_in_required')
+function hasSyntheticDatabase(environment: NodeJS.ProcessEnv): boolean {
   for (const name of ['DATABASE_URL', 'DIRECT_URL'] as const) {
     const value = environment[name]
-    if (!value) throw new Error(`${name.toLowerCase()}_required`)
-    const url = new URL(value)
-    if (!['localhost', '127.0.0.1'].includes(url.hostname) || url.pathname !== '/hana_ci') {
-      throw new Error(`${name.toLowerCase()}_synthetic_local_database_required`)
+    if (!value) return false
+    try {
+      const url = new URL(value)
+      if (!['localhost', '127.0.0.1'].includes(url.hostname) || url.pathname !== '/hana_ci') {
+        return false
+      }
+    } catch {
+      return false
     }
   }
+  return true
+}
+
+const qaEnabled =
+  process.env.ISSUE_155_CLEANUP_QA === '1' ||
+  (process.env.CI === 'true' && hasSyntheticDatabase(process.env))
+
+function assertSyntheticDatabase(environment: NodeJS.ProcessEnv): void {
+  if (environment.ISSUE_155_CLEANUP_QA !== '1' && environment.CI !== 'true') {
+    throw new Error('qa_opt_in_required')
+  }
+  if (!hasSyntheticDatabase(environment)) throw new Error('synthetic_local_database_required')
 }
 
 function keys(storageKey: string): string[] {
@@ -142,9 +156,12 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
     expect(store.objects.size).toBe(0)
   })
 
-  it('waits for an in-flight same-key writer before claiming and removing Storage objects', async () => {
-    const fixture = await createImage()
-    const store = storageFixture(fixture.keys, async () => true)
+  it('skips an in-flight same-key writer and deletes a later candidate without waiting', async () => {
+    const busy = await createImage({
+      confirmedCleanupNextAt: new Date(NOW.getTime() - 2),
+    })
+    const healthy = await createImage()
+    const store = storageFixture([...busy.keys, ...healthy.keys], async () => true)
     let releaseWriter!: () => void
     let writerStarted!: () => void
     const release = new Promise<void>((resolve) => {
@@ -155,12 +172,12 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
     })
     const writer = prisma.$transaction(
       async (transaction) => {
-        await acquireUploadStorageLock(transaction, fixture.storageKey)
+        await acquireUploadStorageLock(transaction, busy.storageKey)
         writerStarted()
         await release
-        const current = await transaction.image.findUniqueOrThrow({ where: { id: fixture.id } })
+        const current = await transaction.image.findUniqueOrThrow({ where: { id: busy.id } })
         expect(current.deletedAt).toBeNull()
-        fixture.keys.forEach((key) => store.objects.add(key))
+        busy.keys.forEach((key) => store.objects.add(key))
       },
       { timeout: 10_000 },
     )
@@ -171,19 +188,27 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
       now: NOW,
       limit: 1,
     })
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(store.storage.remove).not.toHaveBeenCalled()
-    expect(await prisma.image.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({
+    const result = await cleanup
+
+    expect(result).toMatchObject({ scanned: 2, protected: 1, deleted: 1, failed: 0 })
+    expect(store.storage.remove).toHaveBeenCalledOnce()
+    expect(store.storage.remove).toHaveBeenCalledWith(healthy.keys)
+    expect(await prisma.image.findUniqueOrThrow({ where: { id: busy.id } })).toMatchObject({
       deletedAt: null,
       confirmedCleanupStatus: 'pending',
     })
+    expect(await prisma.image.findUnique({ where: { id: healthy.id } })).toBeNull()
 
     releaseWriter()
     await writer
-    const result = await cleanup
+    const recovered = await runConfirmedUnlinkedCleanup(prisma, store.storage, {
+      apply: true,
+      now: NOW,
+      limit: 1,
+    })
 
-    expect(result.deleted).toBe(1)
-    expect(await prisma.image.findUnique({ where: { id: fixture.id } })).toBeNull()
+    expect(recovered.deleted).toBe(1)
+    expect(await prisma.image.findUnique({ where: { id: busy.id } })).toBeNull()
     expect(store.objects.size).toBe(0)
   })
 
