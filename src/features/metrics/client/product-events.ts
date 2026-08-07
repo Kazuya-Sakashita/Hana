@@ -1,6 +1,7 @@
 'use client'
 
 import type { components } from '@/lib/api/generated/schema'
+import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurrence'
 
 type ProductEventReport = components['schemas']['ProductEventReport']
 export type ProductEventName = ProductEventReport['event_name']
@@ -180,7 +181,7 @@ function isProductEventReport(value: unknown): value is ProductEventReport {
     typeof report.event_name === 'string' &&
     EVENT_NAMES.has(report.event_name as ProductEventName) &&
     typeof report.event_id === 'string' &&
-    UUID_PATTERN.test(report.event_id) &&
+    productEventOccurrenceMinuteFromEventId(report.event_id) === report.occurred_minute_utc &&
     typeof report.flow_id === 'string' &&
     UUID_PATTERN.test(report.flow_id) &&
     typeof report.elapsed_bucket === 'string' &&

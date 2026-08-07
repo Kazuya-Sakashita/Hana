@@ -1,5 +1,12 @@
 import type { components } from '@/lib/api/generated/schema'
 import { problems } from '@/server/api/problems'
+import {
+  isWebVitalStatusDurationCombination,
+  OPENAPI_UUID_PATTERN,
+  WEB_VITAL_DURATION_BUCKETS,
+  WEB_VITAL_OPERATIONS,
+  WEB_VITAL_STATUSES,
+} from '../shared/web-vitals-dimensions'
 import { shouldSampleTelemetry, type TelemetryDimensions } from './telemetry-contract'
 
 export type WebVitalsReport = components['schemas']['WebVitalsReport']
@@ -13,13 +20,7 @@ const ALLOWED_KEYS = [
   'status',
   'duration_bucket',
 ] as const
-const OPERATIONS = new Set<WebVitalsReport['operation']>([
-  'web_vital_cls',
-  'web_vital_fcp',
-  'web_vital_inp',
-  'web_vital_lcp',
-  'web_vital_ttfb',
-])
+const OPERATIONS = new Set<WebVitalsReport['operation']>(WEB_VITAL_OPERATIONS)
 const ROUTE_GROUPS = new Set<WebVitalsReport['route_group']>([
   'public',
   'auth',
@@ -29,17 +30,8 @@ const ROUTE_GROUPS = new Set<WebVitalsReport['route_group']>([
   'settings',
   'other_private',
 ])
-const STATUSES = new Set<WebVitalsReport['status']>(['good', 'needs_improvement', 'poor'])
-const DURATION_BUCKETS = new Set<WebVitalsReport['duration_bucket']>([
-  'not_applicable',
-  'under_100ms',
-  'from_100_to_500ms',
-  'from_501_to_1000ms',
-  'from_1001_to_2500ms',
-  'from_2501_to_4000ms',
-  'over_4000ms',
-])
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const STATUSES = new Set<WebVitalsReport['status']>(WEB_VITAL_STATUSES)
+const DURATION_BUCKETS = new Set<WebVitalsReport['duration_bucket']>(WEB_VITAL_DURATION_BUCKETS)
 const DEVELOPMENT_SAMPLING_KEY = 'hana-web-vitals-development-sampling-key'
 const DEVELOPMENT_SAMPLING_KEY_VERSION = 'development-v1'
 const SAMPLING_KEY_VERSION_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/
@@ -63,7 +55,7 @@ export function parseWebVitalsReport(raw: unknown): WebVitalsReport {
   if (input.schema_version !== 'hana-web-vitals-report/v2') {
     validation('body.schema_version', '対応していないschema versionです')
   }
-  if (typeof input.event_id !== 'string' || !UUID_PATTERN.test(input.event_id)) {
+  if (typeof input.event_id !== 'string' || !OPENAPI_UUID_PATTERN.test(input.event_id)) {
     validation('body.event_id', 'UUID形式で指定してください')
   }
   if (typeof input.operation !== 'string' || !OPERATIONS.has(input.operation as never)) {
@@ -85,12 +77,17 @@ export function parseWebVitalsReport(raw: unknown): WebVitalsReport {
     validation('body.duration_bucket', '許可されていないduration bucketです')
   }
 
-  const isCls = input.operation === 'web_vital_cls'
   if (
-    (isCls && input.duration_bucket !== 'not_applicable') ||
-    (!isCls && input.duration_bucket === 'not_applicable')
+    !isWebVitalStatusDurationCombination({
+      operation: input.operation as WebVitalsReport['operation'],
+      status: input.status as WebVitalsReport['status'],
+      duration_bucket: input.duration_bucket as WebVitalsReport['duration_bucket'],
+    })
   ) {
-    validation('body.duration_bucket', 'operationに対応するduration bucketを指定してください')
+    validation(
+      'body.duration_bucket',
+      'operationとstatusに対応するduration bucketを指定してください',
+    )
   }
 
   return {
@@ -115,7 +112,7 @@ export function toWebVitalsTelemetryDimensions(report: WebVitalsReport): Telemet
 }
 
 export function shouldSampleWebVitals(eventId: string): boolean {
-  if (!UUID_PATTERN.test(eventId)) validation('body.event_id', 'UUID形式で指定してください')
+  if (!OPENAPI_UUID_PATTERN.test(eventId)) validation('body.event_id', 'UUID形式で指定してください')
   const configured = process.env.WEB_VITALS_SAMPLING_KEY
   const configuredVersion = process.env.WEB_VITALS_SAMPLING_KEY_VERSION
   if (

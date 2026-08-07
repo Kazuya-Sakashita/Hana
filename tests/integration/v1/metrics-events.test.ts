@@ -205,6 +205,22 @@ describe('POST /v1/metrics/events', () => {
     expect(mocks.eventCreate).not.toHaveBeenCalled()
   })
 
+  it('rejects a new event whose id embeds a different occurrence minute before writing', async () => {
+    const changedMinute = new Date(occurredMinute.getTime() - 60_000)
+
+    const response = await POST(
+      request({
+        ...validReport,
+        occurred_minute_utc: changedMinute.toISOString().replace('.000Z', 'Z'),
+      }),
+    )
+
+    expect(response.status).toBe(422)
+    expect(mocks.eventFindUnique).toHaveBeenCalledTimes(1)
+    expect(mocks.eventFindFirst).not.toHaveBeenCalled()
+    expect(mocks.eventCreate).not.toHaveBeenCalled()
+  })
+
   it('returns the same 204 for an idempotent duplicate', async () => {
     mocks.eventCreate.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('duplicate event', {
@@ -321,9 +337,16 @@ describe('POST /v1/metrics/events', () => {
     expect(mocks.transaction).toHaveBeenCalledTimes(transactionCalls)
   })
 
-  it('fails closed before production writes when retention activation is absent', async () => {
+  it.each([
+    ['missing retention ingest', 'PRODUCT_EVENT_INGEST_ACTIVATION', ''],
+    ['invalid retention ingest', 'PRODUCT_EVENT_INGEST_ACTIVATION', 'issue-186-retention-v0'],
+    ['missing purge', 'PRODUCT_EVENT_PURGE_ACTIVATION', ''],
+    ['invalid purge', 'PRODUCT_EVENT_PURGE_ACTIVATION', 'issue-185-purge-v0'],
+  ] as const)('fails closed before production writes for %s activation', async (_, key, value) => {
     vi.stubEnv('NODE_ENV', 'production')
-    vi.stubEnv('PRODUCT_EVENT_INGEST_ACTIVATION', '')
+    vi.stubEnv('PRODUCT_EVENT_INGEST_ACTIVATION', 'issue-186-retention-v1')
+    vi.stubEnv('PRODUCT_EVENT_PURGE_ACTIVATION', 'issue-185-purge-v1')
+    vi.stubEnv(key, value)
 
     const response = await POST(request(validReport))
 
@@ -331,6 +354,17 @@ describe('POST /v1/metrics/events', () => {
     expect(await response.json()).toMatchObject({ reason: 'telemetry_unavailable' })
     expect(mocks.getUser).not.toHaveBeenCalled()
     expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
+  it('accepts production writes only when both exact activation values are present', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('PRODUCT_EVENT_INGEST_ACTIVATION', 'issue-186-retention-v1')
+    vi.stubEnv('PRODUCT_EVENT_PURGE_ACTIVATION', 'issue-185-purge-v1')
+
+    const response = await POST(request(validReport))
+
+    expect(response.status).toBe(204)
+    expect(mocks.eventCreate).toHaveBeenCalledTimes(1)
   })
 
   it('keeps retention deletion outside the ingest authority', async () => {

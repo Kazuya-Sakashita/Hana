@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   applyTelemetrySuppression,
@@ -175,12 +176,19 @@ function complete(source: TelemetrySource, eventId: string): TelemetryCompletene
   )
 }
 
+const FIXED_SAMPLING_EVENT_IDS = {
+  web_vital: {
+    sampled: '10000000-0000-4000-8000-000000000003',
+    excluded: '10000000-0000-4000-8000-000000000001',
+  },
+  api: {
+    sampled: '10000000-0000-4000-8000-000000000007',
+    excluded: '10000000-0000-4000-8000-000000000001',
+  },
+} as const
+
 function sampledEventId(source: 'web_vital' | 'api', sampled: boolean): string {
-  for (let index = 1; index <= 10_000; index += 1) {
-    const candidate = `10000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`
-    if (shouldSampleTelemetry(source, candidate, samplingFor(source)) === sampled) return candidate
-  }
-  throw new Error('synthetic_sample_id_not_found')
+  return FIXED_SAMPLING_EVENT_IDS[source][sampled ? 'sampled' : 'excluded']
 }
 
 function funnelEvent(overrides: Partial<SyntheticFunnelEvent> = {}): SyntheticFunnelEvent {
@@ -266,6 +274,7 @@ describe('PII-safe telemetry schema v2', () => {
   )
 
   it('fixes retention, sampling and cardinality to code allowlists', () => {
+    expect(TELEMETRY_QUERY_VERSION).toBe('issue-152-v3')
     expect(TELEMETRY_RETENTION_DAYS).toBe(90)
     expect(TELEMETRY_SAMPLING).toEqual({ funnel: 1, web_vital: 0.1, api: 0.1, ai: 1 })
     expect(() =>
@@ -278,9 +287,13 @@ describe('PII-safe telemetry schema v2', () => {
       }),
     ).toThrow('unknown_value')
     expect(shouldSampleTelemetry('funnel', EVENT_A, samplingFor('funnel'))).toBe(true)
-    expect(shouldSampleTelemetry('web_vital', EVENT_A, samplingFor('web_vital'))).toBe(
-      shouldSampleTelemetry('web_vital', EVENT_A, samplingFor('web_vital')),
-    )
+    expect(
+      shouldSampleTelemetry(
+        'web_vital',
+        sampledEventId('web_vital', true),
+        samplingFor('web_vital'),
+      ),
+    ).toBe(true)
   })
 
   it('rejects an allowlisted value used in an invalid source combination', () => {
@@ -290,6 +303,20 @@ describe('PII-safe telemetry schema v2', () => {
         dimensions: {
           ...envelope(EVENT_A, 'api_request').dimensions,
           reason: 'stage_observed',
+        },
+      }),
+    ).toThrow('unknown_value')
+    expect(() =>
+      parseTelemetryEnvelope({
+        schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
+        event_id: EVENT_A,
+        occurred_at_utc: '2026-08-07T00:00:00Z',
+        dimensions: {
+          operation: 'web_vital_lcp',
+          reason: 'not_applicable',
+          route_group: 'record',
+          status: 'poor',
+          duration_bucket: 'from_1001_to_2500ms',
         },
       }),
     ).toThrow('unknown_value')
@@ -319,6 +346,54 @@ describe('PII-safe telemetry schema v2', () => {
 })
 
 describe('telemetry completeness manifest and sampling', () => {
+  it('matches independently precomputed HMAC sampling vectors', () => {
+    const vectors = [
+      {
+        source: 'web_vital' as const,
+        eventId: FIXED_SAMPLING_EVENT_IDS.web_vital.sampled,
+        digest: '18e2c20c5c0e29d52067f4cc9cf78ab0487158696d4a2835861819d1fe815506',
+        sampled: true,
+      },
+      {
+        source: 'web_vital' as const,
+        eventId: FIXED_SAMPLING_EVENT_IDS.web_vital.excluded,
+        digest: 'dfadcb7c628c8f2c06e262850a033bd67e60c32549b933afb27973c9e4c52750',
+        sampled: false,
+      },
+      {
+        source: 'api' as const,
+        eventId: FIXED_SAMPLING_EVENT_IDS.api.sampled,
+        digest: '0dfdd1671af1fc9ada85c04d60890540de2c1aed6b36ea8236bb1b4a51cc55f0',
+        sampled: true,
+      },
+      {
+        source: 'api' as const,
+        eventId: FIXED_SAMPLING_EVENT_IDS.api.excluded,
+        digest: '3e053a35fe371fe445be224e8e2f8dc9a28dd6a01dbf11a66084671630f72035',
+        sampled: false,
+      },
+    ]
+
+    for (const vector of vectors) {
+      const message = Buffer.concat([
+        Buffer.from('hana-telemetry-stable-sampling/v3\0'),
+        Buffer.from(vector.source),
+        Buffer.from('\0'),
+        Buffer.from(SAMPLING_KEY_VERSION),
+        Buffer.from('\0'),
+        Buffer.from(vector.eventId),
+      ])
+      const digest = createHmac('sha256', SAMPLING_KEY).update(message).digest('hex')
+      expect(digest).toBe(vector.digest)
+      const first32Bits = Number.parseInt(digest.slice(0, 8), 16)
+      const tenPercentThreshold = Math.floor(0.1 * 0x1_0000_0000)
+      expect(first32Bits < tenPercentThreshold).toBe(vector.sampled)
+      expect(shouldSampleTelemetry(vector.source, vector.eventId, samplingFor(vector.source))).toBe(
+        vector.sampled,
+      )
+    }
+  })
+
   it('detects duplicate and reorder without turning a complete set into loss', () => {
     expect(
       evaluateTelemetryCompleteness(
@@ -618,6 +693,14 @@ describe('actor-scoped funnel DB truth correlation', () => {
         memories: [memoryTruth({ created_at_utc: '2026-08-07T00:40:00Z' })],
       }),
     ).toMatchObject({ status: 'FAIL', reason: 'memory_saved_after_window' })
+    expect(
+      evaluateSyntheticFunnelFlow({
+        ...base,
+        generated_at_utc: '2026-08-08T00:00:00Z',
+        events: [funnelEvent({ received_at_utc: '2026-08-07T23:00:00Z' })],
+        memories: [memoryTruth({ created_at_utc: '2026-08-07T00:29:59Z' })],
+      }),
+    ).toMatchObject({ status: 'PASS', reason: 'memory_saved_within_window' })
   })
 
   it('holds unverified, invalid, immature or telemetry-incomplete anchors', () => {
@@ -670,6 +753,19 @@ describe('actor-scoped funnel DB truth correlation', () => {
         events: [funnelEvent()],
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'window_not_mature' })
+    const partialMinuteCompleteness = completenessInput(
+      'funnel',
+      manifest([EVENT_B]),
+      [envelope(EVENT_B, 'photo_selected')],
+      { window_end_utc: '2026-08-07T00:00:30Z' },
+    )
+    expect(
+      evaluateSyntheticFunnelFlow({
+        ...base,
+        completeness_input: partialMinuteCompleteness,
+        events: [funnelEvent()],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
     expect(
       evaluateSyntheticFunnelFlow({
         ...base,
@@ -729,6 +825,26 @@ describe('privacy aggregation', () => {
       }),
     ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'censoring_changes_decision' })
   })
+
+  it.each(['M4', 'M10', 'M11', 'M12', 'north_star_monthly_memories_per_active_profile'] as const)(
+    'holds right-censor evaluation for unsupported metric direction %s',
+    (metricId) => {
+      expect(
+        evaluateCensoredRate({
+          metric_id: metricId,
+          eligible: 20,
+          succeeded: 20,
+          censored: 0,
+          minimum: 20,
+          target: metricId === 'M12' ? 0 : 0.5,
+        }),
+      ).toEqual({
+        metric_id: metricId,
+        status: 'HOLD',
+        reason: 'unsupported_metric_direction',
+      })
+    },
+  )
 
   it('adds secondary suppression when one hidden cell could be reconstructed', () => {
     expect(

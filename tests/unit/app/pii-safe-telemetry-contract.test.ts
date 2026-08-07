@@ -7,12 +7,14 @@ function source(path: string) {
 
 const issue = source('docs/issues/ISSUE-152-pii-safe-telemetry.md')
 const contract = source('docs/observability/pii-safe-telemetry.md')
+const environmentExample = source('.env.example')
 const openApi = source('docs/openapi/openapi.yaml')
 const productEventSchema = source('docs/openapi/components/schemas/ProductEventReport.yaml')
 const webVitalsSchema = source('docs/openapi/components/schemas/WebVitalsReport.yaml')
 const recordPage = source('src/app/record/page.tsx')
 const settingsPage = source('src/app/settings/page.tsx')
 const outbox = source('src/features/metrics/client/product-events.ts')
+const productEvent = source('src/features/metrics/server/product-event.ts')
 const telemetry = source('src/features/metrics/server/telemetry-contract.ts')
 const webVitalsRoute = source('src/app/v1/metrics/vitals/route.ts')
 
@@ -53,6 +55,8 @@ describe('ISSUE-152 PII-safe telemetry contract', () => {
     expect(telemetry).toContain("'censoring_changes_decision'")
     expect(telemetry).toContain("'secondary'")
     expect(telemetry).toContain('eligible_census_commitment')
+    expect(telemetry).toContain("TELEMETRY_QUERY_VERSION = 'issue-152-v3'")
+    expect(contract).toContain('Version: `issue-152-v3`')
     expect(contract).toContain('versioned expectation manifestとreceived ID')
     expect(contract).toContain('primary suppression')
     expect(contract).toContain('secondary suppression')
@@ -64,9 +68,20 @@ describe('ISSUE-152 PII-safe telemetry contract', () => {
     expect(telemetry).not.toContain('PRODUCT_EVENT_HASH_PEPPER')
   })
 
-  it('holds production activation until DB authority and retention are implemented separately', () => {
+  it('requires independent authority-retention and purge readiness before production ingest', () => {
     expect(issue).toContain('GitHub Issue #379')
+    expect(issue).toContain('ISSUE-185')
     expect(contract).toContain('production telemetry activationをHold')
     expect(contract).toContain('GitHub Issue #379で実装・検証')
+    expect(contract).toContain('ISSUE-185で実装・検証')
+    expect(productEvent).toContain(
+      "process.env.PRODUCT_EVENT_INGEST_ACTIVATION !== 'issue-186-retention-v1'",
+    )
+    expect(productEvent).toContain(
+      "process.env.PRODUCT_EVENT_PURGE_ACTIVATION !== 'issue-185-purge-v1'",
+    )
+    expect(environmentExample).toMatch(/^PRODUCT_EVENT_INGEST_ACTIVATION=$/m)
+    expect(environmentExample).toMatch(/^PRODUCT_EVENT_PURGE_ACTIVATION=$/m)
+    expect(environmentExample).not.toMatch(/^PRODUCT_EVENT_(?:INGEST|PURGE)_ACTIVATION=issue-/m)
   })
 })

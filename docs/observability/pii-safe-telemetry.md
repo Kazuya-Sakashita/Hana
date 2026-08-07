@@ -1,7 +1,7 @@
 # PII-safe telemetry contract
 
 - Status: active
-- Version: `issue-152-v2`
+- Version: `issue-152-v3`
 - Event schema: `hana-telemetry-event/v2`
 - Retention: 90 days
 
@@ -53,11 +53,15 @@ server-only key、key version、source、event IDをdomain-separated HMAC-SHA256
 利用者属性、結果、本文で変えない。keyまたはkey versionが欠落・不一致ならproduction ingestと
 completenessをfail closedにする。dimension cardinalityはcode allowlistの直積を上限とし、
 未知値を`other`へ丸めて受理せず拒否する。
+HMAC入力は`domain + NUL + source + NUL + key_version + NUL + event_id`のcanonical byte列とし、
+固定key・version・source・event IDに対する事前計算済みdigestと10% thresholdのtest vectorで検証する。
 
 Web Vitals requestは`hana-web-vitals-report/v2`の固定dimensionだけを送る。raw metric ID、raw value、path、
 navigation typeはrequestへ入れず、`fetch`の`credentials: omit`と`keepalive`だけを使う。serverは
 body parseとlogより前にbounded rate limitを適用し、validation後・log前にkeyed 10% samplingする。
 sample-outは204かつlogなしで、sampling policy versionと期待manifestの不一致はcompleteness Holdである。
+event IDはOpenAPI `format: uuid`と同じ範囲を受理する。statusとduration bucketは共有threshold表から
+同じraw valueが取り得る組み合わせだけを許可し、矛盾する組み合わせは422で拒否する。
 
 ## ProductEvent flow lifecycle
 
@@ -114,7 +118,9 @@ Passにできる。
 funnel correlationは`actor_key_version / actor_token / flow_id`の組で行う。stageはclient発生時刻のUTC minute
 bucket、受信時刻、`anchor_trust`を持ち、verified anchorだけを判定する。30分windowはminute intervalの
 worst-caseでPass / Failを確定し、境界をまたぐ場合、actor不一致、key version不一致、unverified anchorは
-Holdにする。server receipt timeでwindowを短縮せず、遅延outboxを成功へ誤分類しない。
+Holdにする。時刻の正本はDB `event_id`から復元した`[minute, minute + 1 minute)`で、区間全体がevidence
+entry window内にない場合はHoldにする。DB `created_at`はreceiptと遅延・順序の検証だけに使い、entryや
+maturityの起点にしない。
 
 ## Aggregation and privacy
 
@@ -123,6 +129,8 @@ domain、UTC window、key versionをHMAC-SHA256へdomain-separated入力し、�
 退会中のunitは元の分母に残し、
 全censor失敗の下限と全censor成功の上限をjob内だけで計算する。下限がtarget以上ならPass、上限がtarget未満
 ならFail、両端で判定が変わる場合はHoldとする。exact census / success / censor / rateは出力しない。
+このright-censor rate evaluatorは高いほど良いproduction rateのM1 / M2 / M3 / M5 / M6 / M7 / M8 / M9
+だけに使う。M12など方向が異なる指標は同式へ入れず、`unsupported_metric_direction`でHoldにする。
 
 restricted tableで数値を表示する場合もcell 5未満をprimary suppressionする。行・列・合計など1個の
 suppressed cellを差分復元できるgroupでは、最小のvisible cellをsecondary suppressionする。CI、PR、
@@ -140,9 +148,10 @@ raw ProductEventへのauthority契約を次の3経路へ分離する。
 job outputはstatus-only schemaで検証し、raw row、actor hash、event ID、exact countをartifactへ保存しない。
 現在の共通DB credentialだけでは実効的な権限分離を証明できないため、production activationはHoldとする。
 table grant、versioned SECURITY DEFINER function、用途別non-owner credential、pg_cron不在時のretention fallbackは
-GitHub Issue #379で実装・検証し、保護された`PRODUCT_EVENT_INGEST_ACTIVATION`を有効化する。それまでは
-production ProductEvent endpoint自身が503でwriteを拒否する。production credential配布とProductEvent全key-version退会purgeは
-ISSUE-185の人間承認境界を維持する。
+GitHub Issue #379で実装・検証する。ProductEvent全key-version退会purgeとHMAC key lifecycleは
+ISSUE-185で実装・検証する。保護された`PRODUCT_EVENT_INGEST_ACTIVATION`と`PRODUCT_EVENT_PURGE_ACTIVATION`の
+規定値が両方揃うまで、production ProductEvent endpoint自身が503でwriteを拒否する。片方だけの有効化、
+欠落、未知値は同じstatus-only failureとして扱い、どの境界が不足したか、secret、PIIをresponseやlogへ出さない。
 
 匿名Web Vitalsは必須`Origin`と`Sec-Fetch-Site: same-origin`を含む同一origin JSON browser requestだけを受け、
 versioned server-only HMACでsamplingする。productionでは

@@ -107,6 +107,15 @@ describe('POST /v1/metrics/vitals', () => {
     expect(logSpy).not.toHaveBeenCalled()
   })
 
+  it('accepts an OpenAPI format UUID without requiring a version or variant', async () => {
+    const response = await POST(
+      jsonRequest({ ...validPayload, event_id: '00000000-0000-0000-0000-000000000000' }),
+    )
+
+    expect(response.status).toBe(204)
+    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response })
+  })
+
   it('changes sampling assignment when the server-only key rotates', () => {
     let changed = false
     for (let index = 1; index < 10_000; index += 1) {
@@ -200,6 +209,28 @@ describe('POST /v1/metrics/vitals', () => {
     [
       { ...validPayload, operation: 'web_vital_lcp', duration_bucket: 'not_applicable' },
       'non-CLS combination',
+    ],
+    [
+      { ...validPayload, operation: 'web_vital_lcp', status: 'poor' },
+      'LCP poor with a good duration',
+    ],
+    [
+      {
+        ...validPayload,
+        operation: 'web_vital_inp',
+        status: 'good',
+        duration_bucket: 'from_501_to_1000ms',
+      },
+      'INP good with a poor duration',
+    ],
+    [
+      {
+        ...validPayload,
+        operation: 'web_vital_ttfb',
+        status: 'needs_improvement',
+        duration_bucket: 'over_4000ms',
+      },
+      'TTFB needs improvement with a poor duration',
     ],
   ])('rejects invalid %s payloads', async (body, _label) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

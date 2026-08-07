@@ -48,6 +48,27 @@ describe('parseProductEventReport', () => {
     expect(() =>
       parseProductEventReport({ ...validReport, flow_id: USER_ID.slice(0, 8) }, NOW),
     ).toThrow()
+    expect(() =>
+      parseProductEventReport(
+        { ...validReport, event_id: '123e4567-e89b-42d3-a456-426614174000' },
+        NOW,
+      ),
+    ).toThrow()
+    expect(() =>
+      parseProductEventReport(
+        { ...validReport, event_id: validReport.event_id.toUpperCase() },
+        NOW,
+      ),
+    ).toThrow()
+  })
+
+  it('rejects an event id whose embedded minute differs from the report', () => {
+    expect(() =>
+      assertProductEventOccurrenceMatchesId({
+        ...validReport,
+        occurred_minute_utc: '2026-08-07T12:33:00Z',
+      }),
+    ).toThrow()
   })
 
   it('rejects elapsed buckets that do not match the event stage', () => {

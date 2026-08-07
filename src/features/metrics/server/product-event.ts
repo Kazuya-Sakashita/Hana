@@ -40,7 +40,6 @@ const ELAPSED_BUCKETS = new Set<ProductEventReport['elapsed_bucket']>([
   'over_60s',
 ])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UTC_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
 const TELEMETRY_BINDING_PATTERN = /^v3\.(\d{10})\.([0-9a-f]{64})\.([0-9a-f]{64})$/
 const PRODUCT_EVENT_MAX_REQUEST_BUCKETS = 4096
@@ -170,7 +169,8 @@ export function resetProductEventRequestRateLimitForTests(): void {
 export function assertProductEventIngestReady(): void {
   if (
     process.env.NODE_ENV === 'production' &&
-    process.env.PRODUCT_EVENT_INGEST_ACTIVATION !== 'issue-186-retention-v1'
+    (process.env.PRODUCT_EVENT_INGEST_ACTIVATION !== 'issue-186-retention-v1' ||
+      process.env.PRODUCT_EVENT_PURGE_ACTIVATION !== 'issue-185-purge-v1')
   ) {
     throw problems.telemetryUnavailable()
   }
@@ -194,7 +194,10 @@ export function parseProductEventReport(raw: unknown, now = new Date()): Product
   if (typeof input.event_name !== 'string' || !EVENT_NAMES.has(input.event_name as never)) {
     validation('body.event_name', '許可されていないイベント名です')
   }
-  if (typeof input.event_id !== 'string' || !UUID_V7_PATTERN.test(input.event_id)) {
+  if (
+    typeof input.event_id !== 'string' ||
+    productEventOccurrenceMinuteFromEventId(input.event_id) === null
+  ) {
     validation('body.event_id', 'UTC分を埋め込んだUUIDv7形式で指定してください')
   }
   if (typeof input.flow_id !== 'string' || !UUID_PATTERN.test(input.flow_id)) {

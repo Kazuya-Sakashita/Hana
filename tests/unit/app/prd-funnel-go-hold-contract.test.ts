@@ -134,10 +134,16 @@ describe('ISSUE-159 product validation contract', () => {
     expect(metrics.find((metric) => metric.ID === 'M2')?.min).toBe('20 Profile / flow')
     expect(metrics.find((metric) => metric.ID === 'M7')?.min).toBe('20 Profile / Profile-week')
     expect(contractSource).toContain('すべての窓はUTCの半開区間`[start, end)`')
-    expect(contractSource).toContain('各anchorが`[window_start_utc, window_end_utc)`に入るunitだけ')
+    expect(contractSource).toContain(
+      '発生minuteの半開区間全体が`[window_start_utc, window_end_utc)`に入る場合だけ',
+    )
+    expect(contractSource).toContain(
+      'DB `createdAt`はreceipt timeとして遅延と順序の検証だけに使い、entryやmaturityの起点にしない',
+    )
     expect(contractSource).toContain('M1 / M5 / M6: `Profile.createdAt`をanchor')
-    expect(contractSource).toContain('M2: `photo_selected.createdAt`')
-    expect(contractSource).toContain('M3: `ai_draft_shown.createdAt`')
+    expect(contractSource).toContain(
+      'M2: `photo_selected`、M3: `ai_draft_shown`の発生minute区間をanchor',
+    )
     expect(contractSource).toContain('entry window内で各Profileが最初に送ったeligible')
     expect(contractSource).toContain('同じcohortを見て閾値を決めてGoにしてはならない')
     expect(contractSource).toContain(

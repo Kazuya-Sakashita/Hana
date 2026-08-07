@@ -92,13 +92,15 @@ payloadは`event_name / event_id / flow_id / elapsed_bucket`だけを許可す�
 ### Evidence entry windows
 
 evidence versionの`window_start_utc / window_end_utc`はeligible unitのentryを選ぶ範囲であり、
-全履歴を意味しない。各anchorが`[window_start_utc, window_end_utc)`に入るunitだけを使う。
+全履歴を意味しない。DB時刻をanchorとするunitはanchorが、ProductEventをanchorとするunitは
+DB `event_id`から復元した発生minuteの半開区間全体が`[window_start_utc, window_end_utc)`に入る場合だけ使う。
+ProductEventのDB `createdAt`はreceipt timeとして遅延と順序の検証だけに使い、entryやmaturityの起点にしない。
 
 - M1 / M5 / M6: `Profile.createdAt`をanchorとし、それぞれ24時間 / 8日 / 31日のmaturity後に集計する。
-- M2: `photo_selected.createdAt`、M3: `ai_draft_shown.createdAt`をanchorとし、30分のmaturity後に集計する。
+- M2: `photo_selected`、M3: `ai_draft_shown`の発生minute区間をanchorとし、区間終端から30分のmaturity後に集計する。
 - M7: `week_start_utc`をanchorとし、週全体がwindow内にあり、`week_end_utc`後に集計する。
 - M8: `calendar_month_start_utc`をanchorとし、月全体がwindow内にあり、翌月開始後に集計する。
-- M9: entry window内で各Profileが最初に送ったeligible `memory_viewed.createdAt`をanchorとし、7日後に集計する。
+- M9: entry window内で各Profileが最初に送ったeligible `memory_viewed`の発生minute区間をanchorとし、区間終端から7日後に集計する。
 - `generated_at_utc`が各unitのmaturityより前なら、そのunitを失敗扱いせずcohort全体をHoldにする。
 
 ### Eligibility and exclusions

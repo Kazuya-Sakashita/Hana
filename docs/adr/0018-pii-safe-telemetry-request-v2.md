@@ -29,6 +29,10 @@ release unitで切り替える必要がある。
 - ProductEvent bodyへretry中も不変の`occurred_minute_utc`を追加する。
 - ProductEvent event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、DB `event_id`からminute、
   DB `created_at`からreceipt timeを復元する。
+- funnel anchorの正本はDB `event_id`から復元する`[minute, minute + 1 minute)`とし、区間全体がevidence
+  entry window内にない場合はHOLDにする。DB `created_at`はreceiptと遅延・順序の検証だけに使う。
+- Web Vitals event IDはOpenAPI `format: uuid`と同じ範囲を受理し、共有threshold表から取り得ない
+  statusとduration bucketの組み合わせは422で拒否する。
 - `GET /me`が返す期限付きserver-minted opaque binding v3をProductEvent headerに必須化し、`getUser()`で
   検証したactor、`getClaims()`で検証したJWT `sub / session_id`、期限とconstant-timeで一致する場合だけ
   ingestへ進む。
@@ -41,11 +45,16 @@ release unitで切り替える必要がある。
   遅延した旧generationの応答が新sessionのoutboxやcurrent-user cacheを変更することを禁止する。
 - degradationはcontinuity単位で保持し、別sessionのoutboxは`NONE`から開始する。
 - outboxはdurable enqueueできない場合に直接送信せず、固定degradationを保持してcompletenessをHOLDにする。
-- ProductEvent authority / retention / expectation登録が未有効ならproduction endpointを503にする。
+- ProductEvent authority / retention / expectation登録と、全key version退会purge / HMAC key lifecycleの
+  どちらかが未有効ならproduction endpointを503にする。独立したversioned activationを両方要求し、
+  片方だけの有効化や未知値をfail closedにする。
 - binding、event ID、raw metric、path、actor hashは通常logやstatus-only evidenceへ出さない。
 - expectation manifestへsampling key versionとsampling key commitmentをcommitし、source / key version /
   event IDをdomain-separated HMACへ入力する。received envelopeはcanonical RFC3339を含めruntimeで再検証し、観測窓外または内容が異なる
   duplicateをcompleteness HOLDにする。
+- right-censor rate evaluatorは高いほど良いproduction rate 8指標だけに限定し、M12など異なる方向の
+  指標は`unsupported_metric_direction`でHOLDにする。samplingはcanonical NUL区切り入力の固定HMAC
+  test vectorでdigestとthreshold判定を検証する。
 
 ## Compatibility and approval
 
@@ -65,6 +74,8 @@ exact-report waiver、保護label、最新SHAの専門reviewとCIのいずれか
 
 ## Rollback
 
+ProductEvent ingestだけを緊急停止する場合は、保護Environmentから二つのactivationのどちらか一方を外し、
+認証やDB writeより前に503へ戻す。再有効化はGitHub Issue #379とISSUE-185のreadinessを両方再検証した後に限る。
 障害時はこのPRをrevertし、client、OpenAPI、generated type、両Route Handlerを同じrelease unitで旧版へ
 戻す。serverだけ旧raw requestへ戻したり、v1とv2を同時受理したりしない。revert後はOpenAPI lint / gen、
 request契約test、auth境界testを再実行し、raw payloadがproduction telemetryへ送られていないことを確認する。
@@ -76,6 +87,6 @@ request契約test、auth境界testを再実行し、raw payloadがproduction tel
 - refresh token rotationでは同じ認証sessionの未ack eventを保持し、別sessionへは継承しない。
 - keyed samplingのsecretを知る主体だけが期待集合を再現でき、key versionまたはsecret commitment不一致を成功扱いしない。
 - 旧clientとの互換性よりprivacyを優先するため、原子的なclient/server rolloutが必須になる。
-- production DB authorityとretention activationはGitHub Issue #379の独立した承認境界で、完了まで
-  production telemetry activationをHOLDにする。
+- production DB authorityとretention activationはGitHub Issue #379、全key version退会purgeとHMAC key lifecycleは
+  ISSUE-185の独立した承認境界とし、両方のversioned activationが揃うまでproduction telemetry activationをHOLDにする。
 - Web Vitals edge attestationと共有rate limitはGitHub Issue #380の独立した承認境界とする。

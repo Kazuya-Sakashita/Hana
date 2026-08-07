@@ -46,8 +46,8 @@ API、AI、性能、記録funnelを同じPII-safe telemetry契約で集約する
 - status-only completeness、suppression、right-censor、North Star evidenceと回帰test
 
 OpenAPIのpathと成功response、production DB、外部monitoring providerは変更しない。requestとAppUser生成型は
-第一者clientと原子的に更新する。production DB authority / retention activationは#379へ分離し、完了まで
-production telemetry activationをHoldにする。
+第一者clientと原子的に更新する。production DB authority / retention activationは#379、全key version退会purgeと
+HMAC key lifecycleはISSUE-185へ分離し、両方のreadinessが完了するまでproduction telemetry activationをHoldにする。
 
 ## 受け入れ条件 (Acceptance Criteria)
 
@@ -64,6 +64,7 @@ production telemetry activationをHoldにする。
 - [x] 観測開始時のeligible censusと退会right-censorをactor非識別のaggregateとして固定し、削除後の分母縮小を検知する
 - [x] censorを全失敗 / 全成功とするworst-case区間からPASS / FAIL / HOLDだけを生成し、exact census / censor countを証跡へ出さない
 - [x] raw event accessのauthority契約とproduction HOLD境界を固定する（DB role / retention実効化は#379）
+- [x] production ProductEvent ingestを#379とISSUE-185の独立したversioned activationへ二重拘束する
 - [x] 分母・分子・補集合と関連表へprimary / secondary suppressionを適用する
 - [x] event completeness、query version、actor key version、eligible census digest、censoring policy / status digestをstatus-only evidenceへ含める
 - [x] North Starのactive unit、UTC entry window、重複排除、event completenessを固定する
@@ -89,7 +90,12 @@ production telemetry activationをHoldにする。
 - 合成ブラウザE2Eで検証済みJWT `session_id`と、Memory `Idempotency-Key` / ProductEvent `flow_id` / 204 ack / DB truthの相関を検証するようにした
 - ProductEvent DB role / retention fallbackはreviewer上限を超えない独立した承認境界として#379へ分離した
 - Web Vitals edge attestation / 共有rate limitは#380へ分離し、両境界とも有効化前のproduction ingestを503にした
-- 本番credential、退会purge、HMAC key lifecycleはISSUE-185の人間承認境界を維持した
+- 本番credential、退会purge、HMAC key lifecycleはISSUE-185の人間承認境界を維持し、#379とISSUE-185の
+  versioned activationが両方揃うまでproduction ProductEvent ingestを503にした
+- ProductEventの発生時刻をDB `event_id`由来のminute区間へ固定し、区間全体がevidence window内にない場合をHOLDにした
+- Web VitalsのUUID受理範囲をOpenAPIへ揃え、共有threshold表でstatusとduration bucketの矛盾を422にした
+- right-censorを高いほど良いproduction rate 8指標へ限定し、M12などをHOLDにした
+- samplingのcanonical NUL区切り入力を事前計算済みHMAC test vectorで固定し、query versionを`issue-152-v3`へ更新した
 
 ## 検証結果
 
@@ -97,7 +103,7 @@ production telemetry activationをHoldにする。
 - `pnpm openapi:gen` PASS
 - `pnpm openapi:auth-contract` PASS（24 operations / 20 private）
 - `pnpm typecheck`、`pnpm lint`、`pnpm format:check` PASS
-- `pnpm test` PASS（194 files中188 PASS / 6 skip、1718 tests中1695 PASS / 23 skip）
+- `pnpm test` PASS（194 files中188 PASS / 6 skip、1764 tests中1741 PASS / 23 skip）
 - `pnpm pr:gate` PASS（`origin/main`取り込み後の全検査・buildを含む）
 - 合成browser E2Eは5 / 5 PASS。Memory `Idempotency-Key`、3段階ProductEventの同一`flow_id`、全204 ack、DB truthの相関を確認した
 - 最新`oasdiff breaking`は19件（error 14 / warning 5）、GitHub Actionと同じ改行正規化後のexact report SHA-256は`b44a1678c98362151a61d0d7ebbdf64c7eabc678e2e0b41dd3d5f9f319a99a8e`
@@ -107,6 +113,8 @@ production telemetry activationをHoldにする。
 - 第2巡はcommit `bcbfd06`を6つの必須roleが独立reviewし、重複を除く所見を修正した
 - 第3巡はcommit `a4c54da`を6つの必須roleが独立reviewし、privacy以外のactionable findingを修正した
 - 第4巡前preflightでanalytics 2件、security 1件、privacy 3件を検出して修正し、3領域とも独立再レビューで`NO FINDINGS`。正式な第4巡には数えない
+- 正式な第4巡はcommit `b51a946`を6つの必須roleが独立reviewし、implementation / securityはGO、test reliability 4件、analytics 3件、API contract 1件、privacy 1件でHOLD
+- 第4巡HOLDは例外証跡を付けた専用App run `31225195289`で`specialist-review-gate`と`merge-eligibility`へ反映し、9件を修正した
 
 ## 専門review履歴
 
@@ -127,6 +135,12 @@ production telemetry activationをHoldにする。
 | 3   | `a4c54da` | API contract                | HOLD |                   3 |
 | 3   | `a4c54da` | security / authorization    | HOLD |                   1 |
 | 3   | `a4c54da` | privacy / data protection   | GO   |                   0 |
+| 4   | `b51a946` | spec acceptance / analytics | HOLD |                   3 |
+| 4   | `b51a946` | implementation correctness  | GO   |                   0 |
+| 4   | `b51a946` | test reliability            | HOLD |                   4 |
+| 4   | `b51a946` | API contract                | HOLD |                   1 |
+| 4   | `b51a946` | security / authorization    | GO   |                   0 |
+| 4   | `b51a946` | privacy / data protection   | HOLD |                   1 |
 
 ## 参考
 

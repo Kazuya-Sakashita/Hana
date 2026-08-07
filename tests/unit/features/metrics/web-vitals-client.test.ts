@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Metric } from 'web-vitals'
 import { createWebVitalsReport } from '@/features/metrics/client/web-vitals-report'
+import {
+  isWebVitalStatusDurationCombination,
+  WEB_VITAL_STATUSES,
+  type WebVitalDurationBucket,
+  type WebVitalOperation,
+} from '@/features/metrics/shared/web-vitals-dimensions'
 
 function metric(name: Metric['name'], value: number): Metric {
   return { name, value, id: 'raw-web-vitals-id', navigationType: 'navigate' } as Metric
@@ -53,4 +59,69 @@ describe('createWebVitalsReport', () => {
       'invalid_web_vital_value',
     )
   })
+
+  it('accepts the full OpenAPI uuid format without imposing a version or variant', () => {
+    expect(
+      createWebVitalsReport(metric('LCP', 2500), '/', '00000000-0000-0000-0000-000000000000')
+        .event_id,
+    ).toBe('00000000-0000-0000-0000-000000000000')
+    expect(() => createWebVitalsReport(metric('LCP', 2500), '/', 'not-a-uuid')).toThrow(
+      'invalid_web_vital_event_id',
+    )
+  })
+
+  it.each([
+    ['FCP', 1800],
+    ['FCP', 1800.1],
+    ['FCP', 3000.1],
+    ['INP', 200],
+    ['INP', 200.1],
+    ['INP', 500.1],
+    ['LCP', 2500],
+    ['LCP', 2500.1],
+    ['LCP', 4000.1],
+    ['TTFB', 800],
+    ['TTFB', 800.1],
+    ['TTFB', 1800.1],
+  ] as const)('keeps the shared %s status and duration ranges consistent at %s', (name, value) => {
+    const report = createWebVitalsReport(
+      metric(name, value),
+      '/',
+      '00000000-0000-4000-8000-000000000010',
+    )
+    expect(
+      isWebVitalStatusDurationCombination({
+        operation: report.operation,
+        status: report.status,
+        duration_bucket: report.duration_bucket,
+      }),
+    ).toBe(true)
+  })
+
+  it.each([
+    ['web_vital_cls', 'not_applicable', ['good', 'needs_improvement', 'poor']],
+    ['web_vital_fcp', 'under_100ms', ['good']],
+    ['web_vital_fcp', 'from_1001_to_2500ms', ['good', 'needs_improvement']],
+    ['web_vital_fcp', 'from_2501_to_4000ms', ['needs_improvement', 'poor']],
+    ['web_vital_inp', 'from_100_to_500ms', ['good', 'needs_improvement']],
+    ['web_vital_inp', 'from_501_to_1000ms', ['poor']],
+    ['web_vital_lcp', 'from_1001_to_2500ms', ['good']],
+    ['web_vital_lcp', 'from_2501_to_4000ms', ['needs_improvement']],
+    ['web_vital_lcp', 'over_4000ms', ['poor']],
+    ['web_vital_ttfb', 'from_501_to_1000ms', ['good', 'needs_improvement']],
+    ['web_vital_ttfb', 'from_1001_to_2500ms', ['needs_improvement', 'poor']],
+    ['web_vital_ttfb', 'over_4000ms', ['poor']],
+  ] as const)(
+    'allows only compatible status values for %s and %s',
+    (operation, durationBucket, expectedStatuses) => {
+      const accepted = WEB_VITAL_STATUSES.filter((status) =>
+        isWebVitalStatusDurationCombination({
+          operation: operation as WebVitalOperation,
+          status,
+          duration_bucket: durationBucket as WebVitalDurationBucket,
+        }),
+      )
+      expect(accepted).toEqual(expectedStatuses)
+    },
+  )
 })

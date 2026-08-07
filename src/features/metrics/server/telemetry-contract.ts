@@ -1,11 +1,18 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
-import { productEventOccurrenceMinuteFromEventId } from './product-event-occurrence'
+import {
+  isWebVitalStatusDurationCombination,
+  OPENAPI_UUID_PATTERN,
+  type WebVitalDurationBucket,
+  type WebVitalOperation,
+  type WebVitalStatus,
+} from '../shared/web-vitals-dimensions'
+import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurrence'
 
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
 export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v2' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
   'hana-telemetry-expectation-manifest/v2' as const
-export const TELEMETRY_QUERY_VERSION = 'issue-152-v2' as const
+export const TELEMETRY_QUERY_VERSION = 'issue-152-v3' as const
 export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
 export const TELEMETRY_RETENTION_DAYS = 90
@@ -145,8 +152,9 @@ const METRIC_REASONS = [
   'censoring_changes_decision',
   'database_truth_complete',
   'target_not_configured',
+  'unsupported_metric_direction',
 ] as const
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const UUID_PATTERN = OPENAPI_UUID_PATTERN
 const SHA256_PATTERN = /^[0-9a-f]{64}$/
 const SHA_PATTERN = /^[0-9a-f]{40}$/
 const UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/
@@ -156,6 +164,16 @@ const TELEMETRY_COMMITMENT_KEY_MIN_LENGTH = 32
 const TELEMETRY_SAMPLING_KEY_MIN_LENGTH = 32
 const TELEMETRY_SAMPLING_DOMAIN = 'hana-telemetry-stable-sampling/v3\0'
 const TELEMETRY_SAMPLING_KEY_COMMITMENT_DOMAIN = 'hana-telemetry-sampling-key-commitment/v1\0'
+const HIGHER_IS_BETTER_PRODUCTION_METRICS = new Set<TelemetryMetricId>([
+  'M1',
+  'M2',
+  'M3',
+  'M5',
+  'M6',
+  'M7',
+  'M8',
+  'M9',
+])
 
 export type TelemetryOperation = (typeof OPERATIONS)[number]
 export type TelemetryReason = (typeof REASONS)[number]
@@ -303,20 +321,14 @@ function validDimensionsCombination(dimensions: TelemetryDimensions): boolean {
     )
   }
   if (source === 'web_vital') {
-    const cls = dimensions.operation === 'web_vital_cls'
     return (
       dimensions.reason === 'not_applicable' &&
       ['good', 'needs_improvement', 'poor'].includes(dimensions.status) &&
-      (cls
-        ? dimensions.duration_bucket === 'not_applicable'
-        : [
-            'under_100ms',
-            'from_100_to_500ms',
-            'from_501_to_1000ms',
-            'from_1001_to_2500ms',
-            'from_2501_to_4000ms',
-            'over_4000ms',
-          ].includes(dimensions.duration_bucket))
+      isWebVitalStatusDurationCombination({
+        operation: dimensions.operation as WebVitalOperation,
+        status: dimensions.status as WebVitalStatus,
+        duration_bucket: dimensions.duration_bucket as WebVitalDurationBucket,
+      })
     )
   }
   if (source === 'api') {
@@ -723,13 +735,12 @@ export function evaluateSyntheticFunnelFlow(input: {
   const windowEnd = parseUtc(input.completeness_input.window_end_utc)
   const stages = matchingStages.map((event) => {
     const envelope = verifiedReceived.get(event.event_id)
-    const occurredAt = UTC_MINUTE_PATTERN.test(event.occurred_minute_utc)
-      ? parseUtc(event.occurred_minute_utc)
-      : null
+    const decodedOccurredMinute = productEventOccurrenceMinuteFromEventId(event.event_id)
+    const occurredAt = decodedOccurredMinute ? parseUtc(decodedOccurredMinute) : null
     return {
       ...event,
       occurredAt,
-      decodedOccurredMinute: productEventOccurrenceMinuteFromEventId(event.event_id),
+      decodedOccurredMinute,
       envelopeOccurredAt: envelope ? parseUtc(envelope.occurred_at_utc) : null,
       receivedAt: parseUtc(event.received_at_utc),
     }
@@ -741,11 +752,12 @@ export function evaluateSyntheticFunnelFlow(input: {
     stages.some(
       (event) =>
         event.decodedOccurredMinute !== event.occurred_minute_utc ||
+        !UTC_MINUTE_PATTERN.test(event.occurred_minute_utc) ||
         !validSyntheticActorRef(event.actor) ||
         event.occurredAt === null ||
         event.envelopeOccurredAt !== event.occurredAt ||
         event.occurredAt < windowStart ||
-        event.occurredAt >= windowEnd ||
+        event.occurredAt + 60 * 1000 > windowEnd ||
         event.receivedAt === null ||
         event.receivedAt < event.occurredAt ||
         event.receivedAt > generatedAt,
@@ -818,6 +830,13 @@ export function evaluateCensoredRate(input: {
   minimum: number
   target: number
 }): { metric_id: TelemetryMetricId; status: MetricStatus; reason: TelemetryMetricReason } {
+  if (!HIGHER_IS_BETTER_PRODUCTION_METRICS.has(input.metric_id)) {
+    return {
+      metric_id: input.metric_id,
+      status: 'HOLD',
+      reason: 'unsupported_metric_direction',
+    }
+  }
   const valid =
     Number.isSafeInteger(input.eligible) &&
     Number.isSafeInteger(input.succeeded) &&
@@ -995,6 +1014,7 @@ const METRIC_REASON_STATUS: Record<TelemetryMetricReason, MetricStatus> = {
   censoring_changes_decision: 'HOLD',
   database_truth_complete: 'PASS',
   target_not_configured: 'HOLD',
+  unsupported_metric_direction: 'HOLD',
 }
 
 function validCompletenessResult(result: TelemetryCompletenessResult): boolean {

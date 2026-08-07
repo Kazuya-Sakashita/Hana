@@ -6,6 +6,7 @@ import {
   PRODUCT_EVENT_OUTBOX_MAX_ENTRIES,
   PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
   PRODUCT_EVENT_OUTBOX_TTL_MS,
+  PRODUCT_EVENT_SEND_TIMEOUT_MS,
   productEventElapsedBucket,
   readProductEventDegradationForTest,
   readProductEventOutboxForTest,
@@ -187,6 +188,49 @@ describe('durable ProductEvent outbox', () => {
     expect(secondPayload.event_id).toBe(eventId)
   })
 
+  it('aborts a timed-out send and retries the same event id', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-07T00:00:00Z'))
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    let firstSignal: AbortSignal | undefined
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce((_url, init: RequestInit) => {
+        firstSignal = init.signal as AbortSignal
+        return new Promise<Response>(() => undefined)
+      })
+      .mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'ai_draft_shown',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 20_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    const eventId = readProductEventOutboxForTest()[0]?.report.event_id
+    const pending = flushProductEventOutbox()
+
+    await vi.advanceTimersByTimeAsync(PRODUCT_EVENT_SEND_TIMEOUT_MS)
+    await pending
+
+    expect(firstSignal?.aborted).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readProductEventOutboxForTest()[0]).toMatchObject({
+      report: { event_id: eventId },
+      attempts: 1,
+      nextAttemptAt: Date.parse('2026-08-07T00:00:12Z'),
+    })
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)).event_id).toBe(eventId)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
   it('preserves degradation and rebinds a persisted queue across same-session rotation', async () => {
     const storage = new MemoryStorage()
     vi.stubGlobal('sessionStorage', storage)
@@ -366,6 +410,50 @@ describe('durable ProductEvent outbox', () => {
 
     setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
 
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(JSON.parse(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY) ?? '{}')).toMatchObject({
+      version: 4,
+      degradation: 'STORAGE_UNAVAILABLE',
+      entries: [],
+    })
+  })
+
+  it.each([
+    ['UUIDv4 event id', '123e4567-e89b-42d3-a456-426614174000', '2026-08-07T00:00:00Z'],
+    ['uppercase UUIDv7 event id', '019FD985-0000-7000-8000-000000000001', '2026-08-07T00:00:00Z'],
+    ['invalid calendar minute', '019fd985-0000-7000-8000-000000000001', '2026-02-30T00:00:00Z'],
+    ['mismatched embedded minute', '019fd985-0000-7000-8000-000000000001', '2026-08-07T00:01:00Z'],
+  ])('fails closed before sending a persisted v4 root with %s', (_label, eventId, minute) => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 4,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: [
+          {
+            report: {
+              event_name: 'record_started',
+              event_id: eventId,
+              flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+              occurred_minute_utc: minute,
+              elapsed_bucket: 'not_applicable',
+            },
+            queuedAt: Date.now(),
+            attempts: 0,
+            nextAttemptAt: Date.now(),
+          },
+        ],
+      }),
+    )
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+
+    expect(fetchMock).not.toHaveBeenCalled()
     expect(readProductEventOutboxForTest()).toHaveLength(0)
     expect(JSON.parse(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY) ?? '{}')).toMatchObject({
       version: 4,
