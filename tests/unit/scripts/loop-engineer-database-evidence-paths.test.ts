@@ -7,8 +7,10 @@ const cliPath = fileURLToPath(
   new URL('../../../scripts/loop-engineer/evaluate-database-evidence-paths.ts', import.meta.url),
 )
 const root = fileURLToPath(new URL('../../..', import.meta.url))
-const baseSha = 'a'.repeat(40)
-const headSha = 'b'.repeat(40)
+const baseCommitSha = 'a'.repeat(40)
+const headCommitSha = 'b'.repeat(40)
+const baseTreeSha = 'c'.repeat(40)
+const headTreeSha = 'd'.repeat(40)
 
 function blob(path: string, sha: string) {
   return { path, mode: '100644', type: 'blob', sha }
@@ -23,11 +25,13 @@ function input(
   headEntries: Array<ReturnType<typeof blob>>,
 ) {
   return {
-    schema_version: 'loop-engineer-database-evidence-tree-input/v1',
-    base_sha: baseSha,
-    head_sha: headSha,
-    base_tree: tree(baseSha, baseEntries),
-    head_tree: tree(headSha, headEntries),
+    schema_version: 'loop-engineer-database-evidence-tree-input/v2',
+    base_commit_sha: baseCommitSha,
+    head_commit_sha: headCommitSha,
+    base_tree_sha: baseTreeSha,
+    head_tree_sha: headTreeSha,
+    base_tree: tree(baseTreeSha, baseEntries),
+    head_tree: tree(headTreeSha, headEntries),
   }
 }
 
@@ -149,15 +153,30 @@ describe('ISSUE-184 trusted database evidence tree classifier', () => {
     },
     {
       ...input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '2'.repeat(40))]),
-      head_sha: baseSha,
+      head_commit_sha: baseCommitSha,
     },
     {
       ...input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '2'.repeat(40))]),
-      head_tree: tree(headSha, []),
+      head_tree: tree(headTreeSha, []),
     },
     {
       ...input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '2'.repeat(40))]),
-      head_tree: { ...tree(headSha, [blob('docs/a.md', '2'.repeat(40))]), truncated: true },
+      head_tree: {
+        ...tree(headTreeSha, [blob('docs/a.md', '2'.repeat(40))]),
+        truncated: true,
+      },
+    },
+    {
+      ...input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '2'.repeat(40))]),
+      base_tree: tree(baseCommitSha, [blob('docs/a.md', '1'.repeat(40))]),
+    },
+    {
+      ...input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '2'.repeat(40))]),
+      head_tree_sha: baseTreeSha,
+    },
+    {
+      ...input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '2'.repeat(40))]),
+      schema_version: 'loop-engineer-database-evidence-tree-input/v1',
     },
     input([blob('docs/a.md', '1'.repeat(40))], [blob('docs/a.md', '1'.repeat(40))]),
   ])('fails closed for malformed, truncated, or unchanged tree input %#', (value) => {

@@ -1,5 +1,5 @@
 import { lstatSync, readdirSync, realpathSync } from 'node:fs'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { defineConfig } from 'prisma/config'
 
 const candidateRoot = process.env.HANA_CANDIDATE_ROOT
@@ -13,12 +13,33 @@ function assertContained(root: string, path: string): void {
   }
 }
 
+function readArtifactStat(path: string) {
+  try {
+    return lstatSync(path)
+  } catch {
+    throw new Error('candidate_artifact_missing')
+  }
+}
+
+function assertNoSymlinkComponents(root: string, path: string): void {
+  assertContained(root, path)
+  const relativePath = relative(root, path)
+  let current = root
+
+  for (const component of relativePath.split(sep).filter(Boolean)) {
+    current = resolve(current, component)
+    if (readArtifactStat(current).isSymbolicLink()) {
+      throw new Error('candidate_artifact_type_rejected')
+    }
+  }
+}
+
 function assertRegularArtifactTree(root: string, path: string): void {
   let entries = 0
   const pending = [path]
   while (pending.length > 0) {
     const current = pending.pop()!
-    const stat = lstatSync(current)
+    const stat = readArtifactStat(current)
     if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) {
       throw new Error('candidate_artifact_type_rejected')
     }
@@ -40,9 +61,19 @@ if (
   throw new Error('trusted_candidate_workspace_required')
 }
 
+const candidateRootStat = readArtifactStat(candidateRoot)
+if (candidateRootStat.isSymbolicLink() || !candidateRootStat.isDirectory()) {
+  throw new Error('trusted_candidate_workspace_required')
+}
 const canonicalCandidateRoot = realpathSync(candidateRoot)
-const schemaPath = resolve(canonicalCandidateRoot, 'prisma/schema.prisma')
-const migrationsPath = resolve(canonicalCandidateRoot, 'prisma/migrations')
+
+const candidateSchemaPath = resolve(candidateRoot, 'prisma/schema.prisma')
+const candidateMigrationsPath = resolve(candidateRoot, 'prisma/migrations')
+assertNoSymlinkComponents(candidateRoot, candidateSchemaPath)
+assertNoSymlinkComponents(candidateRoot, candidateMigrationsPath)
+
+const schemaPath = realpathSync(candidateSchemaPath)
+const migrationsPath = realpathSync(candidateMigrationsPath)
 assertRegularArtifactTree(canonicalCandidateRoot, schemaPath)
 assertRegularArtifactTree(canonicalCandidateRoot, migrationsPath)
 

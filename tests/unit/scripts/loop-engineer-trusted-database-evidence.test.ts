@@ -1,8 +1,14 @@
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
 const root = new URL('../../..', import.meta.url)
+const rootPath = fileURLToPath(root)
+const candidateConfigUrl = new URL('scripts/loop-engineer/candidate-prisma.config.ts', root).href
 const trustedPostgresModule = '../../../scripts/loop-engineer/trusted-synthetic-postgres.mjs'
 const trustedPostgres = import(trustedPostgresModule) as Promise<{
   checkedSyntheticPostgresUrl: (
@@ -12,6 +18,47 @@ const trustedPostgres = import(trustedPostgresModule) as Promise<{
     expectedPort?: string,
   ) => string
 }>
+
+function createArtifactWorkspace(): string {
+  const workspace = mkdtempSync(join(tmpdir(), 'hana-issue184-artifact-'))
+  const prismaRoot = join(workspace, 'candidate', 'prisma')
+  mkdirSync(join(prismaRoot, 'migrations', 'synthetic'), { recursive: true })
+  writeFileSync(join(prismaRoot, 'schema.prisma'), 'datasource db { provider = "postgresql" }\n')
+  writeFileSync(join(prismaRoot, 'migrations', 'synthetic', 'migration.sql'), 'SELECT 1;\n')
+  return workspace
+}
+
+function runCandidateConfig(workspace: string) {
+  return spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '--eval',
+      `await import(${JSON.stringify(candidateConfigUrl)})`,
+    ],
+    {
+      cwd: rootPath,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GITHUB_WORKSPACE: workspace,
+        HANA_CANDIDATE_ROOT: join(workspace, 'candidate'),
+        DIRECT_URL: 'postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci',
+      },
+    },
+  )
+}
+
+function withArtifactWorkspace(operation: (workspace: string) => void): void {
+  const workspace = createArtifactWorkspace()
+  try {
+    operation(workspace)
+  } finally {
+    rmSync(workspace, { recursive: true, force: true })
+  }
+}
 
 describe('ISSUE-184 trusted database evidence boundary', () => {
   it('accepts only the exact synthetic PostgreSQL target and credentials', async () => {
@@ -64,6 +111,9 @@ describe('ISSUE-184 trusted database evidence boundary', () => {
     expect(workflow).toContain('candidate/pnpm-lock.yaml')
     expect(workflow).toContain('HANA_CANDIDATE_ROOT: ${{ github.workspace }}/candidate')
     expect(workflow).toContain('pnpm --dir trusted-control exec prisma migrate deploy')
+    expect(workflow).toContain(
+      'node trusted-control/scripts/loop-engineer/test-child-rls-evidence-fail-closed.mjs',
+    )
     expect(workflow).not.toContain('run: pnpm qa:issue151:')
     expect(workflow).not.toContain('run: pnpm db:migrate:deploy')
     expect(config).toContain("resolve(githubWorkspace, 'candidate')")
@@ -73,15 +123,83 @@ describe('ISSUE-184 trusted database evidence boundary', () => {
     expect(config).not.toContain('prisma.config.ts')
   })
 
-  it('verifies exact schema-owner membership and complete synthetic timestamps', () => {
+  it('accepts a regular candidate schema and migration tree', () => {
+    withArtifactWorkspace((workspace) => {
+      expect(runCandidateConfig(workspace).status).toBe(0)
+    })
+  })
+
+  it('rejects a symlinked prisma parent', () => {
+    withArtifactWorkspace((workspace) => {
+      const candidate = join(workspace, 'candidate')
+      const prisma = join(candidate, 'prisma')
+      const alternate = join(candidate, 'alternate-prisma')
+      rmSync(prisma, { recursive: true })
+      mkdirSync(join(alternate, 'migrations'), { recursive: true })
+      writeFileSync(join(alternate, 'schema.prisma'), 'datasource db { provider = "postgresql" }\n')
+      symlinkSync('alternate-prisma', prisma, 'dir')
+
+      expect(runCandidateConfig(workspace).status).not.toBe(0)
+    })
+  })
+
+  it('rejects a symlinked schema leaf', () => {
+    withArtifactWorkspace((workspace) => {
+      const candidate = join(workspace, 'candidate')
+      const schema = join(candidate, 'prisma', 'schema.prisma')
+      rmSync(schema)
+      writeFileSync(
+        join(candidate, 'alternate-schema.prisma'),
+        'datasource db { provider = "postgresql" }\n',
+      )
+      symlinkSync('../alternate-schema.prisma', schema)
+
+      expect(runCandidateConfig(workspace).status).not.toBe(0)
+    })
+  })
+
+  it('rejects a migration symlink outside the candidate checkout', () => {
+    withArtifactWorkspace((workspace) => {
+      const migrations = join(workspace, 'candidate', 'prisma', 'migrations')
+      const outside = join(workspace, 'outside-migrations')
+      rmSync(migrations, { recursive: true })
+      mkdirSync(outside)
+      writeFileSync(join(outside, 'migration.sql'), 'SELECT 1;\n')
+      symlinkSync(outside, migrations, 'dir')
+
+      expect(runCandidateConfig(workspace).status).not.toBe(0)
+    })
+  })
+
+  it('rejects missing candidate artifacts', () => {
+    withArtifactWorkspace((workspace) => {
+      rmSync(join(workspace, 'candidate', 'prisma', 'schema.prisma'))
+      expect(runCandidateConfig(workspace).status).not.toBe(0)
+    })
+  })
+
+  it('verifies exact policy, privileges, role graph, and random owner CRUD', () => {
     const verifier = readFileSync(
       new URL('scripts/loop-engineer/verify-child-rls-evidence.mjs', root),
+      'utf8',
+    )
+    const adversarial = readFileSync(
+      new URL('scripts/loop-engineer/test-child-rls-evidence-fail-closed.mjs', root),
       'utf8',
     )
 
     expect(verifier).toContain('ownerMembershipCountExact')
     expect(verifier).toContain('schemaOwnerMembershipExact')
+    expect(verifier).toContain('ownerHasNoParentRole')
+    expect(verifier).toContain('ownerCannotSetOtherRole')
+    expect(verifier).toContain('runtimeInsertDenied')
+    expect(verifier).toContain('ownerInsertGranted')
+    expect(verifier).toContain("using: '(user_id = public.hana_current_user_id())'")
+    expect(verifier).toContain('requireDirectRuntimeDenied')
     expect(verifier).toContain('updated_at')
     expect(verifier).toContain('HANA_SYNTHETIC_POSTGRES_PORT')
+    expect(adversarial).toContain('WITH CHECK (false)')
+    expect(adversarial).toContain('FOR INSERT TO hana_child_runtime WITH CHECK (true)')
+    expect(adversarial).toContain('TO hana_child_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE')
   })
 })

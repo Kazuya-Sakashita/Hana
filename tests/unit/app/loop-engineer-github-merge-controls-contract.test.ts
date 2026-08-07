@@ -206,6 +206,7 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
       'node trusted-control/scripts/loop-engineer/bootstrap-child-rls-evidence.mjs',
       'pnpm --dir trusted-control exec prisma migrate deploy --config scripts/loop-engineer/candidate-prisma.config.ts',
       'node trusted-control/scripts/loop-engineer/verify-child-rls-evidence.mjs',
+      'node trusted-control/scripts/loop-engineer/test-child-rls-evidence-fail-closed.mjs',
     ]
     const classificationGuard = steps.find(
       ({ name }) => name === 'Require trusted database evidence classification',
@@ -233,9 +234,14 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
       gateScript.indexOf('database_evidence_required='),
     )
-    expect(gateScript).toContain('git/trees/${live_base_sha}?recursive=1')
-    expect(gateScript).toContain('git/trees/${live_head_sha}?recursive=1')
-    expect(gateScript).toContain('loop-engineer-database-evidence-tree-input/v1')
+    expect(gateScript).toContain('git/commits/${live_base_sha}')
+    expect(gateScript).toContain('git/commits/${live_head_sha}')
+    expect(gateScript).toContain('select(.sha == $expected_commit_sha)')
+    expect(gateScript).toContain('git/trees/${base_tree_sha}?recursive=1')
+    expect(gateScript).toContain('git/trees/${head_tree_sha}?recursive=1')
+    expect(gateScript).not.toContain('git/trees/${live_base_sha}?recursive=1')
+    expect(gateScript).not.toContain('git/trees/${live_head_sha}?recursive=1')
+    expect(gateScript).toContain('loop-engineer-database-evidence-tree-input/v2')
     expect(gateScript).not.toContain('/pulls/${pr_number}/files')
     expect(gateScript).toContain('evaluate-database-evidence-paths.ts')
     expect(gateScript).toContain('"$GITHUB_SHA" != "$live_base_sha"')
@@ -243,9 +249,12 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
       '"$trusted_database_diff_required" == "true" || "$attested_database_area_required" == "true"',
     )
     expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
-      gateScript.indexOf('git/trees/${live_base_sha}?recursive=1'),
+      gateScript.indexOf('git/commits/${live_base_sha}'),
     )
-    expect(gateScript.indexOf('git/trees/${live_head_sha}?recursive=1')).toBeLessThan(
+    expect(gateScript.indexOf('git/commits/${live_head_sha}')).toBeLessThan(
+      gateScript.indexOf('git/trees/${head_tree_sha}?recursive=1'),
+    )
+    expect(gateScript.indexOf('git/trees/${head_tree_sha}?recursive=1')).toBeLessThan(
       gateScript.indexOf('evaluate-database-evidence-paths.ts'),
     )
     expect(candidate['timeout-minutes']).toBe(25)
@@ -310,6 +319,9 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
         'postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci',
       HANA_SYNTHETIC_POSTGRES_PORT: '5432',
     })
+    expect(steps.find((step) => step.run === databaseRuns[4])?.env).toEqual(
+      steps.find((step) => step.run === databaseRuns[3])?.env,
+    )
     expect(databaseIndexes.every((index) => index >= 0)).toBe(true)
     expect(databaseIndexes).toEqual([...databaseIndexes].sort((left, right) => left - right))
     const trustedInstallIndex = steps.findIndex(

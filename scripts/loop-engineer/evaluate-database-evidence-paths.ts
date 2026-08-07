@@ -1,6 +1,14 @@
 const maxInputBytes = 32 * 1024 * 1024
 const maxTreeEntries = 100_000
-const inputFields = ['schema_version', 'base_sha', 'head_sha', 'base_tree', 'head_tree'] as const
+const inputFields = [
+  'schema_version',
+  'base_commit_sha',
+  'head_commit_sha',
+  'base_tree_sha',
+  'head_tree_sha',
+  'base_tree',
+  'head_tree',
+] as const
 
 const exactDocumentationPaths = new Set(['AGENTS.md', 'CLAUDE.md', 'Hana_PRD_v1.md', 'README.md'])
 
@@ -89,17 +97,20 @@ async function main(): Promise<void> {
     if (
       !isRecord(input) ||
       !hasExactFields(input, inputFields) ||
-      input.schema_version !== 'loop-engineer-database-evidence-tree-input/v1' ||
-      !isSha(input.base_sha) ||
-      !isSha(input.head_sha) ||
-      input.base_sha === input.head_sha
+      input.schema_version !== 'loop-engineer-database-evidence-tree-input/v2' ||
+      !isSha(input.base_commit_sha) ||
+      !isSha(input.head_commit_sha) ||
+      !isSha(input.base_tree_sha) ||
+      !isSha(input.head_tree_sha) ||
+      input.base_commit_sha === input.head_commit_sha ||
+      input.base_tree_sha === input.head_tree_sha
     ) {
       failClosed()
       return
     }
 
-    const baseFiles = readFileTree(input.base_tree, input.base_sha)
-    const headFiles = readFileTree(input.head_tree, input.head_sha)
+    const baseFiles = readFileTree(input.base_tree, input.base_tree_sha)
+    const headFiles = readFileTree(input.head_tree, input.head_tree_sha)
     if (!baseFiles || !headFiles) {
       failClosed()
       return

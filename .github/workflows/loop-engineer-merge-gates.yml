@@ -102,14 +102,21 @@ jobs:
             exit 1
           fi
 
-          gh api "repos/${GITHUB_REPOSITORY}/git/trees/${live_base_sha}?recursive=1" > "$RUNNER_TEMP/base-tree.json"
-          gh api "repos/${GITHUB_REPOSITORY}/git/trees/${live_head_sha}?recursive=1" > "$RUNNER_TEMP/head-tree.json"
+          gh api "repos/${GITHUB_REPOSITORY}/git/commits/${live_base_sha}" > "$RUNNER_TEMP/base-commit.json"
+          gh api "repos/${GITHUB_REPOSITORY}/git/commits/${live_head_sha}" > "$RUNNER_TEMP/head-commit.json"
+          base_tree_sha="$(jq -er --arg expected_commit_sha "$live_base_sha" 'select(.sha == $expected_commit_sha) | .tree.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' "$RUNNER_TEMP/base-commit.json")"
+          head_tree_sha="$(jq -er --arg expected_commit_sha "$live_head_sha" 'select(.sha == $expected_commit_sha) | .tree.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' "$RUNNER_TEMP/head-commit.json")"
+
+          gh api "repos/${GITHUB_REPOSITORY}/git/trees/${base_tree_sha}?recursive=1" > "$RUNNER_TEMP/base-tree.json"
+          gh api "repos/${GITHUB_REPOSITORY}/git/trees/${head_tree_sha}?recursive=1" > "$RUNNER_TEMP/head-tree.json"
           jq -nce \
-            --arg base_sha "$live_base_sha" \
-            --arg head_sha "$live_head_sha" \
+            --arg base_commit_sha "$live_base_sha" \
+            --arg head_commit_sha "$live_head_sha" \
+            --arg base_tree_sha "$base_tree_sha" \
+            --arg head_tree_sha "$head_tree_sha" \
             --slurpfile base_tree "$RUNNER_TEMP/base-tree.json" \
             --slurpfile head_tree "$RUNNER_TEMP/head-tree.json" \
-            '{schema_version:"loop-engineer-database-evidence-tree-input/v1",base_sha:$base_sha,head_sha:$head_sha,base_tree:$base_tree[0],head_tree:$head_tree[0]}' \
+            '{schema_version:"loop-engineer-database-evidence-tree-input/v2",base_commit_sha:$base_commit_sha,head_commit_sha:$head_commit_sha,base_tree_sha:$base_tree_sha,head_tree_sha:$head_tree_sha,base_tree:$base_tree[0],head_tree:$head_tree[0]}' \
             > "$RUNNER_TEMP/database-evidence-tree-input.json"
 
           trusted_database_diff_required="$(pnpm --silent exec tsx scripts/loop-engineer/evaluate-database-evidence-paths.ts < "$RUNNER_TEMP/database-evidence-tree-input.json")"
@@ -269,6 +276,14 @@ jobs:
           CHILD_DATABASE_URL: postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci
           HANA_SYNTHETIC_POSTGRES_PORT: '5432'
         run: node trusted-control/scripts/loop-engineer/verify-child-rls-evidence.mjs
+      - name: Prove trusted child RLS verifier fails closed
+        if: needs.prepare.outputs.database_evidence_required == 'true'
+        env:
+          DATABASE_URL: postgresql://hana_admin:hana-admin@localhost:5432/hana_ci
+          DIRECT_URL: postgresql://postgres:synthetic-schema-owner@localhost:5432/hana_ci
+          CHILD_DATABASE_URL: postgresql://hana_child_runtime:synthetic-runtime@localhost:5432/hana_ci
+          HANA_SYNTHETIC_POSTGRES_PORT: '5432'
+        run: node trusted-control/scripts/loop-engineer/test-child-rls-evidence-fail-closed.mjs
       - run: pnpm --dir candidate install --frozen-lockfile
       - name: Run PR gate with database integration enabled
         if: needs.prepare.outputs.database_evidence_required == 'true'
