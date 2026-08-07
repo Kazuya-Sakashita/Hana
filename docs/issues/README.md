@@ -11,9 +11,9 @@
 
 | status | count |
 | --- | ---: |
-| `todo` | 6 |
+| `todo` | 5 |
 | `in_progress` | 1 |
-| `review` | 8 |
+| `review` | 9 |
 | `done` | 150 |
 | `blocked` | 7 |
 
@@ -23,7 +23,6 @@
 | --- | ---: | --- | --- | --- | --- | --- |
 | `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
-| `ISSUE-155` | `#323` | `todo` | P0 | M | confirmed cleanupへlease・backoff・dead-letterを追加する | - |
 | `ISSUE-156` | `#324` | `todo` | P1 | M | Critical pathのcoverage・mutation gateを導入する | - |
 | `ISSUE-157` | `#325` | `todo` | P1 | M | 現行アプリのVisual・A11y・mobile・cross-browser baselineを作る | - |
 | `ISSUE-158` | `#326` | `todo` | P1 | M | route JS・CWV・画像処理のperformance budgetをCIへ追加する | - |
@@ -40,6 +39,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
+| `ISSUE-155` | `#323` | `review` | P0 | M | confirmed cleanupへlease・backoff・dead-letterを追加する | - |
 | `ISSUE-159` | `#327` | `review` | P1 | M | PRD契約とfunnelのGo・Hold基準を再同期する | - |
 | `ISSUE-163` | `#335` | `review` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
 | `ISSUE-164` | `#336` | `review` | P1 | M | PRの自動マージ適格性を機械判定する | - |
@@ -220,7 +220,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
 | `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |
-| `ISSUE-155` | `#323` | `todo` | P0 | M | confirmed cleanupへlease・backoff・dead-letterを追加する | - |
+| `ISSUE-155` | `#323` | `review` | P0 | M | confirmed cleanupへlease・backoff・dead-letterを追加する | - |
 | `ISSUE-156` | `#324` | `todo` | P1 | M | Critical pathのcoverage・mutation gateを導入する | - |
 | `ISSUE-157` | `#325` | `todo` | P1 | M | 現行アプリのVisual・A11y・mobile・cross-browser baselineを作る | - |
 | `ISSUE-158` | `#326` | `todo` | P1 | M | route JS・CWV・画像処理のperformance budgetをCIへ追加する | - |

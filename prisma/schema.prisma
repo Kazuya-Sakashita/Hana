@@ -156,28 +156,34 @@ model Child {
 //   - storage_key は推測不可能な uploads/{userIdHash}/{yyyymm}/{uuid}.{ext} 形式
 //   - 物理ファイルの削除は退会フロー (ISSUE-016) で扱う
 model Image {
-  id                         String    @id @default(uuid()) @db.Uuid
-  userId                     String    @map("user_id") @db.Uuid
-  memoryId                   String?   @map("memory_id") @db.Uuid
-  memoryPosition             Int?      @map("memory_position")
-  storageKey                 String    @unique @map("storage_key")
-  contentType                String    @map("content_type")
-  width                      Int
-  height                     Int
-  fileSize                   Int       @map("file_size")
-  metadataSanitizedAt        DateTime? @map("metadata_sanitized_at") @db.Timestamptz
-  originalVariantStatus      String    @default("unknown") @map("original_variant_status") @db.VarChar(20)
-  thumbnailVariantStatus     String    @default("unknown") @map("thumbnail_variant_status") @db.VarChar(20)
-  previewVariantStatus       String    @default("unknown") @map("preview_variant_status") @db.VarChar(20)
-  variantRepairStatus        String    @default("pending") @map("variant_repair_status") @db.VarChar(20)
-  variantRepairAttempts      Int       @default(0) @map("variant_repair_attempts")
-  variantRepairNextAt        DateTime  @default(now()) @map("variant_repair_next_at") @db.Timestamptz
-  variantRepairClaimToken    String?   @map("variant_repair_claim_token") @db.Uuid
-  variantRepairClaimedAt     DateTime? @map("variant_repair_claimed_at") @db.Timestamptz
-  variantRepairFailureReason String?   @map("variant_repair_failure_reason") @db.VarChar(40)
-  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt                  DateTime? @map("deleted_at") @db.Timestamptz
+  id                            String    @id @default(uuid()) @db.Uuid
+  userId                        String    @map("user_id") @db.Uuid
+  memoryId                      String?   @map("memory_id") @db.Uuid
+  memoryPosition                Int?      @map("memory_position")
+  storageKey                    String    @unique @map("storage_key")
+  contentType                   String    @map("content_type")
+  width                         Int
+  height                        Int
+  fileSize                      Int       @map("file_size")
+  metadataSanitizedAt           DateTime? @map("metadata_sanitized_at") @db.Timestamptz
+  originalVariantStatus         String    @default("unknown") @map("original_variant_status") @db.VarChar(20)
+  thumbnailVariantStatus        String    @default("unknown") @map("thumbnail_variant_status") @db.VarChar(20)
+  previewVariantStatus          String    @default("unknown") @map("preview_variant_status") @db.VarChar(20)
+  variantRepairStatus           String    @default("pending") @map("variant_repair_status") @db.VarChar(20)
+  variantRepairAttempts         Int       @default(0) @map("variant_repair_attempts")
+  variantRepairNextAt           DateTime  @default(now()) @map("variant_repair_next_at") @db.Timestamptz
+  variantRepairClaimToken       String?   @map("variant_repair_claim_token") @db.Uuid
+  variantRepairClaimedAt        DateTime? @map("variant_repair_claimed_at") @db.Timestamptz
+  variantRepairFailureReason    String?   @map("variant_repair_failure_reason") @db.VarChar(40)
+  confirmedCleanupStatus        String    @default("pending") @map("confirmed_cleanup_status") @db.VarChar(20)
+  confirmedCleanupAttempts      Int       @default(0) @map("confirmed_cleanup_attempts")
+  confirmedCleanupNextAt        DateTime  @default(now()) @map("confirmed_cleanup_next_at") @db.Timestamptz(3)
+  confirmedCleanupClaimToken    String?   @map("confirmed_cleanup_claim_token") @db.Uuid
+  confirmedCleanupClaimedAt     DateTime? @map("confirmed_cleanup_claimed_at") @db.Timestamptz
+  confirmedCleanupFailureReason String?   @map("confirmed_cleanup_failure_reason") @db.VarChar(40)
+  createdAt                     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                     DateTime? @map("deleted_at") @db.Timestamptz
 
   user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
   memory Memory? @relation(fields: [memoryId], references: [id], onDelete: SetNull)
@@ -185,6 +191,7 @@ model Image {
   @@index([userId])
   @@index([memoryId])
   @@index([variantRepairStatus, variantRepairNextAt])
+  @@index([memoryId, confirmedCleanupStatus, confirmedCleanupNextAt, id], map: "images_confirmed_cleanup_status_next_at_idx")
   @@map("images")
 }
 

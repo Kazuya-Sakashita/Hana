@@ -12,3 +12,15 @@ export async function acquireUploadStorageLock(
     )::text
   `
 }
+
+export async function tryAcquireUploadStorageLock(
+  transaction: Prisma.TransactionClient,
+  storageKey: string,
+): Promise<boolean> {
+  const rows = await transaction.$queryRaw<Array<{ locked: boolean }>>`
+    SELECT pg_try_advisory_xact_lock(
+      hashtextextended(${`${UPLOAD_STORAGE_LOCK_PREFIX}${storageKey}`}, 0)
+    ) AS locked
+  `
+  return rows[0]?.locked === true
+}

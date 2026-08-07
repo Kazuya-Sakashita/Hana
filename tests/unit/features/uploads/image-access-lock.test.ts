@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import { describe, expect, it, vi } from 'vitest'
-import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
+import { lockImageAccess, tryLockImageAccess } from '@/features/uploads/server/image-access-lock'
 
 describe('lockImageAccess', () => {
   it('locks unique image ids in deterministic order', async () => {
@@ -27,5 +27,20 @@ describe('lockImageAccess', () => {
     await lockImageAccess(transaction, [])
 
     expect(executeRaw).not.toHaveBeenCalled()
+  })
+
+  it('returns whether the image advisory lock was acquired without waiting', async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([{ locked: true }])
+      .mockResolvedValueOnce([{ locked: false }])
+    const transaction = { $queryRaw: queryRaw } as unknown as Prisma.TransactionClient
+
+    await expect(tryLockImageAccess(transaction, 'image-a')).resolves.toBe(true)
+    await expect(tryLockImageAccess(transaction, 'image-b')).resolves.toBe(false)
+    expect(queryRaw.mock.calls.map((call) => call[1])).toEqual([
+      'hana:image:image-a',
+      'hana:image:image-b',
+    ])
   })
 })

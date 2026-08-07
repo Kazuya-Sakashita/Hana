@@ -4,17 +4,9 @@ export interface ExistingImageCandidate {
   contentType: string
 }
 
-export interface SanitizedImageState {
-  contentType: string
-  width: number
-  height: number
-  fileSize: number
-}
-
 export interface ExistingImageBackfillDependencies {
   listBatch(cursor: string | undefined): Promise<ExistingImageCandidate[]>
-  sanitizeOriginal(image: ExistingImageCandidate): Promise<SanitizedImageState>
-  markSanitized(id: string, state: SanitizedImageState): Promise<boolean>
+  sanitizeAndMark(image: ExistingImageCandidate): Promise<boolean>
 }
 
 export interface ExistingImageBackfillResult {
@@ -42,8 +34,7 @@ export async function runExistingImageBackfill(
     if (!apply) continue
     for (const image of images) {
       try {
-        const state = await dependencies.sanitizeOriginal(image)
-        if (!(await dependencies.markSanitized(image.id, state))) {
+        if (!(await dependencies.sanitizeAndMark(image))) {
           throw new Error('image_state_changed')
         }
         succeeded += 1
