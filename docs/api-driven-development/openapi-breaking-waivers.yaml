@@ -9,4 +9,4 @@ waivers:
     expires_on: '2026-08-21'
     scope: openapi-breaking-report
     status: approved
-    report_sha256: c35e6d1a25be6160730c1f09db217b2c92b1392540e7f061aeb149693ba1b8bf
+    report_sha256: 716d930fc9279b8d4109c68c60098f5500fdd102ca32068a16d0c28c33a6bc86

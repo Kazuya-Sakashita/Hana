@@ -95,7 +95,7 @@ production telemetry activationをHoldにする。
 - `pnpm typecheck`、`pnpm lint`、`pnpm format:check` PASS
 - `pnpm test` PASS（194 files中188 PASS / 6 skip、1662 tests中1639 PASS / 23 skip）
 - `pnpm pr:gate` PASS（`origin/main`取り込み後の全検査・buildを含む）
-- `oasdiff breaking`は16件（error 11 / warning 5）、exact report SHA-256は`c35e6d1a25be6160730c1f09db217b2c92b1392540e7f061aeb149693ba1b8bf`
+- `oasdiff breaking`は16件（error 11 / warning 5）、GitHub Actionと同じ改行正規化後のexact report SHA-256は`716d930fc9279b8d4109c68c60098f5500fdd102ca32068a16d0c28c33a6bc86`
 - 2026-08-07に`Kazuya-Sakashita`が上記exact-report scopeを承認し、ADR-0018と期限2026-08-21のwaiverへ固定した
 - 第1巡はcommit `1814d03`をsecurity / privacy / analyticsの3名が独立reviewし、3 / 6 / 5件のactionable findingで全員HOLD
 - 第2巡はcommit `bcbfd06`を6つの必須roleが独立reviewし、重複を除く所見を修正した。最新SHAを第3巡で確認する
