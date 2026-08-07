@@ -96,7 +96,7 @@ workflowのrun名とconcurrency名には未検証inputを含めず、main contro
 
 trusted path分類がDB証跡を必須と判定した場合、または検証済みattestationのchange areaに`database`、`migration-code`、`real-db-migration`のいずれかが含まれる場合、`candidate-pr-gate`はcandidateとattested base SHAの`trusted-control`を兄弟directoryへcheckoutする。trusted dependencyはcandidateのpackage設定やinstall scriptを評価せず導入し、base所有のbootstrap、Prisma CLI/config、children RLS verifierだけを実行する。candidateから入力するのは固定pathの`prisma/schema.prisma`と`prisma/migrations`だけであり、checkout rootからleafまで全path componentのsymlink、checkout外path、欠落、過大なartifact treeを拒否する。
 
-証跡はdigest固定したPostgreSQL 16の合成DB上でISSUE-123 bootstrap、role分離bootstrap、candidate migration、base所有のexact policy/ACL/role graphとowned/foreign/missing・owner CRUD・runtime直アクセス検証の順に取得する。さらにWITH CHECK改変、runtime直INSERT policy、推移SET ROLEを一時的に適用し、verifierが固定FAILとなり復元後に再PASSすることを確認してからcandidateの`pnpm pr:gate`を実行する。candidateの`package.json`や`scripts/qa`を証跡コマンドとして信用しない。要否判定の欠落・不正、tree不正、trusted script欠落、artifact境界違反、step失敗、timeoutはいずれも専用Appの`pr-gate`を成功させない。
+証跡はdigest固定したPostgreSQL 16の合成DB上でISSUE-123 bootstrap、role分離bootstrap、candidate migration、base所有のexact policy/function ACL/role graph、間接view・SECURITY DEFINER露出不在、owned/foreign/missing・owner CRUD・runtime直アクセス検証の順に取得する。さらにWITH CHECK改変、runtime直INSERT policy、authenticatedへの関数EXECUTE、unscoped view、推移SET ROLEを一時的に適用し、verifierが固定FAILとなり復元後に再PASSすることを確認してからcandidateの`pnpm pr:gate`を実行する。candidateの`package.json`や`scripts/qa`を証跡コマンドとして信用しない。要否判定の欠落・不正、tree不正、trusted script欠落、artifact境界違反、step失敗、timeoutはいずれも専用Appの`pr-gate`を成功させない。
 
 このcontrollerは常にmainから`--ref main`でdispatchし、PR branch上のworkflowをcontrollerとして実行しない。DB変更PRはこのcontrollerがmainへ入るまで`HOLD`とし、main更新後はbase/headと全証跡をfreshに取得し直す。ここで使うDBは合成fixtureだけであり、productionまたはstaging DBのmigration・cutoverに必要な人間承認とは分離する。
 

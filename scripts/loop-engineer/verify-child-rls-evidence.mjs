@@ -34,9 +34,40 @@ const expectedAccessStatusSource = `
     ELSE 'missing'
   END`.trim()
 
+const expectedPurgeProductEventsSource = `DECLARE
+    deleted_count BIGINT;
+BEGIN
+    DELETE FROM public.product_events
+    WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '90 days';
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;`
+
 function requireExactState(actual, expected) {
   for (const [key, value] of Object.entries(expected)) {
     if (actual?.[key] !== value) throw new Error('trusted_child_rls_catalog_mismatch')
+  }
+}
+
+function requireExactRows(actual, expected) {
+  if (!Array.isArray(actual) || actual.length !== expected.length) {
+    throw new Error('trusted_child_rls_catalog_mismatch')
+  }
+  for (const [index, expectedRow] of expected.entries()) {
+    for (const [key, expectedValue] of Object.entries(expectedRow)) {
+      const actualValue = actual[index]?.[key]
+      if (Array.isArray(expectedValue)) {
+        if (
+          !Array.isArray(actualValue) ||
+          actualValue.length !== expectedValue.length ||
+          actualValue.some((value, valueIndex) => value !== expectedValue[valueIndex])
+        ) {
+          throw new Error('trusted_child_rls_catalog_mismatch')
+        }
+      } else if (actualValue !== expectedValue) {
+        throw new Error('trusted_child_rls_catalog_mismatch')
+      }
+    }
   }
 }
 
@@ -59,6 +90,385 @@ function requireExactPolicies(actual) {
   ) {
     throw new Error('trusted_child_rls_catalog_mismatch')
   }
+}
+
+function requireExactFunctionAcl(actual) {
+  const expected = [
+    {
+      grantee: 'hana_child_owner',
+      grantor: 'postgres',
+      privilege: 'EXECUTE',
+      grantable: false,
+    },
+    {
+      grantee: 'postgres',
+      grantor: 'postgres',
+      privilege: 'EXECUTE',
+      grantable: false,
+    },
+  ]
+  if (!Array.isArray(actual) || actual.length !== expected.length) {
+    throw new Error('trusted_child_rls_catalog_mismatch')
+  }
+  for (const [index, entry] of expected.entries()) requireExactState(actual[index], entry)
+}
+
+async function verifyAuthorizationSurface(admin) {
+  const relationAccess = await admin.query(`
+    WITH target_roles AS (
+      SELECT role.rolname AS role_name, role.oid AS role_oid
+      FROM pg_catalog.pg_roles AS role
+      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+    ), capabilities(privilege, column_capable) AS (
+      VALUES
+        ('DELETE', false),
+        ('INSERT', true),
+        ('REFERENCES', true),
+        ('SELECT', true),
+        ('TRIGGER', false),
+        ('TRUNCATE', false),
+        ('UPDATE', true)
+    )
+    SELECT
+      target.role_name AS role,
+      namespace.nspname AS schema,
+      relation.relname AS relation,
+      relation.relkind AS kind,
+      capability.privilege,
+      has_table_privilege(
+        target.role_oid,
+        relation.oid,
+        capability.privilege || ' WITH GRANT OPTION'
+      ) OR (
+        capability.column_capable
+        AND has_any_column_privilege(
+          target.role_oid,
+          relation.oid,
+          capability.privilege || ' WITH GRANT OPTION'
+        )
+      ) AS grantable
+    FROM target_roles AS target
+    CROSS JOIN pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    CROSS JOIN capabilities AS capability
+    WHERE namespace.nspname !~ '^pg_'
+      AND namespace.nspname <> 'information_schema'
+      AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND (
+        has_table_privilege(target.role_oid, relation.oid, capability.privilege)
+        OR (
+          capability.column_capable
+          AND has_any_column_privilege(target.role_oid, relation.oid, capability.privilege)
+        )
+      )
+    ORDER BY target.role_name, namespace.nspname, relation.relname, capability.privilege
+  `)
+  requireExactRows(relationAccess.rows, [
+    {
+      role: 'hana_child_owner',
+      schema: 'public',
+      relation: 'children',
+      kind: 'r',
+      privilege: 'DELETE',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_owner',
+      schema: 'public',
+      relation: 'children',
+      kind: 'r',
+      privilege: 'INSERT',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_owner',
+      schema: 'public',
+      relation: 'children',
+      kind: 'r',
+      privilege: 'SELECT',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_owner',
+      schema: 'public',
+      relation: 'children',
+      kind: 'r',
+      privilege: 'UPDATE',
+      grantable: false,
+    },
+  ])
+
+  const sequenceAccess = await admin.query(`
+    WITH target_roles AS (
+      SELECT role.rolname AS role_name, role.oid AS role_oid
+      FROM pg_catalog.pg_roles AS role
+      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+    ), capabilities(privilege) AS (VALUES ('SELECT'), ('UPDATE'), ('USAGE'))
+    SELECT
+      target.role_name AS role,
+      namespace.nspname AS schema,
+      relation.relname AS sequence,
+      capability.privilege,
+      has_sequence_privilege(
+        target.role_oid,
+        relation.oid,
+        capability.privilege || ' WITH GRANT OPTION'
+      ) AS grantable
+    FROM target_roles AS target
+    CROSS JOIN pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    CROSS JOIN capabilities AS capability
+    WHERE namespace.nspname !~ '^pg_'
+      AND namespace.nspname <> 'information_schema'
+      AND relation.relkind = 'S'
+      AND has_sequence_privilege(target.role_oid, relation.oid, capability.privilege)
+    ORDER BY target.role_name, namespace.nspname, relation.relname, capability.privilege
+  `)
+  requireExactRows(sequenceAccess.rows, [])
+
+  const routineAccess = await admin.query(`
+    WITH target_roles AS (
+      SELECT role.rolname AS role_name, role.oid AS role_oid
+      FROM pg_catalog.pg_roles AS role
+      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+    )
+    SELECT
+      target.role_name AS role,
+      routine.oid::regprocedure::text AS signature,
+      routine.prokind AS kind,
+      routine.prosecdef AS "securityDefiner",
+      pg_catalog.pg_get_userbyid(routine.proowner) AS owner,
+      has_function_privilege(
+        target.role_oid,
+        routine.oid,
+        'EXECUTE WITH GRANT OPTION'
+      ) AS grantable
+    FROM target_roles AS target
+    CROSS JOIN pg_catalog.pg_proc AS routine
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+    WHERE namespace.nspname !~ '^pg_'
+      AND namespace.nspname <> 'information_schema'
+      AND has_function_privilege(target.role_oid, routine.oid, 'EXECUTE')
+    ORDER BY target.role_name, routine.oid::regprocedure::text
+  `)
+  requireExactRows(routineAccess.rows, [
+    {
+      role: 'hana_child_owner',
+      signature: 'public.hana_child_access_status(uuid)',
+      kind: 'f',
+      securityDefiner: true,
+      owner: 'postgres',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_owner',
+      signature: 'public.hana_current_user_id()',
+      kind: 'f',
+      securityDefiner: false,
+      owner: 'postgres',
+      grantable: false,
+    },
+  ])
+
+  const securityDefinerRoutines = await admin.query(`
+    SELECT
+      routine.oid::regprocedure::text AS signature,
+      routine.prokind AS kind,
+      routine.provolatile AS volatility,
+      routine.proisstrict AS strict,
+      routine.proparallel AS parallel,
+      routine.prorettype::regtype::text AS "returnType",
+      language.lanname AS language,
+      routine.proconfig AS config,
+      pg_catalog.pg_get_userbyid(routine.proowner) AS owner,
+      EXISTS (
+        SELECT 1
+        FROM pg_catalog.aclexplode(
+          COALESCE(routine.proacl, pg_catalog.acldefault('f', routine.proowner))
+        ) AS acl
+        WHERE acl.grantee = 0
+          AND acl.privilege_type = 'EXECUTE'
+      ) AS "publicExecute",
+      has_function_privilege('hana_child_runtime', routine.oid, 'EXECUTE') AS "runtimeExecute",
+      has_function_privilege('hana_child_owner', routine.oid, 'EXECUTE') AS "ownerExecute",
+      routine.prosrc AS source
+    FROM pg_catalog.pg_proc AS routine
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+    JOIN pg_catalog.pg_language AS language ON language.oid = routine.prolang
+    WHERE namespace.nspname !~ '^pg_'
+      AND namespace.nspname <> 'information_schema'
+      AND routine.prosecdef
+    ORDER BY routine.oid::regprocedure::text
+  `)
+  requireExactRows(
+    securityDefinerRoutines.rows.map((row) => ({ ...row, source: row.source?.trim() })),
+    [
+      {
+        signature: 'public.hana_child_access_status(uuid)',
+        kind: 'f',
+        volatility: 's',
+        strict: false,
+        parallel: 'u',
+        returnType: 'text',
+        language: 'sql',
+        config: ['search_path=pg_catalog'],
+        owner: 'postgres',
+        publicExecute: false,
+        runtimeExecute: false,
+        ownerExecute: true,
+        source: expectedAccessStatusSource,
+      },
+      {
+        signature: 'public.purge_expired_product_events()',
+        kind: 'f',
+        volatility: 'v',
+        strict: false,
+        parallel: 'u',
+        returnType: 'bigint',
+        language: 'plpgsql',
+        config: ['search_path=public'],
+        owner: 'postgres',
+        publicExecute: false,
+        runtimeExecute: false,
+        ownerExecute: false,
+        source: expectedPurgeProductEventsSource,
+      },
+    ],
+  )
+
+  const schemaAccess = await admin.query(`
+    WITH target_roles AS (
+      SELECT role.rolname AS role_name, role.oid AS role_oid
+      FROM pg_catalog.pg_roles AS role
+      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+    ), capabilities(privilege) AS (VALUES ('CREATE'), ('USAGE'))
+    SELECT
+      target.role_name AS role,
+      namespace.nspname AS schema,
+      capability.privilege,
+      has_schema_privilege(
+        target.role_oid,
+        namespace.oid,
+        capability.privilege || ' WITH GRANT OPTION'
+      ) AS grantable
+    FROM target_roles AS target
+    CROSS JOIN pg_catalog.pg_namespace AS namespace
+    CROSS JOIN capabilities AS capability
+    WHERE namespace.nspname !~ '^pg_'
+      AND namespace.nspname <> 'information_schema'
+      AND has_schema_privilege(target.role_oid, namespace.oid, capability.privilege)
+    ORDER BY target.role_name, namespace.nspname, capability.privilege
+  `)
+  requireExactRows(schemaAccess.rows, [
+    {
+      role: 'hana_child_owner',
+      schema: 'public',
+      privilege: 'USAGE',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_runtime',
+      schema: 'public',
+      privilege: 'USAGE',
+      grantable: false,
+    },
+  ])
+
+  const databaseAccess = await admin.query(`
+    WITH target_roles AS (
+      SELECT role.rolname AS role_name, role.oid AS role_oid
+      FROM pg_catalog.pg_roles AS role
+      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+    ), capabilities(privilege) AS (VALUES ('CONNECT'), ('CREATE'), ('TEMPORARY'))
+    SELECT
+      target.role_name AS role,
+      database.datname AS database,
+      capability.privilege,
+      has_database_privilege(
+        target.role_oid,
+        database.oid,
+        capability.privilege || ' WITH GRANT OPTION'
+      ) AS grantable
+    FROM target_roles AS target
+    CROSS JOIN pg_catalog.pg_database AS database
+    CROSS JOIN capabilities AS capability
+    WHERE database.datname = current_database()
+      AND has_database_privilege(target.role_oid, database.oid, capability.privilege)
+    ORDER BY target.role_name, database.datname, capability.privilege
+  `)
+  requireExactRows(databaseAccess.rows, [
+    {
+      role: 'hana_child_owner',
+      database: 'hana_ci',
+      privilege: 'CONNECT',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_owner',
+      database: 'hana_ci',
+      privilege: 'TEMPORARY',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_runtime',
+      database: 'hana_ci',
+      privilege: 'CONNECT',
+      grantable: false,
+    },
+    {
+      role: 'hana_child_runtime',
+      database: 'hana_ci',
+      privilege: 'TEMPORARY',
+      grantable: false,
+    },
+  ])
+
+  const riskyDefaultAcl = await admin.query(`
+    SELECT
+      owner.rolname AS owner,
+      COALESCE(namespace.nspname, '') AS schema,
+      default_acl.defaclobjtype AS kind,
+      COALESCE(grantee.rolname, 'PUBLIC') AS grantee,
+      acl.privilege_type AS privilege,
+      acl.is_grantable AS grantable
+    FROM pg_catalog.pg_default_acl AS default_acl
+    JOIN pg_catalog.pg_roles AS owner ON owner.oid = default_acl.defaclrole
+    LEFT JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = default_acl.defaclnamespace
+    CROSS JOIN LATERAL pg_catalog.aclexplode(default_acl.defaclacl) AS acl
+    LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+    WHERE acl.grantee = 0
+      OR grantee.rolname IN ('hana_child_owner', 'hana_child_runtime')
+    ORDER BY owner.rolname, namespace.nspname, default_acl.defaclobjtype,
+      COALESCE(grantee.rolname, 'PUBLIC'), acl.privilege_type
+  `)
+  requireExactRows(riskyDefaultAcl.rows, [])
+
+  const derivedRelations = await admin.query(`
+    WITH RECURSIVE view_edges AS (
+      SELECT DISTINCT rewrite.ev_class AS dependent_oid, dependency.refobjid AS referenced_oid
+      FROM pg_catalog.pg_rewrite AS rewrite
+      JOIN pg_catalog.pg_depend AS dependency
+        ON dependency.classid = 'pg_catalog.pg_rewrite'::regclass
+        AND dependency.objid = rewrite.oid
+        AND dependency.refclassid = 'pg_catalog.pg_class'::regclass
+      JOIN pg_catalog.pg_class AS dependent ON dependent.oid = rewrite.ev_class
+      WHERE dependent.relkind IN ('v', 'm')
+    ), reachable(oid) AS (
+      SELECT edge.dependent_oid
+      FROM view_edges AS edge
+      WHERE edge.referenced_oid = 'public.children'::regclass
+      UNION
+      SELECT edge.dependent_oid
+      FROM view_edges AS edge
+      JOIN reachable AS prior ON edge.referenced_oid = prior.oid
+    )
+    SELECT namespace.nspname AS schema, relation.relname AS relation, relation.relkind AS kind
+    FROM reachable
+    JOIN pg_catalog.pg_class AS relation ON relation.oid = reachable.oid
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    ORDER BY namespace.nspname, relation.relname, relation.relkind
+  `)
+  requireExactRows(derivedRelations.rows, [])
 }
 
 async function verifyCatalog(admin) {
@@ -90,12 +500,14 @@ async function verifyCatalog(admin) {
     WHERE policy.polrelid = 'public.children'::regclass
   `)
   requireExactPolicies(policies.rows[0]?.policies)
+  await verifyAuthorizationSurface(admin)
 
   const result = await admin.query(`
     SELECT
       NOT schema_owner.rolsuper
         AND schema_owner.rolcreaterole
-        AND schema_owner.rolbypassrls AS "schemaOwnerSafe",
+        AND schema_owner.rolbypassrls
+        AND COALESCE(cardinality(schema_owner.rolconfig), 0) = 0 AS "schemaOwnerSafe",
       runtime.rolcanlogin
         AND NOT runtime.rolsuper
         AND NOT runtime.rolcreatedb
@@ -110,7 +522,8 @@ async function verifyCatalog(admin) {
         AND NOT owner.rolcreaterole
         AND NOT owner.rolinherit
         AND NOT owner.rolreplication
-        AND NOT owner.rolbypassrls AS "ownerSafe",
+        AND NOT owner.rolbypassrls
+        AND COALESCE(cardinality(owner.rolconfig), 0) = 0 AS "ownerSafe",
       relation.relrowsecurity AS "rowSecurity",
       relation.relforcerowsecurity AS "forceRowSecurity",
       pg_get_userbyid(relation.relowner) = 'postgres' AS "relationOwnerExact",
@@ -120,9 +533,53 @@ async function verifyCatalog(admin) {
           AND NOT trigger.tgisinternal
       ) AS "userTriggersAbsent",
       NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_rewrite AS rewrite
+        WHERE rewrite.ev_class = relation.oid
+      ) AS "userRulesAbsent",
+      NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_class AS exposed_relation
+        JOIN pg_catalog.pg_namespace AS exposed_namespace
+          ON exposed_namespace.oid = exposed_relation.relnamespace
+        WHERE exposed_namespace.nspname = 'public'
+          AND exposed_relation.relkind IN ('v', 'm')
+      ) AS "publicViewsAbsent",
+      NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_class AS exposed_relation
+        JOIN pg_catalog.pg_namespace AS exposed_namespace
+          ON exposed_namespace.oid = exposed_relation.relnamespace
+        WHERE exposed_namespace.nspname = 'public'
+          AND exposed_relation.oid <> relation.oid
+          AND exposed_relation.relkind IN ('r', 'p', 'v', 'm', 'f')
+          AND (
+            has_table_privilege('anon', exposed_relation.oid, 'SELECT')
+            OR has_table_privilege('authenticated', exposed_relation.oid, 'SELECT')
+            OR has_table_privilege(runtime.oid, exposed_relation.oid, 'SELECT')
+            OR has_table_privilege(owner.oid, exposed_relation.oid, 'SELECT')
+            OR has_table_privilege('anon', exposed_relation.oid, 'INSERT')
+            OR has_table_privilege('authenticated', exposed_relation.oid, 'INSERT')
+            OR has_table_privilege(runtime.oid, exposed_relation.oid, 'INSERT')
+            OR has_table_privilege(owner.oid, exposed_relation.oid, 'INSERT')
+            OR has_table_privilege('anon', exposed_relation.oid, 'UPDATE')
+            OR has_table_privilege('authenticated', exposed_relation.oid, 'UPDATE')
+            OR has_table_privilege(runtime.oid, exposed_relation.oid, 'UPDATE')
+            OR has_table_privilege(owner.oid, exposed_relation.oid, 'UPDATE')
+            OR has_table_privilege('anon', exposed_relation.oid, 'DELETE')
+            OR has_table_privilege('authenticated', exposed_relation.oid, 'DELETE')
+            OR has_table_privilege(runtime.oid, exposed_relation.oid, 'DELETE')
+            OR has_table_privilege(owner.oid, exposed_relation.oid, 'DELETE')
+          )
+      ) AS "unexpectedRelationAccessAbsent",
+      NOT has_schema_privilege('anon', 'public', 'CREATE')
+        AND NOT has_schema_privilege('authenticated', 'public', 'CREATE')
+        AND NOT has_schema_privilege(runtime.oid, 'public', 'CREATE')
+        AND NOT has_schema_privilege(owner.oid, 'public', 'CREATE')
+        AS "untrustedSchemaCreateDenied",
+      NOT EXISTS (
         SELECT 1 FROM pg_catalog.pg_db_role_setting AS database_setting
-        WHERE database_setting.setrole = runtime.oid
-      ) AS "runtimeDatabaseConfigClean",
+        WHERE database_setting.setrole IN (schema_owner.oid, runtime.oid, owner.oid)
+      ) AS "roleDatabaseConfigClean",
       NOT EXISTS (
         SELECT 1 FROM pg_catalog.pg_parameter_acl AS parameter
         WHERE has_parameter_privilege(runtime.oid, parameter.parname, 'SET')
@@ -207,6 +664,28 @@ async function verifyCatalog(admin) {
         AND current_user_function.proconfig = ARRAY['search_path=pg_catalog']::text[]
         AS "currentUserFunctionExact",
       current_user_function.prosrc AS "currentUserSource",
+      (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'grantee', CASE
+              WHEN acl.grantee = 0 THEN 'PUBLIC'
+              ELSE pg_get_userbyid(acl.grantee)
+            END,
+            'grantor', pg_get_userbyid(acl.grantor),
+            'privilege', acl.privilege_type,
+            'grantable', acl.is_grantable
+          )
+          ORDER BY
+            CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(acl.grantee) END,
+            acl.privilege_type
+        )
+        FROM aclexplode(
+          COALESCE(
+            current_user_function.proacl,
+            acldefault('f', current_user_function.proowner)
+          )
+        ) AS acl
+      ) AS "currentUserAcl",
       has_function_privilege(
         'hana_child_owner',
         'public.hana_child_access_status(uuid)',
@@ -219,6 +698,8 @@ async function verifyCatalog(admin) {
       ) AS "anonymousStatusExecuteDenied",
       NOT has_function_privilege(runtime.oid, status_function.oid, 'EXECUTE')
         AS "runtimeStatusExecuteDenied",
+      NOT has_function_privilege('authenticated', status_function.oid, 'EXECUTE')
+        AS "authenticatedStatusExecuteDenied",
       pg_get_userbyid(status_function.proowner) = 'postgres'
         AND status_function.prosecdef
         AND status_function.provolatile = 's'
@@ -226,7 +707,41 @@ async function verifyCatalog(admin) {
         AND status_language.lanname = 'sql'
         AND status_function.proconfig = ARRAY['search_path=pg_catalog']::text[]
         AS "statusFunctionExact",
-      status_function.prosrc AS "statusFunctionSource"
+      status_function.prosrc AS "statusFunctionSource",
+      (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'grantee', CASE
+              WHEN acl.grantee = 0 THEN 'PUBLIC'
+              ELSE pg_get_userbyid(acl.grantee)
+            END,
+            'grantor', pg_get_userbyid(acl.grantor),
+            'privilege', acl.privilege_type,
+            'grantable', acl.is_grantable
+          )
+          ORDER BY
+            CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(acl.grantee) END,
+            acl.privilege_type
+        )
+        FROM aclexplode(
+          COALESCE(status_function.proacl, acldefault('f', status_function.proowner))
+        ) AS acl
+      ) AS "statusFunctionAcl",
+      NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_proc AS exposed_function
+        JOIN pg_catalog.pg_namespace AS exposed_namespace
+          ON exposed_namespace.oid = exposed_function.pronamespace
+        WHERE exposed_namespace.nspname = 'public'
+          AND exposed_function.prosecdef
+          AND exposed_function.oid <> status_function.oid
+          AND (
+            has_function_privilege('anon', exposed_function.oid, 'EXECUTE')
+            OR has_function_privilege('authenticated', exposed_function.oid, 'EXECUTE')
+            OR has_function_privilege(runtime.oid, exposed_function.oid, 'EXECUTE')
+            OR has_function_privilege(owner.oid, exposed_function.oid, 'EXECUTE')
+          )
+      ) AS "unexpectedDefinerExposureAbsent"
     FROM pg_catalog.pg_roles AS schema_owner
     CROSS JOIN pg_catalog.pg_roles AS runtime
     CROSS JOIN pg_catalog.pg_roles AS owner
@@ -255,7 +770,11 @@ async function verifyCatalog(admin) {
     forceRowSecurity: true,
     relationOwnerExact: true,
     userTriggersAbsent: true,
-    runtimeDatabaseConfigClean: true,
+    userRulesAbsent: true,
+    publicViewsAbsent: true,
+    unexpectedRelationAccessAbsent: true,
+    untrustedSchemaCreateDenied: true,
+    roleDatabaseConfigClean: true,
     parameterAclClean: true,
     runtimeMembershipCountExact: true,
     runtimeMembershipExact: true,
@@ -283,7 +802,9 @@ async function verifyCatalog(admin) {
     statusExecuteGranted: true,
     anonymousStatusExecuteDenied: true,
     runtimeStatusExecuteDenied: true,
+    authenticatedStatusExecuteDenied: true,
     statusFunctionExact: true,
+    unexpectedDefinerExposureAbsent: true,
   })
   requireExactState(
     {
@@ -295,6 +816,8 @@ async function verifyCatalog(admin) {
       statusFunctionSource: expectedAccessStatusSource,
     },
   )
+  requireExactFunctionAcl(result.rows[0]?.currentUserAcl)
+  requireExactFunctionAcl(result.rows[0]?.statusFunctionAcl)
 }
 
 async function requireDirectRuntimeDenied(runtime, text, values = []) {

@@ -26,6 +26,8 @@ function runVerifier(environment, expectedStatus, expectedOutput) {
 async function transaction(client, statements) {
   await client.query('BEGIN')
   try {
+    await client.query("SET LOCAL lock_timeout = '5s'")
+    await client.query("SET LOCAL statement_timeout = '10s'")
     for (const statement of statements) await client.query(statement)
     await client.query('COMMIT')
   } catch (error) {
@@ -73,12 +75,39 @@ async function run() {
     stderr: 'ISSUE-184 trusted child RLS evidence: FAIL\n',
   }
   const admin = new Client({ connectionString: databaseUrl })
+  const schemaOwner = new Client({ connectionString: directUrl })
+  const runtime = new Client({ connectionString: childDatabaseUrl })
   const extraPolicy = `issue_184_${randomUUID().replaceAll('-', '')}`
   const parentRole = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const routineSchema = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const routineName = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const viewSchema = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const viewName = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const ownerId = randomUUID()
+  const foreignOwnerId = randomUUID()
+  const ownerChildId = randomUUID()
+  const foreignChildId = randomUUID()
 
   try {
-    await admin.connect()
+    await Promise.all([admin.connect(), schemaOwner.connect(), runtime.connect()])
     runVerifier(verifierEnvironment, 0, pass)
+
+    await schemaOwner.query(
+      `
+        INSERT INTO public.profiles (id, updated_at)
+        VALUES ($1, CURRENT_TIMESTAMP), ($2, CURRENT_TIMESTAMP)
+      `,
+      [ownerId, foreignOwnerId],
+    )
+    await schemaOwner.query(
+      `
+        INSERT INTO public.children (id, user_id, name, birthdate, updated_at)
+        VALUES
+          ($1, $2, $3, DATE '2025-02-01', CURRENT_TIMESTAMP),
+          ($4, $5, $6, DATE '2025-02-02', CURRENT_TIMESTAMP)
+      `,
+      [ownerChildId, ownerId, randomUUID(), foreignChildId, foreignOwnerId, randomUUID()],
+    )
 
     await admin.query(`
       ALTER POLICY children_owner_scope ON public.children
@@ -100,6 +129,45 @@ async function run() {
         USING (user_id = public.hana_current_user_id())
         WITH CHECK (user_id = public.hana_current_user_id())
       `)
+    }
+    runVerifier(verifierEnvironment, 0, pass)
+
+    await admin.query(
+      'GRANT EXECUTE ON FUNCTION public.hana_child_access_status(uuid) TO authenticated',
+    )
+    try {
+      const mutation = await admin.query(`
+        SELECT has_function_privilege(
+          'authenticated',
+          'public.hana_child_access_status(uuid)',
+          'EXECUTE'
+        ) AS present
+      `)
+      requireTrue(mutation.rows[0]?.present)
+      runVerifier(verifierEnvironment, 1, fail)
+    } finally {
+      await admin.query(
+        'REVOKE EXECUTE ON FUNCTION public.hana_child_access_status(uuid) FROM authenticated',
+      )
+    }
+    runVerifier(verifierEnvironment, 0, pass)
+
+    await transaction(admin, [
+      `CREATE VIEW public.${exposedView} AS SELECT * FROM public.children`,
+      `GRANT SELECT ON TABLE public.${exposedView} TO hana_child_runtime`,
+    ])
+    try {
+      const mutation = await admin.query(
+        `
+          SELECT to_regclass($1) IS NOT NULL
+            AND has_table_privilege('hana_child_runtime', $1, 'SELECT') AS present
+        `,
+        [`public.${exposedView}`],
+      )
+      requireTrue(mutation.rows[0]?.present)
+      runVerifier(verifierEnvironment, 1, fail)
+    } finally {
+      await admin.query(`DROP VIEW IF EXISTS public.${exposedView}`)
     }
     runVerifier(verifierEnvironment, 0, pass)
 
