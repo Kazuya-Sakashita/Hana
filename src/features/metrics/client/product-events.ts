@@ -6,12 +6,14 @@ type ProductEventReport = components['schemas']['ProductEventReport']
 export type ProductEventName = ProductEventReport['event_name']
 export type ProductEventElapsedBucket = ProductEventReport['elapsed_bucket']
 
-export const PRODUCT_EVENT_OUTBOX_STORAGE_KEY = 'hana:productEventOutbox:v1'
+export const PRODUCT_EVENT_OUTBOX_STORAGE_KEY = 'hana:productEventOutbox:v2'
 export const PRODUCT_EVENT_OUTBOX_TTL_MS = 24 * 60 * 60 * 1000
 export const PRODUCT_EVENT_OUTBOX_MAX_ENTRIES = 50
 const PRODUCT_EVENT_OUTBOX_MAX_FLUSH_PER_RUN = 20
 const PRODUCT_EVENT_OUTBOX_MAX_RETRY_MS = 60_000
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const TELEMETRY_BINDING_PATTERN = /^v1\.[0-9a-f]{64}$/
+const OCCURRED_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
 const EVENT_NAMES = new Set<ProductEventName>([
   'record_started',
   'photo_selected',
@@ -35,7 +37,8 @@ type ProductEventOutboxEntry = {
 }
 
 type StoredProductEventOutbox = {
-  version: 1
+  version: 2
+  telemetryBinding: string
   entries: ProductEventOutboxEntry[]
 }
 
@@ -43,6 +46,7 @@ type ProductEventSendResult = 'acknowledged' | 'authentication_rejected' | 'retr
 
 let activeFlush: Promise<void> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
+let activeTelemetryBinding: string | null = null
 
 function hasExactKeys(value: object, expected: readonly string[]): boolean {
   const actual = Object.keys(value).sort()
@@ -57,7 +61,13 @@ function isProductEventReport(value: unknown): value is ProductEventReport {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const report = value as Record<string, unknown>
   return (
-    hasExactKeys(report, ['event_name', 'event_id', 'flow_id', 'elapsed_bucket']) &&
+    hasExactKeys(report, [
+      'event_name',
+      'event_id',
+      'flow_id',
+      'elapsed_bucket',
+      'occurred_minute_utc',
+    ]) &&
     typeof report.event_name === 'string' &&
     EVENT_NAMES.has(report.event_name as ProductEventName) &&
     typeof report.event_id === 'string' &&
@@ -65,7 +75,9 @@ function isProductEventReport(value: unknown): value is ProductEventReport {
     typeof report.flow_id === 'string' &&
     UUID_PATTERN.test(report.flow_id) &&
     typeof report.elapsed_bucket === 'string' &&
-    ELAPSED_BUCKETS.has(report.elapsed_bucket as ProductEventElapsedBucket)
+    ELAPSED_BUCKETS.has(report.elapsed_bucket as ProductEventElapsedBucket) &&
+    typeof report.occurred_minute_utc === 'string' &&
+    OCCURRED_MINUTE_PATTERN.test(report.occurred_minute_utc)
   )
 }
 
@@ -94,16 +106,21 @@ function getSessionStorage(): Storage | null {
 
 function readOutbox(now = Date.now()): StoredProductEventOutbox {
   const storage = getSessionStorage()
-  if (!storage) return { version: 1, entries: [] }
+  if (!storage || !activeTelemetryBinding) {
+    return { version: 2, telemetryBinding: activeTelemetryBinding ?? '', entries: [] }
+  }
   try {
     const raw = storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
-    if (!raw) return { version: 1, entries: [] }
+    if (!raw) return { version: 2, telemetryBinding: activeTelemetryBinding, entries: [] }
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error()
     const outbox = parsed as Record<string, unknown>
     if (
-      !hasExactKeys(outbox, ['version', 'entries']) ||
-      outbox.version !== 1 ||
+      !hasExactKeys(outbox, ['version', 'telemetryBinding', 'entries']) ||
+      outbox.version !== 2 ||
+      outbox.telemetryBinding !== activeTelemetryBinding ||
+      typeof outbox.telemetryBinding !== 'string' ||
+      !TELEMETRY_BINDING_PATTERN.test(outbox.telemetryBinding) ||
       !Array.isArray(outbox.entries) ||
       outbox.entries.length > PRODUCT_EVENT_OUTBOX_MAX_ENTRIES ||
       !outbox.entries.every(isOutboxEntry)
@@ -113,15 +130,17 @@ function readOutbox(now = Date.now()): StoredProductEventOutbox {
     const entries = outbox.entries.filter(
       (entry) => now - entry.queuedAt <= PRODUCT_EVENT_OUTBOX_TTL_MS,
     )
-    if (entries.length !== outbox.entries.length) writeOutbox({ version: 1, entries })
-    return { version: 1, entries }
+    if (entries.length !== outbox.entries.length) {
+      writeOutbox({ version: 2, telemetryBinding: activeTelemetryBinding, entries })
+    }
+    return { version: 2, telemetryBinding: activeTelemetryBinding, entries }
   } catch {
     try {
       storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
     } catch {
-      return { version: 1, entries: [] }
+      return { version: 2, telemetryBinding: activeTelemetryBinding, entries: [] }
     }
-    return { version: 1, entries: [] }
+    return { version: 2, telemetryBinding: activeTelemetryBinding, entries: [] }
   }
 }
 
@@ -138,6 +157,7 @@ function writeOutbox(outbox: StoredProductEventOutbox): boolean {
 }
 
 function enqueue(report: ProductEventReport, now = Date.now()): boolean {
+  if (!activeTelemetryBinding) return false
   const outbox = readOutbox(now)
   const existingStage = outbox.entries.find(
     (entry) =>
@@ -146,7 +166,8 @@ function enqueue(report: ProductEventReport, now = Date.now()): boolean {
   if (existingStage) return true
   if (outbox.entries.length >= PRODUCT_EVENT_OUTBOX_MAX_ENTRIES) return false
   return writeOutbox({
-    version: 1,
+    version: 2,
+    telemetryBinding: activeTelemetryBinding,
     entries: [...outbox.entries, { report, queuedAt: now, attempts: 0, nextAttemptAt: now }],
   })
 }
@@ -156,9 +177,13 @@ function retryDelay(attempts: number): number {
 }
 
 async function send(report: ProductEventReport): Promise<ProductEventSendResult> {
+  if (!activeTelemetryBinding) return 'authentication_rejected'
   const response = await fetch('/v1/metrics/events', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Hana-Telemetry-Binding': activeTelemetryBinding,
+    },
     credentials: 'same-origin',
     keepalive: true,
     body: JSON.stringify(report),
@@ -177,6 +202,7 @@ function scheduleRetry(delay: number): void {
 }
 
 async function runFlush(now: () => number): Promise<void> {
+  if (!activeTelemetryBinding) return
   let processed = 0
   while (processed < PRODUCT_EVENT_OUTBOX_MAX_FLUSH_PER_RUN) {
     const current = readOutbox(now())
@@ -259,6 +285,7 @@ export function startProductEventOutbox(): () => void {
 }
 
 export function clearProductEventOutbox(): void {
+  activeTelemetryBinding = null
   if (retryTimer !== null) {
     clearTimeout(retryTimer)
     retryTimer = null
@@ -270,21 +297,35 @@ export function clearProductEventOutbox(): void {
   }
 }
 
+export function setProductEventTelemetryBinding(binding: string | null): void {
+  const normalized = binding && TELEMETRY_BINDING_PATTERN.test(binding) ? binding : null
+  if (activeTelemetryBinding !== null && activeTelemetryBinding !== normalized) {
+    clearProductEventOutbox()
+  }
+  activeTelemetryBinding = normalized
+}
+
 export function reportProductEvent({
   eventName,
   flowId,
   elapsedMs,
+  telemetryBinding,
 }: {
   eventName: ProductEventName
   flowId?: string
   elapsedMs: number | null
+  telemetryBinding: string
 }): void {
   try {
+    setProductEventTelemetryBinding(telemetryBinding)
+    if (!activeTelemetryBinding) return
+    const occurredAt = new Date(Math.floor(Date.now() / 60_000) * 60_000)
     const report: ProductEventReport = {
       event_name: eventName,
       event_id: crypto.randomUUID(),
       flow_id: flowId ?? crypto.randomUUID(),
       elapsed_bucket: productEventElapsedBucket(elapsedMs),
+      occurred_minute_utc: occurredAt.toISOString().replace('.000Z', 'Z'),
     }
     if (enqueue(report)) void flushProductEventOutbox()
     else void send(report).catch(() => undefined)

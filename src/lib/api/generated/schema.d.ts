@@ -441,13 +441,12 @@ export interface paths {
         put?: never;
         /**
          * Web Vitals 計測の報告 (RUM、 ISSUE-024)
-         * @description ブラウザの `web-vitals` ライブラリから `navigator.sendBeacon` で送られる
-         *     Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受ける。
+         * @description ブラウザの `web-vitals` ライブラリで計測した値をclient側で固定dimensionへ変換して受ける。
          *     DB 保存はしない (Vercel Logs で十分)。
-         *     サインアウト状態でも送れる (匿名で記録)。
-         *     requestは name / value / id / navigationType / route以外を拒否する。
-         *     serverは固定operation / route group / status / duration bucketへ変換し、
-         *     id、raw value、raw route、user識別子を構造化logへ出さない。
+         *     senderはcredentialsをomitし、サインアウト状態と同じcookieless requestとして送る。
+         *     requestはversion、random event ID、固定operation / reason / route group / status /
+         *     duration bucket以外を拒否し、raw id / value / route / navigationTypeを収集しない。
+         *     event IDのstable hashで10% samplingし、event ID自体は構造化logへ出さない。
          */
         post: operations["reportWebVitals"];
         delete?: never;
@@ -471,7 +470,7 @@ export interface paths {
          *     actor は session の user_id からサーバー側で HMAC-SHA256 に変換した仮名識別子として保存し、
          *     クライアントからユーザー識別子を受け取らない。
          *
-         *     request body は event_name / event_id / flow_id / elapsed_bucket に限定する。
+         *     request body は event_name / event_id / flow_id / occurred_minute_utc / elapsed_bucket に限定する。
          *     記録本文、画像情報、氏名、生年月日、メール、URL、storage_key、自由記述は受け付けない。
          *     記録作成フローの flow_id は POST /memories の Idempotency-Key と同じUUIDとする。
          *     下書き復元と通信retryでは同じflowを使い、写真構成変更または409 conflict後は新しいUUIDへ切り替える。
@@ -653,6 +652,11 @@ export interface components {
              * @example 2026-05-14T09:30:00Z
              */
             created_at: string;
+            /**
+             * @description ProductEvent outboxを現在のactorへbindするserver-minted opaque token。
+             *     request body、DB row、通常log、status-only evidenceへ保存しない。
+             */
+            telemetry_binding: string;
         };
         /**
          * @description 子どもプロフィール。1 ユーザーにつき MVP では 1 件まで (v1 で複数対応予定)。
@@ -994,44 +998,32 @@ export interface components {
             };
         };
         /**
-         * @description Web Vitals 計測 1 件の報告 payload (ISSUE-024)。
-         *     PII は含めない (allowlist: name / value / id / navigationType / route)。
-         *     serverは受信値を固定operation / route group / status / duration bucketへ変換し、
-         *     id、raw value、raw route、user識別子をtelemetry logへ出さない。
+         * @description Web Vitals 計測 1 件の低cardinality報告 payload (ISSUE-152)。
+         *     clientで固定dimensionへ変換し、web-vitalsのraw id / value / route / navigationTypeを送らない。
+         *     event_idはstable sampling用であり、通常logやstatus-only evidenceへ出さない。
          */
         WebVitalsReport: {
+            /** @enum {string} */
+            schema_version: "hana-web-vitals-report/v2";
             /**
-             * @description Web Vitals メトリクス名
-             * @example LCP
-             * @enum {string}
+             * Format: uuid
+             * @description report単位のrandom UUID。actor識別には使わない。
              */
-            name: "CLS" | "FCP" | "INP" | "LCP" | "TTFB";
-            /**
-             * @description 数値 (ms / unitless どちらか、 name に依存)
-             * @example 2400
-             */
-            value: number;
-            /**
-             * @description web-vitals が発行するユニーク ID (同一メトリクスの更新で同じ id)
-             * @example v1-1717068000000-12345
-             */
-            id: string;
-            /**
-             * @description Navigation Timing API の type
-             * @example navigate
-             * @enum {string|null}
-             */
-            navigationType?: "navigate" | "reload" | "back-forward" | "back-forward-cache" | "prerender" | "restore" | null;
-            /**
-             * @description ページの sanitized pathname (`[memoryId]` 等の dynamic params は除去済)。
-             *     例: `/`, `/album`, `/memory/[memoryId]`
-             * @example /album
-             */
-            route: string;
+            event_id: string;
+            /** @enum {string} */
+            operation: "web_vital_cls" | "web_vital_fcp" | "web_vital_inp" | "web_vital_lcp" | "web_vital_ttfb";
+            /** @enum {string} */
+            reason: "not_applicable";
+            /** @enum {string} */
+            route_group: "public" | "auth" | "home" | "record" | "memory" | "settings" | "other_private";
+            /** @enum {string} */
+            status: "good" | "needs_improvement" | "poor";
+            /** @enum {string} */
+            duration_bucket: "not_applicable" | "under_100ms" | "from_100_to_500ms" | "from_501_to_1000ms" | "from_1001_to_2500ms" | "from_2501_to_4000ms" | "over_4000ms";
         };
         /**
          * @description 記録体験のファネル計測に使う仮名化イベント。
-         *     許可された4フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
+         *     許可された5フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
          */
         ProductEventReport: {
             /**
@@ -1054,6 +1046,13 @@ export interface components {
              * @example 123e4567-e89b-42d3-a456-426614174000
              */
             flow_id: string;
+            /**
+             * Format: date-time
+             * @description clientでstageが発生したUTC分bucket。通信retryでも同じ値を維持する。
+             *     restricted aggregateはserver受信遅延とclock境界を検証し、不確かなwindowをHOLDにする。
+             * @example 2026-08-07T12:34:00Z
+             */
+            occurred_minute_utc: string;
             /**
              * @description フロー開始からの経過時間を粗く分類した値。
              *     record_started と memory_viewed は not_applicable、それ以外のイベントは時間帯を指定する。
@@ -1461,7 +1460,8 @@ export interface operations {
                      *       "email": null,
                      *       "display_name": null,
                      *       "ai_consent_at": null,
-                     *       "created_at": "2026-05-14T09:30:00Z"
+                     *       "created_at": "2026-05-14T09:30:00Z",
+                     *       "telemetry_binding": "v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -1515,7 +1515,8 @@ export interface operations {
                      *       "email": null,
                      *       "display_name": null,
                      *       "ai_consent_at": null,
-                     *       "created_at": "2026-05-14T09:30:00Z"
+                     *       "created_at": "2026-05-14T09:30:00Z",
+                     *       "telemetry_binding": "v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -2062,13 +2063,20 @@ export interface operations {
                 content?: never;
             };
             422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
         };
     };
     reportProductEvent: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /**
+                 * @description GET /meが返すopaque actor binding。serverは現在の認証actorとの一致をconstant-timeで検証し、
+                 *     header値をDB、通常log、status-only evidenceへ保存しない。
+                 */
+                "X-Hana-Telemetry-Binding": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2086,6 +2094,7 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];

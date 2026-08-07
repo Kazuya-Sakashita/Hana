@@ -1,9 +1,9 @@
 type: object
 description: |
   記録体験のファネル計測に使う仮名化イベント。
-  許可された4フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
+  許可された5フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
 additionalProperties: false
-required: [event_name, event_id, flow_id, elapsed_bucket]
+required: [event_name, event_id, flow_id, occurred_minute_utc, elapsed_bucket]
 properties:
   event_name:
     type: string
@@ -23,6 +23,14 @@ properties:
       POST /memories の Idempotency-Key と同じ値を使い、DB確定Memoryとの相関に使う。
       下書き復元と通信retryでは継承し、写真構成変更または409 conflict後の再試行では再採番する。
     example: 123e4567-e89b-42d3-a456-426614174000
+  occurred_minute_utc:
+    type: string
+    format: date-time
+    pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$'
+    description: |
+      clientでstageが発生したUTC分bucket。通信retryでも同じ値を維持する。
+      restricted aggregateはserver受信遅延とclock境界を検証し、不確かなwindowをHOLDにする。
+    example: '2026-08-07T12:34:00Z'
   elapsed_bucket:
     type: string
     enum: [not_applicable, under_10s, from_10_to_30s, from_31_to_60s, over_60s]

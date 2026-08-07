@@ -40,12 +40,14 @@ API、AI、性能、記録funnelを同じPII-safe telemetry契約で集約する
 
 ## 影響範囲
 
-- `ProductEventReport`のrequest shapeは維持し、`flow_id`とMemory `Idempotency-Key`の意味契約を同期する
+- `ProductEventReport`へ発生minuteとactor拘束headerを追加し、`flow_id`とMemory `Idempotency-Key`の意味契約を同期する
 - 記録画面の下書き復元、写真構成変更、保存retry、409 conflict時のflow lifecycleとサインアウト時のlocal cleanup
-- ProductEvent client outbox、Web Vitalsの低cardinality変換、合成telemetry aggregate
+- actor拘束済みProductEvent client outbox、cookie-less Web Vitals v2の低cardinality変換、合成telemetry aggregate
 - status-only completeness、suppression、right-censor、North Star evidenceと回帰test
 
-OpenAPIのpath、response、生成型のshape、production DB、外部monitoring providerは変更しない。
+OpenAPIのpathと成功response、production DB、外部monitoring providerは変更しない。requestとAppUser生成型は
+第一者clientと原子的に更新する。production DB authority / retention activationは#379へ分離し、完了まで
+production telemetry activationをHoldにする。
 
 ## 受け入れ条件 (Acceptance Criteria)
 
@@ -61,7 +63,7 @@ OpenAPIのpath、response、生成型のshape、production DB、外部monitoring
 - [x] eventごとのexpected-versus-received、loss、duplicate、reorderをstatus-onlyで検証し、silent lossをcompleteness PASSにしない
 - [x] 観測開始時のeligible censusと退会right-censorをactor非識別のaggregateとして固定し、削除後の分母縮小を検知する
 - [x] censorを全失敗 / 全成功とするworst-case区間からPASS / FAIL / HOLDだけを生成し、exact census / censor countを証跡へ出さない
-- [x] raw event accessをingest、retention、承認済みaggregate jobへ限定する
+- [x] raw event accessのauthority契約とproduction HOLD境界を固定する（DB role / retention実効化は#379）
 - [x] 分母・分子・補集合と関連表へprimary / secondary suppressionを適用する
 - [x] event completeness、query version、actor key version、eligible census digest、censoring policy / status digestをstatus-only evidenceへ含める
 - [x] North Starのactive unit、UTC entry window、重複排除、event completenessを固定する
@@ -76,18 +78,31 @@ OpenAPIのpath、response、生成型のshape、production DB、外部monitoring
 
 - 共通event schema、sampling、90日保持、cardinality、completeness、suppression、right-censor、status-only evidenceを固定した
 - ProductEventを送信前にdurable outboxへ保存し、204応答だけをackとして同一event IDで再送するようにした
-- サインアウト、退会完了、401 / 403でoutboxを破棄し、別actorへの再送と誤帰属を防止した
+- server-minted actor bindingをoutbox rootとheaderへ固定し、actor変更、サインアウト、退会完了、401 / 403でoutboxを破棄して別actorへの再送と誤帰属を防止した
 - 記録flowとMemory `Idempotency-Key`を同期し、下書き復元・写真変更・retry・409 conflictの遷移規則を実装した
-- Web Vitalsをraw値・raw route・user identifierなしの固定dimensionへ変換し、匿名公開endpointとして認証契約を同期した
-- 本番credential、purge、HMAC key lifecycleはスコープどおりISSUE-185へ残した
+- Web Vitalsをbrowser内で固定dimensionへ変換し、raw ID・値・path・navigation typeを送らず、cookieをomitするv2 requestへ同期した
+- ProductEvent DB role / retention fallbackはreviewer上限を超えない独立した承認境界として#379へ分離した
+- 本番credential、退会purge、HMAC key lifecycleはISSUE-185の人間承認境界を維持した
 
 ## 検証結果
 
 - `pnpm openapi:lint` PASS（既存warningのみ）
 - `pnpm openapi:gen` PASS
 - `pnpm openapi:auth-contract` PASS（24 operations / 20 private）
-- `pnpm pr:gate`の全検査PASS（183 test files、1572 tests、契約QAすべてPASS。sandbox制限で停止したbuildは同一`pnpm build:ci`を制限外で再実行しPASS）
-- security / privacy / analyticsの専門reviewは未実施
+- `pnpm typecheck`、`pnpm lint`、`pnpm format:check` PASS
+- `pnpm test` PASS（191 files中186 PASS / 5 skip、1624 tests中1612 PASS / 12 skip）
+- `pnpm pr:gate`はbuild直前まで全検査PASS。sandboxのTurbopack port制限で停止した同一`pnpm build:ci`を制限外で再実行しPASS
+- `oasdiff breaking`は14件（required追加9 / 旧Vitals raw field削除5）。ADR-0018とexact-report waiver承認まではHOLD
+- 第1巡はcommit `1814d03`をsecurity / privacy / analyticsの3名が独立reviewし、3 / 6 / 5件のactionable findingで全員HOLD
+- 第1巡の所見を修正中。最新SHAの第2巡は6つの必須roleを別reviewerが独立確認する
+
+## 専門review履歴
+
+| 巡  | 対象SHA   | role                        | 判定 | actionable findings |
+| --- | --------- | --------------------------- | ---- | ------------------: |
+| 1   | `1814d03` | security                    | HOLD |                   3 |
+| 1   | `1814d03` | privacy                     | HOLD |                   6 |
+| 1   | `1814d03` | analytics / spec acceptance | HOLD |                   5 |
 
 ## 参考
 
@@ -96,3 +111,4 @@ OpenAPIのpath、response、生成型のshape、production DB、外部monitoring
 - ISSUE-111
 - ISSUE-159
 - ISSUE-185
+- GitHub Issue #379（ISSUE-186: ProductEvent DB authority / retention fallback）

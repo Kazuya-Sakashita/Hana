@@ -36,20 +36,32 @@ vi.mock('@/server/db/prisma', () => ({
 }))
 
 import { POST } from '@/app/v1/metrics/events/route'
-import { productEventActorHash } from '@/features/metrics/server/product-event'
+import {
+  productEventActorHash,
+  productEventTelemetryBinding,
+} from '@/features/metrics/server/product-event'
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
+const OTHER_USER_ID = '6e15d6e0-5e2b-4af6-8f80-7e71ca60a236'
+const occurredMinute = new Date()
+occurredMinute.setUTCSeconds(0, 0)
 const validReport = {
   event_name: 'photo_selected',
   event_id: '123e4567-e89b-42d3-a456-426614174000',
   flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+  occurred_minute_utc: occurredMinute.toISOString().replace('.000Z', 'Z'),
   elapsed_bucket: 'under_10s',
 }
 
-function request(body: unknown) {
+function request(
+  body: unknown,
+  telemetryBinding: string | null = productEventTelemetryBinding(USER_ID),
+) {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  if (telemetryBinding !== null) headers.set('X-Hana-Telemetry-Binding', telemetryBinding)
   return new Request('http://localhost:3000/v1/metrics/events', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   })
 }
@@ -98,7 +110,29 @@ describe('POST /v1/metrics/events', () => {
     expect(data.actorHash).toMatch(/^[0-9a-f]{64}$/)
     expect(data.actorHash).not.toBe(USER_ID)
     expect(data).not.toHaveProperty('userId')
+    expect(data).not.toHaveProperty('occurredMinuteUtc')
   })
+
+  it.each([
+    ['missing', null],
+    ['another actor', productEventTelemetryBinding(OTHER_USER_ID)],
+    ['malformed', 'v1.invalid'],
+  ])(
+    'rejects a %s telemetry binding before touching ProductEvent storage',
+    async (_label, binding) => {
+      const response = await POST(request(validReport, binding))
+
+      expect(response.status).toBe(403)
+      expect(await response.json()).toMatchObject({ reason: 'forbidden' })
+      expect(mocks.profileFindUnique).not.toHaveBeenCalled()
+      expect(mocks.transaction).not.toHaveBeenCalled()
+      expect(mocks.advisoryLock).not.toHaveBeenCalled()
+      expect(mocks.eventFindUnique).not.toHaveBeenCalled()
+      expect(mocks.eventFindFirst).not.toHaveBeenCalled()
+      expect(mocks.eventCount).not.toHaveBeenCalled()
+      expect(mocks.eventCreate).not.toHaveBeenCalled()
+    },
+  )
 
   it('requires authentication', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } })
@@ -117,6 +151,25 @@ describe('POST /v1/metrics/events', () => {
     )
 
     expect(response.status).toBe(422)
+    expect(mocks.eventCreate).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['future', new Date(Date.now() + 60_000).toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00Z')],
+    [
+      'older than 24 hours',
+      new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00Z'),
+    ],
+  ])('rejects a %s occurrence minute before opening a transaction', async (_label, value) => {
+    const report = { ...validReport }
+    if (value === undefined) delete (report as Partial<typeof validReport>).occurred_minute_utc
+    else report.occurred_minute_utc = value
+
+    const response = await POST(request(report))
+
+    expect(response.status).toBe(422)
+    expect(mocks.transaction).not.toHaveBeenCalled()
     expect(mocks.eventCreate).not.toHaveBeenCalled()
   })
 
@@ -207,7 +260,10 @@ describe('POST /v1/metrics/events', () => {
   it('rejects invalid JSON with Problem Details', async () => {
     const invalidRequest = new Request('http://localhost:3000/v1/metrics/events', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Hana-Telemetry-Binding': productEventTelemetryBinding(USER_ID),
+      },
       body: '{',
     })
 

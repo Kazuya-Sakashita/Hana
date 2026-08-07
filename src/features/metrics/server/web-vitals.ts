@@ -1,36 +1,54 @@
 import type { components } from '@/lib/api/generated/schema'
 import { problems } from '@/server/api/problems'
-import type {
-  TelemetryDimensions,
-  TelemetryDurationBucket,
-  TelemetryOperation,
-  TelemetryRouteGroup,
-  TelemetryStatus,
-} from './telemetry-contract'
+import type { TelemetryDimensions } from './telemetry-contract'
 
 export type WebVitalsReport = components['schemas']['WebVitalsReport']
 
-const ALLOWED_KEYS = new Set(['name', 'value', 'id', 'navigationType', 'route'])
-const ALLOWED_NAMES = new Set<WebVitalsReport['name']>(['CLS', 'FCP', 'INP', 'LCP', 'TTFB'])
-const ALLOWED_NAVIGATION_TYPES = new Set<NonNullable<WebVitalsReport['navigationType']>>([
-  'navigate',
-  'reload',
-  'back-forward',
-  'back-forward-cache',
-  'prerender',
-  'restore',
+const ALLOWED_KEYS = [
+  'schema_version',
+  'event_id',
+  'operation',
+  'reason',
+  'route_group',
+  'status',
+  'duration_bucket',
+] as const
+const OPERATIONS = new Set<WebVitalsReport['operation']>([
+  'web_vital_cls',
+  'web_vital_fcp',
+  'web_vital_inp',
+  'web_vital_lcp',
+  'web_vital_ttfb',
 ])
-
-const VITAL_THRESHOLDS: Record<WebVitalsReport['name'], readonly [number, number]> = {
-  CLS: [0.1, 0.25],
-  FCP: [1800, 3000],
-  INP: [200, 500],
-  LCP: [2500, 4000],
-  TTFB: [800, 1800],
-}
+const ROUTE_GROUPS = new Set<WebVitalsReport['route_group']>([
+  'public',
+  'auth',
+  'home',
+  'record',
+  'memory',
+  'settings',
+  'other_private',
+])
+const STATUSES = new Set<WebVitalsReport['status']>(['good', 'needs_improvement', 'poor'])
+const DURATION_BUCKETS = new Set<WebVitalsReport['duration_bucket']>([
+  'not_applicable',
+  'under_100ms',
+  'from_100_to_500ms',
+  'from_501_to_1000ms',
+  'from_1001_to_2500ms',
+  'from_2501_to_4000ms',
+  'over_4000ms',
+])
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function validation(path: string, message: string): never {
   throw problems.validation([{ path, reason: 'invalid', message }])
+}
+
+function hasExactKeys(input: Record<string, unknown>): boolean {
+  const actual = Object.keys(input).sort()
+  const expected = [...ALLOWED_KEYS].sort()
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
 }
 
 export function parseWebVitalsReport(raw: unknown): WebVitalsReport {
@@ -38,70 +56,57 @@ export function parseWebVitalsReport(raw: unknown): WebVitalsReport {
     validation('body', '入力内容を確認してください')
   }
   const input = raw as Record<string, unknown>
-  const unknownKey = Object.keys(input).find((key) => !ALLOWED_KEYS.has(key))
-  if (unknownKey) validation(`body.${unknownKey}`, '許可されていない項目です')
-  if (typeof input.name !== 'string' || !ALLOWED_NAMES.has(input.name as never)) {
-    validation('body.name', '許可されていないmetric名です')
+  if (!hasExactKeys(input)) validation('body', '許可された固定項目だけを指定してください')
+  if (input.schema_version !== 'hana-web-vitals-report/v2') {
+    validation('body.schema_version', '対応していないschema versionです')
   }
-  if (typeof input.value !== 'number' || !Number.isFinite(input.value) || input.value < 0) {
-    validation('body.value', '0以上の有限値を指定してください')
+  if (typeof input.event_id !== 'string' || !UUID_PATTERN.test(input.event_id)) {
+    validation('body.event_id', 'UUID形式で指定してください')
   }
-  if (typeof input.id !== 'string' || input.id.length === 0 || input.id.length > 128) {
-    validation('body.id', '1〜128文字で指定してください')
+  if (typeof input.operation !== 'string' || !OPERATIONS.has(input.operation as never)) {
+    validation('body.operation', '許可されていないoperationです')
   }
-  if (typeof input.route !== 'string' || input.route.length === 0 || input.route.length > 256) {
-    validation('body.route', '1〜256文字で指定してください')
+  if (input.reason !== 'not_applicable') {
+    validation('body.reason', '許可されていないreasonです')
+  }
+  if (typeof input.route_group !== 'string' || !ROUTE_GROUPS.has(input.route_group as never)) {
+    validation('body.route_group', '許可されていないroute groupです')
+  }
+  if (typeof input.status !== 'string' || !STATUSES.has(input.status as never)) {
+    validation('body.status', '許可されていないstatusです')
   }
   if (
-    input.navigationType !== undefined &&
-    input.navigationType !== null &&
-    (typeof input.navigationType !== 'string' ||
-      !ALLOWED_NAVIGATION_TYPES.has(input.navigationType as never))
+    typeof input.duration_bucket !== 'string' ||
+    !DURATION_BUCKETS.has(input.duration_bucket as never)
   ) {
-    validation('body.navigationType', '許可されていないnavigation typeです')
+    validation('body.duration_bucket', '許可されていないduration bucketです')
   }
+
+  const isCls = input.operation === 'web_vital_cls'
+  if (
+    (isCls && input.duration_bucket !== 'not_applicable') ||
+    (!isCls && input.duration_bucket === 'not_applicable')
+  ) {
+    validation('body.duration_bucket', 'operationに対応するduration bucketを指定してください')
+  }
+
   return {
-    name: input.name as WebVitalsReport['name'],
-    value: input.value as number,
-    id: input.id as string,
-    navigationType: (input.navigationType ?? null) as WebVitalsReport['navigationType'],
-    route: input.route as string,
+    schema_version: 'hana-web-vitals-report/v2',
+    event_id: input.event_id as string,
+    operation: input.operation as WebVitalsReport['operation'],
+    reason: 'not_applicable',
+    route_group: input.route_group as WebVitalsReport['route_group'],
+    status: input.status as WebVitalsReport['status'],
+    duration_bucket: input.duration_bucket as WebVitalsReport['duration_bucket'],
   }
-}
-
-function routeGroup(route: string): TelemetryRouteGroup {
-  if (route === '/lp') return 'public'
-  if (route === '/') return 'home'
-  if (route.startsWith('/auth') || route.startsWith('/sign-in')) return 'auth'
-  if (route.startsWith('/record')) return 'record'
-  if (route.startsWith('/memory/')) return 'memory'
-  if (route.startsWith('/settings')) return 'settings'
-  return 'other_private'
-}
-
-function status(report: WebVitalsReport): TelemetryStatus {
-  const [good, poor] = VITAL_THRESHOLDS[report.name]
-  if (report.value <= good) return 'good'
-  if (report.value <= poor) return 'needs_improvement'
-  return 'poor'
-}
-
-function durationBucket(report: WebVitalsReport): TelemetryDurationBucket {
-  if (report.name === 'CLS') return 'not_applicable'
-  if (report.value < 100) return 'under_100ms'
-  if (report.value <= 500) return 'from_100_to_500ms'
-  if (report.value <= 1000) return 'from_501_to_1000ms'
-  if (report.value <= 2500) return 'from_1001_to_2500ms'
-  if (report.value <= 4000) return 'from_2501_to_4000ms'
-  return 'over_4000ms'
 }
 
 export function toWebVitalsTelemetryDimensions(report: WebVitalsReport): TelemetryDimensions {
   return {
-    operation: `web_vital_${report.name.toLowerCase()}` as TelemetryOperation,
-    reason: 'not_applicable',
-    route_group: routeGroup(report.route),
-    status: status(report),
-    duration_bucket: durationBucket(report),
+    operation: report.operation,
+    reason: report.reason,
+    route_group: report.route_group,
+    status: report.status,
+    duration_bucket: report.duration_bucket,
   }
 }

@@ -17,7 +17,7 @@ const telemetry = source('src/features/metrics/server/telemetry-contract.ts')
 const webVitalsRoute = source('src/app/v1/metrics/vitals/route.ts')
 
 describe('ISSUE-152 PII-safe telemetry contract', () => {
-  it('binds the record flow id to the Memory idempotency key without changing the payload shape', () => {
+  it('binds the record flow id to the Memory idempotency key with a versioned safe payload', () => {
     expect(productEventSchema).toContain('POST /memories の Idempotency-Key と同じ値')
     expect(openApi).toContain('DB Memoryとする')
     expect(recordPage).toContain('flowId = idempotencyKey')
@@ -30,17 +30,19 @@ describe('ISSUE-152 PII-safe telemetry contract', () => {
   it('persists only allowlisted ProductEvent fields until a 204 ack', () => {
     expect(outbox).toContain('response.status === 204')
     expect(outbox).toContain('PRODUCT_EVENT_OUTBOX_MAX_ENTRIES = 50')
-    expect(outbox).toContain(
-      "hasExactKeys(report, ['event_name', 'event_id', 'flow_id', 'elapsed_bucket'])",
-    )
+    expect(outbox).toContain("'occurred_minute_utc'")
+    expect(outbox).toContain("'X-Hana-Telemetry-Binding': activeTelemetryBinding")
+    expect(outbox).toContain('outbox.telemetryBinding !== activeTelemetryBinding')
     expect(outbox).not.toMatch(/report\.(?:email|body|storageKey|prompt|actorHash)/)
     expect(settingsPage.match(/clearProductEventOutbox\(\)/g)).toHaveLength(2)
-    expect(contract).toContain('別actorへの再送を禁止')
+    expect(contract).toContain('active actorのbinding不一致')
   })
 
   it('rejects unknown Web Vitals fields and logs buckets instead of raw values', () => {
     expect(webVitalsSchema).toContain('additionalProperties: false')
     expect(webVitalsRoute).toContain('toWebVitalsTelemetryDimensions(report)')
+    expect(webVitalsSchema).not.toContain('navigationType:')
+    expect(webVitalsSchema).not.toContain('value:')
     expect(webVitalsRoute).not.toContain('report.value')
     expect(webVitalsRoute).not.toContain('userIdHash')
   })
@@ -50,8 +52,8 @@ describe('ISSUE-152 PII-safe telemetry contract', () => {
     expect(telemetry).toContain("'event_reordered_after_truth'")
     expect(telemetry).toContain("'censoring_changes_decision'")
     expect(telemetry).toContain("'secondary'")
-    expect(telemetry).toContain('eligible_census_digest')
-    expect(contract).toContain('expected event ID manifestとreceived ID')
+    expect(telemetry).toContain('eligible_census_commitment')
+    expect(contract).toContain('versioned expectation manifestとreceived ID')
     expect(contract).toContain('primary suppression')
     expect(contract).toContain('secondary suppression')
   })
@@ -60,5 +62,11 @@ describe('ISSUE-152 PII-safe telemetry contract', () => {
     expect(issue).toContain('退会purgeとHMAC key lifecycle（ISSUE-185）')
     expect(contract).toContain('ProductEventの退会purge、HMAC key rotation')
     expect(telemetry).not.toContain('PRODUCT_EVENT_HASH_PEPPER')
+  })
+
+  it('holds production activation until DB authority and retention are implemented separately', () => {
+    expect(issue).toContain('GitHub Issue #379')
+    expect(contract).toContain('production telemetry activationをHold')
+    expect(contract).toContain('GitHub Issue #379で実装・検証')
   })
 })

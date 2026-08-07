@@ -91,6 +91,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
+                telemetry_binding: 'v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -148,6 +149,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
+                telemetry_binding: 'v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -776,13 +778,12 @@ paths:
       operationId: reportWebVitals
       summary: Web Vitals 計測の報告 (RUM、 ISSUE-024)
       description: |
-        ブラウザの `web-vitals` ライブラリから `navigator.sendBeacon` で送られる
-        Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受ける。
+        ブラウザの `web-vitals` ライブラリで計測した値をclient側で固定dimensionへ変換して受ける。
         DB 保存はしない (Vercel Logs で十分)。
-        サインアウト状態でも送れる (匿名で記録)。
-        requestは name / value / id / navigationType / route以外を拒否する。
-        serverは固定operation / route group / status / duration bucketへ変換し、
-        id、raw value、raw route、user識別子を構造化logへ出さない。
+        senderはcredentialsをomitし、サインアウト状態と同じcookieless requestとして送る。
+        requestはversion、random event ID、固定operation / reason / route group / status /
+        duration bucket以外を拒否し、raw id / value / route / navigationTypeを収集しない。
+        event IDのstable hashで10% samplingし、event ID自体は構造化logへ出さない。
       tags: [metrics]
       security: []
       requestBody:
@@ -796,6 +797,8 @@ paths:
           description: 受信成功 (body なし)
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /metrics/events:
@@ -807,7 +810,7 @@ paths:
         actor は session の user_id からサーバー側で HMAC-SHA256 に変換した仮名識別子として保存し、
         クライアントからユーザー識別子を受け取らない。
 
-        request body は event_name / event_id / flow_id / elapsed_bucket に限定する。
+        request body は event_name / event_id / flow_id / occurred_minute_utc / elapsed_bucket に限定する。
         記録本文、画像情報、氏名、生年月日、メール、URL、storage_key、自由記述は受け付けない。
         記録作成フローの flow_id は POST /memories の Idempotency-Key と同じUUIDとする。
         下書き復元と通信retryでは同じflowを使い、写真構成変更または409 conflict後は新しいUUIDへ切り替える。
@@ -816,6 +819,16 @@ paths:
         同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
         同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
       tags: [metrics]
+      parameters:
+        - name: X-Hana-Telemetry-Binding
+          in: header
+          required: true
+          description: |
+            GET /meが返すopaque actor binding。serverは現在の認証actorとの一致をconstant-timeで検証し、
+            header値をDB、通常log、status-only evidenceへ保存しない。
+          schema:
+            type: string
+            pattern: '^v1\.[0-9a-f]{64}$'
       requestBody:
         required: true
         content:
@@ -827,6 +840,8 @@ paths:
           description: 受信成功または冪等な再送 (body なし)
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
         '422':

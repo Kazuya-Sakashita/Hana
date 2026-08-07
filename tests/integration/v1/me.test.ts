@@ -27,6 +27,7 @@ vi.mock('@/server/db/prisma', () => ({
 
 import { GET } from '@/app/v1/me/route'
 import { DELETE, POST } from '@/app/v1/me/ai-consent/route'
+import { productEventTelemetryBinding } from '@/features/metrics/server/product-event'
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const CONSENT_AT = new Date('2026-06-01T00:00:00Z')
@@ -52,6 +53,7 @@ function unauthed() {
 }
 
 beforeEach(() => {
+  vi.stubEnv('PRODUCT_EVENT_HASH_PEPPER', 'integration-test-product-event-pepper-32')
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
       $executeRaw: mocks.advisoryLock,
@@ -64,7 +66,10 @@ beforeEach(() => {
   )
 })
 
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.clearAllMocks()
+  vi.unstubAllEnvs()
+})
 
 describe('GET /v1/me', () => {
   it('returns 401 + ProblemDetails when not authenticated', async () => {
@@ -87,6 +92,7 @@ describe('GET /v1/me', () => {
       display_name: null,
       ai_consent_at: null,
       created_at: '2026-05-14T09:30:00.000Z',
+      telemetry_binding: productEventTelemetryBinding(USER_ID),
     })
   })
 })
@@ -103,6 +109,7 @@ describe('POST /v1/me/ai-consent', () => {
     expect(await res.json()).toMatchObject({
       id: USER_ID,
       ai_consent_at: CONSENT_AT.toISOString(),
+      telemetry_binding: productEventTelemetryBinding(USER_ID),
     })
     expect(mocks.updateMany).toHaveBeenCalledWith({
       where: { id: USER_ID, aiConsentAt: null },
@@ -133,7 +140,11 @@ describe('DELETE /v1/me/ai-consent', () => {
     const res = await DELETE()
 
     expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({ id: USER_ID, ai_consent_at: null })
+    expect(await res.json()).toMatchObject({
+      id: USER_ID,
+      ai_consent_at: null,
+      telemetry_binding: productEventTelemetryBinding(USER_ID),
+    })
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: USER_ID },
       data: { aiConsentAt: null },

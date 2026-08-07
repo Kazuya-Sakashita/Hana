@@ -1,36 +1,37 @@
 type: object
 description: |
-  Web Vitals 計測 1 件の報告 payload (ISSUE-024)。
-  PII は含めない (allowlist: name / value / id / navigationType / route)。
-  serverは受信値を固定operation / route group / status / duration bucketへ変換し、
-  id、raw value、raw route、user識別子をtelemetry logへ出さない。
+  Web Vitals 計測 1 件の低cardinality報告 payload (ISSUE-152)。
+  clientで固定dimensionへ変換し、web-vitalsのraw id / value / route / navigationTypeを送らない。
+  event_idはstable sampling用であり、通常logやstatus-only evidenceへ出さない。
 additionalProperties: false
-required: [name, value, id, route]
+required: [schema_version, event_id, operation, reason, route_group, status, duration_bucket]
 properties:
-  name:
+  schema_version:
     type: string
-    enum: [CLS, FCP, INP, LCP, TTFB]
-    description: Web Vitals メトリクス名
-    example: 'LCP'
-  value:
-    type: number
-    minimum: 0
-    description: 数値 (ms / unitless どちらか、 name に依存)
-    example: 2400
-  id:
+    enum: [hana-web-vitals-report/v2]
+  event_id:
     type: string
-    minLength: 1
-    maxLength: 128
-    description: web-vitals が発行するユニーク ID (同一メトリクスの更新で同じ id)
-    example: 'v1-1717068000000-12345'
-  navigationType:
-    type: [string, 'null']
-    enum: [navigate, reload, back-forward, back-forward-cache, prerender, restore, null]
-    description: Navigation Timing API の type
-    example: 'navigate'
-  route:
+    format: uuid
+    description: report単位のrandom UUID。actor識別には使わない。
+  operation:
     type: string
-    description: |
-      ページの sanitized pathname (`[memoryId]` 等の dynamic params は除去済)。
-      例: `/`, `/album`, `/memory/[memoryId]`
-    example: '/album'
+    enum: [web_vital_cls, web_vital_fcp, web_vital_inp, web_vital_lcp, web_vital_ttfb]
+  reason:
+    type: string
+    enum: [not_applicable]
+  route_group:
+    type: string
+    enum: [public, auth, home, record, memory, settings, other_private]
+  status:
+    type: string
+    enum: [good, needs_improvement, poor]
+  duration_bucket:
+    type: string
+    enum:
+      - not_applicable
+      - under_100ms
+      - from_100_to_500ms
+      - from_501_to_1000ms
+      - from_1001_to_2500ms
+      - from_2501_to_4000ms
+      - over_4000ms

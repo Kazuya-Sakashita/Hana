@@ -376,6 +376,8 @@ export default function RecordPage() {
 
   const reportRecordProductEvent = useCallback(
     (eventName: ProductEventName, flowId = idempotencyKey) => {
+      const telemetryBinding = currentUserQuery.data?.telemetry_binding
+      if (!telemetryBinding) return
       const stageKey = `${flowId}:${eventName}`
       if (reportedProductEventsRef.current.has(stageKey)) return
       try {
@@ -390,12 +392,13 @@ export default function RecordPage() {
           eventName,
           flowId,
           elapsedMs: eventName === 'record_started' ? null : now - startedAt,
+          telemetryBinding,
         })
       } catch {
         return
       }
     },
-    [idempotencyKey],
+    [currentUserQuery.data?.telemetry_binding, idempotencyKey],
   )
 
   const rotateRecordFlow = useCallback(

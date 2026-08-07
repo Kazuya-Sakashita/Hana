@@ -1,6 +1,7 @@
 import { Prisma, type ProductEvent } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import {
+  assertProductEventTelemetryBinding,
   parseProductEventReport,
   PRODUCT_EVENT_MAX_REPORTS_PER_WINDOW,
   PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS,
@@ -10,6 +11,7 @@ import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
 import { requireUser } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 const RETRY_AFTER_SECONDS = Math.ceil(PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS / 1000)
@@ -39,9 +41,18 @@ function matchesEvent(
 
 export async function POST(request: Request) {
   try {
+    const telemetryBinding = request.headers.get('x-hana-telemetry-binding')
+    if (!telemetryBinding) throw problems.forbidden()
+    const supabase = await createSupabaseServerClient()
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser()
+    if (!authUser) throw problems.unauthorized()
+    assertProductEventTelemetryBinding(authUser.id, telemetryBinding)
     const user = await requireUser()
-    const event = parseProductEventReport(await readJson(request))
+    assertProductEventTelemetryBinding(user.id, telemetryBinding)
     const now = new Date()
+    const event = parseProductEventReport(await readJson(request), now)
     const actorHash = productEventActorHash(user.id)
 
     try {

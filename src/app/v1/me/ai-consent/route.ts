@@ -4,6 +4,7 @@ import { toProblemResponse } from '@/server/api/problem-response'
 import { prisma } from '@/server/db/prisma'
 import type { AppUser } from '@/lib/supabase/types'
 import { lockAiConsent } from '@/features/ai/server/consent-lock'
+import { productEventTelemetryBinding } from '@/features/metrics/server/product-event'
 import { Prisma } from '@prisma/client'
 import { problems } from '@/server/api/problems'
 
@@ -22,19 +23,21 @@ function consentTransactionProblem(error: unknown): unknown {
   return error
 }
 
-function toAppUserResponse(user: AppUser) {
+function toAppUserResponse(user: AppUser, telemetryBinding: string) {
   return {
     id: user.id,
     email: user.email,
     display_name: user.displayName,
     ai_consent_at: user.aiConsentAt,
     created_at: user.createdAt,
+    telemetry_binding: telemetryBinding,
   }
 }
 
 export async function POST() {
   try {
     const user = await requireUser()
+    const telemetryBinding = productEventTelemetryBinding(user.id)
     const profile = await prisma.$transaction(async (tx) => {
       await lockAiConsent(tx, user.id)
       await tx.profile.updateMany({
@@ -44,12 +47,15 @@ export async function POST() {
       return tx.profile.findUniqueOrThrow({ where: { id: user.id } })
     }, AI_CONSENT_TRANSACTION_OPTIONS)
     return NextResponse.json(
-      toAppUserResponse({
-        ...user,
-        displayName: profile.displayName,
-        aiConsentAt: profile.aiConsentAt?.toISOString() ?? null,
-        createdAt: profile.createdAt.toISOString(),
-      }),
+      toAppUserResponse(
+        {
+          ...user,
+          displayName: profile.displayName,
+          aiConsentAt: profile.aiConsentAt?.toISOString() ?? null,
+          createdAt: profile.createdAt.toISOString(),
+        },
+        telemetryBinding,
+      ),
     )
   } catch (e) {
     return toProblemResponse(consentTransactionProblem(e))
@@ -59,6 +65,7 @@ export async function POST() {
 export async function DELETE() {
   try {
     const user = await requireUser()
+    const telemetryBinding = productEventTelemetryBinding(user.id)
     const profile = await prisma.$transaction(async (tx) => {
       await lockAiConsent(tx, user.id)
       return tx.profile.update({
@@ -67,12 +74,15 @@ export async function DELETE() {
       })
     }, AI_CONSENT_TRANSACTION_OPTIONS)
     return NextResponse.json(
-      toAppUserResponse({
-        ...user,
-        displayName: profile.displayName,
-        aiConsentAt: null,
-        createdAt: profile.createdAt.toISOString(),
-      }),
+      toAppUserResponse(
+        {
+          ...user,
+          displayName: profile.displayName,
+          aiConsentAt: null,
+          createdAt: profile.createdAt.toISOString(),
+        },
+        telemetryBinding,
+      ),
     )
   } catch (e) {
     return toProblemResponse(consentTransactionProblem(e))

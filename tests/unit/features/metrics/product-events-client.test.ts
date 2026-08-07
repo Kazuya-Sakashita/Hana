@@ -6,12 +6,18 @@ import {
   productEventElapsedBucket,
   readProductEventOutboxForTest,
   reportProductEvent,
+  setProductEventTelemetryBinding,
 } from '@/features/metrics/client/product-events'
+
+const TELEMETRY_BINDING_A = `v1.${'a'.repeat(64)}`
+const TELEMETRY_BINDING_B = `v1.${'b'.repeat(64)}`
 
 afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  clearProductEventOutbox()
+  setProductEventTelemetryBinding(null)
 })
 
 class MemoryStorage implements Storage {
@@ -66,6 +72,7 @@ describe('reportProductEvent', () => {
       eventName: 'photo_selected',
       flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
       elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
     })
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
@@ -78,7 +85,9 @@ describe('reportProductEvent', () => {
       'event_id',
       'event_name',
       'flow_id',
+      'occurred_minute_utc',
     ])
+    expect(new Headers(init.headers).get('x-hana-telemetry-binding')).toBe(TELEMETRY_BINDING_A)
   })
 
   it('swallows network failures so recording is not blocked', async () => {
@@ -90,6 +99,7 @@ describe('reportProductEvent', () => {
         eventName: 'record_started',
         flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
         elapsedMs: null,
+        telemetryBinding: TELEMETRY_BINDING_A,
       }),
     ).not.toThrow()
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
@@ -109,6 +119,7 @@ describe('reportProductEvent', () => {
         eventName: 'memory_saved',
         flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
         elapsedMs: 20_000,
+        telemetryBinding: TELEMETRY_BINDING_A,
       }),
     ).not.toThrow()
     expect(fetchMock).not.toHaveBeenCalled()
@@ -126,6 +137,7 @@ describe('durable ProductEvent outbox', () => {
       eventName: 'photo_selected',
       flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
       elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
     })
     expect(readProductEventOutboxForTest()).toHaveLength(1)
 
@@ -149,6 +161,7 @@ describe('durable ProductEvent outbox', () => {
       eventName: 'ai_draft_shown',
       flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
       elapsedMs: 20_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
     })
     await flushProductEventOutbox()
     const queued = readProductEventOutboxForTest()
@@ -179,6 +192,7 @@ describe('durable ProductEvent outbox', () => {
       eventName: 'memory_viewed' as const,
       flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
       elapsedMs: null,
+      telemetryBinding: TELEMETRY_BINDING_A,
     }
 
     reportProductEvent(input)
@@ -196,7 +210,8 @@ describe('durable ProductEvent outbox', () => {
     storage.setItem(
       PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
+        telemetryBinding: TELEMETRY_BINDING_A,
         entries: [
           {
             report: {
@@ -204,6 +219,7 @@ describe('durable ProductEvent outbox', () => {
               event_id: '123e4567-e89b-42d3-a456-426614174000',
               flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
               elapsed_bucket: 'under_10s',
+              occurred_minute_utc: '2026-08-07T00:00:00Z',
               email: 'synthetic@example.invalid',
             },
             queuedAt: Date.now(),
@@ -213,6 +229,8 @@ describe('durable ProductEvent outbox', () => {
         ],
       }),
     )
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
 
     expect(readProductEventOutboxForTest()).toHaveLength(0)
     expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
@@ -229,6 +247,7 @@ describe('durable ProductEvent outbox', () => {
         eventName: 'photo_selected',
         flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
         elapsedMs: 5_000,
+        telemetryBinding: TELEMETRY_BINDING_A,
       })
       await flushProductEventOutbox()
 
@@ -240,10 +259,38 @@ describe('durable ProductEvent outbox', () => {
   it('supports explicit local cleanup on sign-out and account deletion', () => {
     const storage = new MemoryStorage()
     vi.stubGlobal('sessionStorage', storage)
-    storage.setItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY, JSON.stringify({ version: 1, entries: [] }))
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({ version: 2, telemetryBinding: TELEMETRY_BINDING_A, entries: [] }),
+    )
 
     clearProductEventOutbox()
 
     expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
+  })
+
+  it('drops actor A events before any request when actor B becomes active', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_B)
+
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
+      TELEMETRY_BINDING_A,
+    )
   })
 })

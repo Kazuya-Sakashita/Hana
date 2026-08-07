@@ -3,6 +3,11 @@ import {
   parseWebVitalsReport,
   toWebVitalsTelemetryDimensions,
 } from '@/features/metrics/server/web-vitals'
+import {
+  assertWebVitalsRateLimit,
+  webVitalsRetryAfterSeconds,
+} from '@/features/metrics/server/web-vitals-rate-limit'
+import { shouldSampleTelemetry } from '@/features/metrics/server/telemetry-contract'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
 
@@ -20,7 +25,11 @@ async function readJson(request: Request): Promise<unknown> {
 
 export async function POST(request: Request) {
   try {
+    assertWebVitalsRateLimit(request)
     const report = parseWebVitalsReport(await readJson(request))
+    if (!shouldSampleTelemetry('web_vital', report.event_id)) {
+      return new NextResponse(null, { status: 204 })
+    }
     console.log(
       JSON.stringify({
         schema_version: 'hana-telemetry-dimensions/v1',
@@ -31,6 +40,9 @@ export async function POST(request: Request) {
     )
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    return toProblemResponse(error)
+    const response = toProblemResponse(error)
+    const retryAfterSeconds = webVitalsRetryAfterSeconds(error)
+    if (retryAfterSeconds !== null) response.headers.set('Retry-After', String(retryAfterSeconds))
+    return response
   }
 }

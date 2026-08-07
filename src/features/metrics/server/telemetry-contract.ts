@@ -1,8 +1,12 @@
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 
-export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v1' as const
-export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v1' as const
-export const TELEMETRY_QUERY_VERSION = 'issue-152-v1' as const
+export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
+export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v2' as const
+export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
+  'hana-telemetry-expectation-manifest/v2' as const
+export const TELEMETRY_QUERY_VERSION = 'issue-152-v2' as const
+export const TELEMETRY_SAMPLING_POLICY_VERSION = 'stable-event-id/v2' as const
+export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
 export const TELEMETRY_RETENTION_DAYS = 90
 export const TELEMETRY_MIN_CELL_SIZE = 5
 
@@ -88,6 +92,20 @@ const DURATION_BUCKETS = [
   'over_60s',
 ] as const
 const SOURCES = ['funnel', 'web_vital', 'api', 'ai'] as const
+const COMPLETENESS_REASONS = [
+  'complete',
+  'expected_manifest_missing',
+  'expected_manifest_untrusted',
+  'telemetry_degraded',
+  'sampling_policy_mismatch',
+  'loss_detected',
+  'unexpected_event',
+] as const
+const COMMITMENT_DOMAINS = [
+  'metric_window_manifest',
+  'eligible_census',
+  'censoring_status',
+] as const
 const METRIC_STATUSES = ['PASS', 'FAIL', 'HOLD'] as const
 const METRIC_IDS = [
   'M1',
@@ -112,6 +130,10 @@ const METRIC_REASONS = [
   'stage_missing',
   'window_not_mature',
   'event_reordered_after_truth',
+  'stage_anchor_unverified',
+  'stage_anchor_boundary',
+  'stage_time_invalid',
+  'actor_reference_invalid',
   'invalid_census',
   'minimum_not_met',
   'worst_case_passed',
@@ -124,6 +146,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const SHA256_PATTERN = /^[0-9a-f]{64}$/
 const SHA_PATTERN = /^[0-9a-f]{40}$/
 const UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/
+const UTC_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
+const ACTOR_KEY_VERSION_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/
+const TELEMETRY_COMMITMENT_KEY_MIN_LENGTH = 32
 
 export type TelemetryOperation = (typeof OPERATIONS)[number]
 export type TelemetryReason = (typeof REASONS)[number]
@@ -153,9 +178,36 @@ export type TelemetryEnvelope = {
 export type TelemetryCompletenessResult = {
   source: TelemetrySource
   status: 'PASS' | 'HOLD'
-  reason: 'complete' | 'expected_manifest_missing' | 'loss_detected' | 'unexpected_event'
+  reason:
+    | 'complete'
+    | 'expected_manifest_missing'
+    | 'expected_manifest_untrusted'
+    | 'telemetry_degraded'
+    | 'sampling_policy_mismatch'
+    | 'loss_detected'
+    | 'unexpected_event'
   duplicate: 'NONE' | 'DETECTED'
   reorder: 'NONE' | 'DETECTED'
+}
+
+export type TelemetryExpectationManifest = {
+  schema_version: typeof TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION
+  source: TelemetrySource
+  status: 'PASS' | 'HOLD'
+  degradation:
+    | 'NONE'
+    | 'STORAGE_UNAVAILABLE'
+    | 'CAPACITY_EXCEEDED'
+    | 'TTL_EXPIRED'
+    | 'AUTH_BOUNDARY'
+    | 'UNKNOWN'
+  sampling_policy_version: typeof TELEMETRY_SAMPLING_POLICY_VERSION
+  expected_event_ids: readonly string[]
+}
+
+export type SyntheticActorRef = {
+  actor_key_version: string
+  actor_token: string
 }
 
 export const NORTH_STAR_CONTRACT = {
@@ -313,21 +365,40 @@ export function parseTelemetryEnvelope(raw: unknown): TelemetryEnvelope {
   }
 }
 
+function completenessHold(
+  source: TelemetrySource,
+  reason: Exclude<TelemetryCompletenessResult['reason'], 'complete'>,
+): TelemetryCompletenessResult {
+  return { source, status: 'HOLD', reason, duplicate: 'NONE', reorder: 'NONE' }
+}
+
 export function evaluateTelemetryCompleteness(input: {
   source: TelemetrySource
-  expected_event_ids: readonly string[]
+  manifest: TelemetryExpectationManifest
   received: readonly TelemetryEnvelope[]
 }): TelemetryCompletenessResult {
-  if (input.expected_event_ids.length === 0) {
-    return {
-      source: input.source,
-      status: 'HOLD',
-      reason: 'expected_manifest_missing',
-      duplicate: 'NONE',
-      reorder: 'NONE',
-    }
+  const manifest = input.manifest as TelemetryExpectationManifest | undefined
+  if (!manifest) return completenessHold(input.source, 'expected_manifest_missing')
+  if (manifest.sampling_policy_version !== TELEMETRY_SAMPLING_POLICY_VERSION) {
+    return completenessHold(input.source, 'sampling_policy_mismatch')
   }
-  const expected = new Set(input.expected_event_ids)
+  if (
+    manifest.schema_version !== TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION ||
+    manifest.source !== input.source ||
+    manifest.status !== 'PASS' ||
+    !Array.isArray(manifest.expected_event_ids) ||
+    manifest.expected_event_ids.some((eventId) => !UUID_PATTERN.test(eventId)) ||
+    new Set(manifest.expected_event_ids).size !== manifest.expected_event_ids.length
+  ) {
+    return completenessHold(input.source, 'expected_manifest_untrusted')
+  }
+  if (manifest.degradation !== 'NONE') {
+    return completenessHold(input.source, 'telemetry_degraded')
+  }
+  const sampledExpectedEventIds = manifest.expected_event_ids.filter((eventId) =>
+    shouldSampleTelemetry(input.source, eventId),
+  )
+  const expected = new Set(sampledExpectedEventIds)
   const firstReceived: string[] = []
   const received = new Set<string>()
   let duplicate = false
@@ -343,9 +414,9 @@ export function evaluateTelemetryCompleteness(input: {
       unexpected = true
     }
   }
-  const loss = input.expected_event_ids.some((eventId) => !received.has(eventId))
+  const loss = sampledExpectedEventIds.some((eventId) => !received.has(eventId))
   const receivedExpectedOrder = firstReceived.filter((eventId) => expected.has(eventId))
-  const expectedReceivedOrder = input.expected_event_ids.filter((eventId) => received.has(eventId))
+  const expectedReceivedOrder = sampledExpectedEventIds.filter((eventId) => received.has(eventId))
   const reordered = receivedExpectedOrder.some(
     (eventId, index) => eventId !== expectedReceivedOrder[index],
   )
@@ -361,40 +432,121 @@ export function evaluateTelemetryCompleteness(input: {
 export type SyntheticFunnelEvent = {
   event_id: string
   flow_id: string
+  actor: SyntheticActorRef
   event_name: 'record_started' | 'photo_selected' | 'ai_draft_shown' | 'memory_saved'
+  occurred_minute_utc: string
   received_at_utc: string
+  anchor_trust: 'verified' | 'unverified'
 }
 
 export type SyntheticMemoryTruth = {
   idempotency_key: string
+  actor: SyntheticActorRef
   created_at_utc: string
+}
+
+function validSyntheticActorRef(
+  actor: SyntheticActorRef | null | undefined,
+): actor is SyntheticActorRef {
+  return (
+    actor !== null &&
+    actor !== undefined &&
+    ACTOR_KEY_VERSION_PATTERN.test(actor.actor_key_version) &&
+    SHA256_PATTERN.test(actor.actor_token)
+  )
+}
+
+function sameSyntheticActor(
+  left: SyntheticActorRef | null | undefined,
+  right: SyntheticActorRef | null | undefined,
+): boolean {
+  return (
+    validSyntheticActorRef(left) &&
+    validSyntheticActorRef(right) &&
+    left.actor_key_version === right.actor_key_version &&
+    left.actor_token === right.actor_token
+  )
 }
 
 export function evaluateSyntheticFunnelFlow(input: {
   metric_id: 'M2' | 'M3'
   flow_id: string
+  expected_actor: SyntheticActorRef
   generated_at_utc: string
   completeness: TelemetryCompletenessResult
   events: readonly SyntheticFunnelEvent[]
   memories: readonly SyntheticMemoryTruth[]
-}): { metric_id: 'M2' | 'M3'; status: MetricStatus; reason: string } {
-  if (input.completeness.status !== 'PASS') {
+}): {
+  metric_id: 'M2' | 'M3'
+  status: MetricStatus
+  reason: TelemetryMetricReason
+} {
+  if (!validSyntheticActorRef(input.expected_actor) || !UUID_PATTERN.test(input.flow_id)) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
+  }
+  if (
+    input.completeness.source !== 'funnel' ||
+    input.completeness.status !== 'PASS' ||
+    input.completeness.reason !== 'complete'
+  ) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'telemetry_incomplete' }
   }
   const stageName = input.metric_id === 'M2' ? 'photo_selected' : 'ai_draft_shown'
-  const stages = input.events
-    .filter((event) => event.flow_id === input.flow_id && event.event_name === stageName)
-    .map((event) => ({ ...event, receivedAt: parseUtc(event.received_at_utc) }))
-    .filter((event): event is typeof event & { receivedAt: number } => event.receivedAt !== null)
-    .sort((left, right) => left.receivedAt - right.receivedAt)
-  const stage = stages[0]
-  if (!stage) return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_missing' }
+  const matchingStages = input.events.filter(
+    (event) =>
+      event.flow_id === input.flow_id &&
+      event.event_name === stageName &&
+      sameSyntheticActor(event.actor, input.expected_actor),
+  )
+  if (matchingStages.length === 0) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_missing' }
+  }
+  if (matchingStages.some((event) => event.anchor_trust !== 'verified')) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_anchor_unverified' }
+  }
+  const stages = matchingStages.map((event) => ({
+    ...event,
+    occurredAt: UTC_MINUTE_PATTERN.test(event.occurred_minute_utc)
+      ? parseUtc(event.occurred_minute_utc)
+      : null,
+    receivedAt: parseUtc(event.received_at_utc),
+  }))
+  if (
+    stages.some(
+      (event) =>
+        !UUID_PATTERN.test(event.event_id) ||
+        !validSyntheticActorRef(event.actor) ||
+        event.occurredAt === null ||
+        event.receivedAt === null ||
+        event.receivedAt < event.occurredAt,
+    ) ||
+    new Set(stages.map((event) => event.occurredAt)).size !== 1
+  ) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_time_invalid' }
+  }
+  const stageMinuteStart = stages[0]!.occurredAt!
+  const stageMinuteEnd = stageMinuteStart + 60 * 1000
+  const conversionWindowMs = 30 * 60 * 1000
   const generatedAt = parseUtc(input.generated_at_utc)
-  if (generatedAt === null || generatedAt < stage.receivedAt + 30 * 60 * 1000) {
+  if (generatedAt === null || generatedAt < stageMinuteEnd + conversionWindowMs) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'window_not_mature' }
   }
-  const memory = input.memories
-    .filter((candidate) => candidate.idempotency_key === input.flow_id)
+  const matchingMemories = input.memories.filter(
+    (candidate) =>
+      candidate.idempotency_key === input.flow_id &&
+      sameSyntheticActor(candidate.actor, input.expected_actor),
+  )
+  if (
+    matchingMemories.some(
+      (candidate) =>
+        !UUID_PATTERN.test(candidate.idempotency_key) ||
+        !validSyntheticActorRef(candidate.actor) ||
+        parseUtc(candidate.created_at_utc) === null,
+    )
+  ) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_time_invalid' }
+  }
+  const memory = matchingMemories
     .map((candidate) => ({ ...candidate, createdAt: parseUtc(candidate.created_at_utc) }))
     .filter(
       (candidate): candidate is typeof candidate & { createdAt: number } =>
@@ -402,12 +554,18 @@ export function evaluateSyntheticFunnelFlow(input: {
     )
     .sort((left, right) => left.createdAt - right.createdAt)[0]
   if (!memory) return { metric_id: input.metric_id, status: 'FAIL', reason: 'memory_not_saved' }
-  if (memory.createdAt < stage.receivedAt) {
+  if (memory.createdAt < stageMinuteEnd) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'event_reordered_after_truth' }
   }
-  return memory.createdAt < stage.receivedAt + 30 * 60 * 1000
-    ? { metric_id: input.metric_id, status: 'PASS', reason: 'memory_saved_within_window' }
-    : { metric_id: input.metric_id, status: 'FAIL', reason: 'memory_saved_after_window' }
+  const longestPossibleDuration = memory.createdAt - stageMinuteStart
+  const shortestPossibleDuration = memory.createdAt - stageMinuteEnd
+  if (longestPossibleDuration < conversionWindowMs) {
+    return { metric_id: input.metric_id, status: 'PASS', reason: 'memory_saved_within_window' }
+  }
+  if (shortestPossibleDuration >= conversionWindowMs) {
+    return { metric_id: input.metric_id, status: 'FAIL', reason: 'memory_saved_after_window' }
+  }
+  return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_anchor_boundary' }
 }
 
 export function evaluateCensoredRate(input: {
@@ -496,10 +654,53 @@ function stableValue(value: unknown): unknown {
   )
 }
 
-export function telemetryDigest(value: unknown): string {
+function evidenceDigest(value: unknown): string {
   return createHash('sha256')
     .update(JSON.stringify(stableValue(value)))
     .digest('hex')
+}
+
+export type TelemetryCommitmentDomain = (typeof COMMITMENT_DOMAINS)[number]
+
+export function createTelemetryCommitment(input: {
+  domain: TelemetryCommitmentDomain
+  window_start_utc: string
+  window_end_utc: string
+  actor_key_version: string
+  value: unknown
+  commitment_key: string
+}): string {
+  const windowStart = parseUtc(input.window_start_utc)
+  const windowEnd = parseUtc(input.window_end_utc)
+  if (
+    windowStart === null ||
+    windowEnd === null ||
+    windowStart >= windowEnd ||
+    !includes(COMMITMENT_DOMAINS, input.domain) ||
+    !ACTOR_KEY_VERSION_PATTERN.test(input.actor_key_version) ||
+    input.value === undefined ||
+    typeof input.commitment_key !== 'string' ||
+    Buffer.byteLength(input.commitment_key, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH
+  ) {
+    throw new TelemetryContractError('invalid_input')
+  }
+  try {
+    return createHmac('sha256', input.commitment_key)
+      .update(
+        JSON.stringify(
+          stableValue({
+            domain: input.domain,
+            window_start_utc: input.window_start_utc,
+            window_end_utc: input.window_end_utc,
+            actor_key_version: input.actor_key_version,
+            value: input.value,
+          }),
+        ),
+      )
+      .digest('hex')
+  } catch {
+    throw new TelemetryContractError('invalid_input')
+  }
 }
 
 export function shouldSampleTelemetry(source: TelemetrySource, eventId: string): boolean {
@@ -516,15 +717,50 @@ export type TelemetryMetricResult = {
   reason: TelemetryMetricReason
 }
 
+const METRIC_REASON_STATUS: Record<TelemetryMetricReason, MetricStatus> = {
+  memory_saved_within_window: 'PASS',
+  memory_not_saved: 'FAIL',
+  memory_saved_after_window: 'FAIL',
+  telemetry_incomplete: 'HOLD',
+  stage_missing: 'HOLD',
+  window_not_mature: 'HOLD',
+  event_reordered_after_truth: 'HOLD',
+  stage_anchor_unverified: 'HOLD',
+  stage_anchor_boundary: 'HOLD',
+  stage_time_invalid: 'HOLD',
+  actor_reference_invalid: 'HOLD',
+  invalid_census: 'HOLD',
+  minimum_not_met: 'HOLD',
+  worst_case_passed: 'PASS',
+  best_case_failed: 'FAIL',
+  censoring_changes_decision: 'HOLD',
+  database_truth_complete: 'PASS',
+  target_not_configured: 'HOLD',
+}
+
+function validCompletenessResult(result: TelemetryCompletenessResult): boolean {
+  const validReasonStatus =
+    (result.reason === 'complete' && result.status === 'PASS') ||
+    (result.reason !== 'complete' && result.status === 'HOLD')
+  return (
+    includes(SOURCES, result.source) &&
+    includes(COMPLETENESS_REASONS, result.reason) &&
+    validReasonStatus &&
+    ['NONE', 'DETECTED'].includes(result.duplicate) &&
+    ['NONE', 'DETECTED'].includes(result.reorder)
+  )
+}
+
 export function buildTelemetryEvidence(input: {
   source_sha: string
   window_start_utc: string
   window_end_utc: string
   actor_key_version: string
   generated_at_utc: string
-  metric_window_manifest_digest: string
-  eligible_census_digest: string
-  censoring_status_digest: string
+  commitment_key: string
+  metric_window_manifest: unknown
+  eligible_census: unknown
+  censoring_status: unknown
   completeness: readonly TelemetryCompletenessResult[]
   metrics: readonly TelemetryMetricResult[]
 }): {
@@ -534,12 +770,13 @@ export function buildTelemetryEvidence(input: {
   event_schema_version: typeof TELEMETRY_EVENT_SCHEMA_VERSION
   actor_key_version: string
   generated_at_utc: string
-  metric_window_manifest_digest: string
+  commitment_scheme: typeof TELEMETRY_COMMITMENT_SCHEME
+  metric_window_manifest_commitment: string
   window_start_utc: string
   window_end_utc: string
-  eligible_census_digest: string
+  eligible_census_commitment: string
   censoring_policy_version: 'right-censor-worst-case/v1'
-  censoring_status_digest: string
+  censoring_status_commitment: string
   completeness: readonly TelemetryCompletenessResult[]
   metrics: readonly TelemetryMetricResult[]
   status: MetricStatus
@@ -550,20 +787,25 @@ export function buildTelemetryEvidence(input: {
     parseUtc(input.window_start_utc) === null ||
     parseUtc(input.window_end_utc) === null ||
     parseUtc(input.window_start_utc)! >= parseUtc(input.window_end_utc)! ||
-    !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(input.actor_key_version) ||
+    !ACTOR_KEY_VERSION_PATTERN.test(input.actor_key_version) ||
     parseUtc(input.generated_at_utc) === null ||
-    !SHA256_PATTERN.test(input.metric_window_manifest_digest) ||
-    !SHA256_PATTERN.test(input.eligible_census_digest) ||
-    !SHA256_PATTERN.test(input.censoring_status_digest) ||
-    input.completeness.length === 0 ||
+    typeof input.commitment_key !== 'string' ||
+    Buffer.byteLength(input.commitment_key, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH ||
+    input.metric_window_manifest === undefined ||
+    input.eligible_census === undefined ||
+    input.censoring_status === undefined ||
+    input.completeness.length !== SOURCES.length ||
     input.metrics.length === 0 ||
     new Set(input.completeness.map((item) => item.source)).size !== input.completeness.length ||
+    SOURCES.some((source) => !input.completeness.some((item) => item.source === source)) ||
+    input.completeness.some((item) => !validCompletenessResult(item)) ||
     new Set(input.metrics.map((metric) => metric.metric_id)).size !== input.metrics.length ||
     input.metrics.some(
       (metric) =>
         !includes(METRIC_IDS, metric.metric_id) ||
         !includes(METRIC_STATUSES, metric.status) ||
-        !includes(METRIC_REASONS, metric.reason),
+        !includes(METRIC_REASONS, metric.reason) ||
+        METRIC_REASON_STATUS[metric.reason as TelemetryMetricReason] !== metric.status,
     )
   ) {
     throw new TelemetryContractError('invalid_input')
@@ -575,6 +817,27 @@ export function buildTelemetryEvidence(input: {
       : input.metrics.some((metric) => metric.status === 'FAIL')
         ? 'FAIL'
         : 'PASS'
+  const orderedCompleteness = SOURCES.map((source) => {
+    const item = input.completeness.find((candidate) => candidate.source === source)!
+    return {
+      source,
+      status: item.status,
+      reason: item.reason,
+      duplicate: item.duplicate,
+      reorder: item.reorder,
+    }
+  })
+  const sanitizedMetrics = input.metrics.map((metric) => ({
+    metric_id: metric.metric_id,
+    status: metric.status,
+    reason: metric.reason,
+  }))
+  const commitmentBoundary = {
+    window_start_utc: input.window_start_utc,
+    window_end_utc: input.window_end_utc,
+    actor_key_version: input.actor_key_version,
+    commitment_key: input.commitment_key,
+  }
   const evidenceWithoutDigest = {
     schema_version: TELEMETRY_EVIDENCE_SCHEMA_VERSION,
     source_sha: input.source_sha,
@@ -582,15 +845,28 @@ export function buildTelemetryEvidence(input: {
     event_schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
     actor_key_version: input.actor_key_version,
     generated_at_utc: input.generated_at_utc,
-    metric_window_manifest_digest: input.metric_window_manifest_digest,
+    commitment_scheme: TELEMETRY_COMMITMENT_SCHEME,
+    metric_window_manifest_commitment: createTelemetryCommitment({
+      ...commitmentBoundary,
+      domain: 'metric_window_manifest',
+      value: input.metric_window_manifest,
+    }),
     window_start_utc: input.window_start_utc,
     window_end_utc: input.window_end_utc,
-    eligible_census_digest: input.eligible_census_digest,
+    eligible_census_commitment: createTelemetryCommitment({
+      ...commitmentBoundary,
+      domain: 'eligible_census',
+      value: input.eligible_census,
+    }),
     censoring_policy_version: 'right-censor-worst-case/v1' as const,
-    censoring_status_digest: input.censoring_status_digest,
-    completeness: input.completeness,
-    metrics: input.metrics,
+    censoring_status_commitment: createTelemetryCommitment({
+      ...commitmentBoundary,
+      domain: 'censoring_status',
+      value: input.censoring_status,
+    }),
+    completeness: orderedCompleteness,
+    metrics: sanitizedMetrics,
     status,
   }
-  return { ...evidenceWithoutDigest, evidence_digest: telemetryDigest(evidenceWithoutDigest) }
+  return { ...evidenceWithoutDigest, evidence_digest: evidenceDigest(evidenceWithoutDigest) }
 }
