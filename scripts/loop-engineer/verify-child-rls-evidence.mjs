@@ -445,6 +445,14 @@ async function verifyOwnerBoundary(schemaOwner, runtime) {
     try {
       await runtime.query('SET LOCAL ROLE hana_child_owner')
       await runtime.query("SELECT set_config('hana.current_user_id', $1, true)", [ownerId])
+      const ownerExistingUpdate = await runtime.query(
+        'UPDATE public.children SET name = $1 WHERE id = $2 RETURNING id',
+        [ownerCrudName, ownerChildId],
+      )
+      const ownerExistingDelete = await runtime.query(
+        'DELETE FROM public.children WHERE id = $1 RETURNING id',
+        [ownerChildId],
+      )
       const ownerInsert = await runtime.query(
         `
           INSERT INTO public.children (id, user_id, name, birthdate, updated_at)
@@ -458,6 +466,10 @@ async function verifyOwnerBoundary(schemaOwner, runtime) {
         [ownerCrudUpdatedName, ownerCrudChildId],
       )
       if (
+        ownerExistingUpdate.rowCount !== 1 ||
+        ownerExistingUpdate.rows[0]?.id !== ownerChildId ||
+        ownerExistingDelete.rowCount !== 1 ||
+        ownerExistingDelete.rows[0]?.id !== ownerChildId ||
         ownerInsert.rowCount !== 1 ||
         ownerInsert.rows[0]?.id !== ownerCrudChildId ||
         ownerUpdate.rowCount !== 1 ||
@@ -472,11 +484,19 @@ async function verifyOwnerBoundary(schemaOwner, runtime) {
     }
 
     const persisted = await schemaOwner.query(
-      'SELECT user_id AS "userId", name FROM public.children WHERE id = $1',
-      [ownerCrudChildId],
+      `
+        SELECT
+          (SELECT count(*)::integer FROM public.children WHERE id = $1) AS "deletedCount",
+          replacement.user_id AS "userId",
+          replacement.name
+        FROM public.children AS replacement
+        WHERE replacement.id = $2
+      `,
+      [ownerChildId, ownerCrudChildId],
     )
     if (
       persisted.rowCount !== 1 ||
+      persisted.rows[0]?.deletedCount !== 0 ||
       persisted.rows[0]?.userId !== ownerId ||
       persisted.rows[0]?.name !== ownerCrudUpdatedName
     ) {
