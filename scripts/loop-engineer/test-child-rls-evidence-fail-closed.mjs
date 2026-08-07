@@ -79,6 +79,7 @@ async function run() {
   const runtime = new Client({ connectionString: childDatabaseUrl })
   const extraPolicy = `issue_184_${randomUUID().replaceAll('-', '')}`
   const parentRole = `issue_184_${randomUUID().replaceAll('-', '')}`
+  const backdoorRole = `issue_184_${randomUUID().replaceAll('-', '')}`
   const exposedView = `issue_184_${randomUUID().replaceAll('-', '')}`
   const routineSchema = `issue_184_${randomUUID().replaceAll('-', '')}`
   const routineName = `issue_184_${randomUUID().replaceAll('-', '')}`
@@ -113,6 +114,54 @@ async function run() {
       `,
       [ownerChildId, ownerId, randomUUID(), foreignChildId, foreignOwnerId, randomUUID()],
     )
+
+    await transaction(schemaOwner, [
+      `CREATE ROLE ${backdoorRole} LOGIN PASSWORD 'synthetic-backdoor' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION BYPASSRLS`,
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.children TO ${backdoorRole}`,
+    ])
+    const backdoorUrl = new URL(databaseUrl)
+    backdoorUrl.username = backdoorRole
+    backdoorUrl.password = 'synthetic-backdoor'
+    const backdoor = new Client({ connectionString: backdoorUrl.toString() })
+    try {
+      const mutation = await admin.query(
+        `
+          SELECT role.rolcanlogin
+            AND role.rolbypassrls
+            AND has_table_privilege(role.oid, 'public.children', 'SELECT')
+            AND has_table_privilege(role.oid, 'public.children', 'INSERT')
+            AND has_table_privilege(role.oid, 'public.children', 'UPDATE')
+            AND has_table_privilege(role.oid, 'public.children', 'DELETE')
+            AS present
+          FROM pg_catalog.pg_roles AS role
+          WHERE role.rolname = $1
+        `,
+        [backdoorRole],
+      )
+      requireTrue(mutation.rows[0]?.present)
+      await backdoor.connect()
+      const exposed = await backdoor.query(
+        `
+          SELECT count(*)::integer AS count
+          FROM public.children
+          WHERE id = ANY($1::uuid[])
+        `,
+        [[ownerChildId, foreignChildId]],
+      )
+      requireTrue(exposed.rows[0]?.count === 2)
+      runVerifier(verifierEnvironment, 1, fail)
+    } finally {
+      await backdoor.end().catch(() => undefined)
+      await schemaOwner
+        .query(`REVOKE ALL PRIVILEGES ON TABLE public.children FROM ${backdoorRole}`)
+        .catch(() => undefined)
+      await schemaOwner.query(`DROP ROLE IF EXISTS ${backdoorRole}`).catch(() => undefined)
+    }
+    const backdoorRestored = await admin.query('SELECT to_regrole($1) IS NULL AS restored', [
+      backdoorRole,
+    ])
+    requireTrue(backdoorRestored.rows[0]?.restored)
+    runVerifier(verifierEnvironment, 0, pass)
 
     await admin.query(`
       ALTER POLICY children_owner_scope ON public.children
@@ -368,6 +417,10 @@ async function run() {
     runVerifier(verifierEnvironment, 0, pass)
     process.stdout.write('ISSUE-184 trusted child RLS adversarial checks: PASS\n')
   } finally {
+    await schemaOwner
+      .query(`REVOKE ALL PRIVILEGES ON TABLE public.children FROM ${backdoorRole}`)
+      .catch(() => undefined)
+    await schemaOwner.query(`DROP ROLE IF EXISTS ${backdoorRole}`).catch(() => undefined)
     await admin.query(`DROP VIEW IF EXISTS public.${exposedView}`).catch(() => undefined)
     await admin.query(`DROP SCHEMA IF EXISTS ${routineSchema} CASCADE`).catch(() => undefined)
     await admin.query(`DROP SCHEMA IF EXISTS ${viewSchema} CASCADE`).catch(() => undefined)

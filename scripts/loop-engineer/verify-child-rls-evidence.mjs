@@ -114,11 +114,131 @@ function requireExactFunctionAcl(actual) {
 }
 
 async function verifyAuthorizationSurface(admin) {
+  const roleCatalog = await admin.query(`
+    SELECT
+      role.rolname AS name,
+      role.rolcanlogin AS login,
+      role.rolsuper AS superuser,
+      role.rolcreatedb AS "createDatabase",
+      role.rolcreaterole AS "createRole",
+      role.rolinherit AS inherit,
+      role.rolreplication AS replication,
+      role.rolbypassrls AS "bypassRls",
+      COALESCE(cardinality(role.rolconfig), 0) = 0 AS "configClean"
+    FROM pg_catalog.pg_roles AS role
+    WHERE role.rolname !~ '^pg_'
+    ORDER BY role.rolname
+  `)
+  requireExactRows(roleCatalog.rows, [
+    {
+      name: 'anon',
+      login: false,
+      superuser: false,
+      createDatabase: false,
+      createRole: false,
+      inherit: true,
+      replication: false,
+      bypassRls: false,
+      configClean: true,
+    },
+    {
+      name: 'authenticated',
+      login: false,
+      superuser: false,
+      createDatabase: false,
+      createRole: false,
+      inherit: true,
+      replication: false,
+      bypassRls: false,
+      configClean: true,
+    },
+    {
+      name: 'hana_admin',
+      login: true,
+      superuser: true,
+      createDatabase: true,
+      createRole: true,
+      inherit: true,
+      replication: true,
+      bypassRls: true,
+      configClean: true,
+    },
+    {
+      name: 'hana_child_owner',
+      login: false,
+      superuser: false,
+      createDatabase: false,
+      createRole: false,
+      inherit: false,
+      replication: false,
+      bypassRls: false,
+      configClean: true,
+    },
+    {
+      name: 'hana_child_runtime',
+      login: true,
+      superuser: false,
+      createDatabase: false,
+      createRole: false,
+      inherit: false,
+      replication: false,
+      bypassRls: false,
+      configClean: true,
+    },
+    {
+      name: 'postgres',
+      login: true,
+      superuser: false,
+      createDatabase: false,
+      createRole: true,
+      inherit: true,
+      replication: false,
+      bypassRls: true,
+      configClean: true,
+    },
+  ])
+
+  const roleMemberships = await admin.query(`
+    SELECT
+      granted.rolname AS role,
+      member.rolname AS member,
+      grantor.rolname AS grantor,
+      membership.admin_option AS admin,
+      membership.inherit_option AS inherit,
+      membership.set_option AS "set"
+    FROM pg_catalog.pg_auth_members AS membership
+    JOIN pg_catalog.pg_roles AS granted ON granted.oid = membership.roleid
+    JOIN pg_catalog.pg_roles AS member ON member.oid = membership.member
+    JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = membership.grantor
+    WHERE granted.rolname !~ '^pg_'
+      OR member.rolname !~ '^pg_'
+    ORDER BY granted.rolname, member.rolname, grantor.rolname
+  `)
+  requireExactRows(roleMemberships.rows, [
+    {
+      role: 'hana_child_owner',
+      member: 'hana_child_runtime',
+      grantor: 'postgres',
+      admin: false,
+      inherit: false,
+      set: true,
+    },
+    {
+      role: 'hana_child_owner',
+      member: 'postgres',
+      grantor: 'hana_admin',
+      admin: true,
+      inherit: false,
+      set: false,
+    },
+  ])
+
   const relationAccess = await admin.query(`
     WITH target_roles AS (
       SELECT role.rolname AS role_name, role.oid AS role_oid
       FROM pg_catalog.pg_roles AS role
-      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+      WHERE role.rolname !~ '^pg_'
+        AND role.rolname NOT IN ('hana_admin', 'postgres')
     ), capabilities(privilege, column_capable) AS (
       VALUES
         ('DELETE', false),
@@ -202,7 +322,8 @@ async function verifyAuthorizationSurface(admin) {
     WITH target_roles AS (
       SELECT role.rolname AS role_name, role.oid AS role_oid
       FROM pg_catalog.pg_roles AS role
-      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+      WHERE role.rolname !~ '^pg_'
+        AND role.rolname NOT IN ('hana_admin', 'postgres')
     ), capabilities(privilege) AS (VALUES ('SELECT'), ('UPDATE'), ('USAGE'))
     SELECT
       target.role_name AS role,
@@ -230,7 +351,8 @@ async function verifyAuthorizationSurface(admin) {
     WITH target_roles AS (
       SELECT role.rolname AS role_name, role.oid AS role_oid
       FROM pg_catalog.pg_roles AS role
-      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+      WHERE role.rolname !~ '^pg_'
+        AND role.rolname NOT IN ('hana_admin', 'postgres')
     )
     SELECT
       target.role_name AS role,
@@ -340,7 +462,8 @@ async function verifyAuthorizationSurface(admin) {
     WITH target_roles AS (
       SELECT role.rolname AS role_name, role.oid AS role_oid
       FROM pg_catalog.pg_roles AS role
-      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+      WHERE role.rolname !~ '^pg_'
+        AND role.rolname NOT IN ('hana_admin', 'postgres')
     ), capabilities(privilege) AS (VALUES ('CREATE'), ('USAGE'))
     SELECT
       target.role_name AS role,
@@ -361,6 +484,18 @@ async function verifyAuthorizationSurface(admin) {
   `)
   requireExactRows(schemaAccess.rows, [
     {
+      role: 'anon',
+      schema: 'public',
+      privilege: 'USAGE',
+      grantable: false,
+    },
+    {
+      role: 'authenticated',
+      schema: 'public',
+      privilege: 'USAGE',
+      grantable: false,
+    },
+    {
       role: 'hana_child_owner',
       schema: 'public',
       privilege: 'USAGE',
@@ -378,7 +513,8 @@ async function verifyAuthorizationSurface(admin) {
     WITH target_roles AS (
       SELECT role.rolname AS role_name, role.oid AS role_oid
       FROM pg_catalog.pg_roles AS role
-      WHERE role.rolname IN ('hana_child_owner', 'hana_child_runtime')
+      WHERE role.rolname !~ '^pg_'
+        AND role.rolname NOT IN ('hana_admin', 'postgres')
     ), capabilities(privilege) AS (VALUES ('CONNECT'), ('CREATE'), ('TEMPORARY'))
     SELECT
       target.role_name AS role,
@@ -397,6 +533,30 @@ async function verifyAuthorizationSurface(admin) {
     ORDER BY target.role_name, database.datname, capability.privilege
   `)
   requireExactRows(databaseAccess.rows, [
+    {
+      role: 'anon',
+      database: 'hana_ci',
+      privilege: 'CONNECT',
+      grantable: false,
+    },
+    {
+      role: 'anon',
+      database: 'hana_ci',
+      privilege: 'TEMPORARY',
+      grantable: false,
+    },
+    {
+      role: 'authenticated',
+      database: 'hana_ci',
+      privilege: 'CONNECT',
+      grantable: false,
+    },
+    {
+      role: 'authenticated',
+      database: 'hana_ci',
+      privilege: 'TEMPORARY',
+      grantable: false,
+    },
     {
       role: 'hana_child_owner',
       database: 'hana_ci',

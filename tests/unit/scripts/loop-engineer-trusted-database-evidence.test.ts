@@ -189,6 +189,9 @@ describe('ISSUE-184 trusted database evidence boundary', () => {
     )
 
     expect(verifier).toContain('ownerMembershipCountExact')
+    expect(verifier).toContain('const roleCatalog')
+    expect(verifier).toContain('const roleMemberships')
+    expect(verifier).toContain("role.rolname NOT IN ('hana_admin', 'postgres')")
     expect(verifier).toContain('schemaOwnerMembershipExact')
     expect(verifier).toContain('ownerHasNoParentRole')
     expect(verifier).toContain('ownerCannotSetOtherRole')
@@ -205,6 +208,8 @@ describe('ISSUE-184 trusted database evidence boundary', () => {
     expect(verifier).toContain('updated_at')
     expect(verifier).toContain('HANA_SYNTHETIC_POSTGRES_PORT')
     expect(adversarial).toContain('WITH CHECK (false)')
+    expect(adversarial).toContain("LOGIN PASSWORD 'synthetic-backdoor'")
+    expect(adversarial).toContain('role.rolbypassrls')
     expect(adversarial).toContain('FOR INSERT TO hana_child_runtime WITH CHECK (true)')
     expect(adversarial).toContain('TO authenticated')
     expect(adversarial).toContain('SECURITY DEFINER')
