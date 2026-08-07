@@ -59,11 +59,11 @@ import {
   type UploadFailureStage,
 } from '@/features/memories/client/record-upload-retry'
 import { useCurrentUserQuery, useSetAiConsentMutation } from '@/features/me/client/use-current-user'
+import { reportProductEvent, type ProductEventName } from '@/features/metrics/client/product-events'
 import {
-  createProductEventFlowId,
-  reportProductEvent,
-  type ProductEventName,
-} from '@/features/metrics/client/product-events'
+  resolveRecordFlowTransition,
+  type RecordFlowTransition,
+} from '@/features/metrics/client/record-flow'
 import { getBrowserApiClient } from '@/lib/api/browser-client'
 import { isApiProblemError, type ProblemDetails } from '@/lib/api/error'
 import { optimisticAddMemoryToLists, optimisticReplaceMemoryInLists } from '@/lib/perf/optimistic'
@@ -298,7 +298,7 @@ export default function RecordPage() {
   const aiActionInFlightRef = useRef(false)
   const productFlowIdRef = useRef<string | null>(null)
   const productFlowStartedAtRef = useRef<number | null>(null)
-  const reportedProductEventsRef = useRef(new Set<ProductEventName>())
+  const reportedProductEventsRef = useRef(new Set<string>())
   const currentUserQuery = useCurrentUserQuery()
   const childrenQuery = useChildrenQuery()
   const setAiConsentMutation = useSetAiConsentMutation()
@@ -374,23 +374,45 @@ export default function RecordPage() {
       ? '保存する'
       : '下書きを整える'
 
-  const reportRecordProductEvent = useCallback((eventName: ProductEventName) => {
-    if (reportedProductEventsRef.current.has(eventName)) return
-    try {
-      const flowId = productFlowIdRef.current ?? createProductEventFlowId()
-      const startedAt = productFlowStartedAtRef.current ?? performance.now()
-      productFlowIdRef.current = flowId
-      productFlowStartedAtRef.current = startedAt
-      reportedProductEventsRef.current.add(eventName)
-      reportProductEvent({
-        eventName,
-        flowId,
-        elapsedMs: eventName === 'record_started' ? null : performance.now() - startedAt,
-      })
-    } catch {
-      return
-    }
-  }, [])
+  const reportRecordProductEvent = useCallback(
+    (eventName: ProductEventName, flowId = idempotencyKey) => {
+      const stageKey = `${flowId}:${eventName}`
+      if (reportedProductEventsRef.current.has(stageKey)) return
+      try {
+        const now = performance.now()
+        if (productFlowIdRef.current !== flowId) {
+          productFlowIdRef.current = flowId
+          productFlowStartedAtRef.current = now
+        }
+        const startedAt = productFlowStartedAtRef.current ?? now
+        reportedProductEventsRef.current.add(stageKey)
+        reportProductEvent({
+          eventName,
+          flowId,
+          elapsedMs: eventName === 'record_started' ? null : now - startedAt,
+        })
+      } catch {
+        return
+      }
+    },
+    [idempotencyKey],
+  )
+
+  const rotateRecordFlow = useCallback(
+    (
+      transition: Extract<RecordFlowTransition, 'photo_changed' | 'idempotency_conflict'>,
+    ): string => {
+      const nextFlowId = resolveRecordFlowTransition({
+        transition,
+        currentFlowId: idempotencyKey,
+        createFlowId: createRecordIdempotencyKey,
+      }).flowId
+      setIdempotencyKey(nextFlowId)
+      setDraftRestored(false)
+      return nextFlowId
+    },
+    [idempotencyKey],
+  )
 
   function onCancelClick() {
     if (submitting) return
@@ -443,7 +465,13 @@ export default function RecordPage() {
           previewIsObjectUrl: false,
           removalStatus: 'idle' as const,
         }))
-        setIdempotencyKey(draft.idempotencyKey)
+        setIdempotencyKey(
+          resolveRecordFlowTransition({
+            transition: 'draft_restored',
+            currentFlowId: draft.idempotencyKey,
+            restoredFlowId: draft.idempotencyKey,
+          }).flowId,
+        )
         setTitle(draft.title)
         setBody(draft.body)
         setParentNote(draft.parentNote)
@@ -554,6 +582,7 @@ export default function RecordPage() {
           }),
       )
       if (invalid.size > 0) {
+        rotateRecordFlow('photo_changed')
         if (hasAiGeneratedContent) setAiDraftNeedsReview(true)
         setPhotoAnnouncement('使えなくなった写真を下書きから外しました。ほかの入力はそのままです。')
       }
@@ -561,17 +590,22 @@ export default function RecordPage() {
     return () => {
       cancelled = true
     }
-  }, [draftRestored, hasAiGeneratedContent, router])
+  }, [draftRestored, hasAiGeneratedContent, rotateRecordFlow, router])
 
   useEffect(() => {
-    if (phase !== 'form') return
+    if (phase !== 'form' || !draftInitialized) return
     reportRecordProductEvent('record_started')
-  }, [phase, reportRecordProductEvent])
+  }, [draftInitialized, phase, reportRecordProductEvent])
 
   useEffect(() => {
-    if (aiStatus !== 'done' || storyPreview.length === 0) return
+    if (phase !== 'form' || !draftInitialized || !hasSelectedPhoto) return
+    reportRecordProductEvent('photo_selected')
+  }, [draftInitialized, hasSelectedPhoto, phase, reportRecordProductEvent])
+
+  useEffect(() => {
+    if (!draftInitialized || aiStatus !== 'done' || storyPreview.length === 0) return
     reportRecordProductEvent('ai_draft_shown')
-  }, [aiStatus, reportRecordProductEvent, storyPreview])
+  }, [aiStatus, draftInitialized, reportRecordProductEvent, storyPreview])
 
   useEffect(() => {
     if (aiStatus !== 'failed' || !aiTimedOut) return
@@ -840,9 +874,7 @@ export default function RecordPage() {
     clearFieldError('imageIds')
     focusAfterUploadRef.current = true
     invalidateAiAfterPhotoChange()
-    setIdempotencyKey(createRecordIdempotencyKey())
-    setDraftRestored(false)
-    reportRecordProductEvent('photo_selected')
+    rotateRecordFlow('photo_changed')
     const added: RecordPhoto[] = acceptedFiles.map((nextFile) => ({
       ...createRecordPhotoItem(),
       file: nextFile,
@@ -876,8 +908,7 @@ export default function RecordPage() {
 
   function moveSelectedPhoto(clientId: string, direction: 'up' | 'down') {
     commitPhotos((current) => moveRecordPhoto(current, clientId, direction))
-    setIdempotencyKey(createRecordIdempotencyKey())
-    setDraftRestored(false)
+    rotateRecordFlow('photo_changed')
     invalidateAiAfterPhotoChange()
   }
 
@@ -895,7 +926,7 @@ export default function RecordPage() {
       setPhotoAnnouncement(
         `${removingLabel}を削除しました。残り${photosRef.current.length}枚です。`,
       )
-      setIdempotencyKey(createRecordIdempotencyKey())
+      rotateRecordFlow('photo_changed')
       invalidateAiAfterPhotoChange()
       return
     }
@@ -919,7 +950,7 @@ export default function RecordPage() {
       setPhotoAnnouncement(
         `${removingLabel}を削除しました。残り${photosRef.current.length}枚です。`,
       )
-      setIdempotencyKey(createRecordIdempotencyKey())
+      rotateRecordFlow('photo_changed')
       invalidateAiAfterPhotoChange()
     } catch (error) {
       if (
@@ -935,7 +966,7 @@ export default function RecordPage() {
             ? `${removingLabel}はすでに削除されていました。下書きから外しました。`
             : `${removingLabel}は別の記録で使われています。下書きから外しました。`,
         )
-        setIdempotencyKey(createRecordIdempotencyKey())
+        rotateRecordFlow('photo_changed')
         invalidateAiAfterPhotoChange()
         return
       }
@@ -1238,6 +1269,7 @@ export default function RecordPage() {
                   uploadRuntimeRef.current.delete(photo.clientId)
                 }
                 commitPhotos((current) => current.filter((_, index) => !invalidIndexes.has(index)))
+                rotateRecordFlow('photo_changed')
                 invalidateAiAfterPhotoChange()
               }
               errorFocusRequestedRef.current = true
@@ -1249,8 +1281,7 @@ export default function RecordPage() {
               router.push(signInPath(`${window.location.pathname}${window.location.search}`))
               return
             case 'memory_idempotency_conflict': {
-              const nextIdempotencyKey = createRecordIdempotencyKey()
-              setIdempotencyKey(nextIdempotencyKey)
+              const nextIdempotencyKey = rotateRecordFlow('idempotency_conflict')
               setTopMessage(quietStateCopy.record.saveConflictDescription)
               if (currentUserId) {
                 recordDraftStore.save(currentUserId, {

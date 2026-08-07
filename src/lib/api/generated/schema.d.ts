@@ -442,10 +442,12 @@ export interface paths {
         /**
          * Web Vitals 計測の報告 (RUM、 ISSUE-024)
          * @description ブラウザの `web-vitals` ライブラリから `navigator.sendBeacon` で送られる
-         *     Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受け、 構造化ログに記録する。
+         *     Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受ける。
          *     DB 保存はしない (Vercel Logs で十分)。
          *     サインアウト状態でも送れる (匿名で記録)。
-         *     PII を含めない (allowlist: name / value / id / navigationType / route + userIdHash)。
+         *     requestは name / value / id / navigationType / route以外を拒否する。
+         *     serverは固定operation / route group / status / duration bucketへ変換し、
+         *     id、raw value、raw route、user識別子を構造化logへ出さない。
          */
         post: operations["reportWebVitals"];
         delete?: never;
@@ -471,6 +473,10 @@ export interface paths {
          *
          *     request body は event_name / event_id / flow_id / elapsed_bucket に限定する。
          *     記録本文、画像情報、氏名、生年月日、メール、URL、storage_key、自由記述は受け付けない。
+         *     記録作成フローの flow_id は POST /memories の Idempotency-Key と同じUUIDとする。
+         *     下書き復元と通信retryでは同じflowを使い、写真構成変更または409 conflict後は新しいUUIDへ切り替える。
+         *     clientは送信前にeventをdurable outboxへ保存し、204応答をackとして同じevent_idを再送する。
+         *     memory_saved eventは補助signalであり、保存成功の正本は同じUUIDを持つDB Memoryとする。
          *     同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
          *     同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
          */
@@ -990,7 +996,8 @@ export interface components {
         /**
          * @description Web Vitals 計測 1 件の報告 payload (ISSUE-024)。
          *     PII は含めない (allowlist: name / value / id / navigationType / route)。
-         *     user 識別はサーバ側で session cookie から SHA256(user_id) 先頭 16 文字に変換してログに出す。
+         *     serverは受信値を固定operation / route group / status / duration bucketへ変換し、
+         *     id、raw value、raw route、user識別子をtelemetry logへ出さない。
          */
         WebVitalsReport: {
             /**
@@ -1041,7 +1048,9 @@ export interface components {
             event_id: string;
             /**
              * Format: uuid
-             * @description 1回の記録フロー内だけで共有するUUID
+             * @description 1回の記録フロー内だけで共有するUUID。記録作成フローでは
+             *     POST /memories の Idempotency-Key と同じ値を使い、DB確定Memoryとの相関に使う。
+             *     下書き復元と通信retryでは継承し、写真構成変更または409 conflict後の再試行では再採番する。
              * @example 123e4567-e89b-42d3-a456-426614174000
              */
             flow_id: string;

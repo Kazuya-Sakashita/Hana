@@ -5,7 +5,6 @@ import {
   PRODUCT_EVENT_MAX_REPORTS_PER_WINDOW,
   PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS,
   productEventActorHash,
-  productEventRetentionCutoff,
 } from '@/features/metrics/server/product-event'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
@@ -50,10 +49,6 @@ export async function POST(request: Request) {
         await transaction.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtextextended(${actorHash}, 0))
         `
-        await transaction.productEvent.deleteMany({
-          where: { createdAt: { lt: productEventRetentionCutoff(now) } },
-        })
-
         const existingById = await transaction.productEvent.findUnique({
           where: { eventId: event.event_id },
         })

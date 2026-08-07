@@ -1,12 +1,46 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  clearProductEventOutbox,
+  flushProductEventOutbox,
+  PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
   productEventElapsedBucket,
+  readProductEventOutboxForTest,
   reportProductEvent,
 } from '@/features/metrics/client/product-events'
 
 afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
+
+class MemoryStorage implements Storage {
+  private readonly values = new Map<string, string>()
+
+  get length() {
+    return this.values.size
+  }
+
+  clear() {
+    this.values.clear()
+  }
+
+  getItem(key: string) {
+    return this.values.get(key) ?? null
+  }
+
+  key(index: number) {
+    return [...this.values.keys()][index] ?? null
+  }
+
+  removeItem(key: string) {
+    this.values.delete(key)
+  }
+
+  setItem(key: string, value: string) {
+    this.values.set(key, value)
+  }
+}
 
 describe('productEventElapsedBucket', () => {
   it.each([
@@ -78,5 +112,138 @@ describe('reportProductEvent', () => {
       }),
     ).not.toThrow()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('durable ProductEvent outbox', () => {
+  it('persists before sending and removes an event only after a 204 ack', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+    })
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+
+    await flushProductEventOutbox()
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
+  })
+
+  it('retries the same event id after a network failure', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-07T00:00:00Z'))
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'ai_draft_shown',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 20_000,
+    })
+    await flushProductEventOutbox()
+    const queued = readProductEventOutboxForTest()
+    expect(queued).toHaveLength(1)
+    const eventId = queued[0]?.report.event_id
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await flushProductEventOutbox()
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    const firstPayload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const secondPayload = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))
+    expect(firstPayload.event_id).toBe(eventId)
+    expect(secondPayload.event_id).toBe(eventId)
+  })
+
+  it('deduplicates the same stage while its first request is awaiting ack', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    let acknowledge: ((response: Response) => void) | undefined
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          acknowledge = resolve
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const input = {
+      eventName: 'memory_viewed' as const,
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: null,
+    }
+
+    reportProductEvent(input)
+    reportProductEvent(input)
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    acknowledge?.(new Response(null, { status: 204 }))
+    await flushProductEventOutbox()
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it('fails closed and clears an outbox containing unknown or PII-like fields', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        entries: [
+          {
+            report: {
+              event_name: 'photo_selected',
+              event_id: '123e4567-e89b-42d3-a456-426614174000',
+              flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+              elapsed_bucket: 'under_10s',
+              email: 'synthetic@example.invalid',
+            },
+            queuedAt: Date.now(),
+            attempts: 0,
+            nextAttemptAt: Date.now(),
+          },
+        ],
+      }),
+    )
+
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
+  })
+
+  it.each([401, 403])(
+    'clears every pending event after an auth boundary response %s',
+    async (status) => {
+      const storage = new MemoryStorage()
+      vi.stubGlobal('sessionStorage', storage)
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status })))
+
+      reportProductEvent({
+        eventName: 'photo_selected',
+        flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+        elapsedMs: 5_000,
+      })
+      await flushProductEventOutbox()
+
+      expect(readProductEventOutboxForTest()).toHaveLength(0)
+      expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
+    },
+  )
+
+  it('supports explicit local cleanup on sign-out and account deletion', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    storage.setItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY, JSON.stringify({ version: 1, entries: [] }))
+
+    clearProductEventOutbox()
+
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
   })
 })

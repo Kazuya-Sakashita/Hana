@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   profileFindUnique: vi.fn(),
   profileCreate: vi.fn(),
   eventCreate: vi.fn(),
-  eventDeleteMany: vi.fn(),
   eventCount: vi.fn(),
   eventFindUnique: vi.fn(),
   eventFindFirst: vi.fn(),
@@ -29,7 +28,6 @@ vi.mock('@/server/db/prisma', () => ({
     },
     productEvent: {
       create: mocks.eventCreate,
-      deleteMany: mocks.eventDeleteMany,
       count: mocks.eventCount,
       findUnique: mocks.eventFindUnique,
       findFirst: mocks.eventFindFirst,
@@ -66,7 +64,6 @@ beforeEach(() => {
     createdAt: new Date('2026-07-01T00:00:00Z'),
   })
   mocks.eventCreate.mockResolvedValue(validReport)
-  mocks.eventDeleteMany.mockResolvedValue({ count: 0 })
   mocks.eventCount.mockResolvedValue(0)
   mocks.eventFindUnique.mockResolvedValue(null)
   mocks.eventFindFirst.mockResolvedValue(null)
@@ -76,7 +73,6 @@ beforeEach(() => {
       $executeRaw: mocks.advisoryLock,
       productEvent: {
         create: mocks.eventCreate,
-        deleteMany: mocks.eventDeleteMany,
         count: mocks.eventCount,
         findUnique: mocks.eventFindUnique,
         findFirst: mocks.eventFindFirst,
@@ -200,13 +196,11 @@ describe('POST /v1/metrics/events', () => {
     expect(mocks.eventCount).not.toHaveBeenCalled()
   })
 
-  it('purges events older than the retention window before accepting a report', async () => {
+  it('keeps retention deletion outside the ingest authority', async () => {
     const response = await POST(request(validReport))
 
     expect(response.status).toBe(204)
-    expect(mocks.eventDeleteMany).toHaveBeenCalledWith({
-      where: { createdAt: { lt: expect.any(Date) } },
-    })
+    expect(mocks.eventCreate).toHaveBeenCalledTimes(1)
     expect(mocks.advisoryLock).toHaveBeenCalledTimes(1)
   })
 

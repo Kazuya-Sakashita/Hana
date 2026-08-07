@@ -65,7 +65,9 @@ describe('ISSUE-116 record draft and create idempotency', () => {
     expect(fileSelectionSource).not.toContain("setBody('')")
     expect(fileSelectionSource).not.toContain("setParentNote('')")
     expect(recordSource).toContain("case 'memory_idempotency_conflict'")
-    expect(recordSource).toContain('setIdempotencyKey(nextIdempotencyKey)')
+    expect(recordSource).toContain('setIdempotencyKey(nextFlowId)')
+    expect(recordSource).toContain("rotateRecordFlow('idempotency_conflict')")
+    expect(recordSource).toContain('flowId = idempotencyKey')
     expect(recordSource).toContain('saveConflictDescription')
     expect(recordSource).toContain('ref={primaryActionButtonRef}')
     expect(recordSource).toContain(

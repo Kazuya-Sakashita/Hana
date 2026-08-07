@@ -59,12 +59,12 @@ Known superseded / clarified items:
 
 Current public / anonymous exceptions:
 
-| endpoint                             | auth policy      | reason                                |
-| ------------------------------------ | ---------------- | ------------------------------------- |
-| `GET /v1/health`                     | public           | uptime check                          |
-| `GET /v1/me/account-deletion/status` | receipt cookie   | 退会受付結果だけを照合                |
-| `POST /v1/metrics/vitals`            | optional session | RUM beacon can be sent before sign-in |
-| `POST /v1/waitlist`                  | public           | 公開前の待機リスト登録                |
+| endpoint                             | auth policy    | reason                                               |
+| ------------------------------------ | -------------- | ---------------------------------------------------- |
+| `GET /v1/health`                     | public         | uptime check                                         |
+| `GET /v1/me/account-deletion/status` | receipt cookie | 退会受付結果だけを照合                               |
+| `POST /v1/metrics/vitals`            | public         | anonymous RUM; user/session linkage is not collected |
+| `POST /v1/waitlist`                  | public         | 公開前の待機リスト登録                               |
 
 Internal machine endpoints are not public / anonymous exceptions. Scheduler専用であり、ユーザーJWTの代わりに`CRON_SECRET`を必須とする。responseとログはendpoint固有のallowlistへ限定する。
 

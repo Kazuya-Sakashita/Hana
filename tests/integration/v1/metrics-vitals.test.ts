@@ -1,27 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
-
-const mocks = vi.hoisted(() => ({
-  getUser: vi.fn(),
-  findUnique: vi.fn(),
-  create: vi.fn(),
-}))
-
-vi.mock('@/lib/supabase/server', () => ({
-  createSupabaseServerClient: async () => ({
-    auth: { getUser: mocks.getUser },
-  }),
-}))
-
-vi.mock('@/server/db/prisma', () => ({
-  prisma: {
-    profile: { findUnique: mocks.findUnique, create: mocks.create },
-  },
-}))
-
 import { POST } from '@/app/v1/metrics/vitals/route'
-
-const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 
 function jsonRequest(body: unknown) {
   return new Request('http://localhost:3000/v1/metrics/vitals', {
@@ -36,92 +15,89 @@ const validPayload = {
   value: 2400,
   id: 'v1-1717068000000-12345',
   navigationType: 'navigate',
-  route: '/album',
+  route: '/record',
 }
 
-beforeEach(() => {
-  // 匿名アクセスを既定とする
-  mocks.getUser.mockResolvedValue({ data: { user: null } })
-})
-
 afterEach(() => {
-  vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 describe('POST /v1/metrics/vitals', () => {
-  it('accepts anonymous payload and returns 204', async () => {
+  it('emits only fixed low-cardinality telemetry dimensions', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const res = await POST(jsonRequest(validPayload))
-    expect(res.status).toBe(204)
-    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response: res })
-    expect(logSpy).toHaveBeenCalledTimes(1)
-    const logged = logSpy.mock.calls[0]?.[0]
-    expect(typeof logged).toBe('string')
-    const parsed = JSON.parse(logged as string)
-    expect(parsed.operation).toBe('web-vitals')
-    expect(parsed.name).toBe('LCP')
-    expect(parsed.value).toBe(2400)
-    expect(parsed.route).toBe('/album')
-    expect(parsed.userIdHash).toBeNull() // 匿名
-    logSpy.mockRestore()
-  })
+    const response = await POST(jsonRequest(validPayload))
 
-  it('includes userIdHash (hashed) when authenticated', async () => {
-    mocks.getUser.mockResolvedValue({ data: { user: { id: USER_ID, email: 'a@b.c' } } })
-    mocks.findUnique.mockResolvedValue({
-      id: USER_ID,
-      displayName: null,
-      aiConsentAt: null,
-      createdAt: new Date('2026-05-14T09:30:00Z'),
-      updatedAt: new Date('2026-05-14T09:30:00Z'),
+    expect(response.status).toBe(204)
+    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response })
+    const logged = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>
+    expect(logged).toMatchObject({
+      schema_version: 'hana-telemetry-dimensions/v1',
+      operation: 'web_vital_lcp',
+      reason: 'not_applicable',
+      route_group: 'record',
+      status: 'good',
+      duration_bucket: 'from_1001_to_2500ms',
+      level: 'info',
     })
+    expect(Object.keys(logged).sort()).toEqual([
+      'duration_bucket',
+      'level',
+      'operation',
+      'reason',
+      'route_group',
+      'schema_version',
+      'status',
+      'ts',
+    ])
+  })
+
+  it('does not log raw ids, values, routes, or user identifiers', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const res = await POST(jsonRequest(validPayload))
-    expect(res.status).toBe(204)
-    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
-    expect(parsed.userIdHash).toMatch(/^[0-9a-f]{16}$/) // SHA256 先頭 16 文字
-    expect(parsed.userIdHash).not.toBe(USER_ID) // 生の user id は絶対に出ない
-    logSpy.mockRestore()
+    await POST(jsonRequest(validPayload))
+
+    const logged = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>
+    expect(logged).not.toHaveProperty('id')
+    expect(logged).not.toHaveProperty('value')
+    expect(logged).not.toHaveProperty('route')
+    expect(logged).not.toHaveProperty('userIdHash')
+    expect(JSON.stringify(logged)).not.toContain(validPayload.id)
   })
 
-  it('rejects invalid metric name with 422', async () => {
-    const res = await POST(jsonRequest({ ...validPayload, name: 'NOPE' }))
-    expect(res.status).toBe(422)
-    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response: res })
-  })
-
-  it('rejects negative value with 422', async () => {
-    const res = await POST(jsonRequest({ ...validPayload, value: -5 }))
-    expect(res.status).toBe(422)
-  })
-
-  it('rejects missing id with 422', async () => {
-    const { id: _id, ...rest } = validPayload
-    void _id
-    const res = await POST(jsonRequest(rest))
-    expect(res.status).toBe(422)
-  })
-
-  it('rejects unknown navigationType with 422', async () => {
-    const res = await POST(jsonRequest({ ...validPayload, navigationType: 'teleport' }))
-    expect(res.status).toBe(422)
+  it.each([
+    [{ ...validPayload, name: 'NOPE' }, 'metric name'],
+    [{ ...validPayload, value: -5 }, 'negative value'],
+    [{ name: 'LCP', value: 2400, route: '/record', navigationType: 'navigate' }, 'missing id'],
+    [{ ...validPayload, navigationType: 'teleport' }, 'navigation type'],
+  ])('rejects invalid %s payloads', async (body, _label) => {
+    const response = await POST(jsonRequest(body))
+    expect(response.status).toBe(422)
+    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response })
   })
 
   it('accepts null navigationType', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const res = await POST(jsonRequest({ ...validPayload, navigationType: null }))
-    expect(res.status).toBe(204)
-    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
-    expect(parsed.navigationType).toBeNull()
-    logSpy.mockRestore()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const response = await POST(jsonRequest({ ...validPayload, navigationType: null }))
+    expect(response.status).toBe(204)
   })
 
-  it('does not leak request body / unknown fields into log', async () => {
+  it('rejects unknown fields instead of silently dropping them', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    await POST(jsonRequest({ ...validPayload, email: 'pii@example.com', secret: '...' }))
-    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
-    expect(parsed).not.toHaveProperty('email')
-    expect(parsed).not.toHaveProperty('secret')
-    logSpy.mockRestore()
+    const response = await POST(
+      jsonRequest({ ...validPayload, email: 'synthetic@example.invalid', secret: 'blocked' }),
+    )
+    expect(response.status).toBe(422)
+    expect(logSpy).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid JSON with Problem Details', async () => {
+    const response = await POST(
+      new Request('http://localhost:3000/v1/metrics/vitals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{',
+      }),
+    )
+    expect(response.status).toBe(422)
+    expect(response.headers.get('content-type')).toContain('application/problem+json')
   })
 })
