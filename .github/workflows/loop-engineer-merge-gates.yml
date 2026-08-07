@@ -66,7 +66,7 @@ jobs:
           pr_number="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.pr_number | select(type == "number" and . > 0 and floor == .)')"
           declared_head_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.head_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
           declared_merge_base_sha="$(printf '%s' "$GATE_INPUT" | jq -er '.review_attestation.merge_base_sha | select(type == "string" and test("^[0-9a-f]{40}$"))')"
-          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,changed_files,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
+          live_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '{number,state,draft,base_ref:.base.ref,base_sha:.base.sha,head_sha:.head.sha,mergeable,breaking_approval_label_present:(.labels | map(.name) | index("openapi-breaking-approved") != null)}')"
           live_head_sha="$(jq -er '.head_sha' <<<"$live_pr")"
           live_base_sha="$(jq -er '.base_sha' <<<"$live_pr")"
 
@@ -102,17 +102,17 @@ jobs:
             exit 1
           fi
 
-          declared_changed_files="$(jq -er '.changed_files | select(type == "number" and . > 0 and floor == .)' <<<"$live_pr")"
-          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/files?per_page=100" |
-            jq -sce '[.[][] | .filename] | if all(.[]; type == "string") then . else error("invalid changed file response") end' \
-              > "$RUNNER_TEMP/pull-request-files.json"
-          listed_changed_files="$(jq -er 'length' "$RUNNER_TEMP/pull-request-files.json")"
-          if [[ "$listed_changed_files" != "$declared_changed_files" ]]; then
-            echo "::error::The complete exact-head pull request file list could not be verified."
-            exit 1
-          fi
+          gh api "repos/${GITHUB_REPOSITORY}/git/trees/${live_base_sha}?recursive=1" > "$RUNNER_TEMP/base-tree.json"
+          gh api "repos/${GITHUB_REPOSITORY}/git/trees/${live_head_sha}?recursive=1" > "$RUNNER_TEMP/head-tree.json"
+          jq -nce \
+            --arg base_sha "$live_base_sha" \
+            --arg head_sha "$live_head_sha" \
+            --slurpfile base_tree "$RUNNER_TEMP/base-tree.json" \
+            --slurpfile head_tree "$RUNNER_TEMP/head-tree.json" \
+            '{schema_version:"loop-engineer-database-evidence-tree-input/v1",base_sha:$base_sha,head_sha:$head_sha,base_tree:$base_tree[0],head_tree:$head_tree[0]}' \
+            > "$RUNNER_TEMP/database-evidence-tree-input.json"
 
-          trusted_database_diff_required="$(pnpm --silent exec tsx scripts/loop-engineer/evaluate-database-evidence-paths.ts < "$RUNNER_TEMP/pull-request-files.json")"
+          trusted_database_diff_required="$(pnpm --silent exec tsx scripts/loop-engineer/evaluate-database-evidence-paths.ts < "$RUNNER_TEMP/database-evidence-tree-input.json")"
           attested_database_area_required="$(printf '%s' "$GATE_INPUT" | jq -r 'any(.review_attestation.change_areas[]; . == "database" or . == "migration-code" or . == "real-db-migration")')"
           for evidence_required in "$trusted_database_diff_required" "$attested_database_area_required"; do
             if [[ "$evidence_required" != "true" && "$evidence_required" != "false" ]]; then

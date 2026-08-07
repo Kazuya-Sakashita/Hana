@@ -153,6 +153,20 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).not.toContain('OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(')
   })
 
+  it('pins every controller action to an immutable commit SHA', () => {
+    const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
+      jobs: Record<string, { steps?: Array<{ uses?: string }> }>
+    }
+    const actionReferences = Object.values(workflow.jobs).flatMap((job) =>
+      (job.steps ?? []).flatMap(({ uses }) => (uses ? [uses] : [])),
+    )
+
+    expect(actionReferences.length).toBeGreaterThan(0)
+    for (const actionReference of actionReferences) {
+      expect(actionReference).toMatch(/^[^@\s]+@[0-9a-f]{40}$/)
+    }
+  })
+
   it('requires exact-head PostgreSQL evidence for database change areas', () => {
     const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
       jobs: Record<
@@ -219,19 +233,19 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
       gateScript.indexOf('database_evidence_required='),
     )
-    expect(gateScript).toContain('changed_files')
-    expect(gateScript).toContain('gh api --paginate')
-    expect(gateScript).toContain('listed_changed_files')
-    expect(gateScript).toContain('declared_changed_files')
+    expect(gateScript).toContain('git/trees/${live_base_sha}?recursive=1')
+    expect(gateScript).toContain('git/trees/${live_head_sha}?recursive=1')
+    expect(gateScript).toContain('loop-engineer-database-evidence-tree-input/v1')
+    expect(gateScript).not.toContain('/pulls/${pr_number}/files')
     expect(gateScript).toContain('evaluate-database-evidence-paths.ts')
     expect(gateScript).toContain('"$GITHUB_SHA" != "$live_base_sha"')
     expect(gateScript).toContain(
       '"$trusted_database_diff_required" == "true" || "$attested_database_area_required" == "true"',
     )
     expect(gateScript.indexOf('pnpm --silent loop-engineer:github-gate')).toBeLessThan(
-      gateScript.indexOf('gh api --paginate'),
+      gateScript.indexOf('git/trees/${live_base_sha}?recursive=1'),
     )
-    expect(gateScript.indexOf('gh api --paginate')).toBeLessThan(
+    expect(gateScript.indexOf('git/trees/${live_head_sha}?recursive=1')).toBeLessThan(
       gateScript.indexOf('evaluate-database-evidence-paths.ts'),
     )
     expect(candidate['timeout-minutes']).toBe(25)
