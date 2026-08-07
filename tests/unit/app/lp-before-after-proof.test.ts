@@ -47,7 +47,7 @@ describe('ISSUE-073 LP Before / After proof', () => {
     expect(evaluation).toContain('ISSUE-073')
     expect(evaluation).toContain('LP-P0-02')
     expect(evaluation).toContain('対応済み')
-    expect(evaluation).toContain('写真のみ → 写真 + title → 写真 + 短い本文')
+    expect(evaluation).toContain('比較素材の写真単体から`写真 + title → 任意の短い本文`')
     expect(evaluation).toContain('LP-P0-01')
     expect(evaluation).toContain('LP-P0-03')
   })

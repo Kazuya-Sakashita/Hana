@@ -47,7 +47,14 @@ describe('ISSUE-105 staging preflight hold state', () => {
   })
 
   it('syncs the blocked state into the issue index', () => {
-    expect(issueIndexSource).toContain('| `blocked` | 6 |')
+    const snapshotCount = Number(issueIndexSource.match(/^\| `blocked` \| (\d+) \|$/m)?.[1])
+    const blockedSection =
+      issueIndexSource.match(
+        /## Blocked Or Needs Human Decision\n([\s\S]*?)\n## All Issues/,
+      )?.[1] ?? ''
+    const blockedRows = blockedSection.match(/^\| `ISSUE-/gm) ?? []
+
+    expect(snapshotCount).toBe(blockedRows.length)
     expect(issueIndexSource).toContain('| `ISSUE-105` | `#234` | `blocked` |')
     expect(issueIndexSource).toContain(
       'staging preflight を実行し公開前 traffic の Go/Hold を判定する',

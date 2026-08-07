@@ -64,7 +64,7 @@ describe('prelaunch public LP route', () => {
   })
 
   it('keeps the public route aligned with the three-step value proof', () => {
-    expect(lpSource).toContain('写真のみ')
+    expect(lpSource).toContain('写真を選ぶ')
     expect(lpSource).toContain('写真 + タイトル')
     expect(lpSource).toContain('写真 + 短い本文')
     expect(lpSource).toContain('机の上の小さなくつした')

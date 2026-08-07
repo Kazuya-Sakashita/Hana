@@ -20,12 +20,12 @@ describe('ISSUE-068 home photo-first refinement', () => {
     expect(homeSource).toContain('const featuredMemory = memories[0] ?? null')
     expect(homeSource).toContain('aspect-[4/3]')
     expect(homeSource).toContain('photo-mat rounded-[var(--radius-sheet)]')
-    expect(homeSource).toContain('ここに1まいずつ、しまえます')
+    expect(homeSource).toContain('1まいを選び、短い見出しを添えます')
     expect(homeSource).not.toContain('静かな photo mat')
     expect(homeSource).not.toContain('paper-surface overflow-hidden')
   })
 
-  it('keeps the 30-second record route in thumb reach before album summary and stats', () => {
+  it('keeps the record route in thumb reach before album summary and stats', () => {
     const firstViewSectionIndex = homeSource.indexOf('aria-labelledby="home-primary-action"')
     const ctaIndex = homeSource.indexOf('href="/record"', firstViewSectionIndex)
     const latestMemoryIndex = homeSource.indexOf(

@@ -51,10 +51,9 @@ describe('home Quiet Heirloom refresh', () => {
     expect(homeSource).toContain('写真からページをつくる')
     expect(homeSource).toContain('HomeAlbumSummary')
     expect(homeSource).not.toContain('アルバムをひらく')
-    expect(homeSource).toContain('写真1まいから、AIの下書きまで')
+    expect(homeSource).toContain('AIの下書きか、自分のひとことを選べます。')
     expect(homeSource).toContain('保存前に、ことばを整えられます。')
-    expect(homeSource).toContain('whitespace-nowrap')
-    expect(homeSource).toContain('30秒')
+    expect(homeSource).not.toContain('短時間')
     expect(homeSource).toContain('const featuredMemory = memories[0] ?? null')
     expect(homeSource).toContain('FeaturedPhotoMat')
     expect(homeSource).toContain('また、ここに')
@@ -67,7 +66,7 @@ describe('home Quiet Heirloom refresh', () => {
 
   it('keeps the latest memory primary and summarizes the private album without a feed', () => {
     expect(homeSource).toContain('data-testid="home-first-view-photo-mat"')
-    expect(homeSource).toContain('写真をしまう場所')
+    expect(homeSource).toContain('写真とことばをしまう場所')
     expect(homeSource).toContain('aspect-[4/3]')
     expect(homeSource).toContain('priority')
     expect(homeSource).toContain('アルバム')

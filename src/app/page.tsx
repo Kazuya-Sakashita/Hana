@@ -118,8 +118,7 @@ async function HomeBody({ userId }: { userId: string }) {
               )}
             </h1>
             <p className="text-ink-secondary mt-3 text-sm leading-7">
-              写真1まいから、AIの下書きまで<span className="whitespace-nowrap">30秒</span>
-              。保存前に、ことばを整えられます。
+              AIの下書きか、自分のひとことを選べます。保存前に、ことばを整えられます。
             </p>
           </div>
           <div className="flex flex-col gap-3">
@@ -196,8 +195,8 @@ function FeaturedPhotoMat({ memory }: { memory: MemoryListItem | null }) {
         <div className="bg-paper-slip/70 flex aspect-[4/3] w-full items-center justify-center rounded-[var(--radius-photo-inner)] px-8 text-center">
           <div className="space-y-3">
             <BookOpen className="text-sakura-deep mx-auto size-8" aria-hidden="true" />
-            <p className="text-ink font-serif text-lg leading-7">写真をしまう場所</p>
-            <p className="text-ink-tertiary text-xs leading-6">ここに1まいずつ、しまえます</p>
+            <p className="text-ink font-serif text-lg leading-7">写真とことばをしまう場所</p>
+            <p className="text-ink-tertiary text-xs leading-6">1まいを選び、短い見出しを添えます</p>
           </div>
         </div>
       </div>

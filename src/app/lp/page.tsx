@@ -14,15 +14,15 @@ import { QuietIcon } from '@/components/product/icons'
 import { WaitlistSignupForm } from '@/components/waitlist-signup-form'
 
 export const metadata: Metadata = {
-  title: 'Hana | 写真1枚から、30秒で残す育児記録',
+  title: 'Hana | 写真にことばを添える育児記録',
   description: 'Hana の公開前待機リスト登録ページ',
 }
 
 const journeySteps = [
   {
-    eyebrow: '写真のみ',
-    title: '撮った日の空気を置いておく',
-    body: '小さなくつした、木のくるま、朝の支度。まずは写真だけでも、その日の入口になります。',
+    eyebrow: '写真を選ぶ',
+    title: '今日の1枚を起点にする',
+    body: '小さなくつした、木のくるま、朝の支度。写真を選び、短い見出しを添えるところから始めます。',
     icon: ImagePlus,
   },
   {
@@ -64,8 +64,8 @@ const relevanceCues = [
     icon: PenLine,
   },
   {
-    title: '写真だけの日も',
-    body: 'まず1枚を置いておける',
+    title: '写真から始める',
+    body: '1枚を選び、短い見出しを添える',
     icon: ImagePlus,
   },
   {
@@ -127,15 +127,15 @@ export default function LandingPage() {
       <section className="px-5 py-16 sm:py-20" aria-labelledby="lp-title">
         <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.7fr)]">
           <div>
-            <p className="meta-label">写真1枚から、30秒で残す育児記録</p>
+            <p className="meta-label">写真に、あとでひらけることばを</p>
             <h1 id="lp-title" className="mt-5 font-serif text-5xl leading-[1.08] sm:text-7xl">
-              子どもとの今日が、
+              子どもとの今日を、
               <br />
-              10年後の宝物になる。
+              あとでひらける1ページへ。
             </h1>
             <p className="text-ink-secondary mt-6 max-w-xl text-base leading-8 sm:text-lg">
-              寝かしつけのあと、もう書く気力がない日も。写真を1枚選ぶだけ。必要なら Hana
-              が静かな下書きにして、あとで読み返せるページに残します。
+              寝かしつけのあと、もう書く気力がない日も。写真を1枚選ぶところから。必要なら Hana
+              の下書きを使い、自分のひとことでもページに残せます。
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a
@@ -206,7 +206,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl">
           <p className="meta-label">記録の変化</p>
           <h2 id="value-title" className="mt-3 max-w-3xl font-serif text-4xl leading-tight">
-            写真を、記憶にかえる。
+            写真に、ことばを添える。
           </h2>
           <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,0.48fr)_minmax(0,0.52fr)]">
             <div className="photo-mat lp-soft-photo-mat p-2">
@@ -329,14 +329,6 @@ export default function LandingPage() {
                 公開前の検証フェーズです。待機リスト登録、β版のご案内、任意のインタビューやフィードバック協力のお願い、
                 正式リリースのお知らせに限ってメールアドレスをお預かりします。
               </p>
-              <div className="mt-5 flex flex-wrap gap-2" aria-label="ストア導線">
-                <span className="border-hairline text-ink-secondary inline-flex min-h-11 items-center rounded-full border bg-paper-slip px-4 text-sm">
-                  App Store 準備中
-                </span>
-                <span className="border-hairline text-ink-secondary inline-flex min-h-11 items-center rounded-full border bg-paper-slip px-4 text-sm">
-                  Google Play 準備中
-                </span>
-              </div>
             </div>
           </div>
           <WaitlistSignupForm />

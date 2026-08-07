@@ -30,7 +30,7 @@ describe('ISSUE-071 LP static prototype review', () => {
     expect(lpHtml).toContain('prefers-reduced-motion')
   })
 
-  it('connects the LP copy to waitlist conversion, value proof, AI consent, and store readiness', () => {
+  it('connects the LP copy to waitlist conversion, value proof, and AI consent', () => {
     expect(lpHtml).toContain('待機リストに登録する')
     expect(lpHtml).toContain('記録例を見る')
     expect(lpHtml).toContain('id="waitlist-form"')
@@ -41,9 +41,11 @@ describe('ISSUE-071 LP static prototype review', () => {
     expect(lpHtml).toContain('プライバシーポリシー')
     expect(lpHtml).toContain('アクセス制御された環境で管理します')
     expect(lpHtml).toContain('<noscript>')
-    expect(lpHtml).toContain('App Store 準備中')
-    expect(lpHtml).toContain('Google Play 準備中')
-    expect(lpHtml).toContain('同意していれば下書きを待つ')
+    expect(lpHtml).not.toContain('App Store 準備中')
+    expect(lpHtml).not.toContain('Google Play 準備中')
+    expect(lpHtml).toContain('ことばの残し方を選ぶ')
+    expect(lpHtml).toContain('AI下書きか、自分で短い見出しを添える経路')
+    expect(lpHtml).not.toContain('record-core-ai-390x844.png')
     expect(lpHtml).toContain('AI は同意後だけ')
     expect(lpHtml).toContain('使わずに写真とことばだけで保存する道も残します')
     expect(lpHtml).not.toContain('ページの先頭へ')

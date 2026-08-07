@@ -2,12 +2,14 @@
 
 > AI育児記録アプリ / Product Requirements Document  
 > 作成日：2025年  
-> ステータス：MVP設計フェーズ
+> 最終更新：2026-08-07
+> ステータス：MVP検証フェーズ
 
 ---
 
 ## 目次
 
+0. [Active Product Contract](#0-active-product-contract)
 1. [プロダクト定義](#1-プロダクト定義)
 2. [ターゲットユーザー](#2-ターゲットユーザー)
 3. [JTBD分析](#3-jtbd分析)
@@ -31,13 +33,48 @@
 
 ---
 
+# 0. Active Product Contract
+
+このPRDはproduct要求の正本である。API、認証、AI送信、保持などの技術契約は
+`docs/openapi/openapi.yaml`とAccepted ADRを優先し、測定とGo / Hold / No-Goの詳細は
+`docs/product-validation/funnel-go-hold-contract.md`を正とする。
+
+主張は次の4状態で管理する。
+
+| 状態 | 意味 | 公開文言 |
+|---|---|---|
+| 確認済み事実 | mainの実装、OpenAPI、Accepted ADRで確認できる | 条件と範囲を併記して説明できる |
+| 検証仮説 | 目標値または利用者価値として検証中 | 目標・仮説と明記し、達成済みと断定しない |
+| 未検証 | cohort、外部証跡、人間reviewのいずれかが不足 | active UI、LP、store copyで事実として使わない |
+| 未実装・対象外 | active MVPに実装がない、または明示的にscope外 | 現在または近日提供する能力として使わない |
+
+## 現在のMVP契約
+
+| 項目 | 状態 | Active contract |
+|---|---|---|
+| 提供形態 | 確認済み事実 | Next.jsのmobile-first Web。native appはMVP対象外 |
+| PWA installability | 未実装・対象外 | manifest / service workerは未実装でactive MVPとrelease gateの対象外。Productが再採用するまでは提供予定とも表現しない |
+| 認証 | 確認済み事実 | Supabase AuthのSNS-only。Google先行、Appleは後続。Hanaはpasswordを持たず、private `/v1` APIはCookie sessionだけを使う |
+| 記録 | 確認済み事実 | 写真1〜5枚、AI下書きまたは手動入力、確認・編集、保存、詳細・月別の見返し |
+| 30秒記録 | 検証仮説 | ISSUE-160でAI / 手動各経路のp50 30秒以内を検証する |
+| 60秒 | 検証仮説のguardrail | 同じ経路別pilotのp85 60秒以内。30秒達成の代替実績として扱わない |
+| AI外部送信 | 確認済み事実 | 明示opt-in後だけ、EXIF除去済み画像と許可fieldをAnthropicへ送る。手動経路を常に残す |
+| vendor retention / training / ZDR | 未検証 | ISSUE-161のPrivacy / Legal / AI reviewがGoになるまで断定しない |
+| AI品質・感情価値 | 未検証 | ISSUE-160のpilotで検証し、達成前は「親の言葉になる」「見返して泣ける」を実績として断定しない |
+
+30秒、AI品質、継続、感情価値はproduct visionとして維持するが、検証完了までは仮説である。
+公開文言は確認済み事実だけを現在形で表現する。
+
+---
+
 # 1. プロダクト定義
 
 ## Hanaは何のアプリか
 
-**写真1枚から、AIが子どもとの記憶を物語にする育児記録アプリ。**
+**写真にことばを添え、AI下書きか手動入力を選べる育児記録アプリ。**
 
-親が「書く」ことなく、今日の瞬間を残せる。忙しい育児の中で、後悔なく子どもの成長を記録し続けられる場所。
+写真を起点に、必要ならAI下書きを使い、親が確認・編集して記録を保存する。AIを使わず、
+ひとことを手動入力して保存する経路も同じ入口から選べる。
 
 ## 誰のためのアプリか
 
@@ -49,17 +86,17 @@
 
 | 課題 | Hanaの解決策 |
 |---|---|
-| 記録が続かない | 写真1枚→AI生成で30秒記録完了 |
-| 何を書けばいいかわからない | AIが文章を提案。承認するだけ |
+| 記録が続かない | 写真1〜5枚を起点に判断数を抑えた記録フローを提供し、所要時間はpilotで検証する |
+| 何を書けばいいかわからない | AIが下書きを提案し、親が確認・編集する。AIを使わない手動経路も選べる |
 | 後で見返すと記録が少ない | 書けない日も責めない設計 |
-| 写真に文脈・感情が残らない | AIが情景・感情・エピソードを補完 |
+| 写真に文脈・感情が残らない | AIが断定を避けた下書きを提案し、親の確認後に記録として保存する |
 | 「あのとき残しておけば」という後悔 | 今日からでも始められる記録設計 |
 
-## 一言で言うと
+## Product vision（未検証）
 
-> **「子どもとの今日が、10年後の宝物になる。」**
+> **「子どもとの今日を、あとでひらける1ページへ。」**
 
-## 使った後にユーザーがどう感じるべきか
+## 検証する感情仮説
 
 ```
 「ちゃんと残せた」という安心感
@@ -149,7 +186,7 @@ Hanaに求めること：
 
 ## 利用頻度
 
-- 目標：週3〜5回（毎日は求めない）
+- 検証仮説：週1回以上（毎日は求めない）
 - 理想：気が向いたときに自然に開けること
 
 ## ユーザーが抱える感情
@@ -215,16 +252,19 @@ Hanaに求めること：
 
 ## 比較マトリクス
 
+Hana列の速度、感情価値、継続性は市場実績ではなく検証仮説である。ISSUE-159の判定契約と
+ISSUE-160のpilotがGoになるまで、比較優位を確認済み事実として公開しない。
+
 | 比較軸 | Hana | みてね | Instagram | Google Photos | 育児日記系アプリ | フォトブック系 |
 |---|---|---|---|---|---|---|
-| 記録のしやすさ | ◎（30秒） | ○ | △（映えを選ぶ手間） | ◎（自動） | △（書く負担大） | △（まとめ作業） |
-| 感情の残しやすさ | ◎（AI補完） | △（テキスト任せ） | ○（コメント） | △（なし） | ○（書ければ） | △（なし） |
-| 継続性 | ◎（設計） | ○ | △（疲れる） | ◎（自動） | △ | ✕（都度） |
-| 家族共有 | ○ | ◎ | △（公開前提） | ○ | △ | ✕ |
-| AI活用 | ◎ | △（軽微） | ✕ | ○（分類のみ） | △ | ✕ |
-| プライバシー | ◎（家族限定設計） | ○ | △ | ○ | ○ | ○ |
-| マネタイズ | ◎（設計次第） | ○（印刷・プレミアム） | ✕（広告） | ✕ | △ | ◎（印刷） |
-| 差別化余地 | ◎ | △（成熟） | ✕ | ✕ | ○ | △ |
+| 記録のしやすさ | 検証仮説（p50 30秒以内） | ○ | △（映えを選ぶ手間） | ◎（自動） | △（書く負担大） | △（まとめ作業） |
+| 感情の残しやすさ | 未検証（AI下書き＋親の確認） | △（テキスト任せ） | ○（コメント） | △（なし） | ○（書ければ） | △（なし） |
+| 継続性 | 未検証 | ○ | △（疲れる） | ◎（自動） | △ | ✕（都度） |
+| 家族共有 | MVP対象外 | ◎ | △（公開前提） | ○ | △ | ✕ |
+| AI活用 | 確認済み（明示opt-in） | △（軽微） | ✕ | ○（分類のみ） | △ | ✕ |
+| プライバシー | 確認済み（本人限定・private storage） | ○ | △ | ○ | ○ | ○ |
+| マネタイズ | MVP対象外 | ○（印刷・プレミアム） | ✕（広告） | ✕ | △ | ◎（印刷） |
+| 差別化余地 | 未検証 | △（成熟） | ✕ | ✕ | ○ | △ |
 
 ## 競合の弱点と、Hanaの差別化ポイント
 
@@ -232,18 +272,18 @@ Hanaに求めること：
 - テキストは自分で書く必要がある
 - 「写真保存＋共有」が中心で「記録の物語化」は弱い
 - AIによる自動生成なし
-- **→ Hanaは「AIが代わりに書く」で差別化**
+- **→ Hanaは「AI下書きと親の確認」で書き始めを支える仮説を検証**
 
 ### Google Photosの弱点
 - 感情・文脈ゼロ。ただの保管庫
 - 育児記録という体験設計ではない
-- **→ Hanaは「物語としての記録体験」で差別化**
+- **→ Hanaは「写真に親が確認したことばを添える記録体験」の価値を検証**
 
 ### 育児日記アプリの弱点
 - 書く負担が高い
 - AI非活用
 - UIが古く、感情的体験が弱い
-- **→ Hanaは「書かなくていい」で差別化**
+- **→ HanaはAI下書きまたは手動入力を選べることによる負担軽減を検証**
 
 ---
 
@@ -261,35 +301,34 @@ Hanaに求めること：
 
 写真は「証拠」に過ぎない。物語は「記憶」であり、それは言葉で初めて残る。
 
-## AIが残すべきもの
+## AI下書きで支援する範囲
 
 ```
 - 写真から読み取れる情景の描写
-- 親が感じているであろう感情の言語化
-- 子どもの発達段階に応じたコンテキスト
-- 「この月齢のこの瞬間」の意味付け
-- 親が自分では言語化できなかった「愛情の形」
+- 親が任意入力したひとことの反映
+- 写真だけでは確認できない感情、理由、発達、場所を断定しないこと
+- 親が保存前に確認・編集・破棄できる下書き
+- AIを使わず短い見出しを手動入力できる経路
 ```
 
 AIは「代わりに書く」のではなく「言語化を手伝う」黒子。
 
-## 親が後から見返して泣ける理由
+## 見返し価値の検証仮説（未検証）
 
-「あのころ、こんなに小さかったんだ」という時間の不可逆性への感情。
+写真に親が確認した短い見出しや本文を添えることで、写真だけの場合より当時の場面を
+見つけやすく、残してよかったと感じるかをISSUE-160とM11で検証する。
 
-そのとき何気なく撮った1枚に、AIが補完した言葉が添えられていることで、**写真が「思い出」に変わる瞬間**が生まれる。
+感情成果や再利用意向は未検証であり、「見返して泣ける」「思い出に変わる」と公開claimにしない。
 
-「このとき、どんな気持ちだったか覚えている？」という問いに、アプリが代わりに答えてくれている体験。
+## 子ども本人への将来価値（MVP対象外の仮説）
 
-## 子どもが将来見たときに嬉しい理由
+将来、本人が親の確認した記録をどう受け取るかはMVPでは検証しない。本人向け閲覧や共有を
+再採用するIssueで、同意、年齢、アクセス権、感情価値を別途検証する。
 
-「お父さん・お母さんが、こんなに自分を見ていてくれた」という証拠が言葉で残っている。
+## 祖父母共有（MVP対象外の仮説）
 
-写真だけでは伝わらない「あなたが生まれてきてくれてよかった」という親の気持ちが、文章として残っている。
-
-## 祖父母が共有されたときに喜ぶ理由
-
-遠方でも孫の成長を「物語」として受け取れる。写真だけでなく「今日の○○ちゃん」の情景が伝わる。コメントを返す接点が生まれる。
+家族共有・招待・コメントはactive MVPに存在しない。v1で再採用する場合に、明示招待と受諾、
+owner権限、共有停止、受け手の価値を検証する。
 
 ---
 
@@ -297,7 +336,10 @@ AIは「代わりに書く」のではなく「言語化を手伝う」黒子。
 
 ## MVPの定義
 
-**「30秒で記録でき、見返して泣ける体験」を最小構成で実現する。**
+**写真から記録を保存し、後から見返す価値と記録コストを検証できる最小構成を実現する。**
+
+「p50 30秒以内」と「見返して残してよかったと感じる」はMVPの検証仮説であり、
+ISSUE-160のGoまでは達成済みのproduct claimにしない。p85 60秒以内を暫定guardrailとする。
 
 ## MVP機能一覧
 
@@ -305,14 +347,16 @@ AIは「代わりに書く」のではなく「言語化を手伝う」黒子。
 
 | 機能 | 目的 |
 |---|---|
-| メールアドレス認証（＋Apple/Google OAuth） | 摩擦の少ない登録 |
+| mobile-first Web | store審査前に現行体験を検証する |
+| Supabase Auth SNS-only（Google先行） | Hanaでpasswordを持たずに登録する |
 | 子どもプロフィール登録（名前・誕生日・写真） | パーソナライズの起点 |
-| 写真アップロード（1枚〜複数枚） | 記録の起点 |
-| AI文章生成（Claude API） | 差別化の核心 |
-| 生成文の編集・保存 | 親のコントロール感 |
+| 写真アップロード（1〜5枚） | 記録の起点 |
+| 明示opt-in後のAI文章生成（Anthropic Claude） | 差別化仮説を検証する |
+| AIを使わない手動入力 | 同意しない利用者も記録を完了できる |
+| 下書きの確認・編集・保存 | 親のコントロール感 |
 | タイムライン表示（新→旧） | 記録の蓄積体験 |
 | 記録詳細表示 | 見返す体験 |
-| 月別ふりかえり | 継続動機の強化 |
+| 月別ふりかえり（記録一覧。AI要約なし） | 継続動機を検証する |
 | 「今日で○日目」バッジ表示 | 蓄積の可視化 |
 
 ### MVPで作らないもの（Should Not）
@@ -327,14 +371,15 @@ AIは「代わりに書く」のではなく「言語化を手伝う」黒子。
 | 複数子どもプロフィール | MVPは1人に絞る |
 | コメント・いいね | SNS的機能はコンセプトと矛盾 |
 | 検索・タグ機能 | 記録が蓄積してから必要になる |
+| PWA / native app / Apple Sign In | mobile-first Webの検証後にProductが再採用を判断する |
 
 ## MVPの検証仮説
 
 ```
-仮説1: 写真→AI生成→承認 の30秒フローで、記録が完了する体験は成立するか
-仮説2: AI生成文章の品質は、親が「これでいい」と思えるレベルか
-仮説3: 週3回以上の継続利用が起きるか
-仮説4: 「見返したとき感動した」体験が生まれるか
+仮説1: 操作可能な記録画面の提示→DB保存確認のpilotで、経路別p50 30秒以内、p85 60秒以内にできるか
+仮説2: AI下書きの80%以上を軽微編集以下で保存でき、重大な創作を0件にできるか
+仮説3: 初回記録70%、D7 40%、D30 25%を満たし、週1回以上の記録が起きるか
+仮説4: 「見返したときに残してよかった」と感じ、再閲覧後の再記録につながるか
 ```
 
 ---
@@ -346,13 +391,13 @@ AIは「代わりに書く」のではなく「言語化を手伝う」黒子。
 ### LP（ランディングページ）
 
 ```
-目的：価値訴求とダウンロード誘導
+目的：価値訴求とWebでの利用開始
 表示内容：
-  - キャッチコピー：「子どもとの今日が、10年後の宝物になる。」
-  - AI生成の記録例（Before/After：写真のみ → 写真＋文章）
-  - 「30秒で記録できる」体験の説明
+  - 確認済み機能だけで、写真、手動入力、任意のAI下書き、保存前編集を説明する
+  - 合成の記録例（比較素材の写真単体 → 写真＋短い見出し → 任意の本文。写真のみ保存claimではない）
+  - 30秒 / 60秒仮説がGoになるまでは速度を示す現在形の文言を使わない
   - ユーザーの声（ローンチ後に追加）
-  - App Store / Google Playボタン
+  - Webの利用開始ボタン
 
 UX上の注意：
   - ペルソナが「自分のことだ」と感じるコピーに
@@ -398,11 +443,12 @@ UX上の注意：
 ### 写真追加・AI生成画面
 
 ```
-目的：30秒で記録を完了させる
+目的：AI / 手動を選べる記録フローを提供し、記録コストの仮説をpilotで検証する
 表示内容：
   Step1: カメラロールから写真を選択（複数可）
-  Step2: 「AIが記録を作成中...」（5〜10秒アニメーション）
-  Step3: 生成された文章の表示
+  Step2: AI下書きまたは手動入力を選択
+  Step3: AIを選び同意済みの場合は生成待機、手動の場合は短い見出しを入力
+  Step4: 下書きまたは手動入力した文章の表示
     - タイトル（例：「はじめてのプール」）
     - 本文（3〜5行の情景・感情文）
     - 日付・天気（自動取得）
@@ -416,8 +462,9 @@ UX上の注意：
 
 UX上の注意：
   - AI生成中のアニメーションは「楽しい待ち時間」に
-  - 生成文は「承認するだけ」で終わる設計
-  - 再生成は最大3回まで（無限ループ防止）
+  - 生成文を事実として扱わず、保存前に親が確認・編集する
+  - AIを使わない手動入力を同じ完了経路として維持する
+  - 再生成回数はOpenAPIとquota契約を正とする
   - 編集前と編集後で差分を明確に
 ```
 
@@ -464,13 +511,13 @@ UX上の注意：
 ```
 目的：継続動機の強化と感動体験の提供
 表示内容：
-  - 月のハイライト写真（自動選択 or 手動）
+  - 対象月と前月・翌月のナビゲーション
   - その月の記録枚数
-  - AIが生成した「今月のサマリー」（3行程度）
-  - 記録一覧グリッド
+  - 記録一覧
+  - 記録がない月の責めない空状態
 
 UX上の注意：
-  - 月末または月初に自動で通知（v1以降）
+  - AI月間サマリー、ハイライト自動選定、通知はMVP対象外
   - 「先月の○○ちゃん」という時間軸の表現
 ```
 
@@ -493,30 +540,31 @@ UX上の注意：
 ## 初回利用フロー
 
 ```
-アプリDL
-  → スプラッシュ（「子どもとの今日が、10年後の宝物になる。」）
-  → アカウント登録（Apple/Google/メール）
+Webを開く
+  → LP（「子どもとの今日を、あとでひらける1ページへ。」）
+  → Googleでサインイン（Appleは後続、email+passwordは提供しない）
   → 子どもプロフィール登録（名前・誕生日・写真）
   → 「最初の記録を作りませんか？」
-  → 写真選択→AI生成→確認→保存
+  → 写真選択→AI下書きまたは手動入力→確認・編集→保存
   → 「これが○○ちゃんとの最初のページです」感動メッセージ
   → ホーム画面へ
 ```
 
-## 1日の記録フロー（理想）
+## 1日の記録フロー（検証仮説）
 
 ```
-寝かしつけ後（21〜23時帯が最多）
-  → アプリ起動（ホーム画面）
+利用者が記録を残したいとき
+  → Webを開く（ホーム画面）
   → 「今日の○○ちゃんを残しませんか？」カードをタップ
-  → カメラロールから今日の写真を選択（10秒）
-  → AI生成待ち（5〜8秒）
-  → 生成文確認・軽く編集（15秒）
-  → 保存（2秒）
+  → カメラロールから写真を選択
+  → AI下書きまたは手動入力を選択
+  → 内容を確認・編集
+  → 保存
   → 「今日も残せた」完了画面
   → ホーム画面に戻る
 
-合計：約30〜60秒
+目標：操作可能な記録画面の提示→DB保存確認のpilotで、AI / 手動各経路p50 30秒以内、p85 60秒以内
+状態：ISSUE-160完了までは未検証
 ```
 
 ## 写真から記録を作るフロー
@@ -579,6 +627,9 @@ UX上の注意：
 
 # 9. AI機能仕様
 
+AI生成は明示opt-in後だけ実行する。AIを使わない手動入力を常に選べるようにし、送信範囲と
+状態機械はADR-0011、公開APIはOpenAPIを正とする。
+
 ## 入力情報
 
 | 入力 | 取得方法 | 必須/任意 |
@@ -586,10 +637,12 @@ UX上の注意：
 | 写真（1〜5枚） | ユーザーアップロード | 必須 |
 | 子どもの名前 | プロフィール | 必須 |
 | 子どもの月齢 | 誕生日から自動計算 | 必須 |
-| 撮影日時 | EXIFまたは手動 | 必須 |
-| 天気 | APIまたは手動選択 | 任意 |
+| 記録日 | 画面の初期値または手動 | 必須 |
+| 天気 | 手動選択 | 任意 |
 | 親のひとこと | オプション入力欄 | 任意 |
-| 場所タグ | 位置情報（任意） | 任意 |
+
+EXIFはAI送信前に除去する。surname / full name、生年月日、親の氏名・メール、住所、raw location、
+`storage_key`、presigned URLはAnthropicへ送らない。
 
 ## 出力内容
 
@@ -688,9 +741,10 @@ UX上の注意：
 ## 子どもの写真を扱う上での注意
 
 ```
-- 写真はAIモデルのトレーニングデータとして使用しない（明記）
-- 写真解析はサーバーサイドで処理し、外部サービスに送信しない
-- Claude APIに写真を送信する場合は利用規約に準拠し、プライバシーポリシーに明記
+- 明示opt-in後だけEXIF除去済み画像をAnthropic Claudeへ送信する
+- 送信前後に同意、画像、所有権を再確認し、条件が変わった結果は保存・返却しない
+- vendor retention、training、ZDRはISSUE-161の一次証跡と人間review前に断定しない
+- AIを使わない手動入力を同じ記録フローに残す
 - 顔認識・個人識別のための処理は行わない
 ```
 
@@ -707,140 +761,32 @@ UX上の注意：
 
 ## データモデル
 
-### User
+field、型、relation、index、delete actionの正本は`prisma/schema.prisma`とmigration SQLである。
+このPRDは実装とdriftする疑似SQLを持たず、product上の責務だけを示す。
 
-```sql
-users {
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  email         VARCHAR(255) UNIQUE
-  name          VARCHAR(100)
-  avatar_url    TEXT
-  auth_provider VARCHAR(50)  -- 'email' | 'apple' | 'google'
-  is_premium    BOOLEAN DEFAULT false
-  premium_until TIMESTAMP
-  created_at    TIMESTAMP DEFAULT NOW()
-  updated_at    TIMESTAMP DEFAULT NOW()
-  deleted_at    TIMESTAMP  -- 論理削除
-}
-```
+| model | product責務 | privacy / lifecycle |
+|---|---|---|
+| Profile | Supabase Auth userに対応するHana profile、AI同意、退会状態 | email、provider、token、passwordは保存しない |
+| Child | MVPの1ユーザー1子ども、表示名と誕生日 | owner境界、論理削除、raw locationやgenderを収集しない |
+| Image | private Storage objectのmetadataとMemoryへの関連 | public URLを保存せず、EXIF除去状態と削除状態を管理する |
+| Memory | 親が確認したtitle / body、記録日、保存完了 | `createdAt`をfunnelの保存正本にし、`recordedAt`と区別する |
+| AiGeneration | quota、失敗回復、status-only品質集計 | prompt、生成title / body、親の編集本文を保存しない |
+| ProductEvent | allowlist済みfunnel event | actor hashも仮名化個人dataとして保持・退会purgeする |
+| UploadReservation / AccountDeletion* | orphan cleanupと退会saga | retry、lease、fail-closedな物理削除を管理する |
+| WaitlistSignup | 公開前案内の同意済み連絡先 | app user dataやAI同意と混同しない |
 
-### Child
-
-```sql
-children {
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  user_id       UUID REFERENCES users(id) ON DELETE CASCADE
-  name          VARCHAR(50) NOT NULL
-  birthdate     DATE NOT NULL
-  avatar_url    TEXT
-  gender        VARCHAR(10)  -- 任意。使わない設計も検討
-  created_at    TIMESTAMP DEFAULT NOW()
-  updated_at    TIMESTAMP DEFAULT NOW()
-  deleted_at    TIMESTAMP
-}
-```
-
-**注意：** MVPは1ユーザー1子どもに制限。v1で複数子ども対応。
-
-### Memory（記録）
-
-```sql
-memories {
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  user_id       UUID REFERENCES users(id)
-  child_id      UUID REFERENCES children(id)
-  title         VARCHAR(100) NOT NULL
-  body          TEXT
-  recorded_at   DATE NOT NULL           -- 記録の対象日（撮影日）
-  weather       VARCHAR(20)
-  location_name VARCHAR(100)            -- ユーザーが入力した場合のみ
-  is_favorite   BOOLEAN DEFAULT false
-  ai_generated  BOOLEAN DEFAULT true    -- AI生成かどうか
-  created_at    TIMESTAMP DEFAULT NOW()
-  updated_at    TIMESTAMP DEFAULT NOW()
-  deleted_at    TIMESTAMP
-}
-```
-
-### MemoryImage（記録に紐付く画像）
-
-```sql
-memory_images {
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  memory_id     UUID REFERENCES memories(id) ON DELETE CASCADE
-  storage_key   TEXT NOT NULL            -- S3/Cloudflare R2のオブジェクトキー
-  original_name TEXT
-  width         INTEGER
-  height        INTEGER
-  file_size     INTEGER
-  order_index   INTEGER DEFAULT 0
-  created_at    TIMESTAMP DEFAULT NOW()
-}
-```
-
-**注意：** 画像URLを直接DBに保存しない。storage_keyから署名付きURLを生成。
-
-### AiGeneration（AI生成履歴）
-
-```sql
-ai_generations {
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  memory_id       UUID REFERENCES memories(id)
-  user_id         UUID REFERENCES users(id)
-  model_version   VARCHAR(50)              -- 使用したAIモデル
-  prompt_version  VARCHAR(10)              -- プロンプトバージョン
-  generated_title TEXT
-  generated_body  TEXT
-  final_title     TEXT                     -- 実際に保存されたタイトル
-  final_body      TEXT                     -- 実際に保存された本文
-  was_edited      BOOLEAN DEFAULT false
-  generation_ms   INTEGER                  -- 生成時間（ミリ秒）
-  created_at      TIMESTAMP DEFAULT NOW()
-}
-```
-
-**用途：** 品質改善・プロンプト改善のためのログ。個人を特定しない形で分析。
-
-### FamilyMember（家族共有、v1）
-
-```sql
-family_members {
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  owner_user_id UUID REFERENCES users(id)
-  child_id      UUID REFERENCES children(id)
-  invited_email VARCHAR(255)
-  invited_user_id UUID REFERENCES users(id)
-  role          VARCHAR(20) DEFAULT 'viewer'  -- 'viewer' | 'editor'
-  status        VARCHAR(20) DEFAULT 'pending' -- 'pending' | 'accepted'
-  created_at    TIMESTAMP DEFAULT NOW()
-}
-```
-
-### Subscription
-
-```sql
-subscriptions {
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  user_id         UUID REFERENCES users(id)
-  plan            VARCHAR(50)               -- 'monthly' | 'yearly'
-  status          VARCHAR(20)               -- 'active' | 'cancelled' | 'expired'
-  store_platform  VARCHAR(20)               -- 'app_store' | 'google_play' | 'stripe'
-  store_product_id TEXT
-  current_period_start TIMESTAMP
-  current_period_end   TIMESTAMP
-  created_at      TIMESTAMP DEFAULT NOW()
-  updated_at      TIMESTAMP DEFAULT NOW()
-}
-```
+Family sharing、Subscription、PWA / native store dataはactive MVP schemaに存在しない。追加時はIssue、
+OpenAPI、migration、Privacy reviewを先に確定する。
 
 ## リレーション図
 
 ```
-User ──< Child ──< Memory ──< MemoryImage
-           |
-           └──< FamilyMember
-User ──< Subscription
-Memory ──< AiGeneration
+Profile ──< Child ──< Memory ──< Image
+   ├──< AiGeneration
+   ├──< UploadReservation
+   └──< AccountDeletionIntent
+
+ProductEvent ── actor hashのみ（Profileへの直接FKなし。ISSUE-185で退会purgeを保証）
 ```
 
 ## プライバシー上の注意点
@@ -849,7 +795,7 @@ Memory ──< AiGeneration
 - 子どもの氏名・生年月日・写真は個人情報として最高レベルで保護
 - DBへの直接アクセスはアプリケーションサーバーのみ
 - 画像はストレージサービス（S3等）に保存し、署名付きURL（有効期限あり）でのみアクセス
-- AI生成ログには写真を保存しない（プロンプトテキストのみ）
+- AI生成ログには写真、prompt本文、生成本文を保存せず、固定metadataだけを保存
 - 削除は論理削除後、30日で物理削除
 ```
 
@@ -857,155 +803,20 @@ Memory ──< AiGeneration
 
 # 11. API設計
 
-## 基本仕様
+APIのSingle Source of Truthは`docs/openapi/openapi.yaml`であり、このPRDにはrequest / response schemaを
+重複定義しない。API変更はOpenAPIを先に更新する。
 
-```
-Base URL: https://api.hana.app/v1
-認証: Bearer Token（JWT）
-Content-Type: application/json
-```
+## Active API contract
 
-## 認証 API
-
-```yaml
-POST /auth/register
-  body: { email, password, name }
-  response: { token, user }
-
-POST /auth/login
-  body: { email, password }
-  response: { token, user }
-
-POST /auth/oauth
-  body: { provider: "apple" | "google", token }
-  response: { token, user }
-
-POST /auth/refresh
-  header: Authorization: Bearer {refresh_token}
-  response: { token }
-
-POST /auth/logout
-  response: { success: true }
-```
-
-## 子どもプロフィール API
-
-```yaml
-GET /children
-  response: [{ id, name, birthdate, avatar_url, age_days }]
-
-POST /children
-  body: { name, birthdate, avatar_url? }
-  response: { id, name, birthdate }
-
-GET /children/:id
-  response: { id, name, birthdate, avatar_url, memory_count }
-
-PUT /children/:id
-  body: { name?, birthdate?, avatar_url? }
-  response: { id, name, birthdate }
-```
-
-## 写真アップロード API
-
-```yaml
-POST /uploads/presigned-url
-  body: { file_name, content_type, memory_id? }
-  response: { presigned_url, storage_key }
-  # クライアントはpresigned_urlに直接PUT
-
-POST /uploads/confirm
-  body: { storage_key, width, height, file_size }
-  response: { image_id, thumbnail_url }
-```
-
-## 記録 API
-
-```yaml
-POST /memories
-  body: {
-    child_id,
-    title,
-    body,
-    recorded_at,
-    weather?,
-    image_ids: [uuid],
-    ai_generated: boolean
-  }
-  response: { id, title, body, recorded_at, images }
-
-GET /memories
-  query: { child_id, year?, month?, limit, cursor }
-  response: {
-    data: [memory],
-    next_cursor,
-    total_count
-  }
-
-GET /memories/:id
-  response: { id, title, body, recorded_at, weather, images, child_age_days }
-
-PUT /memories/:id
-  body: { title?, body?, is_favorite? }
-  response: { id, title, body }
-
-DELETE /memories/:id
-  response: { success: true }  # 論理削除
-```
-
-## AI文章生成 API
-
-```yaml
-POST /ai/generate
-  body: {
-    child_id,
-    image_ids: [uuid],
-    recorded_at,
-    weather?,
-    parent_note?     # 親のひとこと（任意）
-  }
-  response: {
-    generation_id,
-    title,
-    body,
-    tags
-  }
-
-POST /ai/regenerate
-  body: { generation_id }
-  response: { generation_id, title, body, tags }
-  # 最大3回まで
-```
-
-## 月別ふりかえり API
-
-```yaml
-GET /memories/monthly-summary
-  query: { child_id, year, month }
-  response: {
-    year,
-    month,
-    memory_count,
-    highlight_image,
-    ai_summary,      # その月のAIサマリー（3行）
-    memories: [memory]
-  }
-```
-
-## 家族共有 API（v1）
-
-```yaml
-POST /family/invite
-  body: { child_id, email, role }
-  response: { invite_id, status }
-
-GET /family/members
-  query: { child_id }
-  response: [{ user_id, name, role, status }]
-
-DELETE /family/members/:member_id
-  response: { success: true }
-```
+- private `/v1` operationはSupabase Cookie sessionで認証する。Bearer-onlyには対応しない。
+- Supabase OAuth sign-in、callback、session refresh、sign-outはHana `/v1` APIの外で扱う。
+- public、匿名許容、receipt cookieのoperationはOpenAPIの`security: []`で明示する。
+- MVPのresource groupはprofile、children、uploads、memories、AI consent / generation、metrics、
+  account deletion、health、waitlistである。
+- 月別ふりかえりは記録一覧の期間指定を使う。AI月間サマリー専用endpointはMVPにない。
+- 家族共有、課金、native pushはMVPのOpenAPIに含めない。
+- 画像のnormal responseへ`storage_key`を出さず、認可後の短期signed URLだけを返す。
+- すべてのerror responseは`application/problem+json`と安定した`reason`を使う。
 
 ---
 
@@ -1015,24 +826,23 @@ DELETE /family/members/:member_id
 
 ```
 認証方式：
-  - JWTトークン（アクセストークン15分、リフレッシュトークン30日）
-  - Apple Sign In / Google OAuth2
-  - メールアドレス＋パスワード（bcrypt ハッシュ化）
+  - Supabase AuthのSNS-only
+  - Google先行、Appleは後続
+  - Supabase SSR Cookie session。Hanaはpasswordや独自tokenを持たない
 
 認可：
   - すべてのリソースにuser_idによる所有権チェック
   - 自分のchildrenのmemoryのみ読み書き可能
-  - 家族共有は明示的な招待・承認後のみ
-  - roleベースのアクセス制御（viewer / editor）
+  - 家族共有はMVP対象外。将来も明示的な招待・承認なしに有効化しない
 ```
 
 ## 画像アクセス制御
 
 ```
 - 画像をパブリックURLで公開しない
-- すべてPresigned URL（有効期限: 1時間）経由でアクセス
-- storage_keyはUUIDベースで推測不可能な形式
-- CDNキャッシュ設定：Cache-Control: private（パブリックキャッシュ禁止）
+- downloadはPresigned URL（既定30分）経由でだけアクセス
+- storage_keyは`uploads/{userIdHash}/{yyyymm}/{uuid}.{ext}`形式でnormal responseに出さない
+- browser cacheは`Cache-Control: private, max-age=300`に限定する
 ```
 
 ## 公開範囲設計
@@ -1058,17 +868,17 @@ SNS公開：MVP・v1では実装しない
 退会時の処理：
   - ユーザー・子どもプロフィール・記録・画像をすべて削除
   - 画像はストレージからも削除
-  - AI生成ログは匿名化して保持（品質改善目的）
+  - AI生成metadataはAccountとのcascade対象にし、prompt・生成本文は元から保存しない
 ```
 
 ## AI利用時のプライバシー
 
 ```
-- 写真をAIモデルのトレーニングに使用しない（利用規約に明記）
-- Claude APIへの送信：写真（一時的）＋プロンプトのみ
-- 送信した写真はAnthropicの保持ポリシーに準拠
-- プロンプトに子どもの氏名・住所等の個人情報を含めない
-- ログに子どもの写真・氏名を保存しない
+- 明示opt-in後だけ、EXIF除去済み写真と許可fieldをAnthropic Claudeへ送信
+- 送信可：child given name、計算済み月齢、記録日、天気、親のひとこと、写真
+- 送信禁止：surname / full name、生年月日、親の氏名・メール、住所、raw location、storage_key、signed URL
+- vendor retention、training、ZDRはISSUE-161の人間review前に断定しない
+- AI generation logへ写真、prompt本文、生成本文を保存しない
 ```
 
 ## ログに残してはいけない情報
@@ -1081,7 +891,7 @@ SNS公開：MVP・v1では実装しない
 ❌ 生成された文章の全文（統計的なメタ情報のみ可）
 ✅ 生成時間（ミリ秒）
 ✅ エラーコード
-✅ 匿名化されたユーザーID
+✅ 許可された運用ログ上のuser_id hash
 ✅ API利用回数
 ```
 
@@ -1094,8 +904,8 @@ SNS公開：MVP・v1では実装しない
   - AI生成への写真利用の同意
   - データの保管期間
   - 退会時のデータ削除ポリシー
-  - 第三者への情報提供の有無（なし）
-- プライバシーポリシーはApp Store審査要件を満たす形式で
+  - opt-in後のAnthropicへの外部送信と送信field
+- Web公開前にPrivacy / Legal reviewを行い、PWA / native化時は追加要件を確認
 ```
 
 ---
@@ -1106,7 +916,7 @@ SNS公開：MVP・v1では実装しない
 
 | 原則 | 具体的な設計 |
 |---|---|
-| 30秒ルール | 写真選択→AI生成→保存の全ステップを30秒以内に |
+| 短時間ルール | p50 30秒以内は検証仮説、p85 60秒以内はguardrail。未達成時に30秒を断定しない |
 | 責めないデザイン | 「○日ぶりですね」は言わない。「おかえり」と言う |
 | 入力最小化 | 必須入力は子どもの名前と誕生日のみ |
 | 完璧を求めない | 「ありのまま」の日常写真でいいと伝える |
@@ -1131,7 +941,7 @@ SNS公開：MVP・v1では実装しない
 
 ```
 - ボタンは画面下部に配置（親指が届く範囲）
-- 写真選択はネイティブUIを活用
+- 写真選択はbrowser / OSのfile pickerを活用
 - テキスト編集以外はスクロール・タップのみで完結
 - 授乳中・抱っこ中でも使えるレイアウト
 ```
@@ -1158,98 +968,46 @@ SNS公開：MVP・v1では実装しない
 
 # 14. HEART評価
 
-## Happiness（幸福度）
+定義、cohort、欠測、抑止、判定の正本は
+`docs/product-validation/funnel-go-hold-contract.md`とする。日時はUTCで固定し、eventは
+ISSUE-111のallowlist以外を追加しない。
 
-```
-指標：アプリに対する満足度・感情的な体験の質
-計測方法：
-  - アプリストアレビュー評価（目標：4.7以上）
-  - アプリ内アンケート（月1回・1問だけ）
-  - 「見返したとき感動した体験の有無」調査
+| HEART | metric ID | 指標 | MVP target / status |
+|---|---|---|---|
+| Happiness | M11 / M12 | 感情価値 / 圧力guardrail | pilot肯定4/5以上、強い圧力0/5 |
+| Happiness | M3 / M10 | AI下書き保存 / 受容性 | event 75%以上、pilot 4/5以上、重大な創作0件 |
+| Engagement | M7 | 週次記録率 | 観測完了Profile-weekの40%以上 |
+| Engagement | M8 / M9 | 再閲覧 / 再閲覧後再記録 | 独立baseline後、評価cohort前にtarget固定 |
+| Adoption | M1 | 初回記録完了率 | 70%以上 |
+| Retention | M5 / M6 | D7 / D30のMemory作成 | 40%以上 / 25%以上 |
+| Task Success | M2 | 写真選択→DB保存 | 85%以上。ISSUE-152のdurable相関まではHold |
+| Task Success | M4 | AI / 手動経路別の所要時間 | 各経路p50 30秒以内、p85 60秒以内、完了5/5 |
 
-MVP目標：
-  - レビュー平均：4.5以上
-  - 「また使いたい」率：80%以上
+## Cohort and privacy gate
 
-改善施策：
-  - AI生成文の品質改善（プロンプトチューニング）
-  - オンボーディングの感情体験強化
-```
+- metricごとのeligible unit、UTC半開区間、min、missing rule、targetはdecision matrixを正とする。
+- ISSUE-160の5名pilotはspeed、AI受容性、感情価値だけに使い、retentionの根拠にしない。
+- 分母、分子、補集合のいずれかが5未満ならprimary suppressionし、差分復元をsecondary suppressionで防ぐ。
+- 制限付きjob内でのみ閾値を計算し、数値を抑止したままmetric IDとPASS / FAIL / HOLDを出力する。
+- event送信失敗を離脱とみなさず、観測窓未完了、event基盤未確認、再現不能な欠測はHoldにする。
+- repo、PR、CI artifactにはmetric ID、evidence version、statusだけを残し、raw event、actor hash、回答本文を残さない。
 
-## Engagement（エンゲージメント）
+## Go / Hold / No-Go
 
-```
-指標：記録頻度・見返し頻度
-計測方法：
-  - 週間アクティブ率（WAU/MAU）
-  - 1セッションあたりの平均記録数
-  - 「見返し」セッションの割合
+- **Go**: M1〜M12、独立baseline / 評価cohort、ISSUE-152 / 160 / 161 / 185、Privacy gate、
+  Product / Privacy reviewを同じevidence versionですべて満たす。
+- **Hold**: cohort不足、観測未完了、欠測、baseline未確定、review pending、または改善後の再計測前。
+- **No-Go**: opt-in前のAI送信やPII流出、AI重大創作、安全な手動経路の欠落、または有効cohortでの
+  target未達が改善後も続く場合。
 
-MVP目標：
-  - WAU/MAU：60%以上
-  - 月間記録数：4件以上（週1回ペース）
+## Human review
 
-改善施策：
-  - 「1年前の今日」通知（感情的フック）
-  - 月別ふりかえり画面の充実
-```
+| review | status | evidence | review reference |
+|---|---|---|---|
+| Product | pending | M1〜M12、threshold、claim inventory、ISSUE-160 | pending |
+| Privacy | pending | suppression、欠測、保持、ISSUE-161 / 185 | pending |
 
-## Adoption（採用）
-
-```
-指標：新規登録率・初回記録完了率
-計測方法：
-  - LPからDLへのCV率
-  - 登録完了率
-  - 初回記録完了率（最重要）
-
-MVP目標：
-  - 登録→初回記録完了率：70%以上（ここが最重要）
-  - LPからDLへのCV率：3%以上
-
-改善施策：
-  - オンボーディングのステップ数最小化
-  - 初回AI生成体験の感動最大化
-```
-
-## Retention（継続率）
-
-```
-指標：翌週継続率・翌月継続率
-計測方法：
-  - Day7 Retention
-  - Day30 Retention
-  - チャーン率（有料→解約）
-
-MVP目標：
-  - Day7 Retention：40%以上
-  - Day30 Retention：25%以上
-  ※ 育児アプリ平均（Day30 15%前後）を上回ることを目標
-
-改善施策：
-  - 「1年前の今日」通知（v1）
-  - 月別ふりかえり通知（v1）
-  - フォトブック提案（継続動機）
-```
-
-## Task Success（タスク成功率）
-
-```
-指標：記録完了率・AI生成→保存率
-計測方法：
-  - 「写真選択→保存完了」の完了率
-  - AI生成後の「破棄率」（再生成→保存されない率）
-  - 平均記録所要時間
-
-MVP目標：
-  - 記録完了率：85%以上（開始した記録が保存まで完了する率）
-  - 平均所要時間：60秒以内
-  - AI生成→保存率：75%以上（生成したものを何らかの形で保存する率）
-
-改善施策：
-  - 生成文の品質が低い場合のフォールバックUX
-  - 編集のしやすさ改善
-```
+どちらかがpending / Hold / No-Goなら、総合判定はGoにならない。
 
 ---
 
@@ -1259,26 +1017,37 @@ MVP目標：
 
 | 指標候補 | 評価 |
 |---|---|
-| 月間保存された記録数 | ◎ ユーザー価値と直結。増えるほど価値 |
-| AI生成後に保存された記録数 | ○ 差別化機能の活用度を測れる |
+| 月間保存された記録数 | 中核候補。蓄積を測れるが単独では感情価値を証明しない |
+| AI生成後に保存された記録数 | 補助指標。手動経路の価値を過小評価しない |
 | 家族に共有された記録数 | △ v1以降の機能。MVP段階では測れない |
-| 月に見返された記録数 | ○ 継続価値の証明になるが、能動的行動のみ |
+| 月に見返された記録数 | guardrail。保存後の価値を観測するがevent欠測を伴う |
 
 ## 選定：**「月間アクティブユーザー1人あたりの保存記録数」**
 
 ```
 計算式：月間保存記録の総数 ÷ 月間アクティブユーザー数
 
-目標値（MVP）：月間4件以上/人（週1回ペース）
-目標値（v1）：月間8件以上/人（週2回ペース）
+検証仮説（MVP）：月間4件以上/人（週1回ペース）
 ```
 
 ### 選んだ理由
 
-1. **ユーザー価値と完全に連動している**：記録が増えるほど、ユーザーにとっての資産価値が高まる
-2. **継続率の代理指標になる**：記録し続けているユーザーはチャーンしない
-3. **差別化機能の活用を含む**：AI生成を経た記録も含まれる
-4. **マネタイズとも連動**：記録が増えるほどフォトブック・プレミアム需要が高まる
+1. 保存された記録というproductの中核outputを、AI / 手動経路を分けずに測れる
+2. 週次・月次の記録習慣を同じ定義で追える
+3. DBの確定Memoryを使い、best-effort eventだけに依存しない
+
+### 必須guardrail
+
+North Star単独でGoを判断しない。次を同時に確認する。
+
+- 再閲覧率と再閲覧後再記録率
+- D7 / D30 retention
+- 「見返したときに残してよかった」という感情価値
+- AIを使わない経路を含む記録完了率
+- 少数集計抑止、欠測、同意、PII非収集
+
+月間保存数が増えても、再閲覧や感情価値が未検証、または罪悪感を誘うUI・重複保存で増えた場合は
+Goにしない。
 
 ---
 
@@ -1344,11 +1113,14 @@ MVP目標：
 
 ```
 作るもの：
-  ✅ 認証（Apple Sign In / メール）
+  ✅ Supabase Auth SNS-only（Google先行）
+  ✅ mobile-first Web
+  ❌ PWA installability（未実装。active MVP / release gate対象外）
   ✅ 子どもプロフィール登録（1名）
   ✅ 写真アップロード（最大5枚/記録）
-  ✅ AI文章生成（Claude API）
-  ✅ 生成文編集・保存
+  ✅ 明示opt-in後のAI文章生成（Anthropic Claude）
+  ✅ AIを使わない手動入力
+  ✅ 下書きの確認・編集・保存
   ✅ タイムライン表示
   ✅ 記録詳細表示
   ✅ 月別ふりかえり（UI）
@@ -1360,21 +1132,24 @@ MVP目標：
   ❌ 課金システム
   ❌ フォトブック
   ❌ 動画対応
+  ❌ PWA / native store配布
 
 検証仮説：
-  - AI生成文章の品質は受け入れられるか
-  - 30秒記録フローは成立するか
-  - Week1継続率は40%を超えるか
+  - AI下書きの80%以上を軽微編集以下で保存でき、重大な創作を0件にできるか
+  - 操作可能な記録画面の提示→DB保存確認のpilotで、AI / 手動各経路p50 30秒以内、p85 60秒以内を満たすか
+  - D7 retention 40%、D30 retention 25%を満たすか
+  - 再閲覧と感情価値が保存数の増加を伴うか
 ```
 
 ## v1（〜4ヶ月）
 
 ```
 作るもの：
+  ✅ Apple Sign Inの有効化
   ✅ プッシュ通知（「1年前の今日」）
   ✅ 家族共有（閲覧のみ）
   ✅ 月別ふりかえり通知
-  ✅ プレミアムプラン（App Store課金）
+  ✅ プレミアムプラン（提供形態に応じて決済方式を再判断）
   ✅ 記録数上限（無料：30件）
   ✅ 複数子どもプロフィール対応
   ✅ 写真画質オプション
@@ -1393,8 +1168,7 @@ MVP目標：
   ✅ 「○○ちゃんの1年間」自動アルバム生成
   ✅ 動画対応（ショート動画）
   ✅ タグ・検索機能
-  ✅ Web版（閲覧のみ）
-  ✅ Android版（v1はiOSのみも検討）
+  ✅ PWA / native appの必要性をmobile-first Web検証後に再判断
 
 検証仮説：
   - フォトブック購入率と単価
@@ -1418,16 +1192,16 @@ MVP目標：
 
 | リスク | 深刻度 | 対策 |
 |---|---|---|
-| **継続されない（最重要）** | ★★★★★ | 30秒フロー・責めないデザイン・「1年前の今日」通知で継続動機を設計から担保 |
+| **継続されない（最重要）** | ★★★★★ | 判断数を抑えた記録フロー、責めないデザイン、月別の見返しを検証し、D7 / D30と再閲覧後再記録で判断 |
 | AI文章が不自然・受け入れられない | ★★★★☆ | プロンプトの徹底チューニング・複数サンプルで事前テスト・必ず編集できる設計 |
-| 子どもの写真をAIに渡す不安 | ★★★★☆ | 利用規約・プライバシーポリシーの明確化・「トレーニング不使用」の明記・選択制の検討 |
+| 子どもの写真をAIに渡す不安 | ★★★★☆ | 明示opt-in、手動経路、送信fieldの限定、ISSUE-161のvendor attestation |
 | みてねとの差別化が伝わらない | ★★★☆☆ | LPで「AI生成Before/After」を明確に見せる・「書かなくていい」を体験させる |
 | 個人開発の運用負荷 | ★★★☆☆ | サーバーレス構成・マネージドサービス活用・Claude APIの活用でAI部分のコスト最小化 |
 | マネタイズが機能しない | ★★★☆☆ | 無料体験を十分に設計した上で価値を実感させてから有料転換。強制しない |
-| プライバシー懸念・炎上 | ★★★★☆ | 子どもの写真は外部に出さない設計・App Storeプライバシーラベルの誠実な申告 |
+| プライバシー懸念・炎上 | ★★★★☆ | 外部AI送信を隠さず説明し、少数集計抑止とPrivacy / Legal reviewを公開前gateにする |
 | 競合（みてね・グーグル）の追随 | ★★★☆☆ | 「AI生成特化」「書かなくていい体験」の設計を深めて先行者利益を確保 |
 | Claude APIのコスト増 | ★★☆☆☆ | 生成回数の上限設計（無料：月20回）・キャッシュ戦略・プロンプトの最適化 |
-| App Store審査の遅延・却下 | ★★☆☆☆ | 子どもコンテンツのガイドライン遵守・レビュー前の事前確認リスト作成 |
+| 将来のstore審査の遅延・却下 | ★★☆☆☆ | MVPはmobile-first Webで検証し、PWA / native再採用時に審査要件を別gateで確認 |
 
 ## 最大リスク：「継続されない」への詳細対策
 
@@ -1436,7 +1210,7 @@ MVP目標：
   「残したい気持ち」は本物だが、忙しさが勝つと3日で止まる
 
 対策の優先順位：
-  1. 記録コストをゼロに近づける（30秒フロー）
+  1. 記録コストを下げる（p50 30秒以内は未検証仮説、p85 60秒以内はguardrail）
   2. 記録しない日への罪悪感を排除する
   3. 「1年前の今日」で能動的に帰ってくる理由を作る
   4. フォトブック提案で「記録が資産になる」実感を作る
@@ -1448,6 +1222,10 @@ MVP目標：
 ---
 
 # 19. ISSUE化
+
+> **Historical planning archive:** この章のISSUE-001〜015は2025年時点の初期分解であり、active backlogではない。
+> 現在のIssue正本は`docs/issues/`、認証・API・privacyの決定はOpenAPIとAccepted ADRを使う。
+> この章に残るemail+password、JWT、native-first、旧Issue番号を現行契約として実装しない。
 
 ## 優先度定義
 
@@ -1707,6 +1485,10 @@ P2：v2以降または改善施策
 
 # 20. 最終評価
 
+> **Historical hypothesis:** この章の点数、市場評価、期間、収益性は検証前の自己評価であり、
+> 確認済み事実やrelease Goではない。現在のGo / Hold / No-Goは
+> `docs/product-validation/funnel-go-hold-contract.md`と人間reviewで判定する。
+
 ## 100点満点評価
 
 | 評価軸 | スコア | コメント |
@@ -1739,7 +1521,7 @@ P2：v2以降または改善施策
 Step 1（最初の1週間）：
   - Claude APIでのAI文章生成プロトタイプ（コマンドラインで十分）
   - 写真を入力→文章が出てくる体験を実際に確認する
-  - 10〜20枚の実際の写真で文章品質を検証
+  - 合成写真だけで文章品質と安全性を検証
 
 Step 2（2週目）：
   - 技術スタック確定（ISSUE-002）
@@ -1756,7 +1538,7 @@ Step 3（3〜8週目）：
 ```
 Day 1-2：
   □ Claude APIのキーを取得し、プロンプトを試す
-  □ 10枚の「ありきたりな育児写真」でAI生成を試す
+  □ 10枚の合成写真でAI生成を試す
   □ 生成文の品質を自己評価する（「これなら保存したい」と思えるか）
 
 Day 3-4：
@@ -1765,7 +1547,7 @@ Day 3-4：
   □ プライバシーポリシー・利用規約のドラフト確認
 
 Day 5-7：
-  □ 認証（Apple Sign In）の実装開始
+  □ Supabase AuthのGoogle sign-inを実装
   □ 子どもプロフィール登録のUI作成
   □ 写真アップロードのFlowを実装
 ```
@@ -1773,20 +1555,20 @@ Day 5-7：
 ## 絶対に外してはいけないこと
 
 ```
-1. 「30秒で記録が完了する」体験
-   → ここが崩れたら全てが崩れる
+1. 短時間で記録が完了する体験
+   → p50 30秒以内は検証仮説、p85 60秒以内はguardrailとして判定する
 
-2. 「AI生成文は親の言葉に見える」品質
-   → AIが前に出た瞬間に体験が壊れる
+2. AI下書きを親が安全に確認・編集できる品質
+   → 軽微編集以下80%以上と重大な創作0件をpilotで検証する
 
 3. 「記録しない日を責めない」設計
    → 罪悪感が離脱の最大要因
 
-4. 「子どもの写真は外に出ない」セキュリティ
-   → これを信頼してもらえなければ使われない
+4. 外部AI送信を隠さず、明示opt-inと最小送信を守るprivacy
+   → vendor条件はISSUE-161とPrivacy / Legal review前に断定しない
 
-5. 「見返したとき感動する」体験
-   → これがなければ継続動機が生まれない。最初の記録からこれを目指す
+5. 見返したときに「残してよかった」と感じる体験
+   → 未検証の感情価値としてpilotで測り、再閲覧と再記録をguardrailにする
 ```
 
 ---
