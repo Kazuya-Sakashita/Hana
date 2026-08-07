@@ -346,6 +346,7 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
   it('skips a contended head candidate and deletes the next image', async () => {
     const busy = await createImage({
       createdAt: new Date(NOW.getTime() - CONFIRMED_UNLINKED_RETENTION_MS - 2),
+      confirmedCleanupNextAt: new Date(NOW.getTime() - 2),
     })
     const healthy = await createImage()
     const store = storageFixture([...busy.keys, ...healthy.keys], async () => true)
