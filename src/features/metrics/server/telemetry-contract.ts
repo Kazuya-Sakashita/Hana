@@ -1,11 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { productEventOccurrenceMinuteFromEventId } from './product-event-occurrence'
 
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
 export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v2' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
   'hana-telemetry-expectation-manifest/v2' as const
 export const TELEMETRY_QUERY_VERSION = 'issue-152-v2' as const
-export const TELEMETRY_SAMPLING_POLICY_VERSION = 'stable-event-id/v2' as const
+export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
 export const TELEMETRY_RETENTION_DAYS = 90
 export const TELEMETRY_MIN_CELL_SIZE = 5
@@ -100,6 +101,9 @@ const COMPLETENESS_REASONS = [
   'sampling_policy_mismatch',
   'loss_detected',
   'unexpected_event',
+  'received_envelope_invalid',
+  'received_event_outside_window',
+  'duplicate_conflict',
 ] as const
 const COMMITMENT_DOMAINS = [
   'metric_window_manifest',
@@ -149,6 +153,9 @@ const UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/
 const UTC_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
 const ACTOR_KEY_VERSION_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/
 const TELEMETRY_COMMITMENT_KEY_MIN_LENGTH = 32
+const TELEMETRY_SAMPLING_KEY_MIN_LENGTH = 32
+const TELEMETRY_SAMPLING_DOMAIN = 'hana-telemetry-stable-sampling/v3\0'
+const TELEMETRY_SAMPLING_KEY_COMMITMENT_DOMAIN = 'hana-telemetry-sampling-key-commitment/v1\0'
 
 export type TelemetryOperation = (typeof OPERATIONS)[number]
 export type TelemetryReason = (typeof REASONS)[number]
@@ -186,6 +193,9 @@ export type TelemetryCompletenessResult = {
     | 'sampling_policy_mismatch'
     | 'loss_detected'
     | 'unexpected_event'
+    | 'received_envelope_invalid'
+    | 'received_event_outside_window'
+    | 'duplicate_conflict'
   duplicate: 'NONE' | 'DETECTED'
   reorder: 'NONE' | 'DETECTED'
 }
@@ -202,6 +212,8 @@ export type TelemetryExpectationManifest = {
     | 'AUTH_BOUNDARY'
     | 'UNKNOWN'
   sampling_policy_version: typeof TELEMETRY_SAMPLING_POLICY_VERSION
+  sampling_key_version: string
+  sampling_key_commitment: string
   expected_event_ids: readonly string[]
 }
 
@@ -212,6 +224,8 @@ export type TelemetryCompletenessInput = {
   window_start_utc: string
   window_end_utc: string
   actor_key_version: string
+  sampling_key_version: string
+  sampling_key: string | null
   manifest_commitment: string
   commitment_key: string
 }
@@ -260,7 +274,9 @@ function includes<const T extends readonly string[]>(
 function parseUtc(value: string): number | null {
   if (!UTC_PATTERN.test(value)) return null
   const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? parsed : null
+  if (!Number.isFinite(parsed)) return null
+  const canonicalInput = value.includes('.') ? value : value.replace('Z', '.000Z')
+  return new Date(parsed).toISOString() === canonicalInput ? parsed : null
 }
 
 export function telemetrySourceForOperation(operation: TelemetryOperation): TelemetrySource {
@@ -399,6 +415,46 @@ export function createTelemetryExpectationManifestCommitment(
   })
 }
 
+function validSamplingConfiguration(
+  source: TelemetrySource,
+  sampling: { key_version: string; key: string | null },
+): boolean {
+  if (TELEMETRY_SAMPLING[source] === 1) {
+    return sampling.key_version === 'none' && sampling.key === null
+  }
+  return (
+    ACTOR_KEY_VERSION_PATTERN.test(sampling.key_version) &&
+    sampling.key_version !== 'none' &&
+    typeof sampling.key === 'string' &&
+    Buffer.byteLength(sampling.key, 'utf8') >= TELEMETRY_SAMPLING_KEY_MIN_LENGTH
+  )
+}
+
+export function createTelemetrySamplingKeyCommitment(input: {
+  source: TelemetrySource
+  sampling_key_version: string
+  sampling_key: string | null
+  commitment_key: string
+}): string {
+  if (
+    !validSamplingConfiguration(input.source, {
+      key_version: input.sampling_key_version,
+      key: input.sampling_key,
+    }) ||
+    Buffer.byteLength(input.commitment_key, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH
+  ) {
+    throw new TelemetryContractError('invalid_input')
+  }
+  return createHmac('sha256', input.commitment_key)
+    .update(TELEMETRY_SAMPLING_KEY_COMMITMENT_DOMAIN)
+    .update(input.source)
+    .update('\0')
+    .update(input.sampling_key_version)
+    .update('\0')
+    .update(input.sampling_key ?? '')
+    .digest('hex')
+}
+
 function validManifestCommitment(input: TelemetryCompletenessInput): boolean {
   if (!SHA256_PATTERN.test(input.manifest_commitment)) return false
   try {
@@ -410,6 +466,62 @@ function validManifestCommitment(input: TelemetryCompletenessInput): boolean {
   }
 }
 
+function validExpectationManifest(
+  manifest: TelemetryExpectationManifest | undefined,
+  source: TelemetrySource,
+): manifest is TelemetryExpectationManifest {
+  return (
+    manifest !== undefined &&
+    isRecord(manifest) &&
+    hasExactKeys(manifest, [
+      'schema_version',
+      'source',
+      'status',
+      'degradation',
+      'sampling_policy_version',
+      'sampling_key_version',
+      'sampling_key_commitment',
+      'expected_event_ids',
+    ]) &&
+    manifest.schema_version === TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION &&
+    manifest.source === source &&
+    manifest.status === 'PASS' &&
+    [
+      'NONE',
+      'STORAGE_UNAVAILABLE',
+      'CAPACITY_EXCEEDED',
+      'TTL_EXPIRED',
+      'AUTH_BOUNDARY',
+      'UNKNOWN',
+    ].includes(manifest.degradation) &&
+    typeof manifest.sampling_key_version === 'string' &&
+    ACTOR_KEY_VERSION_PATTERN.test(manifest.sampling_key_version) &&
+    typeof manifest.sampling_key_commitment === 'string' &&
+    SHA256_PATTERN.test(manifest.sampling_key_commitment) &&
+    Array.isArray(manifest.expected_event_ids) &&
+    manifest.expected_event_ids.length > 0 &&
+    manifest.expected_event_ids.every(
+      (eventId): eventId is string => typeof eventId === 'string' && UUID_PATTERN.test(eventId),
+    ) &&
+    new Set(manifest.expected_event_ids).size === manifest.expected_event_ids.length
+  )
+}
+
+function validSamplingKeyCommitment(input: TelemetryCompletenessInput): boolean {
+  if (!SHA256_PATTERN.test(input.manifest.sampling_key_commitment)) return false
+  try {
+    const expected = Buffer.from(createTelemetrySamplingKeyCommitment(input), 'hex')
+    const received = Buffer.from(input.manifest.sampling_key_commitment, 'hex')
+    return expected.length === received.length && timingSafeEqual(expected, received)
+  } catch {
+    return false
+  }
+}
+
+function receivedEnvelopeSignature(envelope: TelemetryEnvelope): string {
+  return JSON.stringify(stableValue(envelope))
+}
+
 export function evaluateTelemetryCompleteness(
   input: TelemetryCompletenessInput,
 ): TelemetryCompletenessResult {
@@ -418,32 +530,75 @@ export function evaluateTelemetryCompleteness(
   if (manifest.sampling_policy_version !== TELEMETRY_SAMPLING_POLICY_VERSION) {
     return completenessHold(input.source, 'sampling_policy_mismatch')
   }
-  if (
-    manifest.schema_version !== TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION ||
-    manifest.source !== input.source ||
-    manifest.status !== 'PASS' ||
-    !Array.isArray(manifest.expected_event_ids) ||
-    manifest.expected_event_ids.length === 0 ||
-    manifest.expected_event_ids.some((eventId) => !UUID_PATTERN.test(eventId)) ||
-    new Set(manifest.expected_event_ids).size !== manifest.expected_event_ids.length ||
-    !validManifestCommitment(input)
-  ) {
+  if (!validExpectationManifest(manifest, input.source) || !validManifestCommitment(input)) {
     return completenessHold(input.source, 'expected_manifest_untrusted')
   }
   if (manifest.degradation !== 'NONE') {
     return completenessHold(input.source, 'telemetry_degraded')
   }
-  const sampledExpectedEventIds = manifest.expected_event_ids.filter((eventId) =>
-    shouldSampleTelemetry(input.source, eventId),
-  )
+  if (
+    manifest.sampling_key_version !== input.sampling_key_version ||
+    !validSamplingKeyCommitment(input)
+  ) {
+    return completenessHold(input.source, 'sampling_policy_mismatch')
+  }
+  let sampledExpectedEventIds: readonly string[]
+  try {
+    sampledExpectedEventIds = manifest.expected_event_ids.filter((eventId) =>
+      shouldSampleTelemetry(input.source, eventId, {
+        key_version: input.sampling_key_version,
+        key: input.sampling_key,
+      }),
+    )
+  } catch {
+    return completenessHold(input.source, 'sampling_policy_mismatch')
+  }
+  const windowStart = parseUtc(input.window_start_utc)
+  const windowEnd = parseUtc(input.window_end_utc)
+  if (windowStart === null || windowEnd === null || windowStart >= windowEnd) {
+    return completenessHold(input.source, 'expected_manifest_untrusted')
+  }
+  const validatedReceived: TelemetryEnvelope[] = []
+  if (!Array.isArray(input.received)) {
+    return completenessHold(input.source, 'received_envelope_invalid')
+  }
+  for (const rawEnvelope of input.received) {
+    let envelope: TelemetryEnvelope
+    try {
+      envelope = parseTelemetryEnvelope(rawEnvelope)
+    } catch {
+      return completenessHold(input.source, 'received_envelope_invalid')
+    }
+    const occurredAt = parseUtc(envelope.occurred_at_utc)
+    if (occurredAt === null || occurredAt < windowStart || occurredAt >= windowEnd) {
+      return completenessHold(input.source, 'received_event_outside_window')
+    }
+    validatedReceived.push(envelope)
+  }
   const expected = new Set(sampledExpectedEventIds)
   const firstReceived: string[] = []
   const received = new Set<string>()
+  const receivedSignatures = new Map<string, string>()
   let duplicate = false
   let unexpected = false
-  for (const envelope of input.received) {
-    if (received.has(envelope.event_id)) duplicate = true
-    else firstReceived.push(envelope.event_id)
+  for (const envelope of validatedReceived) {
+    const signature = receivedEnvelopeSignature(envelope)
+    const existingSignature = receivedSignatures.get(envelope.event_id)
+    if (existingSignature !== undefined) {
+      duplicate = true
+      if (existingSignature !== signature) {
+        return {
+          source: input.source,
+          status: 'HOLD',
+          reason: 'duplicate_conflict',
+          duplicate: 'DETECTED',
+          reorder: 'NONE',
+        }
+      }
+    } else {
+      firstReceived.push(envelope.event_id)
+      receivedSignatures.set(envelope.event_id, signature)
+    }
     received.add(envelope.event_id)
     if (
       !expected.has(envelope.event_id) ||
@@ -519,7 +674,11 @@ export function evaluateSyntheticFunnelFlow(input: {
   status: MetricStatus
   reason: TelemetryMetricReason
 } {
-  if (!validSyntheticActorRef(input.expected_actor) || !UUID_PATTERN.test(input.flow_id)) {
+  if (
+    !validSyntheticActorRef(input.expected_actor) ||
+    !UUID_PATTERN.test(input.flow_id) ||
+    input.expected_actor.actor_key_version !== input.completeness_input.actor_key_version
+  ) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
   }
   const completeness = evaluateTelemetryCompleteness(input.completeness_input)
@@ -559,21 +718,37 @@ export function evaluateSyntheticFunnelFlow(input: {
   if (matchingStages.some((event) => event.anchor_trust !== 'verified')) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_anchor_unverified' }
   }
-  const stages = matchingStages.map((event) => ({
-    ...event,
-    occurredAt: UTC_MINUTE_PATTERN.test(event.occurred_minute_utc)
+  const generatedAt = parseUtc(input.generated_at_utc)
+  const windowStart = parseUtc(input.completeness_input.window_start_utc)
+  const windowEnd = parseUtc(input.completeness_input.window_end_utc)
+  const stages = matchingStages.map((event) => {
+    const envelope = verifiedReceived.get(event.event_id)
+    const occurredAt = UTC_MINUTE_PATTERN.test(event.occurred_minute_utc)
       ? parseUtc(event.occurred_minute_utc)
-      : null,
-    receivedAt: parseUtc(event.received_at_utc),
-  }))
+      : null
+    return {
+      ...event,
+      occurredAt,
+      decodedOccurredMinute: productEventOccurrenceMinuteFromEventId(event.event_id),
+      envelopeOccurredAt: envelope ? parseUtc(envelope.occurred_at_utc) : null,
+      receivedAt: parseUtc(event.received_at_utc),
+    }
+  })
   if (
+    generatedAt === null ||
+    windowStart === null ||
+    windowEnd === null ||
     stages.some(
       (event) =>
-        !UUID_PATTERN.test(event.event_id) ||
+        event.decodedOccurredMinute !== event.occurred_minute_utc ||
         !validSyntheticActorRef(event.actor) ||
         event.occurredAt === null ||
+        event.envelopeOccurredAt !== event.occurredAt ||
+        event.occurredAt < windowStart ||
+        event.occurredAt >= windowEnd ||
         event.receivedAt === null ||
-        event.receivedAt < event.occurredAt,
+        event.receivedAt < event.occurredAt ||
+        event.receivedAt > generatedAt,
     ) ||
     new Set(stages.map((event) => event.occurredAt)).size !== 1
   ) {
@@ -582,8 +757,7 @@ export function evaluateSyntheticFunnelFlow(input: {
   const stageMinuteStart = stages[0]!.occurredAt!
   const stageMinuteEnd = stageMinuteStart + 60 * 1000
   const conversionWindowMs = 30 * 60 * 1000
-  const generatedAt = parseUtc(input.generated_at_utc)
-  if (generatedAt === null || generatedAt < stageMinuteEnd + conversionWindowMs) {
+  if (generatedAt < stageMinuteEnd + conversionWindowMs) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'window_not_mature' }
   }
   const sameFlowMemories = input.memories.filter(
@@ -608,7 +782,8 @@ export function evaluateSyntheticFunnelFlow(input: {
       (candidate) =>
         !UUID_PATTERN.test(candidate.idempotency_key) ||
         !validSyntheticActorRef(candidate.actor) ||
-        parseUtc(candidate.created_at_utc) === null,
+        parseUtc(candidate.created_at_utc) === null ||
+        parseUtc(candidate.created_at_utc)! > generatedAt,
     )
   ) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_time_invalid' }
@@ -770,11 +945,28 @@ export function createTelemetryCommitment(input: {
   }
 }
 
-export function shouldSampleTelemetry(source: TelemetrySource, eventId: string): boolean {
+export function shouldSampleTelemetry(
+  source: TelemetrySource,
+  eventId: string,
+  sampling: { key_version: string; key: string | null },
+): boolean {
   if (!UUID_PATTERN.test(eventId)) throw new TelemetryContractError('invalid_input')
   const rate = TELEMETRY_SAMPLING[source]
+  if (!validSamplingConfiguration(source, sampling)) {
+    throw new TelemetryContractError('invalid_input')
+  }
   if (rate === 1) return true
-  const bucket = createHash('sha256').update(eventId).digest().readUInt32BE(0) / 0xffffffff
+  if (sampling.key === null) throw new TelemetryContractError('invalid_input')
+  const bucket =
+    createHmac('sha256', sampling.key)
+      .update(TELEMETRY_SAMPLING_DOMAIN)
+      .update(source)
+      .update('\0')
+      .update(sampling.key_version)
+      .update('\0')
+      .update(eventId)
+      .digest()
+      .readUInt32BE(0) / 0x1_0000_0000
   return bucket < rate
 }
 

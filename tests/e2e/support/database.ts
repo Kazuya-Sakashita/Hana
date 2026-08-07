@@ -35,3 +35,30 @@ export async function cleanupSyntheticAccount() {
     await client.end()
   }
 }
+
+export async function readSyntheticTelemetryFlow(flowId: string) {
+  const client = new Client({ connectionString: connectionString() })
+  await client.connect()
+  try {
+    const [memory, events] = await Promise.all([
+      client.query<{ idempotency_key: string }>(
+        `SELECT idempotency_key FROM memories WHERE user_id = $1 AND idempotency_key = $2`,
+        [E2E_USER_ID, flowId],
+      ),
+      client.query<{ event_id: string; event_name: string; flow_id: string }>(
+        `SELECT event_id, event_name, flow_id FROM product_events WHERE flow_id = $1 ORDER BY event_name`,
+        [flowId],
+      ),
+    ])
+    return {
+      memoryIdempotencyKey: memory.rows[0]?.idempotency_key ?? null,
+      events: events.rows.map((event) => ({
+        eventId: event.event_id,
+        eventName: event.event_name,
+        flowId: event.flow_id,
+      })),
+    }
+  } finally {
+    await client.end()
+  }
+}

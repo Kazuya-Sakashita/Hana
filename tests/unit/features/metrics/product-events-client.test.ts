@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearProductEventOutbox,
   flushProductEventOutbox,
+  PRODUCT_EVENT_AUTH_REFRESH_TIMEOUT_MS,
   PRODUCT_EVENT_OUTBOX_MAX_ENTRIES,
   PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
   PRODUCT_EVENT_OUTBOX_TTL_MS,
@@ -11,10 +12,12 @@ import {
   reportProductEvent,
   resetProductEventOutboxForTests,
   setProductEventTelemetryBinding,
+  setProductEventTelemetryBindingRefresher,
 } from '@/features/metrics/client/product-events'
 
-const TELEMETRY_BINDING_A = `v2.1786125600.${'a'.repeat(64)}`
-const TELEMETRY_BINDING_B = `v2.1786125600.${'b'.repeat(64)}`
+const TELEMETRY_BINDING_A = `v3.1786125600.${'a'.repeat(64)}.${'c'.repeat(64)}`
+const TELEMETRY_BINDING_A_ROTATED = `v3.1786129200.${'a'.repeat(64)}.${'d'.repeat(64)}`
+const TELEMETRY_BINDING_B = `v3.1786125600.${'b'.repeat(64)}.${'e'.repeat(64)}`
 
 afterEach(() => {
   vi.clearAllTimers()
@@ -184,16 +187,16 @@ describe('durable ProductEvent outbox', () => {
     expect(secondPayload.event_id).toBe(eventId)
   })
 
-  it('rebinds and flushes a persisted queue after a full module-state reload', async () => {
+  it('preserves degradation and rebinds a persisted queue across same-session rotation', async () => {
     const storage = new MemoryStorage()
     vi.stubGlobal('sessionStorage', storage)
     const queuedAt = Date.now()
     storage.setItem(
       PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
       JSON.stringify({
-        version: 3,
+        version: 4,
         telemetryBinding: TELEMETRY_BINDING_A,
-        degradation: 'NONE',
+        degradation: 'CAPACITY_EXCEEDED',
         entries: [
           {
             report: {
@@ -214,11 +217,60 @@ describe('durable ProductEvent outbox', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A_ROTATED)
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+    expect(readProductEventDegradationForTest()).toBe('CAPACITY_EXCEEDED')
+    expect(JSON.parse(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY) ?? '{}')).toMatchObject({
+      version: 4,
+      telemetryBinding: TELEMETRY_BINDING_A_ROTATED,
+      degradation: 'CAPACITY_EXCEEDED',
+    })
     await flushProductEventOutbox()
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
+      TELEMETRY_BINDING_A_ROTATED,
+    )
     expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it('retries an in-flight auth rejection with the rotated same-session binding', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    let rejectOldBinding: ((response: Response) => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            rejectOldBinding = resolve
+          }),
+      )
+      .mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A_ROTATED)
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+    rejectOldBinding?.(new Response(null, { status: 403 }))
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
+      TELEMETRY_BINDING_A,
+    )
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
+      TELEMETRY_BINDING_A_ROTATED,
+    )
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(readProductEventDegradationForTest()).toBe('NONE')
   })
 
   it('drops a persisted queue before sending when reload resolves a different actor', async () => {
@@ -228,7 +280,7 @@ describe('durable ProductEvent outbox', () => {
     storage.setItem(
       PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
       JSON.stringify({
-        version: 3,
+        version: 4,
         telemetryBinding: TELEMETRY_BINDING_A,
         degradation: 'NONE',
         entries: [
@@ -255,7 +307,7 @@ describe('durable ProductEvent outbox', () => {
     await flushProductEventOutbox()
 
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(readProductEventDegradationForTest()).toBe('AUTH_BOUNDARY')
+    expect(readProductEventDegradationForTest()).toBe('NONE')
     expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
   })
 
@@ -316,7 +368,7 @@ describe('durable ProductEvent outbox', () => {
 
     expect(readProductEventOutboxForTest()).toHaveLength(0)
     expect(JSON.parse(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY) ?? '{}')).toMatchObject({
-      version: 3,
+      version: 4,
       degradation: 'STORAGE_UNAVAILABLE',
       entries: [],
     })
@@ -327,6 +379,9 @@ describe('durable ProductEvent outbox', () => {
     async (status) => {
       const storage = new MemoryStorage()
       vi.stubGlobal('sessionStorage', storage)
+      setProductEventTelemetryBindingRefresher(
+        vi.fn().mockResolvedValue({ status: 'unauthenticated' }),
+      )
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status })))
 
       reportProductEvent({
@@ -349,7 +404,7 @@ describe('durable ProductEvent outbox', () => {
     storage.setItem(
       PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
       JSON.stringify({
-        version: 3,
+        version: 4,
         telemetryBinding: TELEMETRY_BINDING_A,
         degradation: 'NONE',
         entries: [],
@@ -410,7 +465,7 @@ describe('durable ProductEvent outbox', () => {
     storage.setItem(
       PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
       JSON.stringify({
-        version: 3,
+        version: 4,
         telemetryBinding: TELEMETRY_BINDING_A,
         degradation: 'NONE',
         entries: Array.from({ length: PRODUCT_EVENT_OUTBOX_MAX_ENTRIES }, (_, index) => ({
@@ -447,7 +502,7 @@ describe('durable ProductEvent outbox', () => {
     storage.setItem(
       PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
       JSON.stringify({
-        version: 3,
+        version: 4,
         telemetryBinding: TELEMETRY_BINDING_A,
         degradation: 'NONE',
         entries: [
@@ -469,5 +524,271 @@ describe('durable ProductEvent outbox', () => {
 
     expect(readProductEventOutboxForTest(PRODUCT_EVENT_OUTBOX_TTL_MS + 1)).toHaveLength(0)
     expect(readProductEventDegradationForTest()).toBe('TTL_EXPIRED')
+  })
+
+  it('refreshes once after 403 and retries the same event id for the same continuity', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    let resolveRefresh: ((result: { status: 'binding'; binding: string }) => void) | undefined
+    const refresh = vi.fn(
+      () =>
+        new Promise<{ status: 'binding'; binding: string }>((resolve) => {
+          resolveRefresh = resolve
+        }),
+    )
+    setProductEventTelemetryBindingRefresher(refresh)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 403 }))
+      .mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    const eventId = readProductEventOutboxForTest()[0]?.report.event_id
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1))
+
+    resolveRefresh?.({ status: 'binding', binding: TELEMETRY_BINDING_A_ROTATED })
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const first = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const second = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))
+    expect(first.event_id).toBe(eventId)
+    expect(second.event_id).toBe(eventId)
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
+      TELEMETRY_BINDING_A_ROTATED,
+    )
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it('drops the rejected queue and starts clean when refresh resolves another session', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    setProductEventTelemetryBindingRefresher(
+      vi.fn().mockResolvedValue({ status: 'binding', binding: TELEMETRY_BINDING_B }),
+    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 403 }))
+      .mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    await flushProductEventOutbox()
+
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(readProductEventDegradationForTest()).toBe('NONE')
+    reportProductEvent({
+      eventName: 'record_started',
+      flowId: '13696525-149e-48b5-8e3a-dbe6e0ef36bb',
+      elapsedMs: null,
+      telemetryBinding: TELEMETRY_BINDING_B,
+    })
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
+      TELEMETRY_BINDING_B,
+    )
+  })
+
+  it('tombstones a rejected binding returned unchanged by forced refresh', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    setProductEventTelemetryBindingRefresher(
+      vi.fn().mockResolvedValue({ status: 'binding', binding: TELEMETRY_BINDING_A }),
+    )
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    await flushProductEventOutbox()
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    reportProductEvent({
+      eventName: 'record_started',
+      flowId: '13696525-149e-48b5-8e3a-dbe6e0ef36bb',
+      elapsedMs: null,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(readProductEventDegradationForTest()).toBe('AUTH_BOUNDARY')
+  })
+
+  it('suspends an unavailable recovery without resending the tombstoned binding', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    setProductEventTelemetryBindingRefresher(vi.fn().mockResolvedValue({ status: 'unavailable' }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 403 }))
+      .mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    const eventId = readProductEventOutboxForTest()[0]?.report.event_id
+    await flushProductEventOutbox()
+
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+    expect(readProductEventDegradationForTest()).toBe('AUTH_BOUNDARY')
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    await flushProductEventOutbox()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A_ROTATED)
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)).event_id).toBe(eventId)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it('does not let a late refresh revive a queue cleared during sign-out', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    let resolveRefresh: ((result: { status: 'binding'; binding: string }) => void) | undefined
+    let refreshSignal: AbortSignal | undefined
+    const refresh = vi.fn(
+      (signal: AbortSignal) =>
+        new Promise<{ status: 'binding'; binding: string }>((resolve) => {
+          refreshSignal = signal
+          resolveRefresh = resolve
+        }),
+    )
+    setProductEventTelemetryBindingRefresher(refresh)
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    const pending = flushProductEventOutbox()
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1))
+    clearProductEventOutbox()
+    expect(refreshSignal?.aborted).toBe(true)
+    resolveRefresh?.({ status: 'binding', binding: TELEMETRY_BINDING_A_ROTATED })
+    await pending
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A_ROTATED)
+    reportProductEvent({
+      eventName: 'record_started',
+      flowId: '13696525-149e-48b5-8e3a-dbe6e0ef36bb',
+      elapsedMs: null,
+      telemetryBinding: TELEMETRY_BINDING_A_ROTATED,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it('aborts an unresolved old fetch and flushes a new session without waiting', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    let oldSignal: AbortSignal | undefined
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce((_url, init: RequestInit) => {
+        oldSignal = init.signal as AbortSignal
+        return new Promise<Response>(() => undefined)
+      })
+      .mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_B)
+    expect(oldSignal?.aborted).toBe(true)
+
+    reportProductEvent({
+      eventName: 'record_started',
+      flowId: '13696525-149e-48b5-8e3a-dbe6e0ef36bb',
+      elapsedMs: null,
+      telemetryBinding: TELEMETRY_BINDING_B,
+    })
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
+      TELEMETRY_BINDING_B,
+    )
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it('does not carry degradation into another continuity', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 4,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'CAPACITY_EXCEEDED',
+        entries: [],
+      }),
+    )
+    expect(readProductEventDegradationForTest()).toBe('NONE')
+    readProductEventOutboxForTest()
+    expect(readProductEventDegradationForTest()).toBe('CAPACITY_EXCEEDED')
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_B)
+
+    expect(readProductEventDegradationForTest()).toBe('NONE')
+  })
+
+  it('aborts refresh and discards the old queue after the finite recovery timeout', async () => {
+    vi.useFakeTimers()
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    let refreshSignal: AbortSignal | undefined
+    const refresh = vi.fn((signal: AbortSignal) => {
+      refreshSignal = signal
+      return new Promise<never>(() => undefined)
+    })
+    setProductEventTelemetryBindingRefresher(refresh)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 403 })))
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    const pending = flushProductEventOutbox()
+    await vi.advanceTimersByTimeAsync(PRODUCT_EVENT_AUTH_REFRESH_TIMEOUT_MS)
+    await pending
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refreshSignal?.aborted).toBe(true)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
   })
 })

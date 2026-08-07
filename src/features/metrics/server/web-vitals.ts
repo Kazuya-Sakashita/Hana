@@ -1,7 +1,6 @@
-import { createHmac } from 'node:crypto'
 import type { components } from '@/lib/api/generated/schema'
 import { problems } from '@/server/api/problems'
-import type { TelemetryDimensions } from './telemetry-contract'
+import { shouldSampleTelemetry, type TelemetryDimensions } from './telemetry-contract'
 
 export type WebVitalsReport = components['schemas']['WebVitalsReport']
 
@@ -42,7 +41,8 @@ const DURATION_BUCKETS = new Set<WebVitalsReport['duration_bucket']>([
 ])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const DEVELOPMENT_SAMPLING_KEY = 'hana-web-vitals-development-sampling-key'
-const SAMPLING_DOMAIN = 'hana-web-vitals-stable-sampling/v1\0'
+const DEVELOPMENT_SAMPLING_KEY_VERSION = 'development-v1'
+const SAMPLING_KEY_VERSION_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/
 
 function validation(path: string, message: string): never {
   throw problems.validation([{ path, reason: 'invalid', message }])
@@ -117,14 +117,26 @@ export function toWebVitalsTelemetryDimensions(report: WebVitalsReport): Telemet
 export function shouldSampleWebVitals(eventId: string): boolean {
   if (!UUID_PATTERN.test(eventId)) validation('body.event_id', 'UUID形式で指定してください')
   const configured = process.env.WEB_VITALS_SAMPLING_KEY
-  if (process.env.NODE_ENV === 'production' && (!configured || configured.length < 32)) {
+  const configuredVersion = process.env.WEB_VITALS_SAMPLING_KEY_VERSION
+  if (
+    process.env.NODE_ENV === 'production' &&
+    (!configured ||
+      configured.length < 32 ||
+      !configuredVersion ||
+      !SAMPLING_KEY_VERSION_PATTERN.test(configuredVersion) ||
+      configuredVersion === 'none')
+  ) {
     throw problems.telemetryUnavailable()
   }
   const key = configured && configured.length >= 32 ? configured : DEVELOPMENT_SAMPLING_KEY
-  const bucket = createHmac('sha256', key)
-    .update(SAMPLING_DOMAIN)
-    .update(eventId)
-    .digest()
-    .readUInt32BE(0)
-  return bucket / 0xffffffff < 0.1
+  const keyVersion =
+    configuredVersion &&
+    configuredVersion !== 'none' &&
+    SAMPLING_KEY_VERSION_PATTERN.test(configuredVersion)
+      ? configuredVersion
+      : DEVELOPMENT_SAMPLING_KEY_VERSION
+  return shouldSampleTelemetry('web_vital', eventId, {
+    key_version: keyVersion,
+    key,
+  })
 }

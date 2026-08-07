@@ -91,7 +91,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
-                telemetry_binding: 'v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+                telemetry_binding: 'v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -149,7 +149,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
-                telemetry_binding: 'v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+                telemetry_binding: 'v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -788,6 +788,22 @@ paths:
         event ID自体は構造化logへ出さない。信頼済みedgeと共有rate limitが未有効なら503でfail closedする。
       tags: [metrics]
       security: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          description: |
+            browserが付与するrequest origin。serverはconfigured app originとの完全一致を検証する。
+          schema:
+            type: string
+            format: uri
+        - name: Sec-Fetch-Site
+          in: header
+          required: true
+          description: browserが付与するFetch Metadata。同一origin requestだけを受け付ける。
+          schema:
+            type: string
+            const: same-origin
       requestBody:
         required: true
         content:
@@ -829,12 +845,12 @@ paths:
           in: header
           required: true
           description: |
-            GET /meが返す期限付きopaque actor/session binding。serverは現在の認証actor・session・期限との
-            一致をconstant-timeで検証し、
+            GET /meが返す期限付きopaque actor/session binding。serverは検証済みJWTのactor・session_id・
+            期限との一致をconstant-timeで検証し、同一sessionの期限rotationだけを継続扱いする。
             header値をDB、通常log、status-only evidenceへ保存しない。
           schema:
             type: string
-            pattern: '^v2\.\d{10}\.[0-9a-f]{64}$'
+            pattern: '^v3\.\d{10}\.[0-9a-f]{64}\.[0-9a-f]{64}$'
       requestBody:
         required: true
         content:

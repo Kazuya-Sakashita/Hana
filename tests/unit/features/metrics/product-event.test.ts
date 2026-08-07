@@ -12,7 +12,8 @@ import {
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const OTHER_USER_ID = '7f26e7f0-6f3c-4c07-9091-8f82db70b347'
 const NOW = new Date('2026-08-07T12:35:30Z')
-const SESSION_REFERENCE = '2026-08-07T00:00:00.000Z'
+const SESSION_ID = 'd89327d8-a5af-4f90-bc7e-93c8cad43f44'
+const OTHER_SESSION_ID = '13696525-149e-48b5-8e3a-dbe6e0ef36bb'
 const validReport = {
   event_name: 'photo_selected',
   event_id: '019fdc37-4ec0-7000-8000-000000000001',
@@ -110,32 +111,45 @@ describe('productEventActorHash', () => {
 
   it('mints a versioned domain-separated binding and verifies the current actor', () => {
     vi.stubEnv('PRODUCT_EVENT_HASH_PEPPER', 'test-product-event-pepper-with-32-bytes')
-    const binding = productEventTelemetryBinding(USER_ID, SESSION_REFERENCE, NOW)
+    const binding = productEventTelemetryBinding(USER_ID, SESSION_ID, NOW)
 
-    expect(binding).toMatch(/^v2\.\d{10}\.[0-9a-f]{64}$/)
+    expect(binding).toMatch(/^v3\.\d{10}\.[0-9a-f]{64}\.[0-9a-f]{64}$/)
     expect(() =>
-      assertProductEventTelemetryBinding(USER_ID, SESSION_REFERENCE, binding, NOW),
+      assertProductEventTelemetryBinding(USER_ID, SESSION_ID, binding, NOW),
     ).not.toThrow()
     expect(() =>
-      assertProductEventTelemetryBinding(OTHER_USER_ID, SESSION_REFERENCE, binding, NOW),
+      assertProductEventTelemetryBinding(OTHER_USER_ID, SESSION_ID, binding, NOW),
     ).toThrow()
     expect(() =>
-      assertProductEventTelemetryBinding(USER_ID, '2026-08-08T00:00:00.000Z', binding, NOW),
+      assertProductEventTelemetryBinding(USER_ID, OTHER_SESSION_ID, binding, NOW),
     ).toThrow()
+    expect(() => assertProductEventTelemetryBinding(USER_ID, SESSION_ID, null, NOW)).toThrow()
     expect(() =>
-      assertProductEventTelemetryBinding(USER_ID, SESSION_REFERENCE, null, NOW),
-    ).toThrow()
-    expect(() =>
-      assertProductEventTelemetryBinding(USER_ID, SESSION_REFERENCE, 'v2.invalid', NOW),
+      assertProductEventTelemetryBinding(USER_ID, SESSION_ID, 'v3.invalid', NOW),
     ).toThrow()
     expect(() =>
       assertProductEventTelemetryBinding(
         USER_ID,
-        SESSION_REFERENCE,
+        SESSION_ID,
         binding,
         new Date(NOW.getTime() + 3 * 60 * 60 * 1000),
       ),
     ).toThrow()
+  })
+
+  it('keeps the continuity tag stable only within the same verified session', () => {
+    vi.stubEnv('PRODUCT_EVENT_HASH_PEPPER', 'test-product-event-pepper-with-32-bytes')
+    const first = productEventTelemetryBinding(USER_ID, SESSION_ID, NOW).split('.')
+    const rotated = productEventTelemetryBinding(
+      USER_ID,
+      SESSION_ID,
+      new Date(NOW.getTime() + 60 * 60 * 1000),
+    ).split('.')
+    const anotherSession = productEventTelemetryBinding(USER_ID, OTHER_SESSION_ID, NOW).split('.')
+
+    expect(rotated[2]).toBe(first[2])
+    expect(rotated[3]).not.toBe(first[3])
+    expect(anotherSession[2]).not.toBe(first[2])
   })
 
   it('fails closed in production when the pepper is missing or too short', () => {

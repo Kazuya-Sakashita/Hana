@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
+  getClaims: vi.fn(),
   profileFindUnique: vi.fn(),
   profileCreate: vi.fn(),
   eventCreate: vi.fn(),
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
-    auth: { getUser: mocks.getUser },
+    auth: { getUser: mocks.getUser, getClaims: mocks.getClaims },
   }),
 }))
 
@@ -46,7 +47,7 @@ import {
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const OTHER_USER_ID = '6e15d6e0-5e2b-4af6-8f80-7e71ca60a236'
-const SESSION_REFERENCE = '2026-08-07T00:00:00.000Z'
+const SESSION_ID = 'd89327d8-a5af-4f90-bc7e-93c8cad43f44'
 const occurredMinute = new Date()
 occurredMinute.setUTCSeconds(0, 0)
 function eventIdForMinute(minute: Date): string {
@@ -63,7 +64,7 @@ const validReport = {
 
 function request(
   body: unknown,
-  telemetryBinding: string | null = productEventTelemetryBinding(USER_ID, SESSION_REFERENCE),
+  telemetryBinding: string | null = productEventTelemetryBinding(USER_ID, SESSION_ID),
 ) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (telemetryBinding !== null) headers.set('X-Hana-Telemetry-Binding', telemetryBinding)
@@ -77,7 +78,11 @@ function request(
 beforeEach(() => {
   vi.stubEnv('PRODUCT_EVENT_HASH_PEPPER', 'integration-test-product-event-pepper-32')
   mocks.getUser.mockResolvedValue({
-    data: { user: { id: USER_ID, last_sign_in_at: SESSION_REFERENCE } },
+    data: { user: { id: USER_ID } },
+  })
+  mocks.getClaims.mockResolvedValue({
+    data: { claims: { sub: USER_ID, session_id: SESSION_ID } },
+    error: null,
   })
   mocks.profileFindUnique.mockResolvedValue({
     id: USER_ID,
@@ -129,8 +134,8 @@ describe('POST /v1/metrics/events', () => {
 
   it.each([
     ['missing', null],
-    ['another actor', productEventTelemetryBinding(OTHER_USER_ID, SESSION_REFERENCE)],
-    ['malformed', 'v2.invalid'],
+    ['another actor', productEventTelemetryBinding(OTHER_USER_ID, SESSION_ID)],
+    ['malformed', 'v3.invalid'],
   ])(
     'rejects a %s telemetry binding before touching ProductEvent storage',
     async (_label, binding) => {
@@ -138,7 +143,6 @@ describe('POST /v1/metrics/events', () => {
 
       expect(response.status).toBe(403)
       expect(await response.json()).toMatchObject({ reason: 'forbidden' })
-      expect(mocks.profileFindUnique).not.toHaveBeenCalled()
       expect(mocks.transaction).not.toHaveBeenCalled()
       expect(mocks.advisoryLock).not.toHaveBeenCalled()
       expect(mocks.eventFindUnique).not.toHaveBeenCalled()
@@ -153,6 +157,20 @@ describe('POST /v1/metrics/events', () => {
     const response = await POST(request(validReport))
 
     expect(response.status).toBe(401)
+    expect(mocks.eventCreate).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing session_id', { sub: USER_ID }],
+    ['getUser subject mismatch', { sub: OTHER_USER_ID, session_id: SESSION_ID }],
+  ])('rejects %s verified claims before ProductEvent storage', async (_label, claims) => {
+    mocks.getClaims.mockResolvedValue({ data: { claims }, error: null })
+
+    const response = await POST(request(validReport))
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({ reason: 'unauthorized' })
+    expect(mocks.transaction).not.toHaveBeenCalled()
     expect(mocks.eventCreate).not.toHaveBeenCalled()
   })
 
@@ -328,7 +346,7 @@ describe('POST /v1/metrics/events', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Hana-Telemetry-Binding': productEventTelemetryBinding(USER_ID, SESSION_REFERENCE),
+        'X-Hana-Telemetry-Binding': productEventTelemetryBinding(USER_ID, SESSION_ID),
       },
       body: '{',
     })

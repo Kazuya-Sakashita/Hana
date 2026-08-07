@@ -10,13 +10,11 @@ import {
   PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS,
   productEventActorHash,
   productEventOccurrenceMinuteFromEventId,
-  productEventSessionReference,
 } from '@/features/metrics/server/product-event'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
-import { requireUser } from '@/server/auth/current-user'
+import { requireUser, requireVerifiedSessionIdentity } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 const RETRY_AFTER_SECONDS = Math.ceil(PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS / 1000)
@@ -50,16 +48,11 @@ export async function POST(request: Request) {
     assertProductEventIngestReady()
     const telemetryBinding = request.headers.get('x-hana-telemetry-binding')
     if (!telemetryBinding) throw problems.forbidden()
-    const supabase = await createSupabaseServerClient()
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser()
-    if (!authUser) throw problems.unauthorized()
     const now = new Date()
-    const sessionReference = productEventSessionReference(authUser)
-    assertProductEventTelemetryBinding(authUser.id, sessionReference, telemetryBinding, now)
     const user = await requireUser()
-    assertProductEventTelemetryBinding(user.id, sessionReference, telemetryBinding, now)
+    const session = await requireVerifiedSessionIdentity()
+    if (session.subject !== user.id) throw problems.unauthorized()
+    assertProductEventTelemetryBinding(user.id, session.sessionId, telemetryBinding, now)
     const actorHash = productEventActorHash(user.id)
     assertProductEventRequestRateLimit(actorHash, now.getTime())
     const event = parseProductEventReport(await readJson(request), now)

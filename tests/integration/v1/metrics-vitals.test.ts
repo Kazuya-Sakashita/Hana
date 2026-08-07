@@ -3,6 +3,22 @@ import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
 import { POST } from '@/app/v1/metrics/vitals/route'
 import { resetWebVitalsRateLimitForTests } from '@/features/metrics/server/web-vitals-rate-limit'
 import { shouldSampleWebVitals } from '@/features/metrics/server/web-vitals'
+import {
+  createTelemetryExpectationManifestCommitment,
+  createTelemetrySamplingKeyCommitment,
+  evaluateTelemetryCompleteness,
+  parseTelemetryEnvelope,
+  shouldSampleTelemetry,
+  TELEMETRY_EVENT_SCHEMA_VERSION,
+  TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
+  TELEMETRY_SAMPLING_POLICY_VERSION,
+  type TelemetryCompletenessInput,
+  type TelemetryExpectationManifest,
+} from '@/features/metrics/server/telemetry-contract'
+
+const SAMPLING_KEY = 'integration-web-vitals-sampling-key-32-bytes'
+const SAMPLING_KEY_VERSION = 'integration-v1'
+const COMMITMENT_KEY = 'integration-commitment-key-32-bytes-minimum'
 
 function jsonRequest(body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/v1/metrics/vitals', {
@@ -104,6 +120,69 @@ describe('POST /v1/metrics/vitals', () => {
       }
     }
     expect(changed).toBe(true)
+  })
+
+  it('uses the exact same HMAC sampling assignment for ingest and completeness', () => {
+    vi.stubEnv('WEB_VITALS_SAMPLING_KEY', SAMPLING_KEY)
+    vi.stubEnv('WEB_VITALS_SAMPLING_KEY_VERSION', SAMPLING_KEY_VERSION)
+    const sampledIn = eventIdWithSampling(true)
+    const sampledOut = eventIdWithSampling(false)
+    for (const candidate of [sampledIn, sampledOut]) {
+      expect(shouldSampleWebVitals(candidate)).toBe(
+        shouldSampleTelemetry('web_vital', candidate, {
+          key_version: SAMPLING_KEY_VERSION,
+          key: SAMPLING_KEY,
+        }),
+      )
+    }
+
+    const manifest: TelemetryExpectationManifest = {
+      schema_version: TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
+      source: 'web_vital',
+      status: 'PASS',
+      degradation: 'NONE',
+      sampling_policy_version: TELEMETRY_SAMPLING_POLICY_VERSION,
+      sampling_key_version: SAMPLING_KEY_VERSION,
+      sampling_key_commitment: createTelemetrySamplingKeyCommitment({
+        source: 'web_vital',
+        sampling_key_version: SAMPLING_KEY_VERSION,
+        sampling_key: SAMPLING_KEY,
+        commitment_key: COMMITMENT_KEY,
+      }),
+      expected_event_ids: [sampledIn, sampledOut],
+    }
+    const boundary = {
+      source: 'web_vital' as const,
+      manifest,
+      received: [
+        parseTelemetryEnvelope({
+          schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
+          event_id: sampledIn,
+          occurred_at_utc: '2026-08-07T00:00:00Z',
+          dimensions: {
+            operation: 'web_vital_lcp',
+            reason: 'not_applicable',
+            route_group: 'record',
+            status: 'good',
+            duration_bucket: 'from_1001_to_2500ms',
+          },
+        }),
+      ],
+      window_start_utc: '2026-08-07T00:00:00Z',
+      window_end_utc: '2026-08-08T00:00:00Z',
+      actor_key_version: 'v2',
+      sampling_key_version: SAMPLING_KEY_VERSION,
+      sampling_key: SAMPLING_KEY,
+      commitment_key: COMMITMENT_KEY,
+    }
+    const input: TelemetryCompletenessInput = {
+      ...boundary,
+      manifest_commitment: createTelemetryExpectationManifestCommitment(boundary),
+    }
+    expect(evaluateTelemetryCompleteness(input)).toMatchObject({
+      status: 'PASS',
+      reason: 'complete',
+    })
   })
 
   it.each([
@@ -216,6 +295,26 @@ describe('POST /v1/metrics/vitals', () => {
     vi.stubEnv('WEB_VITALS_SHARED_RATE_LIMIT_READY', '')
 
     const response = await POST(jsonRequest(validPayload))
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ reason: 'telemetry_unavailable' })
+  })
+
+  it('fails closed in production when the sampling key version is missing', async () => {
+    const edgeSecret = 'synthetic-edge-attestation-secret-32-bytes'
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('WEB_VITALS_SHARED_RATE_LIMIT_READY', 'true')
+    vi.stubEnv('WEB_VITALS_TRUST_PROXY_HEADERS', 'true')
+    vi.stubEnv('WEB_VITALS_EDGE_ATTESTATION_SECRET', edgeSecret)
+    vi.stubEnv('WEB_VITALS_SAMPLING_KEY', SAMPLING_KEY)
+    vi.stubEnv('WEB_VITALS_SAMPLING_KEY_VERSION', '')
+
+    const response = await POST(
+      jsonRequest(validPayload, {
+        'x-hana-edge-attestation': edgeSecret,
+        'x-forwarded-for': '203.0.113.10',
+      }),
+    )
 
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ reason: 'telemetry_unavailable' })

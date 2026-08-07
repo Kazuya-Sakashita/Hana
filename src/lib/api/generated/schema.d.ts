@@ -657,7 +657,8 @@ export interface components {
             created_at: string;
             /**
              * @description ProductEvent outboxを現在のactorと認証sessionへ期限付きでbindするserver-minted opaque token。
-             *     sign-in session、期限bucketの変更時にrotateし、期限切れ・旧session tokenは拒否する。
+             *     検証済みJWTのsession_idへ拘束し、同一sessionの期限rotationはopaque continuity tagで識別する。
+             *     別session、期限切れ、改ざんtokenは拒否する。
              *     request body、DB row、通常log、status-only evidenceへ保存しない。
              */
             telemetry_binding: string;
@@ -1066,7 +1067,7 @@ export interface components {
              * @enum {string}
              */
             elapsed_bucket: "not_applicable" | "under_10s" | "from_10_to_30s" | "from_31_to_60s" | "over_60s";
-        };
+        } & unknown;
         /**
          * @description 公開前 LP の待機リスト登録 payload。
          *     メールアドレスは待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、
@@ -1467,7 +1468,7 @@ export interface operations {
                      *       "display_name": null,
                      *       "ai_consent_at": null,
                      *       "created_at": "2026-05-14T09:30:00Z",
-                     *       "telemetry_binding": "v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                     *       "telemetry_binding": "v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -1522,7 +1523,7 @@ export interface operations {
                      *       "display_name": null,
                      *       "ai_consent_at": null,
                      *       "created_at": "2026-05-14T09:30:00Z",
-                     *       "telemetry_binding": "v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                     *       "telemetry_binding": "v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -2051,7 +2052,12 @@ export interface operations {
     reportWebVitals: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description browserが付与するrequest origin。serverはconfigured app originとの完全一致を検証する。 */
+                Origin: string;
+                /** @description browserが付与するFetch Metadata。同一origin requestだけを受け付ける。 */
+                "Sec-Fetch-Site": "same-origin";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2079,8 +2085,8 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description GET /meが返す期限付きopaque actor/session binding。serverは現在の認証actor・session・期限との
-                 *     一致をconstant-timeで検証し、
+                 * @description GET /meが返す期限付きopaque actor/session binding。serverは検証済みJWTのactor・session_id・
+                 *     期限との一致をconstant-timeで検証し、同一sessionの期限rotationだけを継続扱いする。
                  *     header値をDB、通常log、status-only evidenceへ保存しない。
                  */
                 "X-Hana-Telemetry-Binding": string;

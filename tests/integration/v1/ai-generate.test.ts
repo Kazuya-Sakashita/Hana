@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Anthropic SDK / Supabase / Prisma を全モック
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
+  getClaims: vi.fn(),
   profileFindUnique: vi.fn(),
   profileCreate: vi.fn(),
   profileUpdate: vi.fn(),
@@ -21,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
-    auth: { getUser: mocks.getUser },
+    auth: { getUser: mocks.getUser, getClaims: mocks.getClaims },
   }),
 }))
 
@@ -64,6 +65,7 @@ import { POST } from '@/app/v1/ai/generate/route'
 import { DELETE as REVOKE_CONSENT } from '@/app/v1/me/ai-consent/route'
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
+const SESSION_ID = 'b5c63330-6f91-4e28-aee6-0c9260911e89'
 const OTHER_USER_ID = '11111111-2222-4333-8444-555555555555'
 const CHILD_ID = '4a2c89b6-1234-4d8e-9abc-fedcba987654'
 const IMAGE_ID = 'a1b2c3d4-1234-4d8e-9abc-fedcba987654'
@@ -164,6 +166,10 @@ function mockResizeIdentity() {
 }
 
 beforeEach(() => {
+  mocks.getClaims.mockResolvedValue({
+    data: { claims: { sub: USER_ID, session_id: SESSION_ID } },
+    error: null,
+  })
   mocks.adminSignals.length = 0
   mocks.aiGenerationCreate.mockResolvedValue({ id: 'gen-default' })
   mocks.aiGenerationUpdateMany.mockResolvedValue({ count: 1 })

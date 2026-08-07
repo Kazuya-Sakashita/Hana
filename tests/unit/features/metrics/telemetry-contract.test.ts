@@ -4,6 +4,7 @@ import {
   buildTelemetryEvidence,
   createTelemetryCommitment,
   createTelemetryExpectationManifestCommitment,
+  createTelemetrySamplingKeyCommitment,
   evaluateCensoredRate,
   evaluateSyntheticFunnelFlow,
   evaluateTelemetryCompleteness,
@@ -29,12 +30,19 @@ import {
   type TelemetrySource,
 } from '@/features/metrics/server/telemetry-contract'
 
+function uuidV7ForMinute(minute: string, suffix: string): string {
+  const timestamp = Date.parse(minute).toString(16).padStart(12, '0')
+  return `${timestamp.slice(0, 8)}-${timestamp.slice(8)}-7000-8000-${suffix}`
+}
+
 const EVENT_A = '00000000-0000-4000-8000-000000000001'
-const EVENT_B = '00000000-0000-4000-8000-000000000002'
+const EVENT_B = uuidV7ForMinute('2026-08-07T00:00:00Z', '000000000002')
 const EVENT_C = '00000000-0000-4000-8000-000000000003'
 const EVENT_D = '00000000-0000-4000-8000-000000000004'
 const FLOW_ID = '00000000-0000-4000-8000-000000000010'
 const COMMITMENT_KEY = 'synthetic-commitment-key-32-bytes-minimum'
+const SAMPLING_KEY = 'synthetic-sampling-key-with-32-bytes-minimum'
+const SAMPLING_KEY_VERSION = 'synthetic-v1'
 const ACTOR_A: SyntheticActorRef = {
   actor_key_version: 'v2',
   actor_token: 'a'.repeat(64),
@@ -100,16 +108,31 @@ function sourceEnvelope(source: TelemetrySource, eventId: string): TelemetryEnve
   })
 }
 
+function samplingFor(source: TelemetrySource) {
+  return TELEMETRY_SAMPLING[source] === 1
+    ? { key_version: 'none', key: null }
+    : { key_version: SAMPLING_KEY_VERSION, key: SAMPLING_KEY }
+}
+
 function manifest(
   expectedEventIds: readonly string[],
   overrides: Partial<TelemetryExpectationManifest> = {},
 ): TelemetryExpectationManifest {
+  const source = overrides.source ?? 'funnel'
+  const sampling = samplingFor(source)
   return {
     schema_version: TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
-    source: 'funnel',
+    source,
     status: 'PASS',
     degradation: 'NONE',
     sampling_policy_version: TELEMETRY_SAMPLING_POLICY_VERSION,
+    sampling_key_version: sampling.key_version,
+    sampling_key_commitment: createTelemetrySamplingKeyCommitment({
+      source,
+      sampling_key_version: sampling.key_version,
+      sampling_key: sampling.key,
+      commitment_key: COMMITMENT_KEY,
+    }),
     expected_event_ids: expectedEventIds,
     ...overrides,
   }
@@ -121,6 +144,8 @@ function completenessInput(
   received: readonly TelemetryEnvelope[],
   overrides: Partial<TelemetryCompletenessInput> = {},
 ): TelemetryCompletenessInput {
+  const { manifest_commitment: suppliedCommitment, ...boundaryOverrides } = overrides
+  const sampling = samplingFor(source)
   const boundary = {
     source,
     manifest: expectation,
@@ -128,12 +153,19 @@ function completenessInput(
     window_start_utc: '2026-08-07T00:00:00Z',
     window_end_utc: '2026-08-08T00:00:00Z',
     actor_key_version: 'v2',
+    sampling_key_version: sampling.key_version,
+    sampling_key: sampling.key,
     commitment_key: COMMITMENT_KEY,
+    ...boundaryOverrides,
   }
   return {
     ...boundary,
-    manifest_commitment: createTelemetryExpectationManifestCommitment(boundary),
-    ...overrides,
+    manifest_commitment:
+      suppliedCommitment ??
+      createTelemetryExpectationManifestCommitment({
+        ...boundary,
+        manifest: boundary.manifest ?? expectation,
+      }),
   }
 }
 
@@ -146,7 +178,7 @@ function complete(source: TelemetrySource, eventId: string): TelemetryCompletene
 function sampledEventId(source: 'web_vital' | 'api', sampled: boolean): string {
   for (let index = 1; index <= 10_000; index += 1) {
     const candidate = `10000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`
-    if (shouldSampleTelemetry(source, candidate) === sampled) return candidate
+    if (shouldSampleTelemetry(source, candidate, samplingFor(source)) === sampled) return candidate
   }
   throw new Error('synthetic_sample_id_not_found')
 }
@@ -245,9 +277,9 @@ describe('PII-safe telemetry schema v2', () => {
         },
       }),
     ).toThrow('unknown_value')
-    expect(shouldSampleTelemetry('funnel', EVENT_A)).toBe(true)
-    expect(shouldSampleTelemetry('web_vital', EVENT_A)).toBe(
-      shouldSampleTelemetry('web_vital', EVENT_A),
+    expect(shouldSampleTelemetry('funnel', EVENT_A, samplingFor('funnel'))).toBe(true)
+    expect(shouldSampleTelemetry('web_vital', EVENT_A, samplingFor('web_vital'))).toBe(
+      shouldSampleTelemetry('web_vital', EVENT_A, samplingFor('web_vital')),
     )
   })
 
@@ -262,6 +294,18 @@ describe('PII-safe telemetry schema v2', () => {
       }),
     ).toThrow('unknown_value')
   })
+
+  it.each(['2026-02-30T00:00:00Z', '2026-08-07T24:00:00Z'])(
+    'rejects a non-canonical calendar timestamp %s',
+    (occurredAt) => {
+      expect(() =>
+        parseTelemetryEnvelope({
+          ...envelope(EVENT_A, 'api_request'),
+          occurred_at_utc: occurredAt,
+        }),
+      ).toThrow('invalid_input')
+    },
+  )
 
   it('separates ingest, retention and aggregate reader authorities', () => {
     expect(TELEMETRY_ACCESS_POLICY).toEqual({
@@ -353,6 +397,84 @@ describe('telemetry completeness manifest and sampling', () => {
         }),
       ),
     ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', { ...manifest([EVENT_A]), unexpected: 'blocked' } as never, [
+          envelope(EVENT_A, 'record_started'),
+        ]),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+  })
+
+  it('binds sampled expectations to the runtime sampling key version and secret', () => {
+    const sampledIn = sampledEventId('web_vital', true)
+    const expectation = manifest([sampledIn], { source: 'web_vital' })
+    const received = [sourceEnvelope('web_vital', sampledIn)]
+
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('web_vital', expectation, received, {
+          sampling_key_version: 'rotated-v2',
+        }),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'sampling_policy_mismatch' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('web_vital', expectation, received, { sampling_key: null }),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'sampling_policy_mismatch' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('web_vital', expectation, received, {
+          sampling_key: 'different-sampling-key-with-32-bytes-minimum',
+        }),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'sampling_policy_mismatch' })
+  })
+
+  it('rejects malformed, out-of-window and conflicting duplicate receipts', () => {
+    const expectation = manifest([EVENT_A])
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', expectation, [] as never, { received: {} as never }),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'received_envelope_invalid' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', expectation, [
+          { ...envelope(EVENT_A, 'record_started'), email: 'blocked@example.invalid' } as never,
+        ]),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'received_envelope_invalid' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', expectation, [
+          {
+            ...envelope(EVENT_A, 'record_started'),
+            occurred_at_utc: '2026-02-30T00:00:00Z',
+          },
+        ]),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'received_envelope_invalid' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', expectation, [
+          { ...envelope(EVENT_A, 'record_started'), occurred_at_utc: '2026-08-08T00:00:00Z' },
+        ]),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'received_event_outside_window' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', expectation, [
+          envelope(EVENT_A, 'record_started'),
+          envelope(EVENT_A, 'photo_selected'),
+        ]),
+      ),
+    ).toMatchObject({
+      status: 'HOLD',
+      reason: 'duplicate_conflict',
+      duplicate: 'DETECTED',
+    })
   })
 
   it('applies stable sampling before comparing expected and received ids', () => {
@@ -419,6 +541,22 @@ describe('actor-scoped funnel DB truth correlation', () => {
         }),
       ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'actor_reference_invalid' })
     }
+    expect(
+      evaluateSyntheticFunnelFlow({
+        metric_id: 'M2',
+        flow_id: FLOW_ID,
+        expected_actor: ACTOR_A,
+        generated_at_utc: '2026-08-07T01:00:00Z',
+        completeness_input: completenessInput(
+          'funnel',
+          manifest([EVENT_B]),
+          [envelope(EVENT_B, 'photo_selected')],
+          { actor_key_version: 'v3' },
+        ),
+        events: [funnelEvent()],
+        memories: [memoryTruth()],
+      }),
+    ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'actor_reference_invalid' })
   })
 
   it('holds actor conflicts and stages that were not verified by the same completeness input', () => {
@@ -501,6 +639,28 @@ describe('actor-scoped funnel DB truth correlation', () => {
       evaluateSyntheticFunnelFlow({
         ...base,
         events: [funnelEvent({ received_at_utc: '2026-08-06T23:59:59Z' })],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
+    expect(
+      evaluateSyntheticFunnelFlow({
+        ...base,
+        completeness_input: completenessInput('funnel', manifest([EVENT_C]), [
+          envelope(EVENT_C, 'photo_selected'),
+        ]),
+        events: [funnelEvent({ event_id: EVENT_C })],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
+    expect(
+      evaluateSyntheticFunnelFlow({
+        ...base,
+        events: [funnelEvent({ occurred_minute_utc: '2026-08-07T00:01:00Z' })],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
+    expect(
+      evaluateSyntheticFunnelFlow({
+        ...base,
+        generated_at_utc: '2026-08-07T00:10:00Z',
+        events: [funnelEvent({ received_at_utc: '2026-08-07T00:20:00Z' })],
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
     expect(

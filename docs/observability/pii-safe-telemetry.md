@@ -48,13 +48,15 @@ URL、storage key、prompt、AI生成本文、親の編集本文、自由記述�
 | API        | `api_request`                      | stable Problem `reason`とstatus class | operationごとの固定route group、duration bucket               |
 | AI         | `ai_generation`                    | allowlist済み失敗理由と固定outcome    | `ai`、duration bucket                                         |
 
-samplingはfunnel / AIを100%、Web Vitals / APIを10%とする。sampling decisionはevent IDのstable hashで
-決定し、利用者属性、結果、本文で変えない。dimension cardinalityはcode allowlistの直積を上限とし、
+samplingはfunnel / AIを100%、Web Vitals / APIを10%とする。10% sourceのsampling decisionは
+server-only key、key version、source、event IDをdomain-separated HMAC-SHA256へ入力して決定し、
+利用者属性、結果、本文で変えない。keyまたはkey versionが欠落・不一致ならproduction ingestと
+completenessをfail closedにする。dimension cardinalityはcode allowlistの直積を上限とし、
 未知値を`other`へ丸めて受理せず拒否する。
 
 Web Vitals requestは`hana-web-vitals-report/v2`の固定dimensionだけを送る。raw metric ID、raw value、path、
 navigation typeはrequestへ入れず、`fetch`の`credentials: omit`と`keepalive`だけを使う。serverは
-body parseとlogより前にbounded rate limitを適用し、validation後・log前にstable 10% samplingする。
+body parseとlogより前にbounded rate limitを適用し、validation後・log前にkeyed 10% samplingする。
 sample-outは204かつlogなしで、sampling policy versionと期待manifestの不一致はcompleteness Holdである。
 
 ## ProductEvent flow lifecycle
@@ -70,17 +72,23 @@ sample-outは204かつlogなしで、sampling policy versionと期待manifestの
 | `memory_idempotency_conflict` | 旧flowを終了して新しいUUID | 内容を保持し、新flowで再試行                        |
 | DB Memory作成成功             | UUIDをMemoryへ保存         | DB Memoryを保存の正とし、`memory_saved`は補助signal |
 
-client outboxは送信前にsessionStorageへ5 fieldのProductEventと`queuedAt / attempts / nextAttemptAt`、
-outbox rootへserver-minted telemetry bindingと固定degradation statusを1つだけ保存する。bindingは認証sessionと
-期限bucketへ拘束し、request headerだけに使い、
+client outbox v4は送信前にsessionStorageへ5 fieldのProductEventと`queuedAt / attempts / nextAttemptAt`、
+outbox rootへserver-minted telemetry bindingと固定degradation statusを1つだけ保存する。binding v3は
+`getUser()`で検証したactorと`getClaims()`で検証したJWT `sub / session_id`、期限bucketへ拘束し、
+同じ`session_id`のtoken rotationだけをopaque continuity tagで継続する。request headerだけに使い、
 body、DB row、通常log、evidenceへ出さない。204だけをackとし、同じevent IDと発生minuteを指数backoffで
 再送する。event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、restricted aggregateはDB event IDから
 minuteを復元し、DB `created_at`をreceipt timeとして使う。最大50件、TTL 24時間で、容量超過時に
 古い未ack eventを追い出してcompletenessを偽装しない。outboxが使えないbrowserでは記録操作を止めないが、
 該当観測窓のcompletenessは証明できないためHoldにする。
-active actorのbinding不一致、サインアウト、退会完了、401 / 403では送信前にoutbox全体を破棄し、別actorへの
-再送を禁止する。この破棄はackではなく、
-該当観測窓をHoldにする認証境界である。
+別actorまたは別`session_id`のbinding不一致、サインアウト、退会完了では送信前にoutbox全体を破棄し、
+別sessionへの再送を禁止する。token rotation中の旧bindingが401 / 403になった場合だけ、同じopaque
+continuityを確認した新bindingで同じevent IDを再送する。401 / 403後の`GET /me`強制再取得は有限timeoutで
+1回だけ行う。別continuity、確認済み未認証、再取得timeoutでは旧rootを破棄する。一時的に再取得できない場合は
+拒否bindingをtombstone化し、旧rootを保持したまま送信を止め、新しい同一continuity bindingだけで再開する。
+送信と再取得は`AbortController`とbinding generationで隔離し、旧generationの遅延応答が新sessionのoutboxや
+current-user cacheを変更しないようにする。degradationはcontinuity単位で保持し、別sessionでは`NONE`から
+開始する。401 / 403による停止または破棄はackではなく、該当観測窓をHoldにする認証境界である。
 
 ## Server truth and completeness
 
@@ -90,11 +98,15 @@ active actorのbinding不一致、サインアウト、退会完了、401 / 403�
 - API / AI: serverで確定したstatusとstable reasonだけをtruthとする。
 
 sourceごとに観測開始前のversioned expectation manifestとreceived IDを比較し、loss、duplicate、reorderを
-別々に判定する。manifestはsource、sampling policy version、degradation status、sampling適用前のexpected
-event IDを固定する。観測窓・actor key version・manifest全体をdomain-separated HMAC commitmentへ事前登録し、
+別々に判定する。manifestはsource、sampling policy version、sampling key version、sampling key commitment、
+degradation status、sampling適用前のexpected event IDを固定する。sampling key commitmentは別のcommitment keyで
+domain-separated HMACを作り、同じversion文字列に誤ったsecretが配布された場合もfail closedにする。
+観測窓・actor key version・manifest全体をdomain-separated HMAC commitmentへ事前登録し、
 evaluatorはconstant-timeで一致を検証してから同じversioned policyを適用する。空manifest、manifest欠落、
 source不一致、degraded、
-policy不一致、loss、unexpected eventはcompleteness Holdである。
+policy / sampling key version不一致、loss、unexpected eventはcompleteness Holdである。received envelopeは
+型注釈を信用せずexact schemaとcanonical RFC3339 calendar dateで再parseし、発生時刻が半開観測窓の外ならHoldにする。同一event IDの
+payloadが異なる重複はconflictとしてHoldにする。
 expectedとreceivedが同時に欠落してもPassにしない。duplicateとreorderは
 検出状態を残し、event IDと件数をoutputしない。dedup後に全expected eventが存在する場合だけcompletenessを
 Passにできる。
@@ -132,7 +144,8 @@ GitHub Issue #379で実装・検証し、保護された`PRODUCT_EVENT_INGEST_AC
 production ProductEvent endpoint自身が503でwriteを拒否する。production credential配布とProductEvent全key-version退会purgeは
 ISSUE-185の人間承認境界を維持する。
 
-匿名Web Vitalsは同一origin JSON browser requestだけを受け、server-only HMACでsamplingする。productionでは
+匿名Web Vitalsは必須`Origin`と`Sec-Fetch-Site: same-origin`を含む同一origin JSON browser requestだけを受け、
+versioned server-only HMACでsamplingする。productionでは
 信頼済みedge attestation、proxy header上書き、共有client/global rate limitが揃うまでendpoint自身が503で拒否する。
 process-local limiterは開発時と共有edge後のdefense-in-depthに限定する。
 

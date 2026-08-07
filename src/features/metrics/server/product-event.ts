@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { components } from '@/lib/api/generated/schema'
 import { problems } from '@/server/api/problems'
+import { productEventOccurrenceMinuteFromEventId } from './product-event-occurrence'
+
+export { productEventOccurrenceMinuteFromEventId } from './product-event-occurrence'
 
 export type ProductEventReport = components['schemas']['ProductEventReport']
 
@@ -10,7 +13,8 @@ export const PRODUCT_EVENT_MAX_REPORTS_PER_WINDOW = 60
 export const PRODUCT_EVENT_MAX_REQUESTS_PER_WINDOW = 120
 export const PRODUCT_EVENT_RETENTION_DAYS = 90
 const PRODUCT_EVENT_HASH_PEPPER_MIN_LENGTH = 32
-const PRODUCT_EVENT_BINDING_DOMAIN = 'hana-product-event-telemetry-binding/v2\0'
+const PRODUCT_EVENT_BINDING_CONTINUITY_DOMAIN = 'hana-product-event-telemetry-continuity/v3\0'
+const PRODUCT_EVENT_BINDING_DOMAIN = 'hana-product-event-telemetry-binding/v3\0'
 const PRODUCT_EVENT_BINDING_BUCKET_MS = 60 * 60 * 1000
 const PRODUCT_EVENT_BINDING_MAX_TTL_MS = 2 * PRODUCT_EVENT_BINDING_BUCKET_MS
 const PRODUCT_EVENT_MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -38,7 +42,7 @@ const ELAPSED_BUCKETS = new Set<ProductEventReport['elapsed_bucket']>([
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UTC_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
-const TELEMETRY_BINDING_PATTERN = /^v2\.(\d{10})\.([0-9a-f]{64})$/
+const TELEMETRY_BINDING_PATTERN = /^v3\.(\d{10})\.([0-9a-f]{64})\.([0-9a-f]{64})$/
 const PRODUCT_EVENT_MAX_REQUEST_BUCKETS = 4096
 const requestBuckets = new Map<string, { count: number; resetAt: number }>()
 
@@ -59,41 +63,58 @@ export function productEventActorHash(userId: string): string {
   return createHmac('sha256', hashPepper()).update(userId).digest('hex')
 }
 
-function bindingDigest(userId: string, sessionReference: string, expiresAtSeconds: string): string {
+function bindingContinuity(userId: string, sessionId: string): string {
+  return createHmac('sha256', hashPepper())
+    .update(PRODUCT_EVENT_BINDING_CONTINUITY_DOMAIN)
+    .update(userId)
+    .update('\0')
+    .update(sessionId)
+    .digest('hex')
+}
+
+function bindingDigest(
+  userId: string,
+  sessionId: string,
+  expiresAtSeconds: string,
+  continuity: string,
+): string {
   const digest = createHmac('sha256', hashPepper())
     .update(PRODUCT_EVENT_BINDING_DOMAIN)
     .update(userId)
     .update('\0')
-    .update(sessionReference)
+    .update(sessionId)
     .update('\0')
     .update(expiresAtSeconds)
+    .update('\0')
+    .update(continuity)
     .digest('hex')
   return digest
 }
 
 export function productEventTelemetryBinding(
   userId: string,
-  sessionReference: string,
+  sessionId: string,
   now = new Date(),
 ): string {
-  if (!Number.isFinite(Date.parse(sessionReference))) throw new Error('invalid telemetry session')
+  if (!UUID_PATTERN.test(userId) || !UUID_PATTERN.test(sessionId)) {
+    throw new Error('invalid telemetry session')
+  }
   const expiresAtMs =
     (Math.floor(now.getTime() / PRODUCT_EVENT_BINDING_BUCKET_MS) + 2) *
     PRODUCT_EVENT_BINDING_BUCKET_MS
   const expiresAtSeconds = String(Math.floor(expiresAtMs / 1000))
-  return `v2.${expiresAtSeconds}.${bindingDigest(userId, sessionReference, expiresAtSeconds)}`
-}
-
-export function productEventSessionReference(user: { last_sign_in_at?: string | null }): string {
-  const sessionReference = user.last_sign_in_at
-  if (!sessionReference || !Number.isFinite(Date.parse(sessionReference)))
-    throw problems.forbidden()
-  return sessionReference
+  const continuity = bindingContinuity(userId, sessionId)
+  return `v3.${expiresAtSeconds}.${continuity}.${bindingDigest(
+    userId,
+    sessionId,
+    expiresAtSeconds,
+    continuity,
+  )}`
 }
 
 export function assertProductEventTelemetryBinding(
   userId: string,
-  sessionReference: string,
+  sessionId: string,
   supplied: string | null,
   now = new Date(),
 ): void {
@@ -104,10 +125,12 @@ export function assertProductEventTelemetryBinding(
     Number.isSafeInteger(expiresAtMs) &&
     expiresAtMs > now.getTime() &&
     expiresAtMs - now.getTime() <= PRODUCT_EVENT_BINDING_MAX_TTL_MS
-  const expectedValue = `v2.${expiresAtSeconds}.${bindingDigest(
+  const expectedContinuity = bindingContinuity(userId, sessionId)
+  const expectedValue = `v3.${expiresAtSeconds}.${expectedContinuity}.${bindingDigest(
     userId,
-    sessionReference,
+    sessionId,
     expiresAtSeconds,
+    expectedContinuity,
   )}`
   const expected = Buffer.from(expectedValue, 'utf8')
   const received = Buffer.from(supplied ?? '', 'utf8')
@@ -115,18 +138,6 @@ export function assertProductEventTelemetryBinding(
   const comparable = sameLength ? received : Buffer.alloc(expected.length)
   if (!validExpiry || !timingSafeEqual(expected, comparable) || !sameLength) {
     throw problems.forbidden()
-  }
-}
-
-export function productEventOccurrenceMinuteFromEventId(eventId: string): string | null {
-  if (!UUID_V7_PATTERN.test(eventId)) return null
-  const timestampHex = eventId.replace(/-/g, '').slice(0, 12)
-  const timestamp = Number.parseInt(timestampHex, 16)
-  if (!Number.isSafeInteger(timestamp) || timestamp % 60_000 !== 0) return null
-  try {
-    return new Date(timestamp).toISOString().replace('.000Z', 'Z')
-  } catch {
-    return null
   }
 }
 

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { parse as parseYaml } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const prdSource = readFileSync(new URL('../../../Hana_PRD_v1.md', import.meta.url), 'utf8')
@@ -10,6 +11,9 @@ const productEventSchemaSource = readFileSync(
   new URL('../../../docs/openapi/components/schemas/ProductEventReport.yaml', import.meta.url),
   'utf8',
 )
+const productEventSchema = parseYaml(productEventSchemaSource) as {
+  properties?: { event_name?: { enum?: string[] } }
+}
 const issueSource = readFileSync(
   new URL('../../../docs/issues/ISSUE-159-prd-funnel-go-hold.md', import.meta.url),
   'utf8',
@@ -92,9 +96,7 @@ describe('ISSUE-159 product validation contract', () => {
   })
 
   it('uses only the existing allowlisted product events', () => {
-    const enumMatch = productEventSchemaSource.match(/enum: \[([^\]]+)\]/)
-    expect(enumMatch).not.toBeNull()
-    const eventNames = (enumMatch?.[1] ?? '').split(',').map((eventName) => eventName.trim())
+    const eventNames = productEventSchema.properties?.event_name?.enum ?? []
 
     expect(eventNames).toEqual([
       'record_started',

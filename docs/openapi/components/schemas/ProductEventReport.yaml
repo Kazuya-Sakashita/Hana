@@ -4,6 +4,19 @@ description: |
   許可された5フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
 additionalProperties: false
 required: [event_name, event_id, flow_id, occurred_minute_utc, elapsed_bucket]
+allOf:
+  - if:
+      properties:
+        event_name:
+          enum: [record_started, memory_viewed]
+    then:
+      properties:
+        elapsed_bucket:
+          const: not_applicable
+    else:
+      properties:
+        elapsed_bucket:
+          enum: [under_10s, from_10_to_30s, from_31_to_60s, over_60s]
 properties:
   event_name:
     type: string

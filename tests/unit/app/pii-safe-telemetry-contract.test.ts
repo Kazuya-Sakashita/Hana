@@ -31,11 +31,11 @@ describe('ISSUE-152 PII-safe telemetry contract', () => {
     expect(outbox).toContain('response.status === 204')
     expect(outbox).toContain('PRODUCT_EVENT_OUTBOX_MAX_ENTRIES = 50')
     expect(outbox).toContain("'occurred_minute_utc'")
-    expect(outbox).toContain("'X-Hana-Telemetry-Binding': activeTelemetryBinding")
+    expect(outbox).toContain("'X-Hana-Telemetry-Binding': telemetryBinding")
     expect(outbox).toContain('outbox.telemetryBinding !== activeTelemetryBinding')
     expect(outbox).not.toMatch(/report\.(?:email|body|storageKey|prompt|actorHash)/)
     expect(settingsPage.match(/clearProductEventOutbox\(\)/g)).toHaveLength(2)
-    expect(contract).toContain('active actorのbinding不一致')
+    expect(contract).toContain('別actorまたは別`session_id`のbinding不一致')
   })
 
   it('rejects unknown Web Vitals fields and logs buckets instead of raw values', () => {

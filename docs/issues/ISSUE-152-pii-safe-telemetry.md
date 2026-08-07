@@ -79,10 +79,14 @@ production telemetry activationをHoldにする。
 - 共通event schema、sampling、90日保持、cardinality、completeness、suppression、right-censor、status-only evidenceを固定した
 - ProductEventを送信前にdurable outboxへ保存し、204応答だけをackとして同一event IDで再送するようにした
 - 発生minuteをUUIDv7 event IDへ埋め込み、既存DB `event_id / created_at`から発生minuteとreceipt timeを復元できるようにした
-- server-minted期限付きactor/session bindingをoutbox rootとheaderへ固定し、actor変更、サインアウト、退会完了、401 / 403でoutboxを破棄して別actorへの再送と誤帰属を防止した
+- `getUser()`と`getClaims()`を突き合わせたJWT `session_id`拘束binding v3をoutbox rootとheaderへ固定し、同一sessionのtoken rotationだけをcontinuity tagで継続するoutbox v4へ更新した
+- 401 / 403後の強制binding再取得を1回・有限timeoutに制限し、拒否binding tombstone、continuity単位degradation、AbortController、binding generationで旧sessionの再送と遅延書込みを遮断した
 - durable enqueue失敗時のdirect sendを廃止し、capacity / TTL / storage / auth degradationをfail-closedに保持した
 - 記録flowとMemory `Idempotency-Key`を同期し、下書き復元・写真変更・retry・409 conflictの遷移規則を実装した
 - Web Vitalsをbrowser内で固定dimensionへ変換し、raw ID・値・path・navigation typeを送らず、cookieをomitするv2 requestへ同期した
+- Web Vitals / APIの10% samplingをversioned server-only HMACへ統一し、manifestへkey versionとkey commitmentをcommitした
+- completeness評価でreceived envelopeのruntime / canonical RFC3339再検証、半開観測窓、内容が異なるduplicate、actor key version、UUIDv7発生minuteをfail closedにした
+- 合成ブラウザE2Eで検証済みJWT `session_id`と、Memory `Idempotency-Key` / ProductEvent `flow_id` / 204 ack / DB truthの相関を検証するようにした
 - ProductEvent DB role / retention fallbackはreviewer上限を超えない独立した承認境界として#379へ分離した
 - Web Vitals edge attestation / 共有rate limitは#380へ分離し、両境界とも有効化前のproduction ingestを503にした
 - 本番credential、退会purge、HMAC key lifecycleはISSUE-185の人間承認境界を維持した
@@ -93,12 +97,15 @@ production telemetry activationをHoldにする。
 - `pnpm openapi:gen` PASS
 - `pnpm openapi:auth-contract` PASS（24 operations / 20 private）
 - `pnpm typecheck`、`pnpm lint`、`pnpm format:check` PASS
-- `pnpm test` PASS（194 files中188 PASS / 6 skip、1662 tests中1639 PASS / 23 skip）
+- `pnpm test` PASS（194 files中188 PASS / 6 skip、1718 tests中1695 PASS / 23 skip）
 - `pnpm pr:gate` PASS（`origin/main`取り込み後の全検査・buildを含む）
-- `oasdiff breaking`は16件（error 11 / warning 5）、GitHub Actionと同じ改行正規化後のexact report SHA-256は`716d930fc9279b8d4109c68c60098f5500fdd102ca32068a16d0c28c33a6bc86`
-- 2026-08-07に`Kazuya-Sakashita`が上記exact-report scopeを承認し、ADR-0018と期限2026-08-21のwaiverへ固定した
+- 合成browser E2Eは5 / 5 PASS。Memory `Idempotency-Key`、3段階ProductEventの同一`flow_id`、全204 ack、DB truthの相関を確認した
+- 最新`oasdiff breaking`は19件（error 14 / warning 5）、GitHub Actionと同じ改行正規化後のexact report SHA-256は`b44a1678c98362151a61d0d7ebbdf64c7eabc678e2e0b41dd3d5f9f319a99a8e`
+- 2026-08-07承認の旧16件reportとwaiverは最新差分を承認しない。上記19件reportへの明示承認とwaiver更新まではHOLD
 - 第1巡はcommit `1814d03`をsecurity / privacy / analyticsの3名が独立reviewし、3 / 6 / 5件のactionable findingで全員HOLD
-- 第2巡はcommit `bcbfd06`を6つの必須roleが独立reviewし、重複を除く所見を修正した。最新SHAを第3巡で確認する
+- 第2巡はcommit `bcbfd06`を6つの必須roleが独立reviewし、重複を除く所見を修正した
+- 第3巡はcommit `a4c54da`を6つの必須roleが独立reviewし、privacy以外のactionable findingを修正した
+- 第4巡前preflightでanalytics 2件、security 1件、privacy 3件を検出して修正し、3領域とも独立再レビューで`NO FINDINGS`。正式な第4巡には数えない
 
 ## 専門review履歴
 
@@ -113,6 +120,12 @@ production telemetry activationをHoldにする。
 | 2   | `bcbfd06` | API contract                | HOLD |                   3 |
 | 2   | `bcbfd06` | security / authorization    | HOLD |                   5 |
 | 2   | `bcbfd06` | privacy / data protection   | HOLD |                   4 |
+| 3   | `a4c54da` | spec acceptance / analytics | HOLD |                   1 |
+| 3   | `a4c54da` | implementation correctness  | HOLD |                   2 |
+| 3   | `a4c54da` | test reliability            | HOLD |                   4 |
+| 3   | `a4c54da` | API contract                | HOLD |                   3 |
+| 3   | `a4c54da` | security / authorization    | HOLD |                   1 |
+| 3   | `a4c54da` | privacy / data protection   | GO   |                   0 |
 
 ## 参考
 

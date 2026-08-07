@@ -22,17 +22,30 @@ release unitで切り替える必要がある。
 - Web Vitals senderは`fetch`の`credentials: omit`、`referrerPolicy: no-referrer`、`keepalive`だけを使い、
   `sendBeacon`を使わない。
 - Web Vitals serverは同一origin JSON browser requestとv2のexact fixed shapeだけを受理し、rate limit後・
-  validation後・log前にserver-only HMAC 10% samplingを適用する。信頼済みedgeと共有rate limitが
+  validation後・log前にversioned server-only HMAC 10% samplingを適用する。`Origin`と
+  `Sec-Fetch-Site: same-origin`を公開契約で必須にし、sampling key / key versionが欠けたproduction requestは
+  503でfail closedにする。信頼済みedgeと共有rate limitが
   未有効ならproduction endpointを503にする。
 - ProductEvent bodyへretry中も不変の`occurred_minute_utc`を追加する。
 - ProductEvent event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、DB `event_id`からminute、
   DB `created_at`からreceipt timeを復元する。
-- `GET /me`が返す期限付きserver-minted opaque bindingをProductEvent headerに必須化し、現在の認証actor・
-  sign-in session・期限とconstant-timeで一致する場合だけingestへ進む。
-- outboxはbindingをrootに1つだけ保持し、active actorが一致しない場合は送信前に全件破棄する。
+- `GET /me`が返す期限付きserver-minted opaque binding v3をProductEvent headerに必須化し、`getUser()`で
+  検証したactor、`getClaims()`で検証したJWT `sub / session_id`、期限とconstant-timeで一致する場合だけ
+  ingestへ進む。
+- outbox v4はbindingをrootに1つだけ保持する。同じ`session_id`のtoken rotationだけをopaque continuity tagで
+  継続し、別actorまたは別`session_id`なら送信前に全件破棄する。
+- 401 / 403後は有限timeout付きで`GET /me`を1回だけ強制再取得する。同じcontinuityの新bindingだけを
+  同じevent IDの再送へ使い、別continuity、確認済み未認証、再取得timeoutでは旧rootを破棄する。
+  一時的な再取得不能では拒否bindingをtombstone化して送信を止め、新しい同一continuity bindingを待つ。
+- 送信とbinding再取得は`AbortController`とbinding generationへ拘束する。認証境界で旧処理を中断し、
+  遅延した旧generationの応答が新sessionのoutboxやcurrent-user cacheを変更することを禁止する。
+- degradationはcontinuity単位で保持し、別sessionのoutboxは`NONE`から開始する。
 - outboxはdurable enqueueできない場合に直接送信せず、固定degradationを保持してcompletenessをHOLDにする。
 - ProductEvent authority / retention / expectation登録が未有効ならproduction endpointを503にする。
 - binding、event ID、raw metric、path、actor hashは通常logやstatus-only evidenceへ出さない。
+- expectation manifestへsampling key versionとsampling key commitmentをcommitし、source / key version /
+  event IDをdomain-separated HMACへ入力する。received envelopeはcanonical RFC3339を含めruntimeで再検証し、観測窓外または内容が異なる
+  duplicateをcompleteness HOLDにする。
 
 ## Compatibility and approval
 
@@ -44,8 +57,9 @@ release unitで切り替える必要がある。
 3. 人間が`openapi-breaking-approved` labelを付与する。
 4. api-contract / security-authorization / privacy-data-protectionを含む最新SHA reviewを全件GOにする。
 
-上記のbreaking scopeは2026-08-07に`Kazuya-Sakashita`が明示承認した。exact-report waiver、
-保護label、最新SHAの専門reviewとCIのいずれかが欠けた場合は、引き続きPRをHOLDする。
+2026-08-07の承認は当時のexact reportだけに限定される。2026-08-08のbinding v3、必須browser header、
+条件付きelapsed bucket契約を含む最新差分は、新しいexact report hashへの明示承認とwaiver更新を必要とする。
+exact-report waiver、保護label、最新SHAの専門reviewとCIのいずれかが欠けた場合は、引き続きPRをHOLDする。
 
 ## Rollback
 
@@ -57,6 +71,8 @@ request契約test、auth境界testを再実行し、raw payloadがproduction tel
 
 - raw Web Vitals値や動的pathをserverへ送らず、公開endpointへsession cookieを添付しない。
 - ProductEvent outboxのactor誤帰属とreceipt timeによるwindow短縮をfail closedにできる。
+- refresh token rotationでは同じ認証sessionの未ack eventを保持し、別sessionへは継承しない。
+- keyed samplingのsecretを知る主体だけが期待集合を再現でき、key versionまたはsecret commitment不一致を成功扱いしない。
 - 旧clientとの互換性よりprivacyを優先するため、原子的なclient/server rolloutが必須になる。
 - production DB authorityとretention activationはGitHub Issue #379の独立した承認境界で、完了まで
   production telemetry activationをHOLDにする。
