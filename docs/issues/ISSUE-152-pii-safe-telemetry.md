@@ -90,8 +90,8 @@ production telemetry activationをHoldにする。
 - `pnpm openapi:gen` PASS
 - `pnpm openapi:auth-contract` PASS（24 operations / 20 private）
 - `pnpm typecheck`、`pnpm lint`、`pnpm format:check` PASS
-- `pnpm test` PASS（191 files中186 PASS / 5 skip、1624 tests中1612 PASS / 12 skip）
-- `pnpm pr:gate`はbuild直前まで全検査PASS。sandboxのTurbopack port制限で停止した同一`pnpm build:ci`を制限外で再実行しPASS
+- `pnpm test` PASS（193 files中187 PASS / 6 skip、1644 tests中1621 PASS / 23 skip）
+- `pnpm pr:gate` PASS（`origin/main`取り込み後の全検査・buildを含む）
 - `oasdiff breaking`は14件（required追加9 / 旧Vitals raw field削除5）。ADR-0018とexact-report waiver承認まではHOLD
 - 第1巡はcommit `1814d03`をsecurity / privacy / analyticsの3名が独立reviewし、3 / 6 / 5件のactionable findingで全員HOLD
 - 第1巡の所見を修正中。最新SHAの第2巡は6つの必須roleを別reviewerが独立確認する
