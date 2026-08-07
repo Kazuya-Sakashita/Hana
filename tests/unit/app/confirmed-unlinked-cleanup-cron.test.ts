@@ -81,6 +81,7 @@ describe('POST /internal/confirmed-unlinked-image-cleanups', () => {
         storage_unavailable: 0,
         finalize_failed: 0,
         processing_timeout: 0,
+        invalid_storage_key: 0,
         claim_failed: 0,
         retry_state_unavailable: 0,
       },

@@ -10,6 +10,8 @@ import {
 } from '@/features/uploads/server/confirmed-unlinked-cleanup'
 import { lockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { deriveVariantKey } from '@/features/uploads/server/signed-url'
+import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
+import { userIdHash } from '@/features/uploads/server/storage-key'
 
 const qaEnabled = process.env.ISSUE_155_CLEANUP_QA === '1'
 const NOW = new Date('2026-08-07T12:00:00.000Z')
@@ -85,7 +87,7 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
     }> = {},
   ) {
     const id = randomUUID()
-    const storageKey = `uploads/0123456789abcdef/202608/${id}.jpg`
+    const storageKey = `uploads/${userIdHash(userId)}/202608/${id}.jpg`
     await prisma.image.create({
       data: {
         id,
@@ -136,6 +138,51 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
     expect(firstResult.deleted).toBe(1)
     expect(second).toMatchObject({ eligibleTotal: 0, scanned: 0, deleted: 0 })
     expect(store.storage.remove).toHaveBeenCalledOnce()
+    expect(await prisma.image.findUnique({ where: { id: fixture.id } })).toBeNull()
+    expect(store.objects.size).toBe(0)
+  })
+
+  it('waits for an in-flight same-key writer before claiming and removing Storage objects', async () => {
+    const fixture = await createImage()
+    const store = storageFixture(fixture.keys, async () => true)
+    let releaseWriter!: () => void
+    let writerStarted!: () => void
+    const release = new Promise<void>((resolve) => {
+      releaseWriter = resolve
+    })
+    const started = new Promise<void>((resolve) => {
+      writerStarted = resolve
+    })
+    const writer = prisma.$transaction(
+      async (transaction) => {
+        await acquireUploadStorageLock(transaction, fixture.storageKey)
+        writerStarted()
+        await release
+        const current = await transaction.image.findUniqueOrThrow({ where: { id: fixture.id } })
+        expect(current.deletedAt).toBeNull()
+        fixture.keys.forEach((key) => store.objects.add(key))
+      },
+      { timeout: 10_000 },
+    )
+    await started
+
+    const cleanup = runConfirmedUnlinkedCleanup(prisma, store.storage, {
+      apply: true,
+      now: NOW,
+      limit: 1,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(store.storage.remove).not.toHaveBeenCalled()
+    expect(await prisma.image.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({
+      deletedAt: null,
+      confirmedCleanupStatus: 'pending',
+    })
+
+    releaseWriter()
+    await writer
+    const result = await cleanup
+
+    expect(result.deleted).toBe(1)
     expect(await prisma.image.findUnique({ where: { id: fixture.id } })).toBeNull()
     expect(store.objects.size).toBe(0)
   })
@@ -337,7 +384,7 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
     const baseCreatedAt = new Date(NOW.getTime() - CONFIRMED_UNLINKED_RETENTION_MS - 1_000)
     const rows = Array.from({ length: 51 }, (_, index) => {
       const id = `00000000-0000-4000-8000-${String(500 + index).padStart(12, '0')}`
-      const storageKey = `uploads/0123456789abcdef/202608/${id}.jpg`
+      const storageKey = `uploads/${userIdHash(userId)}/202608/${id}.jpg`
       return {
         id,
         userId,
@@ -432,6 +479,36 @@ describe.skipIf(!qaEnabled)('ISSUE-155 confirmed cleanup PostgreSQL and Storage 
       confirmedCleanupFailureReason: 'storage_unavailable',
     })
     expect(store.objects.has(poison.storageKey)).toBe(true)
+  })
+
+  it('dead-letters a cross-owner storage key without calling Storage or exposing it', async () => {
+    const fixture = await createImage()
+    const invalidStorageKey = `uploads/ffffffffffffffff/202608/${fixture.id}.jpg`
+    await prisma.image.update({
+      where: { id: fixture.id },
+      data: { storageKey: invalidStorageKey },
+    })
+    const store = storageFixture(keys(invalidStorageKey), async () => true)
+
+    const result = await runConfirmedUnlinkedCleanup(prisma, store.storage, {
+      apply: true,
+      now: NOW,
+      limit: 1,
+    })
+
+    expect(result).toMatchObject({
+      deleted: 0,
+      deadLetter: 1,
+      failureReasons: { invalid_storage_key: 1 },
+    })
+    expect(store.storage.remove).not.toHaveBeenCalled()
+    expect(await prisma.image.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({
+      confirmedCleanupStatus: 'dead_letter',
+      confirmedCleanupAttempts: CONFIRMED_UNLINKED_CLEANUP_MAX_ATTEMPTS,
+      confirmedCleanupFailureReason: 'invalid_storage_key',
+    })
+    expect(JSON.stringify(result)).not.toContain(invalidStorageKey)
+    expect(JSON.stringify(result)).not.toContain(fixture.id)
   })
 
   it('rejects unknown failure reasons and incomplete claims at the database boundary', async () => {

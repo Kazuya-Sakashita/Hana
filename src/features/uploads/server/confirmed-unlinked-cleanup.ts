@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { Prisma, type Image, type PrismaClient } from '@prisma/client'
 import { lockImageAccess, tryLockImageAccess } from '@/features/uploads/server/image-access-lock'
 import { deriveVariantKey } from '@/features/uploads/server/signed-url'
+import { acquireUploadStorageLock } from '@/features/uploads/server/upload-storage-lock'
+import { isValidStorageKey, storageKeyBelongsToUser } from '@/features/uploads/server/storage-key'
 
 export const CONFIRMED_UNLINKED_RETENTION_MS = 48 * 60 * 60 * 1000
 export const CONFIRMED_UNLINKED_CLEANUP_LEASE_MS = 10 * 60 * 1000
@@ -17,6 +19,7 @@ export type ConfirmedUnlinkedCleanupFailureReason =
   | 'storage_unavailable'
   | 'finalize_failed'
   | 'processing_timeout'
+  | 'invalid_storage_key'
 
 type ConfirmedUnlinkedCleanupMetricReason =
   | ConfirmedUnlinkedCleanupFailureReason
@@ -70,6 +73,7 @@ function failureReasonCounts(): Record<ConfirmedUnlinkedCleanupMetricReason, num
     storage_unavailable: 0,
     finalize_failed: 0,
     processing_timeout: 0,
+    invalid_storage_key: 0,
     claim_failed: 0,
     retry_state_unavailable: 0,
   }
@@ -168,6 +172,12 @@ async function claimImage(
 ): Promise<ClaimImageResult | null> {
   return prisma.$transaction(
     async (transaction) => {
+      const candidate = await transaction.image.findUnique({
+        where: { id: imageId },
+        select: { storageKey: true },
+      })
+      if (!candidate) return null
+      await acquireUploadStorageLock(transaction, candidate.storageKey)
       if (!(await tryLockImageAccess(transaction, imageId))) return { kind: 'busy' }
       const image = await transaction.image.findUnique({ where: { id: imageId } })
       if (!image || !isDueForClaim(image, now, cutoff, staleClaimBefore)) return null
@@ -297,6 +307,39 @@ async function recordFailure(
   )
 }
 
+async function recordInvalidStorageKey(
+  prisma: PrismaClient,
+  imageId: string,
+  token: string,
+): Promise<'dead_letter' | 'protected'> {
+  return prisma.$transaction(
+    async (transaction) => {
+      await lockImageAccess(transaction, [imageId])
+      const updated = await transaction.image.updateMany({
+        where: {
+          id: imageId,
+          memoryId: null,
+          deletedAt: { not: null },
+          confirmedCleanupStatus: 'claimed',
+          confirmedCleanupClaimToken: token,
+        },
+        data: {
+          confirmedCleanupStatus: 'dead_letter',
+          confirmedCleanupAttempts: CONFIRMED_UNLINKED_CLEANUP_MAX_ATTEMPTS,
+          confirmedCleanupClaimToken: null,
+          confirmedCleanupClaimedAt: null,
+          confirmedCleanupFailureReason: 'invalid_storage_key',
+        },
+      })
+      return updated.count === 1 ? 'dead_letter' : 'protected'
+    },
+    {
+      maxWait: CONFIRMED_UNLINKED_CLEANUP_TRANSACTION_MAX_WAIT_MS,
+      timeout: CONFIRMED_UNLINKED_CLEANUP_TRANSACTION_TIMEOUT_MS,
+    },
+  )
+}
+
 function recordOutcome(
   result: ConfirmedUnlinkedCleanupResult,
   outcome: 'deleted' | 'protected' | 'retried' | 'dead_letter',
@@ -384,6 +427,20 @@ export async function runConfirmedUnlinkedCleanup(
       if (claim.kind !== 'claimed') {
         result.failureReasons.processing_timeout += 1
         recordOutcome(result, claim.kind)
+        continue
+      }
+
+      if (
+        !isValidStorageKey(claim.image.storageKey) ||
+        !storageKeyBelongsToUser(claim.image.storageKey, claim.image.userId)
+      ) {
+        result.failureReasons.invalid_storage_key += 1
+        try {
+          recordOutcome(result, await recordInvalidStorageKey(prisma, claim.image.id, claim.token))
+        } catch {
+          result.failed += 1
+          result.failureReasons.retry_state_unavailable += 1
+        }
         continue
       }
 

@@ -6,6 +6,7 @@ import {
   CONFIRMED_UNLINKED_RETENTION_MS,
   runConfirmedUnlinkedCleanup,
 } from '@/features/uploads/server/confirmed-unlinked-cleanup'
+import { userIdHash } from '@/features/uploads/server/storage-key'
 
 const NOW = new Date('2026-08-07T12:00:00.000Z')
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
@@ -17,7 +18,7 @@ function image(index: number, overrides: Partial<Image> = {}): Image {
     userId: USER_ID,
     memoryId: null,
     memoryPosition: null,
-    storageKey: `uploads/0123456789abcdef/202608/550e8400-e29b-41d4-a716-${suffix}.jpg`,
+    storageKey: `uploads/${userIdHash(USER_ID)}/202608/550e8400-e29b-41d4-a716-${suffix}.jpg`,
     contentType: 'image/jpeg',
     width: 1,
     height: 1,
@@ -181,6 +182,7 @@ const emptyFailureReasons = {
   storage_unavailable: 0,
   finalize_failed: 0,
   processing_timeout: 0,
+  invalid_storage_key: 0,
   claim_failed: 0,
   retry_state_unavailable: 0,
 }
@@ -281,6 +283,32 @@ describe('confirmed unlinked image cleanup', () => {
       confirmedCleanupFailureReason: 'storage_unavailable',
     })
     expect(rows.get(row.id)?.confirmedCleanupNextAt.getTime()).toBeGreaterThan(NOW.getTime())
+  })
+
+  it('dead-letters an invalid owner prefix without touching Storage or exposing identifiers', async () => {
+    const row = image(18, {
+      storageKey: 'uploads/ffffffffffffffff/202608/550e8400-e29b-41d4-a716-000000000018.jpg',
+    })
+    const { prisma, rows } = harness([row])
+    const remove = vi.fn(async () => true)
+
+    const result = await runConfirmedUnlinkedCleanup(prisma, { remove }, { apply: true, now: NOW })
+
+    expect(result).toMatchObject({
+      deleted: 0,
+      deadLetter: 1,
+      failureReasons: { ...emptyFailureReasons, invalid_storage_key: 1 },
+    })
+    expect(remove).not.toHaveBeenCalled()
+    expect(rows.get(row.id)).toMatchObject({
+      confirmedCleanupStatus: 'dead_letter',
+      confirmedCleanupAttempts: CONFIRMED_UNLINKED_CLEANUP_MAX_ATTEMPTS,
+      confirmedCleanupClaimToken: null,
+      confirmedCleanupClaimedAt: null,
+      confirmedCleanupFailureReason: 'invalid_storage_key',
+    })
+    expect(JSON.stringify(result)).not.toContain(row.id)
+    expect(JSON.stringify(result)).not.toContain('uploads/')
   })
 
   it('moves a poison image to dead-letter without blocking the next candidate', async () => {

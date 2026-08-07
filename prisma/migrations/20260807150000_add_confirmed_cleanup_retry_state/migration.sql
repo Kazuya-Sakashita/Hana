@@ -26,7 +26,8 @@ ALTER TABLE "images"
             OR "confirmed_cleanup_failure_reason" IN (
                 'storage_unavailable',
                 'finalize_failed',
-                'processing_timeout'
+                'processing_timeout',
+                'invalid_storage_key'
             )
         ),
     ADD CONSTRAINT "images_confirmed_cleanup_claim_check"
