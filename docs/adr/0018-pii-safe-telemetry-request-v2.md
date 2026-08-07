@@ -57,8 +57,10 @@ release unitで切り替える必要がある。
 3. 人間が`openapi-breaking-approved` labelを付与する。
 4. api-contract / security-authorization / privacy-data-protectionを含む最新SHA reviewを全件GOにする。
 
-2026-08-07の承認は当時のexact reportだけに限定される。2026-08-08のbinding v3、必須browser header、
-条件付きelapsed bucket契約を含む最新差分は、新しいexact report hashへの明示承認とwaiver更新を必要とする。
+2026-08-07T22:10:52Zに`Kazuya-Sakashita`が、binding v3、必須browser header、条件付きelapsed bucket
+契約を含む19件（error 14 / warning 5）のexact report SHA-256
+`b44a1678c98362151a61d0d7ebbdf64c7eabc678e2e0b41dd3d5f9f319a99a8e`だけを明示承認した。
+旧16件reportの承認は`superseded`とし、最新hashへ再利用しない。
 exact-report waiver、保護label、最新SHAの専門reviewとCIのいずれかが欠けた場合は、引き続きPRをHOLDする。
 
 ## Rollback

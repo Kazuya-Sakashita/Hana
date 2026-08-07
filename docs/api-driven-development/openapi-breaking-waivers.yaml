@@ -8,5 +8,14 @@ waivers:
     approved_at: '2026-08-07T13:45:05Z'
     expires_on: '2026-08-21'
     scope: openapi-breaking-report
-    status: approved
+    status: superseded
     report_sha256: 716d930fc9279b8d4109c68c60098f5500fdd102ca32068a16d0c28c33a6bc86
+  - id: issue-152-pii-safe-telemetry-v3
+    issue: ISSUE-152
+    reason: JWT session拘束ProductEventとPII-safe Web Vitals v2の19件の原子的な破壊変更を承認する
+    approved_by: Kazuya-Sakashita
+    approved_at: '2026-08-07T22:10:52Z'
+    expires_on: '2026-08-21'
+    scope: openapi-breaking-report
+    status: approved
+    report_sha256: b44a1678c98362151a61d0d7ebbdf64c7eabc678e2e0b41dd3d5f9f319a99a8e
