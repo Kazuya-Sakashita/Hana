@@ -20,7 +20,7 @@ describe('private route metadata', () => {
 
   it('keeps the public metadata contracts', () => {
     expect(readFileSync('src/app/lp/page.tsx', 'utf8')).toContain(
-      "title: 'Hana | 写真1枚から、30秒で残す育児記録'",
+      "title: 'Hana | 写真にことばを添える育児記録'",
     )
     expect(readFileSync('src/app/privacy/page.tsx', 'utf8')).toContain(
       "title: 'プライバシーポリシー | Hana'",
