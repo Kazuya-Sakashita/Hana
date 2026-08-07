@@ -37,17 +37,25 @@ vi.mock('@/server/db/prisma', () => ({
 
 import { POST } from '@/app/v1/metrics/events/route'
 import {
+  PRODUCT_EVENT_MAX_REQUESTS_PER_WINDOW,
   productEventActorHash,
+  productEventOccurrenceMinuteFromEventId,
   productEventTelemetryBinding,
+  resetProductEventRequestRateLimitForTests,
 } from '@/features/metrics/server/product-event'
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const OTHER_USER_ID = '6e15d6e0-5e2b-4af6-8f80-7e71ca60a236'
+const SESSION_REFERENCE = '2026-08-07T00:00:00.000Z'
 const occurredMinute = new Date()
 occurredMinute.setUTCSeconds(0, 0)
+function eventIdForMinute(minute: Date): string {
+  const timestamp = minute.getTime().toString(16).padStart(12, '0')
+  return `${timestamp.slice(0, 8)}-${timestamp.slice(8)}-7000-8000-000000000001`
+}
 const validReport = {
   event_name: 'photo_selected',
-  event_id: '123e4567-e89b-42d3-a456-426614174000',
+  event_id: eventIdForMinute(occurredMinute),
   flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
   occurred_minute_utc: occurredMinute.toISOString().replace('.000Z', 'Z'),
   elapsed_bucket: 'under_10s',
@@ -55,7 +63,7 @@ const validReport = {
 
 function request(
   body: unknown,
-  telemetryBinding: string | null = productEventTelemetryBinding(USER_ID),
+  telemetryBinding: string | null = productEventTelemetryBinding(USER_ID, SESSION_REFERENCE),
 ) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (telemetryBinding !== null) headers.set('X-Hana-Telemetry-Binding', telemetryBinding)
@@ -68,7 +76,9 @@ function request(
 
 beforeEach(() => {
   vi.stubEnv('PRODUCT_EVENT_HASH_PEPPER', 'integration-test-product-event-pepper-32')
-  mocks.getUser.mockResolvedValue({ data: { user: { id: USER_ID } } })
+  mocks.getUser.mockResolvedValue({
+    data: { user: { id: USER_ID, last_sign_in_at: SESSION_REFERENCE } },
+  })
   mocks.profileFindUnique.mockResolvedValue({
     id: USER_ID,
     displayName: null,
@@ -80,6 +90,7 @@ beforeEach(() => {
   mocks.eventFindUnique.mockResolvedValue(null)
   mocks.eventFindFirst.mockResolvedValue(null)
   mocks.advisoryLock.mockResolvedValue(1)
+  resetProductEventRequestRateLimitForTests()
   mocks.transaction.mockImplementation(async (callback) =>
     callback({
       $executeRaw: mocks.advisoryLock,
@@ -111,12 +122,15 @@ describe('POST /v1/metrics/events', () => {
     expect(data.actorHash).not.toBe(USER_ID)
     expect(data).not.toHaveProperty('userId')
     expect(data).not.toHaveProperty('occurredMinuteUtc')
+    expect(productEventOccurrenceMinuteFromEventId(data.eventId)).toBe(
+      validReport.occurred_minute_utc,
+    )
   })
 
   it.each([
     ['missing', null],
-    ['another actor', productEventTelemetryBinding(OTHER_USER_ID)],
-    ['malformed', 'v1.invalid'],
+    ['another actor', productEventTelemetryBinding(OTHER_USER_ID, SESSION_REFERENCE)],
+    ['malformed', 'v2.invalid'],
   ])(
     'rejects a %s telemetry binding before touching ProductEvent storage',
     async (_label, binding) => {
@@ -212,6 +226,27 @@ describe('POST /v1/metrics/events', () => {
     expect(response.status).toBe(409)
   })
 
+  it('returns 409 when the same event id is reused with a different occurrence minute', async () => {
+    mocks.eventFindUnique.mockResolvedValue({
+      eventId: validReport.event_id,
+      actorHash: productEventActorHash(USER_ID),
+      flowId: validReport.flow_id,
+      eventName: validReport.event_name,
+      elapsedBucket: validReport.elapsed_bucket,
+    })
+    const changedMinute = new Date(occurredMinute.getTime() - 60_000)
+
+    const response = await POST(
+      request({
+        ...validReport,
+        occurred_minute_utc: changedMinute.toISOString().replace('.000Z', 'Z'),
+      }),
+    )
+
+    expect(response.status).toBe(409)
+    expect(mocks.eventCreate).not.toHaveBeenCalled()
+  })
+
   it('deduplicates a repeated stage within the same flow', async () => {
     mocks.eventCreate.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('duplicate stage', {
@@ -249,6 +284,37 @@ describe('POST /v1/metrics/events', () => {
     expect(mocks.eventCount).not.toHaveBeenCalled()
   })
 
+  it('rate-limits duplicate requests before opening another transaction', async () => {
+    mocks.eventFindUnique.mockResolvedValue({
+      eventId: validReport.event_id,
+      actorHash: productEventActorHash(USER_ID),
+      flowId: validReport.flow_id,
+      eventName: validReport.event_name,
+      elapsedBucket: validReport.elapsed_bucket,
+    })
+    for (let count = 0; count < PRODUCT_EVENT_MAX_REQUESTS_PER_WINDOW; count += 1) {
+      expect((await POST(request(validReport))).status).toBe(204)
+    }
+    const transactionCalls = mocks.transaction.mock.calls.length
+
+    const response = await POST(request(validReport))
+
+    expect(response.status).toBe(429)
+    expect(mocks.transaction).toHaveBeenCalledTimes(transactionCalls)
+  })
+
+  it('fails closed before production writes when retention activation is absent', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('PRODUCT_EVENT_INGEST_ACTIVATION', '')
+
+    const response = await POST(request(validReport))
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ reason: 'telemetry_unavailable' })
+    expect(mocks.getUser).not.toHaveBeenCalled()
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+
   it('keeps retention deletion outside the ingest authority', async () => {
     const response = await POST(request(validReport))
 
@@ -262,7 +328,7 @@ describe('POST /v1/metrics/events', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Hana-Telemetry-Binding': productEventTelemetryBinding(USER_ID),
+        'X-Hana-Telemetry-Binding': productEventTelemetryBinding(USER_ID, SESSION_REFERENCE),
       },
       body: '{',
     })

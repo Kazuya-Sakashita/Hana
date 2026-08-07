@@ -13,8 +13,11 @@ properties:
   event_id:
     type: string
     format: uuid
-    description: 冪等な再送判定に使うイベント単位のUUID
-    example: 8f7e6d5c-4b3a-4291-8765-0123456789ab
+    pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    description: |
+      冪等な再送判定に使うUUIDv7。先頭48 bitへoccurred_minute_utcと同じUTC分を埋め込み、
+      restricted aggregateだけがDB event_idから発生minuteを復元する。通常logやstatus-only evidenceへ出さない。
+    example: 019fdc37-4ec0-7000-8000-000000000001
   flow_id:
     type: string
     format: uuid
@@ -29,6 +32,7 @@ properties:
     pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$'
     description: |
       clientでstageが発生したUTC分bucket。通信retryでも同じ値を維持する。
+      server受信時刻より未来の分と、受信時刻から24時間を超えて古い分は受理しない。
       restricted aggregateはserver受信遅延とclock境界を検証し、不確かなwindowをHOLDにする。
     example: '2026-08-07T12:34:00Z'
   elapsed_bucket:

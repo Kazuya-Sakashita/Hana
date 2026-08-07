@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { isIP } from 'node:net'
 import { problems } from '@/server/api/problems'
 
@@ -17,6 +17,25 @@ const buckets = new Map<string, Bucket>()
 const retryAfterSecondsByError = new WeakMap<object, number>()
 const OVERFLOW_BUCKET_KEY = '__overflow__'
 const CLIENT_KEY_SECRET = randomBytes(32)
+
+export function assertWebVitalsProductionBoundary(request: Request): void {
+  if (process.env.NODE_ENV !== 'production') return
+  const attestationSecret = process.env.WEB_VITALS_EDGE_ATTESTATION_SECRET
+  const supplied = request.headers.get('x-hana-edge-attestation') ?? ''
+  const configured =
+    process.env.WEB_VITALS_SHARED_RATE_LIMIT_READY === 'true' &&
+    process.env.WEB_VITALS_TRUST_PROXY_HEADERS === 'true' &&
+    typeof attestationSecret === 'string' &&
+    Buffer.byteLength(attestationSecret, 'utf8') >= 32 &&
+    webVitalsClientKey(request, true) !== 'unknown'
+  const expected = Buffer.from(attestationSecret ?? '', 'utf8')
+  const received = Buffer.from(supplied, 'utf8')
+  const sameLength = expected.length === received.length
+  const comparable = sameLength ? received : Buffer.alloc(expected.length)
+  if (!configured || !sameLength || !timingSafeEqual(expected, comparable)) {
+    throw problems.telemetryUnavailable()
+  }
+}
 
 export function assertWebVitalsRateLimit(
   request: Request,

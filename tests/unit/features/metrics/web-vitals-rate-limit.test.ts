@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  assertWebVitalsProductionBoundary,
   assertWebVitalsRateLimit,
   resetWebVitalsRateLimitForTests,
   webVitalsClientKey,
@@ -14,7 +15,10 @@ function request(headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/v1/metrics/vitals', { headers })
 }
 
-afterEach(() => resetWebVitalsRateLimitForTests())
+afterEach(() => {
+  resetWebVitalsRateLimitForTests()
+  vi.unstubAllEnvs()
+})
 
 describe('Web Vitals rate limit', () => {
   it('uses a conservative shared bucket unless proxy headers are explicitly trusted', () => {
@@ -66,5 +70,26 @@ describe('Web Vitals rate limit', () => {
         true,
       ),
     ).toThrow()
+  })
+
+  it('requires protected edge attestation and shared limiting in production', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(() => assertWebVitalsProductionBoundary(request())).toThrow()
+
+    const secret = 'synthetic-edge-attestation-secret-32-bytes'
+    vi.stubEnv('WEB_VITALS_SHARED_RATE_LIMIT_READY', 'true')
+    vi.stubEnv('WEB_VITALS_TRUST_PROXY_HEADERS', 'true')
+    vi.stubEnv('WEB_VITALS_EDGE_ATTESTATION_SECRET', secret)
+    expect(() =>
+      assertWebVitalsProductionBoundary(request({ 'x-hana-edge-attestation': 'wrong' })),
+    ).toThrow()
+    expect(() =>
+      assertWebVitalsProductionBoundary(
+        request({
+          'x-hana-edge-attestation': secret,
+          'x-forwarded-for': '203.0.113.10',
+        }),
+      ),
+    ).not.toThrow()
   })
 })

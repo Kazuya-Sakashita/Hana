@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto'
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
 export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v2' as const
@@ -205,6 +205,17 @@ export type TelemetryExpectationManifest = {
   expected_event_ids: readonly string[]
 }
 
+export type TelemetryCompletenessInput = {
+  source: TelemetrySource
+  manifest: TelemetryExpectationManifest
+  received: readonly TelemetryEnvelope[]
+  window_start_utc: string
+  window_end_utc: string
+  actor_key_version: string
+  manifest_commitment: string
+  commitment_key: string
+}
+
 export type SyntheticActorRef = {
   actor_key_version: string
   actor_token: string
@@ -372,11 +383,36 @@ function completenessHold(
   return { source, status: 'HOLD', reason, duplicate: 'NONE', reorder: 'NONE' }
 }
 
-export function evaluateTelemetryCompleteness(input: {
-  source: TelemetrySource
-  manifest: TelemetryExpectationManifest
-  received: readonly TelemetryEnvelope[]
-}): TelemetryCompletenessResult {
+export function createTelemetryExpectationManifestCommitment(
+  input: Pick<
+    TelemetryCompletenessInput,
+    'manifest' | 'window_start_utc' | 'window_end_utc' | 'actor_key_version' | 'commitment_key'
+  >,
+): string {
+  return createTelemetryCommitment({
+    domain: 'metric_window_manifest',
+    window_start_utc: input.window_start_utc,
+    window_end_utc: input.window_end_utc,
+    actor_key_version: input.actor_key_version,
+    value: input.manifest,
+    commitment_key: input.commitment_key,
+  })
+}
+
+function validManifestCommitment(input: TelemetryCompletenessInput): boolean {
+  if (!SHA256_PATTERN.test(input.manifest_commitment)) return false
+  try {
+    const expected = Buffer.from(createTelemetryExpectationManifestCommitment(input), 'hex')
+    const received = Buffer.from(input.manifest_commitment, 'hex')
+    return expected.length === received.length && timingSafeEqual(expected, received)
+  } catch {
+    return false
+  }
+}
+
+export function evaluateTelemetryCompleteness(
+  input: TelemetryCompletenessInput,
+): TelemetryCompletenessResult {
   const manifest = input.manifest as TelemetryExpectationManifest | undefined
   if (!manifest) return completenessHold(input.source, 'expected_manifest_missing')
   if (manifest.sampling_policy_version !== TELEMETRY_SAMPLING_POLICY_VERSION) {
@@ -387,8 +423,10 @@ export function evaluateTelemetryCompleteness(input: {
     manifest.source !== input.source ||
     manifest.status !== 'PASS' ||
     !Array.isArray(manifest.expected_event_ids) ||
+    manifest.expected_event_ids.length === 0 ||
     manifest.expected_event_ids.some((eventId) => !UUID_PATTERN.test(eventId)) ||
-    new Set(manifest.expected_event_ids).size !== manifest.expected_event_ids.length
+    new Set(manifest.expected_event_ids).size !== manifest.expected_event_ids.length ||
+    !validManifestCommitment(input)
   ) {
     return completenessHold(input.source, 'expected_manifest_untrusted')
   }
@@ -473,7 +511,7 @@ export function evaluateSyntheticFunnelFlow(input: {
   flow_id: string
   expected_actor: SyntheticActorRef
   generated_at_utc: string
-  completeness: TelemetryCompletenessResult
+  completeness_input: TelemetryCompletenessInput
   events: readonly SyntheticFunnelEvent[]
   memories: readonly SyntheticMemoryTruth[]
 }): {
@@ -484,20 +522,37 @@ export function evaluateSyntheticFunnelFlow(input: {
   if (!validSyntheticActorRef(input.expected_actor) || !UUID_PATTERN.test(input.flow_id)) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
   }
+  const completeness = evaluateTelemetryCompleteness(input.completeness_input)
   if (
-    input.completeness.source !== 'funnel' ||
-    input.completeness.status !== 'PASS' ||
-    input.completeness.reason !== 'complete'
+    completeness.source !== 'funnel' ||
+    completeness.status !== 'PASS' ||
+    completeness.reason !== 'complete'
   ) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'telemetry_incomplete' }
   }
   const stageName = input.metric_id === 'M2' ? 'photo_selected' : 'ai_draft_shown'
-  const matchingStages = input.events.filter(
-    (event) =>
-      event.flow_id === input.flow_id &&
-      event.event_name === stageName &&
-      sameSyntheticActor(event.actor, input.expected_actor),
+  const sameFlowStages = input.events.filter(
+    (event) => event.flow_id === input.flow_id && event.event_name === stageName,
   )
+  if (
+    sameFlowStages.some(
+      (event) =>
+        !validSyntheticActorRef(event.actor) ||
+        !sameSyntheticActor(event.actor, input.expected_actor),
+    )
+  ) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
+  }
+  const verifiedReceived = new Map(
+    input.completeness_input.received.map((envelope) => [envelope.event_id, envelope]),
+  )
+  const matchingStages = sameFlowStages.filter((event) => {
+    const envelope = verifiedReceived.get(event.event_id)
+    return envelope?.dimensions.operation === event.event_name
+  })
+  if (matchingStages.length !== sameFlowStages.length) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'telemetry_incomplete' }
+  }
   if (matchingStages.length === 0) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_missing' }
   }
@@ -531,7 +586,19 @@ export function evaluateSyntheticFunnelFlow(input: {
   if (generatedAt === null || generatedAt < stageMinuteEnd + conversionWindowMs) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'window_not_mature' }
   }
-  const matchingMemories = input.memories.filter(
+  const sameFlowMemories = input.memories.filter(
+    (candidate) => candidate.idempotency_key === input.flow_id,
+  )
+  if (
+    sameFlowMemories.some(
+      (candidate) =>
+        !validSyntheticActorRef(candidate.actor) ||
+        !sameSyntheticActor(candidate.actor, input.expected_actor),
+    )
+  ) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
+  }
+  const matchingMemories = sameFlowMemories.filter(
     (candidate) =>
       candidate.idempotency_key === input.flow_id &&
       sameSyntheticActor(candidate.actor, input.expected_actor),

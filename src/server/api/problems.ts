@@ -71,6 +71,13 @@ export const problems = {
       429,
       '短時間に送信が続いています。少し時間をおいてからお試しください',
     ),
+  telemetryUnavailable: () =>
+    build(
+      'telemetry_unavailable',
+      'Service Unavailable',
+      503,
+      '計測基盤の安全確認が完了していません',
+    ),
   storageUnavailable: () =>
     build(
       'storage_unavailable',

@@ -1,11 +1,16 @@
 import { Prisma, type ProductEvent } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import {
+  assertProductEventIngestReady,
+  assertProductEventOccurrenceMatchesId,
+  assertProductEventRequestRateLimit,
   assertProductEventTelemetryBinding,
   parseProductEventReport,
   PRODUCT_EVENT_MAX_REPORTS_PER_WINDOW,
   PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS,
   productEventActorHash,
+  productEventOccurrenceMinuteFromEventId,
+  productEventSessionReference,
 } from '@/features/metrics/server/product-event'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
@@ -35,12 +40,14 @@ function matchesEvent(
     existing.actorHash === actorHash &&
     existing.flowId === event.flow_id &&
     existing.eventName === event.event_name &&
+    productEventOccurrenceMinuteFromEventId(existing.eventId) === event.occurred_minute_utc &&
     existing.elapsedBucket === event.elapsed_bucket
   )
 }
 
 export async function POST(request: Request) {
   try {
+    assertProductEventIngestReady()
     const telemetryBinding = request.headers.get('x-hana-telemetry-binding')
     if (!telemetryBinding) throw problems.forbidden()
     const supabase = await createSupabaseServerClient()
@@ -48,12 +55,14 @@ export async function POST(request: Request) {
       data: { user: authUser },
     } = await supabase.auth.getUser()
     if (!authUser) throw problems.unauthorized()
-    assertProductEventTelemetryBinding(authUser.id, telemetryBinding)
-    const user = await requireUser()
-    assertProductEventTelemetryBinding(user.id, telemetryBinding)
     const now = new Date()
-    const event = parseProductEventReport(await readJson(request), now)
+    const sessionReference = productEventSessionReference(authUser)
+    assertProductEventTelemetryBinding(authUser.id, sessionReference, telemetryBinding, now)
+    const user = await requireUser()
+    assertProductEventTelemetryBinding(user.id, sessionReference, telemetryBinding, now)
     const actorHash = productEventActorHash(user.id)
+    assertProductEventRequestRateLimit(actorHash, now.getTime())
+    const event = parseProductEventReport(await readJson(request), now)
 
     try {
       await prisma.$transaction(async (transaction) => {
@@ -67,6 +76,7 @@ export async function POST(request: Request) {
           if (matchesEvent(existingById, event, actorHash)) return
           throw problems.productEventConflict()
         }
+        assertProductEventOccurrenceMatchesId(event)
 
         const existingStage = await transaction.productEvent.findFirst({
           where: {

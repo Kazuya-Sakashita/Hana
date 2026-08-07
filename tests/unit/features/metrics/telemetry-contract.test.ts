@@ -3,6 +3,7 @@ import {
   applyTelemetrySuppression,
   buildTelemetryEvidence,
   createTelemetryCommitment,
+  createTelemetryExpectationManifestCommitment,
   evaluateCensoredRate,
   evaluateSyntheticFunnelFlow,
   evaluateTelemetryCompleteness,
@@ -22,6 +23,7 @@ import {
   type SyntheticFunnelEvent,
   type SyntheticMemoryTruth,
   type TelemetryCompletenessResult,
+  type TelemetryCompletenessInput,
   type TelemetryEnvelope,
   type TelemetryExpectationManifest,
   type TelemetrySource,
@@ -113,12 +115,32 @@ function manifest(
   }
 }
 
-function complete(source: TelemetrySource, eventId: string): TelemetryCompletenessResult {
-  return evaluateTelemetryCompleteness({
+function completenessInput(
+  source: TelemetrySource,
+  expectation: TelemetryExpectationManifest,
+  received: readonly TelemetryEnvelope[],
+  overrides: Partial<TelemetryCompletenessInput> = {},
+): TelemetryCompletenessInput {
+  const boundary = {
     source,
-    manifest: manifest([eventId], { source }),
-    received: [sourceEnvelope(source, eventId)],
-  })
+    manifest: expectation,
+    received,
+    window_start_utc: '2026-08-07T00:00:00Z',
+    window_end_utc: '2026-08-08T00:00:00Z',
+    actor_key_version: 'v2',
+    commitment_key: COMMITMENT_KEY,
+  }
+  return {
+    ...boundary,
+    manifest_commitment: createTelemetryExpectationManifestCommitment(boundary),
+    ...overrides,
+  }
+}
+
+function complete(source: TelemetrySource, eventId: string): TelemetryCompletenessResult {
+  return evaluateTelemetryCompleteness(
+    completenessInput(source, manifest([eventId], { source }), [sourceEnvelope(source, eventId)]),
+  )
 }
 
 function sampledEventId(source: 'web_vital' | 'api', sampled: boolean): string {
@@ -255,16 +277,14 @@ describe('PII-safe telemetry schema v2', () => {
 describe('telemetry completeness manifest and sampling', () => {
   it('detects duplicate and reorder without turning a complete set into loss', () => {
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'funnel',
-        manifest: manifest([EVENT_A, EVENT_B, EVENT_C]),
-        received: [
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A, EVENT_B, EVENT_C]), [
           envelope(EVENT_B, 'photo_selected'),
           envelope(EVENT_A, 'record_started'),
           envelope(EVENT_B, 'photo_selected'),
           envelope(EVENT_C, 'memory_saved'),
-        ],
-      }),
+        ]),
+      ),
     ).toEqual({
       source: 'funnel',
       status: 'PASS',
@@ -276,91 +296,95 @@ describe('telemetry completeness manifest and sampling', () => {
 
   it('holds on silent loss or unexpected events', () => {
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'funnel',
-        manifest: manifest([EVENT_A, EVENT_B]),
-        received: [envelope(EVENT_A, 'record_started')],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A, EVENT_B]), [
+          envelope(EVENT_A, 'record_started'),
+        ]),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'loss_detected' })
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'funnel',
-        manifest: manifest([EVENT_A]),
-        received: [envelope(EVENT_A, 'record_started'), envelope(EVENT_C, 'memory_saved')],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A]), [
+          envelope(EVENT_A, 'record_started'),
+          envelope(EVENT_C, 'memory_saved'),
+        ]),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'unexpected_event' })
   })
 
   it('holds when the expectation manifest is missing, untrusted, degraded or version-skewed', () => {
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'funnel',
-        manifest: undefined as never,
-        received: [],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A]), [], { manifest: undefined as never }),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_missing' })
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'funnel',
-        manifest: manifest([EVENT_A], { status: 'HOLD' }),
-        received: [],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A], { status: 'HOLD' }), []),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'api',
-        manifest: manifest([EVENT_A]),
-        received: [],
-      }),
+      evaluateTelemetryCompleteness(completenessInput('api', manifest([EVENT_A]), [])),
     ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'funnel',
-        manifest: manifest([EVENT_A], { degradation: 'TTL_EXPIRED' }),
-        received: [],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A], { degradation: 'TTL_EXPIRED' }), []),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'telemetry_degraded' })
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'funnel',
-        manifest: {
-          ...manifest([EVENT_A]),
-          sampling_policy_version: 'stable-event-id/v1',
-        } as never,
-        received: [],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput(
+          'funnel',
+          {
+            ...manifest([EVENT_A]),
+            sampling_policy_version: 'stable-event-id/v1',
+          } as never,
+          [],
+        ),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'sampling_policy_mismatch' })
+    expect(
+      evaluateTelemetryCompleteness(completenessInput('funnel', manifest([]), [])),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A]), [envelope(EVENT_A, 'record_started')], {
+          manifest_commitment: '0'.repeat(64),
+        }),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
   })
 
   it('applies stable sampling before comparing expected and received ids', () => {
     const sampledIn = sampledEventId('api', true)
     const sampledOut = sampledEventId('api', false)
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'api',
-        manifest: manifest([sampledIn, sampledOut], { source: 'api' }),
-        received: [sourceEnvelope('api', sampledIn)],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('api', manifest([sampledIn, sampledOut], { source: 'api' }), [
+          sourceEnvelope('api', sampledIn),
+        ]),
+      ),
     ).toMatchObject({ status: 'PASS', reason: 'complete' })
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'api',
-        manifest: manifest([sampledIn, sampledOut], { source: 'api' }),
-        received: [],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('api', manifest([sampledIn, sampledOut], { source: 'api' }), []),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'loss_detected' })
     expect(
-      evaluateTelemetryCompleteness({
-        source: 'api',
-        manifest: manifest([sampledIn, sampledOut], { source: 'api' }),
-        received: [sourceEnvelope('api', sampledIn), sourceEnvelope('api', sampledOut)],
-      }),
+      evaluateTelemetryCompleteness(
+        completenessInput('api', manifest([sampledIn, sampledOut], { source: 'api' }), [
+          sourceEnvelope('api', sampledIn),
+          sourceEnvelope('api', sampledOut),
+        ]),
+      ),
     ).toMatchObject({ status: 'HOLD', reason: 'unexpected_event' })
   })
 })
 
 describe('actor-scoped funnel DB truth correlation', () => {
-  const completeFunnel = complete('funnel', EVENT_A)
+  const completeFunnel = completenessInput('funnel', manifest([EVENT_B]), [
+    envelope(EVENT_B, 'photo_selected'),
+  ])
 
   it('uses actor, key version and flow while keeping actor data out of the result', () => {
     const result = evaluateSyntheticFunnelFlow({
@@ -368,7 +392,7 @@ describe('actor-scoped funnel DB truth correlation', () => {
       flow_id: FLOW_ID,
       expected_actor: ACTOR_A,
       generated_at_utc: '2026-08-07T01:00:00Z',
-      completeness: completeFunnel,
+      completeness_input: completeFunnel,
       events: [funnelEvent()],
       memories: [memoryTruth()],
     })
@@ -389,12 +413,39 @@ describe('actor-scoped funnel DB truth correlation', () => {
           flow_id: FLOW_ID,
           expected_actor: ACTOR_A,
           generated_at_utc: '2026-08-07T01:00:00Z',
-          completeness: completeFunnel,
+          completeness_input: completeFunnel,
           events: [funnelEvent()],
           memories: [memoryTruth({ actor })],
         }),
-      ).toEqual({ metric_id: 'M2', status: 'FAIL', reason: 'memory_not_saved' })
+      ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'actor_reference_invalid' })
     }
+  })
+
+  it('holds actor conflicts and stages that were not verified by the same completeness input', () => {
+    expect(
+      evaluateSyntheticFunnelFlow({
+        metric_id: 'M2',
+        flow_id: FLOW_ID,
+        expected_actor: ACTOR_A,
+        generated_at_utc: '2026-08-07T01:00:00Z',
+        completeness_input: completeFunnel,
+        events: [funnelEvent(), funnelEvent({ event_id: EVENT_C, actor: ACTOR_B })],
+        memories: [memoryTruth()],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'actor_reference_invalid' })
+    expect(
+      evaluateSyntheticFunnelFlow({
+        metric_id: 'M2',
+        flow_id: FLOW_ID,
+        expected_actor: ACTOR_A,
+        generated_at_utc: '2026-08-07T01:00:00Z',
+        completeness_input: completenessInput('funnel', manifest([EVENT_A]), [
+          envelope(EVENT_A, 'record_started'),
+        ]),
+        events: [funnelEvent()],
+        memories: [memoryTruth()],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
   })
 
   it('uses the occurrence minute interval instead of delayed receipt time', () => {
@@ -403,7 +454,7 @@ describe('actor-scoped funnel DB truth correlation', () => {
       flow_id: FLOW_ID,
       expected_actor: ACTOR_A,
       generated_at_utc: '2026-08-07T01:00:00Z',
-      completeness: completeFunnel,
+      completeness_input: completeFunnel,
       events: [
         funnelEvent({
           occurred_minute_utc: '2026-08-07T00:00:00Z',
@@ -437,7 +488,7 @@ describe('actor-scoped funnel DB truth correlation', () => {
       flow_id: FLOW_ID,
       expected_actor: ACTOR_A,
       generated_at_utc: '2026-08-07T01:00:00Z',
-      completeness: completeFunnel,
+      completeness_input: completeFunnel,
       memories: [memoryTruth()],
     }
     expect(
@@ -462,11 +513,9 @@ describe('actor-scoped funnel DB truth correlation', () => {
     expect(
       evaluateSyntheticFunnelFlow({
         ...base,
-        completeness: evaluateTelemetryCompleteness({
-          source: 'funnel',
-          manifest: manifest([EVENT_A, EVENT_B]),
-          received: [envelope(EVENT_A, 'record_started')],
-        }),
+        completeness_input: completenessInput('funnel', manifest([EVENT_A, EVENT_B]), [
+          envelope(EVENT_A, 'record_started'),
+        ]),
         events: [],
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
@@ -479,7 +528,7 @@ describe('actor-scoped funnel DB truth correlation', () => {
         flow_id: FLOW_ID,
         expected_actor: ACTOR_A,
         generated_at_utc: '2026-08-07T01:00:00Z',
-        completeness: completeFunnel,
+        completeness_input: completeFunnel,
         events: [funnelEvent()],
         memories: [memoryTruth()],
       }),

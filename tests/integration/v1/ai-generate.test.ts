@@ -75,7 +75,11 @@ const IMAGE_IDS = [
   'e1b2c3d4-1234-4d8e-9abc-fedcba987654',
 ]
 
-const supabaseUser = { id: USER_ID, email: 'parent@example.com' }
+const supabaseUser = {
+  id: USER_ID,
+  email: 'parent@example.com',
+  last_sign_in_at: '2026-08-07T00:00:00.000Z',
+}
 const profileConsented = {
   id: USER_ID,
   displayName: null,

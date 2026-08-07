@@ -30,6 +30,7 @@ import { DELETE, POST } from '@/app/v1/me/ai-consent/route'
 import { productEventTelemetryBinding } from '@/features/metrics/server/product-event'
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
+const SESSION_REFERENCE = '2026-08-07T00:00:00.000Z'
 const CONSENT_AT = new Date('2026-06-01T00:00:00Z')
 const CREATED_AT = new Date('2026-05-14T09:30:00Z')
 
@@ -43,7 +44,13 @@ const profile = {
 
 function authed(profileOverrides: Partial<typeof profile> = {}) {
   mocks.getUser.mockResolvedValue({
-    data: { user: { id: USER_ID, email: 'parent@example.com' } },
+    data: {
+      user: {
+        id: USER_ID,
+        email: 'parent@example.com',
+        last_sign_in_at: SESSION_REFERENCE,
+      },
+    },
   })
   mocks.findUnique.mockResolvedValue({ ...profile, ...profileOverrides })
 }
@@ -92,7 +99,7 @@ describe('GET /v1/me', () => {
       display_name: null,
       ai_consent_at: null,
       created_at: '2026-05-14T09:30:00.000Z',
-      telemetry_binding: productEventTelemetryBinding(USER_ID),
+      telemetry_binding: productEventTelemetryBinding(USER_ID, SESSION_REFERENCE),
     })
   })
 })
@@ -109,7 +116,7 @@ describe('POST /v1/me/ai-consent', () => {
     expect(await res.json()).toMatchObject({
       id: USER_ID,
       ai_consent_at: CONSENT_AT.toISOString(),
-      telemetry_binding: productEventTelemetryBinding(USER_ID),
+      telemetry_binding: productEventTelemetryBinding(USER_ID, SESSION_REFERENCE),
     })
     expect(mocks.updateMany).toHaveBeenCalledWith({
       where: { id: USER_ID, aiConsentAt: null },
@@ -143,7 +150,7 @@ describe('DELETE /v1/me/ai-consent', () => {
     expect(await res.json()).toMatchObject({
       id: USER_ID,
       ai_consent_at: null,
-      telemetry_binding: productEventTelemetryBinding(USER_ID),
+      telemetry_binding: productEventTelemetryBinding(USER_ID, SESSION_REFERENCE),
     })
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: USER_ID },

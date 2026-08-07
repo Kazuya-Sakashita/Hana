@@ -122,7 +122,7 @@ Allowed:
 - elapsed time
 - request_id / ProblemDetails `instance`
 - user_id hash
-- Web Vitals metric name / value / route
+- Web Vitals fixed operation / reason / route_group / status / duration_bucket
 - AI metadata: model, prompt version, token counts, duration, stable error reason
 
 Forbidden:
@@ -136,6 +136,7 @@ Forbidden:
 - AI generated title/body
 - prompt text
 - raw location
+- Web Vitals raw metric ID / value / path / navigation type
 - cookie / bearer token / service role key
 
 ProblemDetails may expose `detail` to users, but server logs should branch on stable `reason` and avoid copying free-form PII.

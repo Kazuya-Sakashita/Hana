@@ -71,9 +71,11 @@ sample-outは204かつlogなしで、sampling policy versionと期待manifestの
 | DB Memory作成成功             | UUIDをMemoryへ保存         | DB Memoryを保存の正とし、`memory_saved`は補助signal |
 
 client outboxは送信前にsessionStorageへ5 fieldのProductEventと`queuedAt / attempts / nextAttemptAt`、
-outbox rootへserver-minted telemetry bindingを1つだけ保存する。bindingはrequest headerだけに使い、
+outbox rootへserver-minted telemetry bindingと固定degradation statusを1つだけ保存する。bindingは認証sessionと
+期限bucketへ拘束し、request headerだけに使い、
 body、DB row、通常log、evidenceへ出さない。204だけをackとし、同じevent IDと発生minuteを指数backoffで
-再送する。最大50件、TTL 24時間で、容量超過時に
+再送する。event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、restricted aggregateはDB event IDから
+minuteを復元し、DB `created_at`をreceipt timeとして使う。最大50件、TTL 24時間で、容量超過時に
 古い未ack eventを追い出してcompletenessを偽装しない。outboxが使えないbrowserでは記録操作を止めないが、
 該当観測窓のcompletenessは証明できないためHoldにする。
 active actorのbinding不一致、サインアウト、退会完了、401 / 403では送信前にoutbox全体を破棄し、別actorへの
@@ -89,7 +91,9 @@ active actorのbinding不一致、サインアウト、退会完了、401 / 403�
 
 sourceごとに観測開始前のversioned expectation manifestとreceived IDを比較し、loss、duplicate、reorderを
 別々に判定する。manifestはsource、sampling policy version、degradation status、sampling適用前のexpected
-event IDを固定し、evaluatorが同じversioned policyを適用する。manifest欠落、source不一致、degraded、
+event IDを固定する。観測窓・actor key version・manifest全体をdomain-separated HMAC commitmentへ事前登録し、
+evaluatorはconstant-timeで一致を検証してから同じversioned policyを適用する。空manifest、manifest欠落、
+source不一致、degraded、
 policy不一致、loss、unexpected eventはcompleteness Holdである。
 expectedとreceivedが同時に欠落してもPassにしない。duplicateとreorderは
 検出状態を残し、event IDと件数をoutputしない。dedup後に全expected eventが存在する場合だけcompletenessを
@@ -124,8 +128,13 @@ raw ProductEventへのauthority契約を次の3経路へ分離する。
 job outputはstatus-only schemaで検証し、raw row、actor hash、event ID、exact countをartifactへ保存しない。
 現在の共通DB credentialだけでは実効的な権限分離を証明できないため、production activationはHoldとする。
 table grant、versioned SECURITY DEFINER function、用途別non-owner credential、pg_cron不在時のretention fallbackは
-GitHub Issue #379で実装・検証する。production credential配布とProductEvent全key-version退会purgeは
+GitHub Issue #379で実装・検証し、保護された`PRODUCT_EVENT_INGEST_ACTIVATION`を有効化する。それまでは
+production ProductEvent endpoint自身が503でwriteを拒否する。production credential配布とProductEvent全key-version退会purgeは
 ISSUE-185の人間承認境界を維持する。
+
+匿名Web Vitalsは同一origin JSON browser requestだけを受け、server-only HMACでsamplingする。productionでは
+信頼済みedge attestation、proxy header上書き、共有client/global rate limitが揃うまでendpoint自身が503で拒否する。
+process-local limiterは開発時と共有edge後のdefense-in-depthに限定する。
 
 ## North Star
 

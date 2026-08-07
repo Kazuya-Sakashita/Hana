@@ -19,13 +19,19 @@ release unitで切り替える必要がある。
 ## Decision
 
 - Web Vitalsは`hana-web-vitals-report/v2`へ切り替え、browser内でraw値を固定dimensionへ変換する。
-- Web Vitals senderは`fetch`の`credentials: omit`と`keepalive`だけを使い、`sendBeacon`を使わない。
-- Web Vitals serverはv2のexact fixed shapeだけを受理し、rate limit後・validation後・log前にstable 10%
-  samplingを適用する。
+- Web Vitals senderは`fetch`の`credentials: omit`、`referrerPolicy: no-referrer`、`keepalive`だけを使い、
+  `sendBeacon`を使わない。
+- Web Vitals serverは同一origin JSON browser requestとv2のexact fixed shapeだけを受理し、rate limit後・
+  validation後・log前にserver-only HMAC 10% samplingを適用する。信頼済みedgeと共有rate limitが
+  未有効ならproduction endpointを503にする。
 - ProductEvent bodyへretry中も不変の`occurred_minute_utc`を追加する。
-- `GET /me`が返すserver-minted opaque bindingをProductEvent headerに必須化し、現在の認証actorと
-  constant-timeで一致する場合だけingestへ進む。
+- ProductEvent event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、DB `event_id`からminute、
+  DB `created_at`からreceipt timeを復元する。
+- `GET /me`が返す期限付きserver-minted opaque bindingをProductEvent headerに必須化し、現在の認証actor・
+  sign-in session・期限とconstant-timeで一致する場合だけingestへ進む。
 - outboxはbindingをrootに1つだけ保持し、active actorが一致しない場合は送信前に全件破棄する。
+- outboxはdurable enqueueできない場合に直接送信せず、固定degradationを保持してcompletenessをHOLDにする。
+- ProductEvent authority / retention / expectation登録が未有効ならproduction endpointを503にする。
 - binding、event ID、raw metric、path、actor hashは通常logやstatus-only evidenceへ出さない。
 
 ## Compatibility and approval
@@ -53,3 +59,4 @@ request契約test、auth境界testを再実行し、raw payloadがproduction tel
 - 旧clientとの互換性よりprivacyを優先するため、原子的なclient/server rolloutが必須になる。
 - production DB authorityとretention activationはGitHub Issue #379の独立した承認境界で、完了まで
   production telemetry activationをHOLDにする。
+- Web Vitals edge attestationと共有rate limitはGitHub Issue #380の独立した承認境界とする。

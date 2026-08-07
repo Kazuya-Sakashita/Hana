@@ -6,13 +6,13 @@ type ProductEventReport = components['schemas']['ProductEventReport']
 export type ProductEventName = ProductEventReport['event_name']
 export type ProductEventElapsedBucket = ProductEventReport['elapsed_bucket']
 
-export const PRODUCT_EVENT_OUTBOX_STORAGE_KEY = 'hana:productEventOutbox:v2'
+export const PRODUCT_EVENT_OUTBOX_STORAGE_KEY = 'hana:productEventOutbox:v3'
 export const PRODUCT_EVENT_OUTBOX_TTL_MS = 24 * 60 * 60 * 1000
 export const PRODUCT_EVENT_OUTBOX_MAX_ENTRIES = 50
 const PRODUCT_EVENT_OUTBOX_MAX_FLUSH_PER_RUN = 20
 const PRODUCT_EVENT_OUTBOX_MAX_RETRY_MS = 60_000
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const TELEMETRY_BINDING_PATTERN = /^v1\.[0-9a-f]{64}$/
+const TELEMETRY_BINDING_PATTERN = /^v2\.\d{10}\.[0-9a-f]{64}$/
 const OCCURRED_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
 const EVENT_NAMES = new Set<ProductEventName>([
   'record_started',
@@ -37,16 +37,38 @@ type ProductEventOutboxEntry = {
 }
 
 type StoredProductEventOutbox = {
-  version: 2
+  version: 3
   telemetryBinding: string
+  degradation: ProductEventDegradation
   entries: ProductEventOutboxEntry[]
 }
+
+export type ProductEventDegradation =
+  | 'NONE'
+  | 'STORAGE_UNAVAILABLE'
+  | 'CAPACITY_EXCEEDED'
+  | 'TTL_EXPIRED'
+  | 'AUTH_BOUNDARY'
 
 type ProductEventSendResult = 'acknowledged' | 'authentication_rejected' | 'retry'
 
 let activeFlush: Promise<void> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let activeTelemetryBinding: string | null = null
+let activeDegradation: ProductEventDegradation = 'NONE'
+
+function emptyOutbox(): StoredProductEventOutbox {
+  return {
+    version: 3,
+    telemetryBinding: activeTelemetryBinding ?? '',
+    degradation: activeDegradation,
+    entries: [],
+  }
+}
+
+function markDegradation(reason: Exclude<ProductEventDegradation, 'NONE'>): void {
+  if (activeDegradation === 'NONE') activeDegradation = reason
+}
 
 function hasExactKeys(value: object, expected: readonly string[]): boolean {
   const actual = Object.keys(value).sort()
@@ -107,51 +129,93 @@ function getSessionStorage(): Storage | null {
 function readOutbox(now = Date.now()): StoredProductEventOutbox {
   const storage = getSessionStorage()
   if (!storage || !activeTelemetryBinding) {
-    return { version: 2, telemetryBinding: activeTelemetryBinding ?? '', entries: [] }
+    if (!storage && activeTelemetryBinding) markDegradation('STORAGE_UNAVAILABLE')
+    return emptyOutbox()
   }
   try {
     const raw = storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
-    if (!raw) return { version: 2, telemetryBinding: activeTelemetryBinding, entries: [] }
+    if (!raw) return emptyOutbox()
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error()
     const outbox = parsed as Record<string, unknown>
     if (
-      !hasExactKeys(outbox, ['version', 'telemetryBinding', 'entries']) ||
-      outbox.version !== 2 ||
+      outbox.version === 3 &&
+      typeof outbox.telemetryBinding === 'string' &&
+      TELEMETRY_BINDING_PATTERN.test(outbox.telemetryBinding) &&
+      outbox.telemetryBinding !== activeTelemetryBinding
+    ) {
+      markDegradation('AUTH_BOUNDARY')
+      storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
+      return emptyOutbox()
+    }
+    if (
+      !hasExactKeys(outbox, ['version', 'telemetryBinding', 'degradation', 'entries']) ||
+      outbox.version !== 3 ||
       outbox.telemetryBinding !== activeTelemetryBinding ||
       typeof outbox.telemetryBinding !== 'string' ||
       !TELEMETRY_BINDING_PATTERN.test(outbox.telemetryBinding) ||
       !Array.isArray(outbox.entries) ||
       outbox.entries.length > PRODUCT_EVENT_OUTBOX_MAX_ENTRIES ||
-      !outbox.entries.every(isOutboxEntry)
+      !outbox.entries.every(isOutboxEntry) ||
+      ![
+        'NONE',
+        'STORAGE_UNAVAILABLE',
+        'CAPACITY_EXCEEDED',
+        'TTL_EXPIRED',
+        'AUTH_BOUNDARY',
+      ].includes(String(outbox.degradation))
     ) {
       throw new Error()
+    }
+    if (outbox.degradation !== 'NONE') {
+      activeDegradation = outbox.degradation as ProductEventDegradation
     }
     const entries = outbox.entries.filter(
       (entry) => now - entry.queuedAt <= PRODUCT_EVENT_OUTBOX_TTL_MS,
     )
     if (entries.length !== outbox.entries.length) {
-      writeOutbox({ version: 2, telemetryBinding: activeTelemetryBinding, entries })
+      markDegradation('TTL_EXPIRED')
+      writeOutbox({
+        version: 3,
+        telemetryBinding: activeTelemetryBinding,
+        degradation: activeDegradation,
+        entries,
+      })
     }
-    return { version: 2, telemetryBinding: activeTelemetryBinding, entries }
+    return {
+      version: 3,
+      telemetryBinding: activeTelemetryBinding,
+      degradation: activeDegradation,
+      entries,
+    }
   } catch {
+    markDegradation('STORAGE_UNAVAILABLE')
     try {
       storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
+      storage.setItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY, JSON.stringify(emptyOutbox()))
     } catch {
-      return { version: 2, telemetryBinding: activeTelemetryBinding, entries: [] }
+      return emptyOutbox()
     }
-    return { version: 2, telemetryBinding: activeTelemetryBinding, entries: [] }
+    return emptyOutbox()
   }
 }
 
 function writeOutbox(outbox: StoredProductEventOutbox): boolean {
   const storage = getSessionStorage()
-  if (!storage) return false
+  if (!storage) {
+    markDegradation('STORAGE_UNAVAILABLE')
+    return false
+  }
   try {
-    if (outbox.entries.length === 0) storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
-    else storage.setItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY, JSON.stringify(outbox))
+    const persisted = { ...outbox, degradation: activeDegradation }
+    if (persisted.entries.length === 0 && persisted.degradation === 'NONE') {
+      storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
+    } else {
+      storage.setItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY, JSON.stringify(persisted))
+    }
     return true
   } catch {
+    markDegradation('STORAGE_UNAVAILABLE')
     return false
   }
 }
@@ -164,10 +228,15 @@ function enqueue(report: ProductEventReport, now = Date.now()): boolean {
       entry.report.flow_id === report.flow_id && entry.report.event_name === report.event_name,
   )
   if (existingStage) return true
-  if (outbox.entries.length >= PRODUCT_EVENT_OUTBOX_MAX_ENTRIES) return false
+  if (outbox.entries.length >= PRODUCT_EVENT_OUTBOX_MAX_ENTRIES) {
+    markDegradation('CAPACITY_EXCEEDED')
+    writeOutbox(outbox)
+    return false
+  }
   return writeOutbox({
-    version: 2,
+    version: 3,
     telemetryBinding: activeTelemetryBinding,
+    degradation: activeDegradation,
     entries: [...outbox.entries, { report, queuedAt: now, attempts: 0, nextAttemptAt: now }],
   })
 }
@@ -185,6 +254,7 @@ async function send(report: ProductEventReport): Promise<ProductEventSendResult>
       'X-Hana-Telemetry-Binding': activeTelemetryBinding,
     },
     credentials: 'same-origin',
+    referrerPolicy: 'no-referrer',
     keepalive: true,
     body: JSON.stringify(report),
   })
@@ -265,6 +335,20 @@ export function createProductEventFlowId(): string {
   return crypto.randomUUID()
 }
 
+function createProductEventId(occurredAt: Date): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  let timestamp = occurredAt.getTime()
+  for (let index = 5; index >= 0; index -= 1) {
+    bytes[index] = timestamp & 0xff
+    timestamp = Math.floor(timestamp / 256)
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 export function flushProductEventOutbox(now: () => number = Date.now): Promise<void> {
   if (activeFlush) return activeFlush
   activeFlush = runFlush(now).finally(() => {
@@ -284,7 +368,10 @@ export function startProductEventOutbox(): () => void {
   }
 }
 
-export function clearProductEventOutbox(): void {
+export function clearProductEventOutbox(
+  degradation: Exclude<ProductEventDegradation, 'NONE'> = 'AUTH_BOUNDARY',
+): void {
+  markDegradation(degradation)
   activeTelemetryBinding = null
   if (retryTimer !== null) {
     clearTimeout(retryTimer)
@@ -301,6 +388,7 @@ export function setProductEventTelemetryBinding(binding: string | null): void {
   const normalized = binding && TELEMETRY_BINDING_PATTERN.test(binding) ? binding : null
   if (activeTelemetryBinding !== null && activeTelemetryBinding !== normalized) {
     clearProductEventOutbox()
+    activeDegradation = 'NONE'
   }
   activeTelemetryBinding = normalized
 }
@@ -322,13 +410,12 @@ export function reportProductEvent({
     const occurredAt = new Date(Math.floor(Date.now() / 60_000) * 60_000)
     const report: ProductEventReport = {
       event_name: eventName,
-      event_id: crypto.randomUUID(),
+      event_id: createProductEventId(occurredAt),
       flow_id: flowId ?? crypto.randomUUID(),
       elapsed_bucket: productEventElapsedBucket(elapsedMs),
       occurred_minute_utc: occurredAt.toISOString().replace('.000Z', 'Z'),
     }
     if (enqueue(report)) void flushProductEventOutbox()
-    else void send(report).catch(() => undefined)
   } catch {
     return
   }
@@ -338,4 +425,16 @@ export function readProductEventOutboxForTest(
   now = Date.now(),
 ): readonly ProductEventOutboxEntry[] {
   return readOutbox(now).entries
+}
+
+export function readProductEventDegradationForTest(): ProductEventDegradation {
+  return activeDegradation
+}
+
+export function resetProductEventOutboxForTests(): void {
+  activeDegradation = 'NONE'
+  activeTelemetryBinding = null
+  activeFlush = null
+  if (retryTimer !== null) clearTimeout(retryTimer)
+  retryTimer = null
 }

@@ -30,7 +30,8 @@ properties:
     example: '2026-05-14T09:30:00Z'
   telemetry_binding:
     type: string
-    pattern: '^v1\.[0-9a-f]{64}$'
+    pattern: '^v2\.\d{10}\.[0-9a-f]{64}$'
     description: |
-      ProductEvent outboxを現在のactorへbindするserver-minted opaque token。
+      ProductEvent outboxを現在のactorと認証sessionへ期限付きでbindするserver-minted opaque token。
+      sign-in session、期限bucketの変更時にrotateし、期限切れ・旧session tokenは拒否する。
       request body、DB row、通常log、status-only evidenceへ保存しない。

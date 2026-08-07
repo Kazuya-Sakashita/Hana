@@ -91,7 +91,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
-                telemetry_binding: 'v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+                telemetry_binding: 'v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -149,7 +149,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
-                telemetry_binding: 'v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+                telemetry_binding: 'v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -783,7 +783,9 @@ paths:
         senderはcredentialsをomitし、サインアウト状態と同じcookieless requestとして送る。
         requestはversion、random event ID、固定operation / reason / route group / status /
         duration bucket以外を拒否し、raw id / value / route / navigationTypeを収集しない。
-        event IDのstable hashで10% samplingし、event ID自体は構造化logへ出さない。
+        requestは同一originのapplication/json browser fetchへ限定する。
+        event IDをserver-only HMACで10% samplingし、第三者によるsample対象の事前選別を防ぐ。
+        event ID自体は構造化logへ出さない。信頼済みedgeと共有rate limitが未有効なら503でfail closedする。
       tags: [metrics]
       security: []
       requestBody:
@@ -799,6 +801,8 @@ paths:
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /metrics/events:
@@ -815,6 +819,7 @@ paths:
         記録作成フローの flow_id は POST /memories の Idempotency-Key と同じUUIDとする。
         下書き復元と通信retryでは同じflowを使い、写真構成変更または409 conflict後は新しいUUIDへ切り替える。
         clientは送信前にeventをdurable outboxへ保存し、204応答をackとして同じevent_idを再送する。
+        event_idは発生UTC分を埋め込んだUUIDv7とし、occurred_minute_utcとの一致をserverで検証する。
         memory_saved eventは補助signalであり、保存成功の正本は同じUUIDを持つDB Memoryとする。
         同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
         同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
@@ -824,11 +829,12 @@ paths:
           in: header
           required: true
           description: |
-            GET /meが返すopaque actor binding。serverは現在の認証actorとの一致をconstant-timeで検証し、
+            GET /meが返す期限付きopaque actor/session binding。serverは現在の認証actor・session・期限との
+            一致をconstant-timeで検証し、
             header値をDB、通常log、status-only evidenceへ保存しない。
           schema:
             type: string
-            pattern: '^v1\.[0-9a-f]{64}$'
+            pattern: '^v2\.\d{10}\.[0-9a-f]{64}$'
       requestBody:
         required: true
         content:
@@ -848,6 +854,8 @@ paths:
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /waitlist:

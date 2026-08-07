@@ -2,12 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { assertOpenApiResponse } from '../../helpers/openapi-response-contract'
 import { POST } from '@/app/v1/metrics/vitals/route'
 import { resetWebVitalsRateLimitForTests } from '@/features/metrics/server/web-vitals-rate-limit'
-import { shouldSampleTelemetry } from '@/features/metrics/server/telemetry-contract'
+import { shouldSampleWebVitals } from '@/features/metrics/server/web-vitals'
 
 function jsonRequest(body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/v1/metrics/vitals', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost:3000',
+      'Sec-Fetch-Site': 'same-origin',
+      ...headers,
+    },
     body: JSON.stringify(body),
   })
 }
@@ -19,7 +24,7 @@ function eventId(index: number): string {
 function eventIdWithSampling(expected: boolean): string {
   for (let index = 1; index < 10_000; index += 1) {
     const candidate = eventId(index)
-    if (shouldSampleTelemetry('web_vital', candidate) === expected) return candidate
+    if (shouldSampleWebVitals(candidate) === expected) return candidate
   }
   throw new Error('sampling_fixture_not_found')
 }
@@ -82,8 +87,23 @@ describe('POST /v1/metrics/vitals', () => {
 
     expect(first.status).toBe(204)
     expect(second.status).toBe(204)
-    expect(shouldSampleTelemetry('web_vital', unsampledEventId)).toBe(false)
+    expect(shouldSampleWebVitals(unsampledEventId)).toBe(false)
     expect(logSpy).not.toHaveBeenCalled()
+  })
+
+  it('changes sampling assignment when the server-only key rotates', () => {
+    let changed = false
+    for (let index = 1; index < 10_000; index += 1) {
+      const candidate = eventId(index)
+      vi.stubEnv('WEB_VITALS_SAMPLING_KEY', 'sampling-key-a-with-at-least-32-bytes')
+      const first = shouldSampleWebVitals(candidate)
+      vi.stubEnv('WEB_VITALS_SAMPLING_KEY', 'sampling-key-b-with-at-least-32-bytes')
+      if (first !== shouldSampleWebVitals(candidate)) {
+        changed = true
+        break
+      }
+    }
+    expect(changed).toBe(true)
   })
 
   it.each([
@@ -126,7 +146,11 @@ describe('POST /v1/metrics/vitals', () => {
     const response = await POST(
       new Request('http://localhost:3000/v1/metrics/vitals', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://localhost:3000',
+          'Sec-Fetch-Site': 'same-origin',
+        },
         body: '{',
       }),
     )
@@ -153,7 +177,12 @@ describe('POST /v1/metrics/vitals', () => {
     const parse = vi.fn()
     const limitedRequest = new Request('http://localhost:3000/v1/metrics/vitals', {
       method: 'POST',
-      headers: { 'x-forwarded-for': '198.51.100.200' },
+      headers: {
+        'content-type': 'application/json',
+        origin: 'http://localhost:3000',
+        'sec-fetch-site': 'same-origin',
+        'x-forwarded-for': '198.51.100.200',
+      },
     })
     Object.defineProperty(limitedRequest, 'json', { value: parse })
     const limited = await POST(limitedRequest)
@@ -164,5 +193,31 @@ describe('POST /v1/metrics/vitals', () => {
     expect(parse).not.toHaveBeenCalled()
     expect(logSpy).not.toHaveBeenCalled()
     expect(await limited.text()).not.toContain('198.51.100.200')
+  })
+
+  it.each([
+    [{ Origin: 'https://attacker.invalid', 'Sec-Fetch-Site': 'cross-site' }, 'cross origin'],
+    [{ 'Content-Type': 'text/plain' }, 'non JSON'],
+  ])('rejects a %s browser request before parsing or logging', async (headers, _label) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const parse = vi.fn()
+    const request = jsonRequest(validPayload, headers)
+    Object.defineProperty(request, 'json', { value: parse })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(422)
+    expect(parse).not.toHaveBeenCalled()
+    expect(logSpy).not.toHaveBeenCalled()
+  })
+
+  it('fails closed in production until the trusted shared rate-limit boundary is active', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('WEB_VITALS_SHARED_RATE_LIMIT_READY', '')
+
+    const response = await POST(jsonRequest(validPayload))
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ reason: 'telemetry_unavailable' })
   })
 })

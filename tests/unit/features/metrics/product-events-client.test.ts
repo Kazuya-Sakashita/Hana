@@ -2,22 +2,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearProductEventOutbox,
   flushProductEventOutbox,
+  PRODUCT_EVENT_OUTBOX_MAX_ENTRIES,
   PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+  PRODUCT_EVENT_OUTBOX_TTL_MS,
   productEventElapsedBucket,
+  readProductEventDegradationForTest,
   readProductEventOutboxForTest,
   reportProductEvent,
+  resetProductEventOutboxForTests,
   setProductEventTelemetryBinding,
 } from '@/features/metrics/client/product-events'
 
-const TELEMETRY_BINDING_A = `v1.${'a'.repeat(64)}`
-const TELEMETRY_BINDING_B = `v1.${'b'.repeat(64)}`
+const TELEMETRY_BINDING_A = `v2.1786125600.${'a'.repeat(64)}`
+const TELEMETRY_BINDING_B = `v2.1786125600.${'b'.repeat(64)}`
 
 afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllGlobals()
   clearProductEventOutbox()
-  setProductEventTelemetryBinding(null)
+  resetProductEventOutboxForTests()
 })
 
 class MemoryStorage implements Storage {
@@ -65,6 +69,7 @@ describe('productEventElapsedBucket', () => {
 
 describe('reportProductEvent', () => {
   it('sends only the allowlisted event fields with keepalive', async () => {
+    vi.stubGlobal('sessionStorage', new MemoryStorage())
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -80,6 +85,7 @@ describe('reportProductEvent', () => {
     const payload = JSON.parse(String(init.body)) as Record<string, unknown>
     expect(url).toBe('/v1/metrics/events')
     expect(init.keepalive).toBe(true)
+    expect(init.referrerPolicy).toBe('no-referrer')
     expect(Object.keys(payload).sort()).toEqual([
       'elapsed_bucket',
       'event_id',
@@ -91,6 +97,7 @@ describe('reportProductEvent', () => {
   })
 
   it('swallows network failures so recording is not blocked', async () => {
+    vi.stubGlobal('sessionStorage', new MemoryStorage())
     const fetchMock = vi.fn().mockRejectedValue(new Error('offline'))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -107,7 +114,7 @@ describe('reportProductEvent', () => {
 
   it('swallows synchronous browser API failures so recording is not blocked', () => {
     vi.stubGlobal('crypto', {
-      randomUUID: vi.fn(() => {
+      getRandomValues: vi.fn(() => {
         throw new Error('browser API unavailable')
       }),
     })
@@ -177,6 +184,81 @@ describe('durable ProductEvent outbox', () => {
     expect(secondPayload.event_id).toBe(eventId)
   })
 
+  it('rebinds and flushes a persisted queue after a full module-state reload', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const queuedAt = Date.now()
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 3,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: [
+          {
+            report: {
+              event_name: 'record_started',
+              event_id: '019fd985-0000-7000-8000-000000000001',
+              flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+              occurred_minute_utc: '2026-08-07T00:00:00Z',
+              elapsed_bucket: 'not_applicable',
+            },
+            queuedAt,
+            attempts: 0,
+            nextAttemptAt: queuedAt,
+          },
+        ],
+      }),
+    )
+    resetProductEventOutboxForTests()
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it('drops a persisted queue before sending when reload resolves a different actor', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const queuedAt = Date.now()
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 3,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: [
+          {
+            report: {
+              event_name: 'record_started',
+              event_id: '019fd985-0000-7000-8000-000000000001',
+              flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+              occurred_minute_utc: '2026-08-07T00:00:00Z',
+              elapsed_bucket: 'not_applicable',
+            },
+            queuedAt,
+            attempts: 0,
+            nextAttemptAt: queuedAt,
+          },
+        ],
+      }),
+    )
+    resetProductEventOutboxForTests()
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_B)
+    await flushProductEventOutbox()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(readProductEventDegradationForTest()).toBe('AUTH_BOUNDARY')
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
+  })
+
   it('deduplicates the same stage while its first request is awaiting ack', async () => {
     const storage = new MemoryStorage()
     vi.stubGlobal('sessionStorage', storage)
@@ -233,7 +315,11 @@ describe('durable ProductEvent outbox', () => {
     setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
 
     expect(readProductEventOutboxForTest()).toHaveLength(0)
-    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).toBeNull()
+    expect(JSON.parse(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY) ?? '{}')).toMatchObject({
+      version: 3,
+      degradation: 'STORAGE_UNAVAILABLE',
+      entries: [],
+    })
   })
 
   it.each([401, 403])(
@@ -262,7 +348,12 @@ describe('durable ProductEvent outbox', () => {
     setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
     storage.setItem(
       PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
-      JSON.stringify({ version: 2, telemetryBinding: TELEMETRY_BINDING_A, entries: [] }),
+      JSON.stringify({
+        version: 3,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: [],
+      }),
     )
 
     clearProductEventOutbox()
@@ -292,5 +383,91 @@ describe('durable ProductEvent outbox', () => {
     expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('x-hana-telemetry-binding')).toBe(
       TELEMETRY_BINDING_A,
     )
+  })
+
+  it('does not bypass durability when sessionStorage is unavailable', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(readProductEventDegradationForTest()).toBe('STORAGE_UNAVAILABLE')
+  })
+
+  it('marks capacity exhaustion without evicting or directly sending an event', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    const queuedAt = Date.now()
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 3,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: Array.from({ length: PRODUCT_EVENT_OUTBOX_MAX_ENTRIES }, (_, index) => ({
+          report: {
+            event_name: 'photo_selected',
+            event_id: `019fd985-0000-7000-8000-${index.toString(16).padStart(12, '0')}`,
+            flow_id: `10000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
+            occurred_minute_utc: '2026-08-07T00:00:00Z',
+            elapsed_bucket: 'under_10s',
+          },
+          queuedAt,
+          attempts: 0,
+          nextAttemptAt: queuedAt + 60_000,
+        })),
+      }),
+    )
+
+    reportProductEvent({
+      eventName: 'ai_draft_shown',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 20_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+
+    expect(readProductEventOutboxForTest()).toHaveLength(PRODUCT_EVENT_OUTBOX_MAX_ENTRIES)
+    expect(readProductEventDegradationForTest()).toBe('CAPACITY_EXCEEDED')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('marks expired durable entries as degraded', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 3,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: [
+          {
+            report: {
+              event_name: 'record_started',
+              event_id: '019fd985-0000-7000-8000-000000000001',
+              flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+              occurred_minute_utc: '2026-08-07T00:00:00Z',
+              elapsed_bucket: 'not_applicable',
+            },
+            queuedAt: 0,
+            attempts: 0,
+            nextAttemptAt: 0,
+          },
+        ],
+      }),
+    )
+
+    expect(readProductEventOutboxForTest(PRODUCT_EVENT_OUTBOX_TTL_MS + 1)).toHaveLength(0)
+    expect(readProductEventDegradationForTest()).toBe('TTL_EXPIRED')
   })
 })

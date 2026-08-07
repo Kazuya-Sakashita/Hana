@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import {
   parseWebVitalsReport,
+  shouldSampleWebVitals,
   toWebVitalsTelemetryDimensions,
 } from '@/features/metrics/server/web-vitals'
 import {
+  assertWebVitalsProductionBoundary,
   assertWebVitalsRateLimit,
   webVitalsRetryAfterSeconds,
 } from '@/features/metrics/server/web-vitals-rate-limit'
-import { shouldSampleTelemetry } from '@/features/metrics/server/telemetry-contract'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
 
@@ -23,11 +24,32 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
+function assertBrowserRequestBoundary(request: Request): void {
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+  const origin = request.headers.get('origin')
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (
+    contentType !== 'application/json' ||
+    origin !== new URL(request.url).origin ||
+    fetchSite !== 'same-origin'
+  ) {
+    throw problems.validation([
+      {
+        path: 'headers',
+        reason: 'request_boundary_invalid',
+        message: '同一originのJSON requestだけを受け付けます',
+      },
+    ])
+  }
+}
+
 export async function POST(request: Request) {
   try {
+    assertWebVitalsProductionBoundary(request)
+    assertBrowserRequestBoundary(request)
     assertWebVitalsRateLimit(request)
     const report = parseWebVitalsReport(await readJson(request))
-    if (!shouldSampleTelemetry('web_vital', report.event_id)) {
+    if (!shouldSampleWebVitals(report.event_id)) {
       return new NextResponse(null, { status: 204 })
     }
     console.log(

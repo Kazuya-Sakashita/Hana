@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   assertProductEventTelemetryBinding,
+  assertProductEventOccurrenceMatchesId,
   parseProductEventReport,
   productEventActorHash,
+  productEventOccurrenceMinuteFromEventId,
   productEventRetentionCutoff,
   productEventTelemetryBinding,
 } from '@/features/metrics/server/product-event'
@@ -10,9 +12,10 @@ import {
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
 const OTHER_USER_ID = '7f26e7f0-6f3c-4c07-9091-8f82db70b347'
 const NOW = new Date('2026-08-07T12:35:30Z')
+const SESSION_REFERENCE = '2026-08-07T00:00:00.000Z'
 const validReport = {
   event_name: 'photo_selected',
-  event_id: '123e4567-e89b-42d3-a456-426614174000',
+  event_id: '019fdc37-4ec0-7000-8000-000000000001',
   flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
   occurred_minute_utc: '2026-08-07T12:34:00Z',
   elapsed_bucket: 'under_10s',
@@ -25,6 +28,10 @@ afterEach(() => {
 describe('parseProductEventReport', () => {
   it('accepts only the allowlisted shape', () => {
     expect(parseProductEventReport(validReport, NOW)).toEqual(validReport)
+    expect(() => assertProductEventOccurrenceMatchesId(validReport)).not.toThrow()
+    expect(productEventOccurrenceMinuteFromEventId(validReport.event_id)).toBe(
+      validReport.occurred_minute_utc,
+    )
   })
 
   it('rejects unknown fields instead of silently retaining them', () => {
@@ -103,14 +110,32 @@ describe('productEventActorHash', () => {
 
   it('mints a versioned domain-separated binding and verifies the current actor', () => {
     vi.stubEnv('PRODUCT_EVENT_HASH_PEPPER', 'test-product-event-pepper-with-32-bytes')
-    const binding = productEventTelemetryBinding(USER_ID)
+    const binding = productEventTelemetryBinding(USER_ID, SESSION_REFERENCE, NOW)
 
-    expect(binding).toMatch(/^v1\.[0-9a-f]{64}$/)
-    expect(binding).not.toBe(`v1.${productEventActorHash(USER_ID)}`)
-    expect(() => assertProductEventTelemetryBinding(USER_ID, binding)).not.toThrow()
-    expect(() => assertProductEventTelemetryBinding(OTHER_USER_ID, binding)).toThrow()
-    expect(() => assertProductEventTelemetryBinding(USER_ID, null)).toThrow()
-    expect(() => assertProductEventTelemetryBinding(USER_ID, 'v1.invalid')).toThrow()
+    expect(binding).toMatch(/^v2\.\d{10}\.[0-9a-f]{64}$/)
+    expect(() =>
+      assertProductEventTelemetryBinding(USER_ID, SESSION_REFERENCE, binding, NOW),
+    ).not.toThrow()
+    expect(() =>
+      assertProductEventTelemetryBinding(OTHER_USER_ID, SESSION_REFERENCE, binding, NOW),
+    ).toThrow()
+    expect(() =>
+      assertProductEventTelemetryBinding(USER_ID, '2026-08-08T00:00:00.000Z', binding, NOW),
+    ).toThrow()
+    expect(() =>
+      assertProductEventTelemetryBinding(USER_ID, SESSION_REFERENCE, null, NOW),
+    ).toThrow()
+    expect(() =>
+      assertProductEventTelemetryBinding(USER_ID, SESSION_REFERENCE, 'v2.invalid', NOW),
+    ).toThrow()
+    expect(() =>
+      assertProductEventTelemetryBinding(
+        USER_ID,
+        SESSION_REFERENCE,
+        binding,
+        new Date(NOW.getTime() + 3 * 60 * 60 * 1000),
+      ),
+    ).toThrow()
   })
 
   it('fails closed in production when the pepper is missing or too short', () => {

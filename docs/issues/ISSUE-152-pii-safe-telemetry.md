@@ -78,10 +78,13 @@ production telemetry activationをHoldにする。
 
 - 共通event schema、sampling、90日保持、cardinality、completeness、suppression、right-censor、status-only evidenceを固定した
 - ProductEventを送信前にdurable outboxへ保存し、204応答だけをackとして同一event IDで再送するようにした
-- server-minted actor bindingをoutbox rootとheaderへ固定し、actor変更、サインアウト、退会完了、401 / 403でoutboxを破棄して別actorへの再送と誤帰属を防止した
+- 発生minuteをUUIDv7 event IDへ埋め込み、既存DB `event_id / created_at`から発生minuteとreceipt timeを復元できるようにした
+- server-minted期限付きactor/session bindingをoutbox rootとheaderへ固定し、actor変更、サインアウト、退会完了、401 / 403でoutboxを破棄して別actorへの再送と誤帰属を防止した
+- durable enqueue失敗時のdirect sendを廃止し、capacity / TTL / storage / auth degradationをfail-closedに保持した
 - 記録flowとMemory `Idempotency-Key`を同期し、下書き復元・写真変更・retry・409 conflictの遷移規則を実装した
 - Web Vitalsをbrowser内で固定dimensionへ変換し、raw ID・値・path・navigation typeを送らず、cookieをomitするv2 requestへ同期した
 - ProductEvent DB role / retention fallbackはreviewer上限を超えない独立した承認境界として#379へ分離した
+- Web Vitals edge attestation / 共有rate limitは#380へ分離し、両境界とも有効化前のproduction ingestを503にした
 - 本番credential、退会purge、HMAC key lifecycleはISSUE-185の人間承認境界を維持した
 
 ## 検証結果
@@ -90,11 +93,11 @@ production telemetry activationをHoldにする。
 - `pnpm openapi:gen` PASS
 - `pnpm openapi:auth-contract` PASS（24 operations / 20 private）
 - `pnpm typecheck`、`pnpm lint`、`pnpm format:check` PASS
-- `pnpm test` PASS（193 files中187 PASS / 6 skip、1644 tests中1621 PASS / 23 skip）
+- `pnpm test` PASS（194 files中188 PASS / 6 skip、1662 tests中1639 PASS / 23 skip）
 - `pnpm pr:gate` PASS（`origin/main`取り込み後の全検査・buildを含む）
-- `oasdiff breaking`は14件（required追加9 / 旧Vitals raw field削除5）。ADR-0018とexact-report waiver承認まではHOLD
+- `oasdiff breaking`は16件（error 11 / warning 5）、exact report SHA-256は`c35e6d1a25be6160730c1f09db217b2c92b1392540e7f061aeb149693ba1b8bf`。ADR-0018とwaiver承認まではHOLD
 - 第1巡はcommit `1814d03`をsecurity / privacy / analyticsの3名が独立reviewし、3 / 6 / 5件のactionable findingで全員HOLD
-- 第1巡の所見を修正中。最新SHAの第2巡は6つの必須roleを別reviewerが独立確認する
+- 第2巡はcommit `bcbfd06`を6つの必須roleが独立reviewし、重複を除く所見を修正した。最新SHAを第3巡で確認する
 
 ## 専門review履歴
 
@@ -103,6 +106,12 @@ production telemetry activationをHoldにする。
 | 1   | `1814d03` | security                    | HOLD |                   3 |
 | 1   | `1814d03` | privacy                     | HOLD |                   6 |
 | 1   | `1814d03` | analytics / spec acceptance | HOLD |                   5 |
+| 2   | `bcbfd06` | spec acceptance / analytics | HOLD |                   4 |
+| 2   | `bcbfd06` | implementation correctness  | HOLD |                   6 |
+| 2   | `bcbfd06` | test reliability            | HOLD |                   6 |
+| 2   | `bcbfd06` | API contract                | HOLD |                   3 |
+| 2   | `bcbfd06` | security / authorization    | HOLD |                   5 |
+| 2   | `bcbfd06` | privacy / data protection   | HOLD |                   4 |
 
 ## 参考
 
@@ -112,3 +121,4 @@ production telemetry activationをHoldにする。
 - ISSUE-159
 - ISSUE-185
 - GitHub Issue #379（ISSUE-186: ProductEvent DB authority / retention fallback）
+- GitHub Issue #380（ISSUE-187: Web Vitals edge attestation / shared rate limit）

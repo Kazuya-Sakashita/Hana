@@ -16,6 +16,7 @@ interface SyntheticAuthUser {
   identities: unknown[]
   created_at: string
   updated_at: string
+  last_sign_in_at: string
   is_anonymous: boolean
 }
 
@@ -29,5 +30,6 @@ export const E2E_USER = {
   identities: [],
   created_at: '2026-07-31T00:00:00.000Z',
   updated_at: '2026-07-31T00:00:00.000Z',
+  last_sign_in_at: '2026-07-31T00:00:00.000Z',
   is_anonymous: false,
 } satisfies SyntheticAuthUser

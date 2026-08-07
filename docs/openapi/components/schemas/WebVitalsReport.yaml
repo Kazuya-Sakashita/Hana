@@ -5,6 +5,25 @@ description: |
   event_idはstable sampling用であり、通常logやstatus-only evidenceへ出さない。
 additionalProperties: false
 required: [schema_version, event_id, operation, reason, route_group, status, duration_bucket]
+allOf:
+  - if:
+      properties:
+        operation:
+          const: web_vital_cls
+    then:
+      properties:
+        duration_bucket:
+          const: not_applicable
+    else:
+      properties:
+        duration_bucket:
+          enum:
+            - under_100ms
+            - from_100_to_500ms
+            - from_501_to_1000ms
+            - from_1001_to_2500ms
+            - from_2501_to_4000ms
+            - over_4000ms
 properties:
   schema_version:
     type: string
@@ -12,7 +31,7 @@ properties:
   event_id:
     type: string
     format: uuid
-    description: report単位のrandom UUID。actor識別には使わない。
+    description: report単位のrandom UUID。actor識別には使わず、server-only HMAC samplingへ使う。
   operation:
     type: string
     enum: [web_vital_cls, web_vital_fcp, web_vital_inp, web_vital_lcp, web_vital_ttfb]

@@ -46,6 +46,8 @@ export default defineConfig({
         SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service-role-key',
         ANTHROPIC_API_KEY: 'synthetic-anthropic-key',
         AI_MODEL: 'claude-haiku-4-5',
+        PRODUCT_EVENT_HASH_PEPPER: 'synthetic-product-event-pepper-32-bytes',
+        PRODUCT_EVENT_INGEST_ACTIVATION: 'issue-186-retention-v1',
       },
     },
   ],

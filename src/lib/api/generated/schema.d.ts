@@ -446,7 +446,9 @@ export interface paths {
          *     senderはcredentialsをomitし、サインアウト状態と同じcookieless requestとして送る。
          *     requestはversion、random event ID、固定operation / reason / route group / status /
          *     duration bucket以外を拒否し、raw id / value / route / navigationTypeを収集しない。
-         *     event IDのstable hashで10% samplingし、event ID自体は構造化logへ出さない。
+         *     requestは同一originのapplication/json browser fetchへ限定する。
+         *     event IDをserver-only HMACで10% samplingし、第三者によるsample対象の事前選別を防ぐ。
+         *     event ID自体は構造化logへ出さない。信頼済みedgeと共有rate limitが未有効なら503でfail closedする。
          */
         post: operations["reportWebVitals"];
         delete?: never;
@@ -475,6 +477,7 @@ export interface paths {
          *     記録作成フローの flow_id は POST /memories の Idempotency-Key と同じUUIDとする。
          *     下書き復元と通信retryでは同じflowを使い、写真構成変更または409 conflict後は新しいUUIDへ切り替える。
          *     clientは送信前にeventをdurable outboxへ保存し、204応答をackとして同じevent_idを再送する。
+         *     event_idは発生UTC分を埋め込んだUUIDv7とし、occurred_minute_utcとの一致をserverで検証する。
          *     memory_saved eventは補助signalであり、保存成功の正本は同じUUIDを持つDB Memoryとする。
          *     同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
          *     同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
@@ -653,7 +656,8 @@ export interface components {
              */
             created_at: string;
             /**
-             * @description ProductEvent outboxを現在のactorへbindするserver-minted opaque token。
+             * @description ProductEvent outboxを現在のactorと認証sessionへ期限付きでbindするserver-minted opaque token。
+             *     sign-in session、期限bucketの変更時にrotateし、期限切れ・旧session tokenは拒否する。
              *     request body、DB row、通常log、status-only evidenceへ保存しない。
              */
             telemetry_binding: string;
@@ -1007,7 +1011,7 @@ export interface components {
             schema_version: "hana-web-vitals-report/v2";
             /**
              * Format: uuid
-             * @description report単位のrandom UUID。actor識別には使わない。
+             * @description report単位のrandom UUID。actor識別には使わず、server-only HMAC samplingへ使う。
              */
             event_id: string;
             /** @enum {string} */
@@ -1020,7 +1024,7 @@ export interface components {
             status: "good" | "needs_improvement" | "poor";
             /** @enum {string} */
             duration_bucket: "not_applicable" | "under_100ms" | "from_100_to_500ms" | "from_501_to_1000ms" | "from_1001_to_2500ms" | "from_2501_to_4000ms" | "over_4000ms";
-        };
+        } & unknown;
         /**
          * @description 記録体験のファネル計測に使う仮名化イベント。
          *     許可された5フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
@@ -1034,8 +1038,9 @@ export interface components {
             event_name: "record_started" | "photo_selected" | "ai_draft_shown" | "memory_saved" | "memory_viewed";
             /**
              * Format: uuid
-             * @description 冪等な再送判定に使うイベント単位のUUID
-             * @example 8f7e6d5c-4b3a-4291-8765-0123456789ab
+             * @description 冪等な再送判定に使うUUIDv7。先頭48 bitへoccurred_minute_utcと同じUTC分を埋め込み、
+             *     restricted aggregateだけがDB event_idから発生minuteを復元する。通常logやstatus-only evidenceへ出さない。
+             * @example 019fdc37-4ec0-7000-8000-000000000001
              */
             event_id: string;
             /**
@@ -1049,6 +1054,7 @@ export interface components {
             /**
              * Format: date-time
              * @description clientでstageが発生したUTC分bucket。通信retryでも同じ値を維持する。
+             *     server受信時刻より未来の分と、受信時刻から24時間を超えて古い分は受理しない。
              *     restricted aggregateはserver受信遅延とclock境界を検証し、不確かなwindowをHOLDにする。
              * @example 2026-08-07T12:34:00Z
              */
@@ -1461,7 +1467,7 @@ export interface operations {
                      *       "display_name": null,
                      *       "ai_consent_at": null,
                      *       "created_at": "2026-05-14T09:30:00Z",
-                     *       "telemetry_binding": "v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                     *       "telemetry_binding": "v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -1516,7 +1522,7 @@ export interface operations {
                      *       "display_name": null,
                      *       "ai_consent_at": null,
                      *       "created_at": "2026-05-14T09:30:00Z",
-                     *       "telemetry_binding": "v1.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                     *       "telemetry_binding": "v2.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -2065,6 +2071,7 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     reportProductEvent: {
@@ -2072,7 +2079,8 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description GET /meが返すopaque actor binding。serverは現在の認証actorとの一致をconstant-timeで検証し、
+                 * @description GET /meが返す期限付きopaque actor/session binding。serverは現在の認証actor・session・期限との
+                 *     一致をconstant-timeで検証し、
                  *     header値をDB、通常log、status-only evidenceへ保存しない。
                  */
                 "X-Hana-Telemetry-Binding": string;
@@ -2099,6 +2107,7 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createWaitlistSignup: {

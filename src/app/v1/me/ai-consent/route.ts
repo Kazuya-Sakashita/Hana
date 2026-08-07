@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/server/auth/current-user'
+import { requireAuthenticatedAccount, requireUser } from '@/server/auth/current-user'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { prisma } from '@/server/db/prisma'
 import type { AppUser } from '@/lib/supabase/types'
 import { lockAiConsent } from '@/features/ai/server/consent-lock'
-import { productEventTelemetryBinding } from '@/features/metrics/server/product-event'
+import {
+  productEventSessionReference,
+  productEventTelemetryBinding,
+} from '@/features/metrics/server/product-event'
 import { Prisma } from '@prisma/client'
 import { problems } from '@/server/api/problems'
 
@@ -36,8 +39,12 @@ function toAppUserResponse(user: AppUser, telemetryBinding: string) {
 
 export async function POST() {
   try {
+    const { authUser } = await requireAuthenticatedAccount()
     const user = await requireUser()
-    const telemetryBinding = productEventTelemetryBinding(user.id)
+    const telemetryBinding = productEventTelemetryBinding(
+      user.id,
+      productEventSessionReference(authUser),
+    )
     const profile = await prisma.$transaction(async (tx) => {
       await lockAiConsent(tx, user.id)
       await tx.profile.updateMany({
@@ -64,8 +71,12 @@ export async function POST() {
 
 export async function DELETE() {
   try {
+    const { authUser } = await requireAuthenticatedAccount()
     const user = await requireUser()
-    const telemetryBinding = productEventTelemetryBinding(user.id)
+    const telemetryBinding = productEventTelemetryBinding(
+      user.id,
+      productEventSessionReference(authUser),
+    )
     const profile = await prisma.$transaction(async (tx) => {
       await lockAiConsent(tx, user.id)
       return tx.profile.update({
