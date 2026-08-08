@@ -1,7 +1,7 @@
 ---
 title: Hana Product Validation Funnel Go/Hold Contract
 status: active
-contract_version: 2026-08-08.1
+contract_version: 2026-08-09.1
 last_updated: 2026-08-08
 owners:
   - product
@@ -150,7 +150,9 @@ release Goへ読み替えない。
 
 - event送信失敗を離脱、未保存、未閲覧として扱わない。DB Memory作成は保存の正とする。
 - event依存のM2、M3、M8、M9はISSUE-191の相関・重複・順序・completeness証跡がGoになるまでHoldとする。
-- funnel completenessがPASS / completeでなければM2、M3、M8、M9を`telemetry_incomplete`のHoldへ強制する。
+- evidence生成は署名済みcompleteness inputを再評価し、query version、全評価actor scope、各metricのentry windowを
+  一致させる。1日または1 actorだけのPASSを月次cohortへ流用しない。funnel completenessがPASS / completeで
+  なければM2、M3、M8、M9を`telemetry_incomplete`のHoldへ強制する。
 - event endpoint、retention job、aggregate query、actor key versionのいずれかが観測期間中に未確認なら該当cohortはHoldにする。
 - 観測窓未完了、min不足、重複排除不能、時計境界不明、削除で分母を再現不能な場合もHoldにする。
 - 欠測を補完、推定、外挿してGoへ変更しない。

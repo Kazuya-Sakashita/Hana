@@ -61,6 +61,9 @@ PR #382が最終Review Round 5でHOLDになったため、Round 6へ進まず、
 - [x] nested synthetic actorをexact-key schemaに限定し、再署名済み未知fieldを拒否する
 - [x] M1〜M9全件のentry / maturity単一変異とM9 baselineのcutoff ±1msを検証する
 - [x] PRDと下流ISSUE-159 / 162をISSUE-191の署名済みevidence契約へ揃える
+- [x] completeness inputをquery / 全actor scope / metric windowへ拘束し、短い期間・単一actorのPASS流用を拒否する
+- [x] baseline receiptを検証済みbaseline evidence本体へ拘束し、正規再署名した任意digestを拒否する
+- [x] verifierでnested exact schema、exact M1〜M12、funnel伝播、全体status再導出を検証する
 - [ ] 固定base / head SHAを6専門roleがRound 1からreviewし、通常上限3巡以内に全role GOを得る
 
 ## セキュリティ・プライバシー考慮

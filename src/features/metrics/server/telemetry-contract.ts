@@ -10,7 +10,7 @@ import {
 import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurrence'
 
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
-export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v5' as const
+export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v6' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
   'hana-telemetry-expectation-manifest/v5' as const
 export const TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION =
@@ -21,17 +21,17 @@ export const TELEMETRY_EVENT_UNIVERSE_SCHEMA_VERSION = 'hana-telemetry-event-uni
 export const TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION = 'hana-telemetry-ingest-receipt/v2' as const
 export const TELEMETRY_MEMORY_TRUTH_RECEIPT_SCHEMA_VERSION =
   'hana-telemetry-memory-truth-receipt/v1' as const
-export const TELEMETRY_TARGET_DECISION_SCHEMA_VERSION = 'hana-telemetry-target-decision/v2' as const
+export const TELEMETRY_TARGET_DECISION_SCHEMA_VERSION = 'hana-telemetry-target-decision/v3' as const
 export const TELEMETRY_BASELINE_EVIDENCE_RECEIPT_SCHEMA_VERSION =
-  'hana-telemetry-baseline-evidence-receipt/v1' as const
+  'hana-telemetry-baseline-evidence-receipt/v2' as const
 export const TELEMETRY_BINARY_OUTCOME_TABLE_SCHEMA_VERSION =
   'hana-telemetry-binary-outcome-table/v1' as const
 export const TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION =
-  'hana-telemetry-metric-window-manifest/v2' as const
+  'hana-telemetry-metric-window-manifest/v3' as const
 export const TELEMETRY_ELIGIBLE_CENSUS_SCHEMA_VERSION = 'hana-telemetry-eligible-census/v1' as const
 export const TELEMETRY_CENSORING_STATUS_SCHEMA_VERSION =
   'hana-telemetry-censoring-status/v1' as const
-export const TELEMETRY_QUERY_VERSION = 'issue-191-v2' as const
+export const TELEMETRY_QUERY_VERSION = 'issue-191-v3' as const
 export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
 export const TELEMETRY_RETENTION_DAYS = 90
@@ -137,6 +137,7 @@ const COMMITMENT_DOMAINS = [
   'authoritative_event_universe',
   'eligible_census',
   'censoring_status',
+  'completeness_scope',
 ] as const
 const TELEMETRY_EVIDENCE_DIGEST_DOMAIN = 'hana-telemetry-evidence-digest/v1\0'
 const METRIC_STATUSES = ['PASS', 'FAIL', 'HOLD'] as const
@@ -188,6 +189,7 @@ const METRIC_REASONS = [
   'censoring_changes_decision',
   'database_truth_complete',
   'target_not_configured',
+  'baseline_only',
   'unsupported_metric_direction',
 ] as const
 const SHA256_PATTERN = /^[0-9a-f]{64}$/
@@ -207,8 +209,8 @@ const TELEMETRY_MEMORY_TRUTH_RECEIPT_DOMAIN = 'hana-telemetry-memory-truth-recei
 const TELEMETRY_TARGET_DECISION_DOMAIN = 'hana-telemetry-target-decision/v2\0'
 const TELEMETRY_BASELINE_EVIDENCE_RECEIPT_DOMAIN = 'hana-telemetry-baseline-evidence-receipt/v1\0'
 const TELEMETRY_ELIGIBILITY_POLICY_VERSION = 'source-operation-actor-window/v1' as const
-const TELEMETRY_METRIC_POLICY_VERSION = 'immutable-metric-policy/v2' as const
-const TELEMETRY_TARGET_POLICY_VERSION = 'protected-baseline-target/v2' as const
+const TELEMETRY_METRIC_POLICY_VERSION = 'immutable-metric-policy/v3' as const
+const TELEMETRY_TARGET_POLICY_VERSION = 'protected-baseline-target/v3' as const
 const HIGHER_IS_BETTER_PRODUCTION_METRICS = new Set<TelemetryMetricId>([
   'M1',
   'M2',
@@ -770,7 +772,6 @@ function validAuthorityRegistration(input: TelemetryCompletenessInput): boolean 
     (registration.expected_actor !== null &&
       (!validSyntheticActorRef(registration.expected_actor) ||
         registration.expected_actor.actor_key_version !== input.actor_key_version)) ||
-    (registration.source === 'funnel' && registration.expected_actor === null) ||
     parseUtc(registration.window_start_utc) === null ||
     parseUtc(registration.window_end_utc) === null ||
     parseUtc(registration.window_start_utc)! >= parseUtc(registration.window_end_utc)!
@@ -1859,6 +1860,7 @@ export type TelemetryBaselineEvidenceReceipt = {
   window_end_utc: string
   generated_at_utc: string
   evidence_digest: string
+  evidence: TelemetryEvidence
   metric_status: 'HOLD'
   metric_reason: 'baseline_only'
   evidence_key_version: string
@@ -1897,6 +1899,53 @@ export function createTelemetryBaselineEvidenceReceiptCommitment(input: {
     .digest('hex')
 }
 
+export function buildTelemetryBaselineEvidenceReceipt(input: {
+  metric_id: 'M8' | 'M9'
+  evidence: TelemetryEvidence
+}): TelemetryBaselineEvidenceReceipt {
+  const evidenceKeyVersion = process.env.TELEMETRY_EVIDENCE_KEY_VERSION
+  const evidenceKey = process.env.TELEMETRY_EVIDENCE_COMMITMENT_KEY
+  const actorKeyVersion = protectedActorKeyVersion()
+  if (
+    !isRecord(input) ||
+    !hasExactKeys(input, ['metric_id', 'evidence']) ||
+    !verifyTelemetryEvidence(input.evidence) ||
+    input.evidence.cohort_role !== 'baseline' ||
+    typeof evidenceKeyVersion !== 'string' ||
+    typeof evidenceKey !== 'string' ||
+    actorKeyVersion === null
+  ) {
+    throw new TelemetryContractError('invalid_input')
+  }
+  const metric = input.evidence.metrics.find((item) => item.metric_id === input.metric_id)
+  if (metric?.status !== 'HOLD' || metric.reason !== 'baseline_only') {
+    throw new TelemetryContractError('invalid_input')
+  }
+  const unsigned = {
+    schema_version: TELEMETRY_BASELINE_EVIDENCE_RECEIPT_SCHEMA_VERSION,
+    evidence_schema_version: TELEMETRY_EVIDENCE_SCHEMA_VERSION,
+    query_version: TELEMETRY_QUERY_VERSION,
+    metric_id: input.metric_id,
+    cohort_role: 'baseline' as const,
+    actor_key_version: actorKeyVersion,
+    window_start_utc: input.evidence.window_start_utc,
+    window_end_utc: input.evidence.window_end_utc,
+    generated_at_utc: input.evidence.generated_at_utc,
+    evidence_digest: input.evidence.evidence_digest,
+    evidence: input.evidence,
+    metric_status: 'HOLD' as const,
+    metric_reason: 'baseline_only' as const,
+    evidence_key_version: evidenceKeyVersion,
+  }
+  return {
+    ...unsigned,
+    receipt_commitment: createTelemetryBaselineEvidenceReceiptCommitment({
+      receipt: unsigned,
+      commitment_key: evidenceKey,
+    }),
+  }
+}
+
 export function createTelemetryTargetDecisionCommitment(input: {
   decision: Omit<TelemetryTargetDecision, 'target_commitment'>
   commitment_key: string
@@ -1933,6 +1982,7 @@ function validBaselineEvidenceReceipt(
       'window_end_utc',
       'generated_at_utc',
       'evidence_digest',
+      'evidence',
       'metric_status',
       'metric_reason',
       'evidence_key_version',
@@ -1949,7 +1999,23 @@ function validBaselineEvidenceReceipt(
     receipt.evidence_key_version !== configuredEvidenceVersion ||
     typeof configuredEvidenceKey !== 'string' ||
     !SHA256_PATTERN.test(receipt.evidence_digest) ||
-    !SHA256_PATTERN.test(receipt.receipt_commitment)
+    !SHA256_PATTERN.test(receipt.receipt_commitment) ||
+    !verifyTelemetryEvidence(receipt.evidence) ||
+    receipt.evidence.cohort_role !== 'baseline' ||
+    receipt.evidence.schema_version !== receipt.evidence_schema_version ||
+    receipt.evidence.query_version !== receipt.query_version ||
+    receipt.evidence.actor_key_version !== receipt.actor_key_version ||
+    receipt.evidence.window_start_utc !== receipt.window_start_utc ||
+    receipt.evidence.window_end_utc !== receipt.window_end_utc ||
+    receipt.evidence.generated_at_utc !== receipt.generated_at_utc ||
+    receipt.evidence.evidence_key_version !== receipt.evidence_key_version ||
+    receipt.evidence.evidence_digest !== receipt.evidence_digest ||
+    !receipt.evidence.metrics.some(
+      (metric) =>
+        metric.metric_id === metricId &&
+        metric.status === receipt.metric_status &&
+        metric.reason === receipt.metric_reason,
+    )
   ) {
     return false
   }
@@ -2326,6 +2392,7 @@ const METRIC_REASON_STATUS: Record<TelemetryMetricReason, MetricStatus> = {
   censoring_changes_decision: 'HOLD',
   database_truth_complete: 'PASS',
   target_not_configured: 'HOLD',
+  baseline_only: 'HOLD',
   unsupported_metric_direction: 'HOLD',
 }
 
@@ -2364,8 +2431,13 @@ const METRIC_REASON_ALLOWLIST = {
   M5: EVIDENCE_RATE_REASONS,
   M6: EVIDENCE_RATE_REASONS,
   M7: EVIDENCE_RATE_REASONS,
-  M8: [...EVIDENCE_RATE_REASONS, 'telemetry_incomplete', 'target_not_configured'],
-  M9: [...EVIDENCE_RATE_REASONS, ...FUNNEL_CORRELATION_HOLD_REASONS, 'target_not_configured'],
+  M8: [...EVIDENCE_RATE_REASONS, 'telemetry_incomplete', 'target_not_configured', 'baseline_only'],
+  M9: [
+    ...EVIDENCE_RATE_REASONS,
+    ...FUNNEL_CORRELATION_HOLD_REASONS,
+    'target_not_configured',
+    'baseline_only',
+  ],
   M10: ['unsupported_metric_direction'],
   M11: ['unsupported_metric_direction'],
   M12: ['unsupported_metric_direction'],
@@ -2377,6 +2449,8 @@ const METRIC_REASON_ALLOWLIST = {
 
 function validMetricResult(metric: TelemetryMetricResult): boolean {
   return (
+    isRecord(metric) &&
+    hasExactKeys(metric, ['metric_id', 'status', 'reason']) &&
     includes(METRIC_IDS, metric.metric_id) &&
     includes(METRIC_STATUSES, metric.status) &&
     includes(METRIC_REASONS, metric.reason) &&
@@ -2388,6 +2462,12 @@ function validMetricResult(metric: TelemetryMetricResult): boolean {
 }
 
 function validCompletenessResult(result: TelemetryCompletenessResult): boolean {
+  if (
+    !isRecord(result) ||
+    !hasExactKeys(result, ['source', 'status', 'reason', 'duplicate', 'reorder'])
+  ) {
+    return false
+  }
   const validReasonStatus =
     (result.reason === 'complete' && result.status === 'PASS') ||
     (result.reason !== 'complete' && result.status === 'HOLD')
@@ -2398,6 +2478,117 @@ function validCompletenessResult(result: TelemetryCompletenessResult): boolean {
     ['NONE', 'DETECTED'].includes(result.duplicate) &&
     ['NONE', 'DETECTED'].includes(result.reorder)
   )
+}
+
+export type TelemetryEvidenceCompletenessResult = TelemetryCompletenessResult & {
+  query_version: typeof TELEMETRY_QUERY_VERSION
+  actor_key_version: string
+  window_start_utc: string
+  window_end_utc: string
+  cohort_scope: 'all_actors' | 'expected_actor_only'
+  scope_commitment: string
+}
+
+function validEvidenceCompletenessResult(
+  result: unknown,
+): result is TelemetryEvidenceCompletenessResult {
+  if (
+    !isRecord(result) ||
+    !hasExactKeys(result, [
+      'source',
+      'status',
+      'reason',
+      'duplicate',
+      'reorder',
+      'query_version',
+      'actor_key_version',
+      'window_start_utc',
+      'window_end_utc',
+      'cohort_scope',
+      'scope_commitment',
+    ]) ||
+    result.query_version !== TELEMETRY_QUERY_VERSION ||
+    result.actor_key_version !== protectedActorKeyVersion() ||
+    parseUtc(String(result.window_start_utc)) === null ||
+    parseUtc(String(result.window_end_utc)) === null ||
+    parseUtc(String(result.window_start_utc))! >= parseUtc(String(result.window_end_utc))! ||
+    !['all_actors', 'expected_actor_only'].includes(String(result.cohort_scope)) ||
+    typeof result.scope_commitment !== 'string' ||
+    !SHA256_PATTERN.test(result.scope_commitment)
+  ) {
+    return false
+  }
+  return validCompletenessResult({
+    source: result.source,
+    status: result.status,
+    reason: result.reason,
+    duplicate: result.duplicate,
+    reorder: result.reorder,
+  } as TelemetryCompletenessResult)
+}
+
+function validEvidenceCompletenessInput(
+  value: unknown,
+  windowStartUtc: string,
+  windowEndUtc: string,
+): value is TelemetryCompletenessInput {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      'source',
+      'manifest',
+      'received',
+      'window_start_utc',
+      'window_end_utc',
+      'actor_key_version',
+      'authority_registration',
+      'authority_registry_receipt',
+      'event_universe',
+      'received_receipts',
+      'sampling_key_version',
+      'sampling_key',
+      'manifest_commitment',
+    ]) ||
+    !includes(SOURCES, value.source) ||
+    value.window_start_utc !== windowStartUtc ||
+    value.window_end_utc !== windowEndUtc ||
+    value.actor_key_version !== protectedActorKeyVersion() ||
+    !isRecord(value.manifest) ||
+    value.manifest.query_version !== TELEMETRY_QUERY_VERSION ||
+    !isRecord(value.authority_registration)
+  ) {
+    return false
+  }
+  return (
+    value.source !== 'funnel' ||
+    (value.authority_registration.expected_actor === null &&
+      value.authority_registration.cohort_rule === 'all_actors')
+  )
+}
+
+function deriveEvidenceStatus(input: {
+  completeness: readonly Pick<TelemetryCompletenessResult, 'status'>[]
+  metrics: readonly TelemetryMetricResult[]
+}): MetricStatus {
+  if (
+    input.metrics.some((metric) => metric.status === 'HOLD') ||
+    input.completeness.some((item) => item.status === 'HOLD')
+  ) {
+    return 'HOLD'
+  }
+  return input.metrics.some((metric) => metric.status === 'FAIL') ? 'FAIL' : 'PASS'
+}
+
+function validEvidenceCompletenessPropagation(input: {
+  completeness: readonly Pick<TelemetryCompletenessResult, 'source' | 'status' | 'reason'>[]
+  metrics: readonly TelemetryMetricResult[]
+}): boolean {
+  const funnel = input.completeness.find((item) => item.source === 'funnel')
+  if (funnel?.status === 'PASS' && funnel.reason === 'complete') return true
+  return (['M2', 'M3', 'M8', 'M9'] as const).every((metricId) => {
+    const metric = input.metrics.find((item) => item.metric_id === metricId)
+    return metric?.status === 'HOLD' && metric.reason === 'telemetry_incomplete'
+  })
 }
 
 type RequiredTelemetryMetricId = (typeof TELEMETRY_REQUIRED_METRIC_IDS)[number]
@@ -2474,10 +2665,10 @@ export type TelemetryMetricWindowEntry = {
 export type TelemetryMetricWindowManifest = {
   schema_version: typeof TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION
   query_version: typeof TELEMETRY_QUERY_VERSION
-  contract_version: '2026-08-08.1'
+  contract_version: '2026-08-09.1'
   metric_policy_version: typeof TELEMETRY_METRIC_POLICY_VERSION
   actor_key_version: string
-  cohort_role: 'evaluation'
+  cohort_role: 'baseline' | 'evaluation'
   window_start_utc: string
   window_end_utc: string
   metric_ids: readonly RequiredTelemetryMetricId[]
@@ -2695,10 +2886,10 @@ function validMetricWindowManifest(
     ]) &&
     value.schema_version === TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION &&
     value.query_version === TELEMETRY_QUERY_VERSION &&
-    value.contract_version === '2026-08-08.1' &&
+    value.contract_version === '2026-08-09.1' &&
     value.metric_policy_version === TELEMETRY_METRIC_POLICY_VERSION &&
     value.actor_key_version === protectedActorKeyVersion() &&
-    value.cohort_role === 'evaluation' &&
+    (value.cohort_role === 'baseline' || value.cohort_role === 'evaluation') &&
     value.window_start_utc === windowStartUtc &&
     value.window_end_utc === windowEndUtc &&
     Array.isArray(value.metric_ids) &&
@@ -2709,32 +2900,34 @@ function validMetricWindowManifest(
       window_end_utc: windowEndUtc,
     }) &&
     Array.isArray(value.target_decisions) &&
-    value.target_decisions.length === 2 &&
-    new Set(
-      value.target_decisions.map((decision) =>
-        isRecord(decision) ? decision.metric_id : undefined,
-      ),
-    ).size === 2 &&
-    (['M8', 'M9'] as const).every((metricId) => {
-      const decision = value.target_decisions.find(
-        (candidate) => isRecord(candidate) && candidate.metric_id === metricId,
-      )
-      return (
-        decision !== undefined &&
-        value.metric_windows.some((entry) => entry.metric_id === metricId) &&
-        validatedProtectedTarget({
-          metric_id: metricId,
-          evaluation_window_start_utc: value.metric_windows.find(
-            (entry) => entry.metric_id === metricId,
-          )!.entry_window_start_utc,
-          evaluation_window_end_utc: value.metric_windows.find(
-            (entry) => entry.metric_id === metricId,
-          )!.entry_window_end_utc,
-          generated_at_utc: generatedAtUtc,
-          target_decision: decision,
-        }) !== null
-      )
-    })
+    (value.cohort_role === 'baseline'
+      ? value.target_decisions.length === 0
+      : value.target_decisions.length === 2 &&
+        new Set(
+          value.target_decisions.map((decision) =>
+            isRecord(decision) ? decision.metric_id : undefined,
+          ),
+        ).size === 2 &&
+        (['M8', 'M9'] as const).every((metricId) => {
+          const decision = value.target_decisions.find(
+            (candidate) => isRecord(candidate) && candidate.metric_id === metricId,
+          )
+          return (
+            decision !== undefined &&
+            value.metric_windows.some((entry) => entry.metric_id === metricId) &&
+            validatedProtectedTarget({
+              metric_id: metricId,
+              evaluation_window_start_utc: value.metric_windows.find(
+                (entry) => entry.metric_id === metricId,
+              )!.entry_window_start_utc,
+              evaluation_window_end_utc: value.metric_windows.find(
+                (entry) => entry.metric_id === metricId,
+              )!.entry_window_end_utc,
+              generated_at_utc: generatedAtUtc,
+              target_decision: decision,
+            }) !== null
+          )
+        }))
   )
 }
 
@@ -2859,6 +3052,12 @@ function evidenceRateResultsMatch(input: {
     const censoring = input.censoring_status.metrics.find((item) => item.metric_id === metricId)
     const supplied = input.metrics.find((item) => item.metric_id === metricId)
     if (!census || !censoring || !supplied) return false
+    if (
+      input.metric_window_manifest.cohort_role === 'baseline' &&
+      (metricId === 'M8' || metricId === 'M9')
+    ) {
+      return supplied.status === 'HOLD' && supplied.reason === 'baseline_only'
+    }
     if (!funnelComplete && ['M2', 'M3', 'M8', 'M9'].includes(metricId)) {
       return supplied.status === 'HOLD' && supplied.reason === 'telemetry_incomplete'
     }
@@ -2910,6 +3109,7 @@ export type TelemetryEvidence = {
   query_version: typeof TELEMETRY_QUERY_VERSION
   event_schema_version: typeof TELEMETRY_EVENT_SCHEMA_VERSION
   actor_key_version: string
+  cohort_role: 'baseline' | 'evaluation'
   generated_at_utc: string
   commitment_scheme: typeof TELEMETRY_COMMITMENT_SCHEME
   evidence_key_version: string
@@ -2919,7 +3119,7 @@ export type TelemetryEvidence = {
   eligible_census_commitment: string
   censoring_policy_version: 'right-censor-worst-case/v1'
   censoring_status_commitment: string
-  completeness: readonly TelemetryCompletenessResult[]
+  completeness: readonly TelemetryEvidenceCompletenessResult[]
   metrics: readonly TelemetryMetricResult[]
   status: MetricStatus
   evidence_digest: string
@@ -2933,7 +3133,7 @@ export function buildTelemetryEvidence(input: {
   metric_window_manifest: TelemetryMetricWindowManifest
   eligible_census: TelemetryEligibleCensus
   censoring_status: TelemetryCensoringStatus
-  completeness: readonly TelemetryCompletenessResult[]
+  completeness_inputs: readonly TelemetryCompletenessInput[]
   metrics: readonly TelemetryMetricResult[]
 }): TelemetryEvidence {
   const evidenceKeyVersion = process.env.TELEMETRY_EVIDENCE_KEY_VERSION
@@ -2949,7 +3149,7 @@ export function buildTelemetryEvidence(input: {
       'metric_window_manifest',
       'eligible_census',
       'censoring_status',
-      'completeness',
+      'completeness_inputs',
       'metrics',
     ]) ||
     !SHA_PATTERN.test(input.source_sha) ||
@@ -2975,35 +3175,67 @@ export function buildTelemetryEvidence(input: {
       input.window_start_utc,
       input.window_end_utc,
     ) ||
-    input.completeness.length !== SOURCES.length ||
+    !Array.isArray(input.completeness_inputs) ||
+    !Array.isArray(input.metrics) ||
+    input.completeness_inputs.length !== SOURCES.length ||
     input.metrics.length !== TELEMETRY_REQUIRED_METRIC_IDS.length ||
-    new Set(input.completeness.map((item) => item.source)).size !== input.completeness.length ||
-    SOURCES.some((source) => !input.completeness.some((item) => item.source === source)) ||
-    input.completeness.some((item) => !validCompletenessResult(item)) ||
+    input.completeness_inputs.some(
+      (item) => !validEvidenceCompletenessInput(item, input.window_start_utc, input.window_end_utc),
+    ) ||
+    new Set(input.completeness_inputs.map((item) => item.source)).size !==
+      input.completeness_inputs.length ||
+    SOURCES.some((source) => !input.completeness_inputs.some((item) => item.source === source)) ||
     new Set(input.metrics.map((metric) => metric.metric_id)).size !== input.metrics.length ||
     TELEMETRY_REQUIRED_METRIC_IDS.some(
       (metricId) => !input.metrics.some((metric) => metric.metric_id === metricId),
     ) ||
     input.metrics.some((metric) => !validMetricResult(metric)) ||
-    !evidenceRateResultsMatch(input)
+    !evidenceRateResultsMatch({
+      ...input,
+      completeness: input.completeness_inputs.map(evaluateTelemetryCompleteness),
+    })
   ) {
     throw new TelemetryContractError('invalid_input')
   }
-  const status: MetricStatus =
-    input.metrics.some((metric) => metric.status === 'HOLD') ||
-    input.completeness.some((item) => item.status === 'HOLD')
-      ? 'HOLD'
-      : input.metrics.some((metric) => metric.status === 'FAIL')
-        ? 'FAIL'
-        : 'PASS'
+  const completeness = input.completeness_inputs.map(evaluateTelemetryCompleteness)
+  const status = deriveEvidenceStatus({ completeness, metrics: input.metrics })
+  const commitmentBoundary = {
+    window_start_utc: input.window_start_utc,
+    window_end_utc: input.window_end_utc,
+    actor_key_version: actorKeyVersion,
+    commitment_key: evidenceKey,
+  }
   const orderedCompleteness = SOURCES.map((source) => {
-    const item = input.completeness.find((candidate) => candidate.source === source)!
+    const completenessInput = input.completeness_inputs.find(
+      (candidate) => candidate.source === source,
+    )!
+    const item = completeness.find((candidate) => candidate.source === source)!
     return {
       source,
       status: item.status,
       reason: item.reason,
       duplicate: item.duplicate,
       reorder: item.reorder,
+      query_version: TELEMETRY_QUERY_VERSION,
+      actor_key_version: actorKeyVersion,
+      window_start_utc: completenessInput.window_start_utc,
+      window_end_utc: completenessInput.window_end_utc,
+      cohort_scope: completenessInput.authority_registration.cohort_rule,
+      scope_commitment: createTelemetryCommitment({
+        ...commitmentBoundary,
+        domain: 'completeness_scope',
+        value: {
+          source,
+          query_version: TELEMETRY_QUERY_VERSION,
+          actor_key_version: actorKeyVersion,
+          window_start_utc: completenessInput.window_start_utc,
+          window_end_utc: completenessInput.window_end_utc,
+          cohort_rule: completenessInput.authority_registration.cohort_rule,
+          expected_actor: completenessInput.authority_registration.expected_actor,
+          authority_commitment: completenessInput.manifest.authority_commitment,
+          universe_commitment: completenessInput.manifest.universe_commitment,
+        },
+      }),
     }
   })
   const sanitizedMetrics = input.metrics.map((metric) => ({
@@ -3011,18 +3243,13 @@ export function buildTelemetryEvidence(input: {
     status: metric.status,
     reason: metric.reason,
   }))
-  const commitmentBoundary = {
-    window_start_utc: input.window_start_utc,
-    window_end_utc: input.window_end_utc,
-    actor_key_version: actorKeyVersion,
-    commitment_key: evidenceKey,
-  }
   const evidenceWithoutDigest = {
     schema_version: TELEMETRY_EVIDENCE_SCHEMA_VERSION,
     source_sha: input.source_sha,
     query_version: TELEMETRY_QUERY_VERSION,
     event_schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
     actor_key_version: actorKeyVersion,
+    cohort_role: input.metric_window_manifest.cohort_role,
     generated_at_utc: input.generated_at_utc,
     commitment_scheme: TELEMETRY_COMMITMENT_SCHEME,
     evidence_key_version: evidenceKeyVersion,
@@ -3066,6 +3293,7 @@ export function verifyTelemetryEvidence(value: unknown): value is TelemetryEvide
       'query_version',
       'event_schema_version',
       'actor_key_version',
+      'cohort_role',
       'generated_at_utc',
       'commitment_scheme',
       'evidence_key_version',
@@ -3084,6 +3312,7 @@ export function verifyTelemetryEvidence(value: unknown): value is TelemetryEvide
     value.query_version !== TELEMETRY_QUERY_VERSION ||
     value.event_schema_version !== TELEMETRY_EVENT_SCHEMA_VERSION ||
     value.actor_key_version !== actorKeyVersion ||
+    (value.cohort_role !== 'baseline' && value.cohort_role !== 'evaluation') ||
     value.commitment_scheme !== TELEMETRY_COMMITMENT_SCHEME ||
     value.evidence_key_version !== evidenceKeyVersion ||
     value.censoring_policy_version !== 'right-censor-worst-case/v1' ||
@@ -3112,11 +3341,42 @@ export function verifyTelemetryEvidence(value: unknown): value is TelemetryEvide
     value.metrics.length !== TELEMETRY_REQUIRED_METRIC_IDS.length ||
     new Set(value.completeness.map((item) => (isRecord(item) ? item.source : undefined))).size !==
       SOURCES.length ||
-    new Set(value.metrics.map((item) => (isRecord(item) ? item.metric_id : undefined))).size !==
-      TELEMETRY_REQUIRED_METRIC_IDS.length ||
-    value.completeness.some((item) => !validCompletenessResult(item as never)) ||
+    !hasExactRequiredMetricSet(
+      value.metrics.map((item) => (isRecord(item) ? item.metric_id : undefined)),
+    ) ||
+    value.completeness.some((item) => !validEvidenceCompletenessResult(item)) ||
+    value.completeness.some(
+      (item) =>
+        !isRecord(item) ||
+        item.window_start_utc !== value.window_start_utc ||
+        item.window_end_utc !== value.window_end_utc ||
+        item.actor_key_version !== value.actor_key_version,
+    ) ||
+    !value.completeness.some(
+      (item) => isRecord(item) && item.source === 'funnel' && item.cohort_scope === 'all_actors',
+    ) ||
     value.metrics.some((item) => !validMetricResult(item as never)) ||
-    !includes(METRIC_STATUSES, value.status)
+    !includes(METRIC_STATUSES, value.status) ||
+    value.status !==
+      deriveEvidenceStatus({
+        completeness: value.completeness as unknown as TelemetryEvidenceCompletenessResult[],
+        metrics: value.metrics as unknown as TelemetryMetricResult[],
+      }) ||
+    !validEvidenceCompletenessPropagation({
+      completeness: value.completeness as unknown as TelemetryEvidenceCompletenessResult[],
+      metrics: value.metrics as unknown as TelemetryMetricResult[],
+    }) ||
+    (value.cohort_role === 'baseline' &&
+      !(['M8', 'M9'] as const).every((metricId) => {
+        const metric = (value.metrics as unknown as TelemetryMetricResult[]).find(
+          (item) => item.metric_id === metricId,
+        )
+        return metric?.status === 'HOLD' && metric.reason === 'baseline_only'
+      })) ||
+    (value.cohort_role === 'evaluation' &&
+      (value.metrics as unknown as TelemetryMetricResult[]).some(
+        (metric) => metric.reason === 'baseline_only',
+      ))
   ) {
     return false
   }

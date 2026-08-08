@@ -1,7 +1,7 @@
 # PII-safe telemetry contract
 
 - Status: active
-- Version: `issue-191-v2`
+- Version: `issue-191-v3`
 - Event schema: `hana-telemetry-event/v2`
 - Retention: 90 days
 
@@ -171,8 +171,11 @@ actor key versionをHMAC-SHA256へdomain-separated入力し、通常のSHA diges
 このright-censor rate evaluatorは高いほど良いproduction rateのM1 / M2 / M3 / M5 / M6 / M7 / M8 / M9
 だけに使う。minimumとtargetはcallerから受け取らず、M1 / M2 / M3 / M5 / M6 / M7はproduct contractの固定値を
 code policyとして使う。M2 / M3はdistinct Profileとflowを、M7はdistinct ProfileとProfile-weekをそれぞれ20以上要求する。
-funnel completenessがPASS / completeでない場合、M2 / M3 / M8 / M9は個別rateを直列化せず
-`HOLD / telemetry_incomplete`へ強制する。固定maturity cutoff前は`HOLD / window_not_mature`だけを受理する。
+evidence builderはcallerが渡したcompleteness結果を信用せず、署名済みcompleteness inputを再評価する。
+query version、protected actor key version、全評価actor scope、UTC windowを一致させ、1日または1 actorだけの
+PASSを月次cohortへ流用しない。funnel completenessがPASS / completeでない場合、M2 / M3 / M8 / M9は
+個別rateを直列化せず`HOLD / telemetry_incomplete`へ強制する。固定maturity cutoff前は
+`HOLD / window_not_mature`だけを受理する。
 M8 / M9はbaseline evidence keyで署名した`baseline` role receiptをtarget decisionへ埋め込み、target、
 `at_or_above`方向、target固定時刻、evaluation window、再計測期限を専用target keyでまとめて署名する。
 `baseline.window_end <= baseline.generated_at <= target_fixed_at < evaluation.window_start`を満たし、
@@ -220,7 +223,10 @@ completeness sourceはDB Memory truthである。単独ではGoにせずdiagnost
 
 ## Evidence
 
-`hana-telemetry-evidence/v5`はsource SHA、UTC window、query / event schema version、保護されたactor key version、
-window manifest / eligible census / censoring statusのdomain-separated keyed commitment、4つの必須sourceの
-completeness、metric別statusとreason、全体status、artifact全体のdomain-separated keyed digestだけを持つ。必須sourceの欠落・
-余分、commitmentのdomain / window / key version不一致、metric status / reason不一致、未知値はfail closedにする。
+`hana-telemetry-evidence/v6`はsource SHA、UTC window、query / event schema version、保護されたactor key version、
+baseline / evaluation cohort role、window manifest / eligible census / censoring statusのdomain-separated keyed
+commitment、query / actor scope / windowへ拘束した4つのstatus-only completeness、metric別statusとreason、
+再導出した全体status、artifact全体のdomain-separated keyed digestだけを持つ。必須sourceの欠落・余分、exactな
+M1〜M12以外への置換、nested unknown field、funnel HOLD伝播矛盾、全体status矛盾、commitmentのdomain / window /
+key version不一致をfail closedにする。M8 / M9のbaseline receiptは任意digestを受け取らず、検証済みbaseline
+evidence本体を内包してschema / query / actor key / window / generated time / metric result / digestを完全一致させる。

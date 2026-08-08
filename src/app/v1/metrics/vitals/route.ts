@@ -28,6 +28,7 @@ function assertBrowserRequestBoundary(request: Request): void {
   const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
   const origin = request.headers.get('origin')
   const fetchSite = request.headers.get('sec-fetch-site')
+  const configuredOrigin = configuredWebVitalsOrigin(request)
   if (contentType !== 'application/json') {
     throw problems.validation([
       {
@@ -37,7 +38,7 @@ function assertBrowserRequestBoundary(request: Request): void {
       },
     ])
   }
-  if (origin !== new URL(request.url).origin) {
+  if (origin !== configuredOrigin) {
     throw problems.validation([
       {
         path: 'header.Origin',
@@ -55,6 +56,27 @@ function assertBrowserRequestBoundary(request: Request): void {
       },
     ])
   }
+}
+
+function configuredWebVitalsOrigin(request: Request): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL
+  if (!configured) {
+    if (process.env.NODE_ENV === 'production') throw problems.telemetryUnavailable()
+    return new URL(request.url).origin
+  }
+  let url: URL
+  try {
+    url = new URL(configured)
+  } catch {
+    throw problems.telemetryUnavailable()
+  }
+  const developmentHttp =
+    url.protocol === 'http:' &&
+    (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]')
+  if ((url.protocol !== 'https:' && !developmentHttp) || url.username || url.password) {
+    throw problems.telemetryUnavailable()
+  }
+  return url.origin
 }
 
 export async function POST(request: Request) {

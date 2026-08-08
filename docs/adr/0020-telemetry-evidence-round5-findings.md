@@ -31,6 +31,11 @@ target decision、sealed universe chronology、Memory actor ownership、protecte
   caller指定値、未設定、未知形式、PII様値を拒否する。
 - query、evidence、metric policy、target policy、manifestのversionを更新し、ISSUE-188およびRound 1の署名済み証跡を受理しない。
 - status-only evidence全体は保護されたevidence keyと専用domainのHMACで署名し、固定status / reasonを含む出力改ざんを拒否する。
+- completenessは署名済みinputをbuilder内で再評価し、query、全actor evaluation scope、metric windowを拘束する。
+  1日・1 actorのPASSを月次cohortへ流用しない。
+- baseline receiptは検証済みbaseline evidence本体を内包し、任意64桁digest、cohort role、window、version、metric結果の
+  不一致を拒否する。
+- verifierはnested exact-key、exact M1〜M12、funnel HOLD伝播、`HOLD > FAIL > PASS`で再導出した全体statusを検証する。
 - status-only evidenceにはraw event、actor、exact count、rate、子どもの情報を含めない。
 
 ## Compatibility and approval

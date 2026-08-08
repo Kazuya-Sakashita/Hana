@@ -403,6 +403,45 @@ describe('POST /v1/metrics/vitals', () => {
     },
   )
 
+  it('compares Origin with the configured app origin instead of an attacker-controlled Host', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://hana.example')
+    const request = new Request('https://attacker.invalid/v1/metrics/vitals', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://attacker.invalid',
+        'Sec-Fetch-Site': 'same-origin',
+      },
+      body: JSON.stringify(validPayload),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(422)
+    expect(await response.json()).toMatchObject({
+      reason: 'validation_error',
+      errors: [{ path: 'header.Origin', reason: 'request_boundary_invalid' }],
+    })
+  })
+
+  it('accepts the configured app origin independently of the received request Host', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://hana.example')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const request = new Request('https://proxy-host.invalid/v1/metrics/vitals', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://hana.example',
+        'Sec-Fetch-Site': 'same-origin',
+      },
+      body: JSON.stringify(validPayload),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(204)
+  })
+
   it('rejects invalid JSON with Problem Details', async () => {
     const response = await POST(
       new Request('http://localhost:3000/v1/metrics/vitals', {
@@ -502,6 +541,27 @@ describe('POST /v1/metrics/vitals', () => {
     vi.stubEnv('WEB_VITALS_EDGE_ATTESTATION_SECRET', edgeSecret)
     vi.stubEnv('WEB_VITALS_SAMPLING_KEY', SAMPLING_KEY)
     vi.stubEnv('WEB_VITALS_SAMPLING_KEY_VERSION', '')
+
+    const response = await POST(
+      jsonRequest(validPayload, {
+        'x-hana-edge-attestation': edgeSecret,
+        'x-forwarded-for': '203.0.113.10',
+      }),
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ reason: 'telemetry_unavailable' })
+  })
+
+  it('fails closed in production when the canonical app origin is missing', async () => {
+    const edgeSecret = 'synthetic-edge-attestation-secret-32-bytes'
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '')
+    vi.stubEnv('WEB_VITALS_SHARED_RATE_LIMIT_READY', 'true')
+    vi.stubEnv('WEB_VITALS_TRUST_PROXY_HEADERS', 'true')
+    vi.stubEnv('WEB_VITALS_EDGE_ATTESTATION_SECRET', edgeSecret)
+    vi.stubEnv('WEB_VITALS_SAMPLING_KEY', SAMPLING_KEY)
+    vi.stubEnv('WEB_VITALS_SAMPLING_KEY_VERSION', SAMPLING_KEY_VERSION)
 
     const response = await POST(
       jsonRequest(validPayload, {
