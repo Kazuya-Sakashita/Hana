@@ -8,6 +8,7 @@ function source(path: string) {
 const issue = source('docs/issues/ISSUE-188-telemetry-contract-round5-recovery.md')
 const contract = source('docs/observability/pii-safe-telemetry.md')
 const environmentExample = source('.env.example')
+const playwrightConfig = source('playwright.config.ts')
 const openApi = source('docs/openapi/openapi.yaml')
 const productEventSchema = source('docs/openapi/components/schemas/ProductEventReport.yaml')
 const webVitalsSchema = source('docs/openapi/components/schemas/WebVitalsReport.yaml')
@@ -91,5 +92,6 @@ describe('ISSUE-188 PII-safe telemetry contract recovery', () => {
     expect(environmentExample).not.toMatch(
       /^PRODUCT_EVENT_(?:INGEST|PURGE|DEGRADATION)_ACTIVATION=issue-/m,
     )
+    expect(playwrightConfig).toContain("PRODUCT_EVENT_DEGRADATION_ACTIVATION: 'issue-190-v1'")
   })
 })

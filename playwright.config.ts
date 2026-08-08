@@ -49,6 +49,7 @@ export default defineConfig({
         PRODUCT_EVENT_HASH_PEPPER: 'synthetic-product-event-pepper-32-bytes',
         PRODUCT_EVENT_INGEST_ACTIVATION: 'issue-186-retention-v1',
         PRODUCT_EVENT_PURGE_ACTIVATION: 'issue-185-purge-v1',
+        PRODUCT_EVENT_DEGRADATION_ACTIVATION: 'issue-190-v1',
         WEB_VITALS_SAMPLING_KEY: 'synthetic-web-vitals-sampling-key-32-bytes',
         WEB_VITALS_SAMPLING_KEY_VERSION: 'synthetic-v1',
       },
