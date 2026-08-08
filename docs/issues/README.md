@@ -12,8 +12,8 @@
 | status | count |
 | --- | ---: |
 | `todo` | 4 |
-| `in_progress` | 2 |
-| `review` | 9 |
+| `in_progress` | 1 |
+| `review` | 10 |
 | `done` | 150 |
 | `blocked` | 8 |
 
@@ -33,7 +33,6 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
 | `ISSUE-166` | `#338` | `in_progress` | P0 | M | GitHub Rulesetと安全なAuto-mergeを有効化する | - |
-| `ISSUE-188` | `#381` | `in_progress` | P1 | M | ISSUE-152置換: PII-safe telemetry契約のRound 5所見を解消する | - |
 
 ## Review Queue
 
@@ -48,6 +47,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
+| `ISSUE-188` | `#381` | `review` | P1 | M | ISSUE-152置換: PII-safe telemetry契約のRound 5所見を解消する | - |
 
 ## Blocked Or Needs Human Decision
 
@@ -238,7 +238,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
 | `ISSUE-185` | `#375` | `blocked` | P0 | M | ProductEventの退会purgeとHMAC key lifecycleを実装する | ISSUE-188 |
-| `ISSUE-188` | `#381` | `in_progress` | P1 | M | ISSUE-152置換: PII-safe telemetry契約のRound 5所見を解消する | - |
+| `ISSUE-188` | `#381` | `review` | P1 | M | ISSUE-152置換: PII-safe telemetry契約のRound 5所見を解消する | - |
 
 ## Status Rules
 

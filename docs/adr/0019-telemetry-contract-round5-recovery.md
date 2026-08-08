@@ -1,8 +1,8 @@
 # 0019. Telemetry契約をbare UUIDと全dimension matrixへ統一する
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-08
-- Deciders: pending exact-report approval
+- Deciders: Kazuya-Sakashita
 - Related: ISSUE-188 / GitHub Issue #381
 - Supersedes implementation evidence from: ISSUE-152 / GitHub Issue #322 / PR #378
 
@@ -39,7 +39,8 @@ ISSUE-152のreport hash、waiver、review、ISSUE-173例外proofは再利用し�
 
 Candidate exact reportは21件（error 16 / warning 5）、GitHub Action互換の改行正規化後
 SHA-256は`5b1e916b4ef35c448101624354d73f86d9d0de277fe88dbc7fe8025873e8bc35`である。
-人間のexact-report承認はpendingであり、承認前は本ADRもproposedを維持する。
+2026-08-08T01:48:02Zに`Kazuya-Sakashita`が上記21件とexact report SHA-256だけを
+明示承認した。waiverの期限、保護label、最新SHAのfresh reviewとCIのいずれかが欠けた場合はHOLDする。
 
 ## Consequences
 
