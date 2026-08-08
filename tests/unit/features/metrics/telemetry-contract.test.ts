@@ -8,6 +8,7 @@ import {
   createTelemetrySamplingKeyCommitment,
   evaluateCensoredRate,
   evaluateSyntheticFunnelFlow,
+  evaluateSyntheticM9ViewToMemory,
   evaluateTelemetryCompleteness,
   NORTH_STAR_CONTRACT,
   parseTelemetryEnvelope,
@@ -24,6 +25,7 @@ import {
   type SyntheticActorRef,
   type SyntheticFunnelEvent,
   type SyntheticMemoryTruth,
+  type SyntheticProfileMemoryTruth,
   type TelemetryCompletenessResult,
   type TelemetryCompletenessInput,
   type TelemetryEnvelope,
@@ -57,16 +59,20 @@ const ACTOR_A_OLD_KEY: SyntheticActorRef = {
   actor_token: 'c'.repeat(64),
 }
 
-function envelope(eventId: string, operation: TelemetryEnvelope['dimensions']['operation']) {
+function envelope(
+  eventId: string,
+  operation: TelemetryEnvelope['dimensions']['operation'],
+  occurredAtUtc = '2026-08-07T00:00:00Z',
+) {
   const noDuration = operation === 'record_started' || operation === 'memory_viewed'
   return parseTelemetryEnvelope({
     schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
     event_id: eventId,
-    occurred_at_utc: '2026-08-07T00:00:00Z',
+    occurred_at_utc: occurredAtUtc,
     dimensions: {
       operation,
       reason: operation === 'api_request' ? 'validation_error' : 'stage_observed',
-      route_group: 'record',
+      route_group: operation === 'memory_viewed' ? 'memory' : 'record',
       status: operation === 'api_request' ? 'client_error' : 'success',
       duration_bucket:
         operation === 'api_request'
@@ -213,6 +219,29 @@ function memoryTruth(overrides: Partial<SyntheticMemoryTruth> = {}): SyntheticMe
   }
 }
 
+function viewedEvent(overrides: Partial<SyntheticFunnelEvent> = {}): SyntheticFunnelEvent {
+  return {
+    event_id: EVENT_B,
+    flow_id: FLOW_ID,
+    actor: ACTOR_A,
+    event_name: 'memory_viewed',
+    occurred_minute_utc: '2026-08-07T00:00:00Z',
+    received_at_utc: '2026-08-07T00:20:00Z',
+    anchor_trust: 'verified',
+    ...overrides,
+  }
+}
+
+function profileMemory(
+  overrides: Partial<SyntheticProfileMemoryTruth> = {},
+): SyntheticProfileMemoryTruth {
+  return {
+    actor: ACTOR_A,
+    created_at_utc: '2026-08-13T23:59:59Z',
+    ...overrides,
+  }
+}
+
 function fourSourceCompleteness(): TelemetryCompletenessResult[] {
   const ids: Record<TelemetrySource, string> = {
     funnel: EVENT_A,
@@ -274,7 +303,7 @@ describe('PII-safe telemetry schema v2', () => {
   )
 
   it('fixes retention, sampling and cardinality to code allowlists', () => {
-    expect(TELEMETRY_QUERY_VERSION).toBe('issue-152-v3')
+    expect(TELEMETRY_QUERY_VERSION).toBe('issue-188-v1')
     expect(TELEMETRY_RETENTION_DAYS).toBe(90)
     expect(TELEMETRY_SAMPLING).toEqual({ funnel: 1, web_vital: 0.1, api: 0.1, ai: 1 })
     expect(() =>
@@ -321,6 +350,32 @@ describe('PII-safe telemetry schema v2', () => {
       }),
     ).toThrow('unknown_value')
   })
+
+  it.each(['metrics', 'account', 'ai'] as const)(
+    'rejects the global route group %s for Web Vitals',
+    (routeGroup) => {
+      const valid = sourceEnvelope('web_vital', sampledEventId('web_vital', true))
+      expect(() =>
+        parseTelemetryEnvelope({
+          ...valid,
+          dimensions: { ...valid.dimensions, route_group: routeGroup },
+        }),
+      ).toThrow('unknown_value')
+    },
+  )
+
+  it.each(['public', 'auth', 'home', 'record', 'memory', 'settings', 'other_private'] as const)(
+    'accepts the Web Vitals route group %s',
+    (routeGroup) => {
+      const valid = sourceEnvelope('web_vital', sampledEventId('web_vital', true))
+      expect(
+        parseTelemetryEnvelope({
+          ...valid,
+          dimensions: { ...valid.dimensions, route_group: routeGroup },
+        }).dimensions.route_group,
+      ).toBe(routeGroup)
+    },
+  )
 
   it.each(['2026-02-30T00:00:00Z', '2026-08-07T24:00:00Z'])(
     'rejects a non-canonical calendar timestamp %s',
@@ -602,6 +657,31 @@ describe('actor-scoped funnel DB truth correlation', () => {
     expect(result).not.toHaveProperty('actor')
   })
 
+  it('uses the same generic bare UUID contract and canonical comparison as ingestion', () => {
+    expect(
+      evaluateSyntheticFunnelFlow({
+        metric_id: 'M2',
+        flow_id: FLOW_ID.toUpperCase(),
+        expected_actor: ACTOR_A,
+        generated_at_utc: '2026-08-07T01:00:00Z',
+        completeness_input: completeFunnel,
+        events: [funnelEvent()],
+        memories: [memoryTruth()],
+      }),
+    ).toMatchObject({ status: 'PASS', reason: 'memory_saved_within_window' })
+    expect(
+      evaluateSyntheticFunnelFlow({
+        metric_id: 'M2',
+        flow_id: `urn:uuid:${FLOW_ID}`,
+        expected_actor: ACTOR_A,
+        generated_at_utc: '2026-08-07T01:00:00Z',
+        completeness_input: completeFunnel,
+        events: [funnelEvent()],
+        memories: [memoryTruth()],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'actor_reference_invalid' })
+  })
+
   it('does not attribute another actor or key version memory with the same flow', () => {
     for (const actor of [ACTOR_B, ACTOR_A_OLD_KEY]) {
       expect(
@@ -792,6 +872,148 @@ describe('actor-scoped funnel DB truth correlation', () => {
   })
 })
 
+describe('M9 occurrence-minute view-to-memory correlation', () => {
+  const completeView = completenessInput('funnel', manifest([EVENT_B]), [
+    envelope(EVENT_B, 'memory_viewed'),
+  ])
+  const base = {
+    expected_actor: ACTOR_A,
+    generated_at_utc: '2026-08-14T00:01:00Z',
+    completeness_input: completeView,
+    events: [viewedEvent()],
+    memories: [profileMemory()],
+  }
+
+  it('uses the occurrence-minute interval and not delayed receipt as the seven-day anchor', () => {
+    expect(evaluateSyntheticM9ViewToMemory(base)).toEqual({
+      metric_id: 'M9',
+      status: 'PASS',
+      reason: 'memory_saved_within_window',
+    })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        events: [viewedEvent({ received_at_utc: '2026-08-13T12:00:00Z' })],
+      }),
+    ).toMatchObject({ status: 'PASS', reason: 'memory_saved_within_window' })
+  })
+
+  it('holds until the full occurrence interval plus seven days is mature', () => {
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        generated_at_utc: '2026-08-14T00:00:59Z',
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'window_not_mature' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        memories: [],
+      }),
+    ).toMatchObject({ status: 'FAIL', reason: 'memory_not_saved' })
+  })
+
+  it.each([
+    ['2026-08-07T00:00:30Z', 'HOLD', 'event_reordered_after_truth'],
+    ['2026-08-13T23:59:59Z', 'PASS', 'memory_saved_within_window'],
+    ['2026-08-14T00:00:00Z', 'HOLD', 'stage_anchor_boundary'],
+    ['2026-08-14T00:00:59Z', 'HOLD', 'stage_anchor_boundary'],
+    ['2026-08-14T00:01:00Z', 'FAIL', 'memory_saved_after_window'],
+  ] as const)(
+    'evaluates memory at %s with the minute-interval worst case',
+    (createdAtUtc, status, reason) => {
+      expect(
+        evaluateSyntheticM9ViewToMemory({
+          ...base,
+          memories: [profileMemory({ created_at_utc: createdAtUtc })],
+        }),
+      ).toMatchObject({ status, reason })
+    },
+  )
+
+  it('uses the first eligible view for the profile', () => {
+    const laterMinute = '2026-08-07T12:00:00Z'
+    const laterEventId = uuidV7ForMinute(laterMinute, '000000000011')
+    const completeness = completenessInput('funnel', manifest([EVENT_B, laterEventId]), [
+      envelope(EVENT_B, 'memory_viewed'),
+      envelope(laterEventId, 'memory_viewed', laterMinute),
+    ])
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        completeness_input: completeness,
+        events: [
+          viewedEvent({
+            event_id: laterEventId,
+            occurred_minute_utc: laterMinute,
+            received_at_utc: '2026-08-07T12:20:00Z',
+          }),
+          viewedEvent(),
+        ],
+        memories: [profileMemory({ created_at_utc: '2026-08-14T00:01:00Z' })],
+      }),
+    ).toMatchObject({ status: 'FAIL', reason: 'memory_saved_after_window' })
+  })
+
+  it('holds unverified, actor-mismatched, incomplete and invalid occurrence anchors', () => {
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        events: [viewedEvent({ anchor_trust: 'unverified' })],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'stage_anchor_unverified' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        events: [viewedEvent({ actor: ACTOR_B })],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'actor_reference_invalid' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        expected_actor: ACTOR_A_OLD_KEY,
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'actor_reference_invalid' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        completeness_input: completenessInput('funnel', manifest([EVENT_B]), []),
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        events: [viewedEvent({ occurred_minute_utc: '2026-08-07T00:01:00Z' })],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
+  })
+
+  it('requires the complete occurrence minute to be inside the entry window', () => {
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        completeness_input: completenessInput(
+          'funnel',
+          manifest([EVENT_B]),
+          [envelope(EVENT_B, 'memory_viewed')],
+          { window_start_utc: '2026-08-07T00:00:01Z' },
+        ),
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        completeness_input: completenessInput(
+          'funnel',
+          manifest([EVENT_B]),
+          [envelope(EVENT_B, 'memory_viewed')],
+          { window_end_utc: '2026-08-07T00:00:30Z' },
+        ),
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
+  })
+})
+
 describe('privacy aggregation', () => {
   it('uses worst-case right-censor intervals without returning counts', () => {
     expect(
@@ -961,6 +1183,57 @@ describe('status-only evidence v2', () => {
         completeness: valid.completeness.map((item, index) =>
           index === 0 ? { ...item, status: 'HOLD', reason: 'caller_claimed_safe' } : item,
         ) as never,
+      }),
+    ).toThrow('invalid_input')
+  })
+
+  it.each([
+    ['worst_case_passed', 'PASS'],
+    ['best_case_failed', 'FAIL'],
+    ['censoring_changes_decision', 'HOLD'],
+  ] as const)('rejects M12 with the right-censor reason %s', (reason, status) => {
+    const valid = evidenceInput()
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metrics: [{ metric_id: 'M12', status, reason }],
+      }),
+    ).toThrow('invalid_input')
+  })
+
+  it.each(['M1', 'M2', 'M3', 'M5', 'M6', 'M7', 'M8', 'M9'] as const)(
+    'accepts right-censor results only for the supported production rate metric %s',
+    (metricId) => {
+      const valid = evidenceInput()
+      for (const metric of [
+        { metric_id: metricId, status: 'PASS', reason: 'worst_case_passed' },
+        { metric_id: metricId, status: 'FAIL', reason: 'best_case_failed' },
+        { metric_id: metricId, status: 'HOLD', reason: 'censoring_changes_decision' },
+      ] as const) {
+        expect(buildTelemetryEvidence({ ...valid, metrics: [metric] }).metrics).toEqual([metric])
+      }
+    },
+  )
+
+  it.each(['M4', 'M10', 'M11', 'north_star_monthly_memories_per_active_profile'] as const)(
+    'rejects a right-censor result for unsupported metric %s',
+    (metricId) => {
+      const valid = evidenceInput()
+      expect(() =>
+        buildTelemetryEvidence({
+          ...valid,
+          metrics: [{ metric_id: metricId, status: 'PASS', reason: 'worst_case_passed' }],
+        }),
+      ).toThrow('invalid_input')
+    },
+  )
+
+  it('rejects a funnel-correlation reason for an unrelated metric', () => {
+    const valid = evidenceInput()
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metrics: [{ metric_id: 'M1', status: 'PASS', reason: 'memory_saved_within_window' }],
       }),
     ).toThrow('invalid_input')
   })

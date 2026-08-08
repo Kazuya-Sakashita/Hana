@@ -49,4 +49,20 @@ describe('record telemetry flow lifecycle', () => {
       }),
     ).toThrow('invalid_next_flow_id')
   })
+
+  it('accepts generic bare UUIDs and returns their canonical lowercase form', () => {
+    expect(
+      resolveRecordFlowTransition({
+        transition: 'draft_restored',
+        currentFlowId: 'ABCDEFAB-CDEF-9999-7000-ABCDEFABCDEF',
+        restoredFlowId: '00000000-0000-0000-0000-000000000000',
+      }).flowId,
+    ).toBe('00000000-0000-0000-0000-000000000000')
+    expect(() =>
+      resolveRecordFlowTransition({
+        transition: 'save_retried',
+        currentFlowId: 'urn:uuid:00000000-0000-0000-0000-000000000000',
+      }),
+    ).toThrow('invalid_current_flow_id')
+  })
 })

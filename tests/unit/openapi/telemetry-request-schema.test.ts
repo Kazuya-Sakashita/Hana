@@ -4,6 +4,13 @@ import Ajv2020 from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
 import { parse as parseYaml } from 'yaml'
 import { describe, expect, it } from 'vitest'
+import {
+  isWebVitalStatusDurationCombination,
+  WEB_VITAL_DURATION_BUCKETS,
+  WEB_VITAL_OPERATIONS,
+  WEB_VITAL_STATUSES,
+} from '@/features/metrics/shared/web-vitals-dimensions'
+import { BARE_UUID_PATTERN } from '@/lib/uuid'
 
 const ajv = new Ajv2020({ allErrors: true, strict: false })
 addFormats(ajv)
@@ -41,14 +48,14 @@ const openApi = readYaml<OpenApiDocument>('../../../docs/openapi/openapi.yaml')
 const validateWebVitals = ajv.compile(webVitalsSchema)
 const validateProductEvent = ajv.compile(productEventSchema)
 
-function webVitalsReport(operation: string, durationBucket: string) {
+function webVitalsReport(operation: string, durationBucket: string, status = 'good') {
   return {
     schema_version: 'hana-web-vitals-report/v2',
     event_id: '00000000-0000-4000-8000-000000000001',
     operation,
     reason: 'not_applicable',
     route_group: 'record',
-    status: 'good',
+    status,
     duration_bucket: durationBucket,
   }
 }
@@ -96,6 +103,44 @@ describe('WebVitalsReport OpenAPI request schema', () => {
   ])('rejects the route-invalid %s / %s combination', (operation, durationBucket) => {
     expect(validateWebVitals(webVitalsReport(operation, durationBucket))).toBe(false)
   })
+
+  it('matches the shared runtime helper for all 105 operation, status and bucket combinations', () => {
+    let combinations = 0
+    for (const operation of WEB_VITAL_OPERATIONS) {
+      for (const status of WEB_VITAL_STATUSES) {
+        for (const durationBucket of WEB_VITAL_DURATION_BUCKETS) {
+          combinations += 1
+          expect(
+            validateWebVitals(webVitalsReport(operation, durationBucket, status)),
+            `${operation}/${status}/${durationBucket}`,
+          ).toBe(
+            isWebVitalStatusDurationCombination({
+              operation,
+              status,
+              duration_bucket: durationBucket,
+            }),
+          )
+        }
+      }
+    }
+    expect(combinations).toBe(105)
+  })
+
+  it.each([
+    '00000000-0000-0000-0000-000000000000',
+    '123e4567-e89b-9000-0000-426614174000',
+    '123E4567-E89B-42D3-A456-426614174000',
+    'urn:uuid:123e4567-e89b-42d3-a456-426614174000',
+    '{123e4567-e89b-42d3-a456-426614174000}',
+    '123e4567e89b42d3a456426614174000',
+  ])('matches the shared bare UUID runtime contract for %s', (eventId) => {
+    expect(
+      validateWebVitals({
+        ...webVitalsReport('web_vital_lcp', 'from_1001_to_2500ms'),
+        event_id: eventId,
+      }),
+    ).toBe(BARE_UUID_PATTERN.test(eventId))
+  })
 })
 
 describe('ProductEventReport OpenAPI request schema', () => {
@@ -122,6 +167,38 @@ describe('ProductEventReport OpenAPI request schema', () => {
 
   it.each(timedEvents)('rejects timed event %s with not_applicable', (eventName) => {
     expect(validateProductEvent(productEventReport(eventName, 'not_applicable'))).toBe(false)
+  })
+
+  it.each([
+    '00000000-0000-0000-0000-000000000000',
+    '123e4567-e89b-9000-0000-426614174000',
+    '123E4567-E89B-42D3-A456-426614174000',
+    'urn:uuid:123e4567-e89b-42d3-a456-426614174000',
+    '{123e4567-e89b-42d3-a456-426614174000}',
+    '123e4567e89b42d3a456426614174000',
+  ])('matches the shared bare UUID runtime contract for flow_id %s', (flowId) => {
+    expect(
+      validateProductEvent({
+        ...productEventReport('photo_selected', 'under_10s'),
+        flow_id: flowId,
+      }),
+    ).toBe(BARE_UUID_PATTERN.test(flowId))
+  })
+})
+
+describe('Memory Idempotency-Key OpenAPI schema', () => {
+  const schema = parameterSchema(headerParameter('/memories', 'Idempotency-Key'))
+  const validate = ajv.compile(schema)
+
+  it.each([
+    '00000000-0000-0000-0000-000000000000',
+    '123e4567-e89b-9000-0000-426614174000',
+    '123E4567-E89B-42D3-A456-426614174000',
+    'urn:uuid:123e4567-e89b-42d3-a456-426614174000',
+    '{123e4567-e89b-42d3-a456-426614174000}',
+    '123e4567e89b42d3a456426614174000',
+  ])('matches the shared bare UUID runtime contract for %s', (idempotencyKey) => {
+    expect(validate(idempotencyKey)).toBe(BARE_UUID_PATTERN.test(idempotencyKey))
   })
 })
 

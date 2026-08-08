@@ -19,7 +19,7 @@ const issueSource = readFileSync(
   'utf8',
 )
 const telemetryIssueSource = readFileSync(
-  new URL('../../../docs/issues/ISSUE-152-pii-safe-telemetry.md', import.meta.url),
+  new URL('../../../docs/issues/ISSUE-188-telemetry-contract-round5-recovery.md', import.meta.url),
   'utf8',
 )
 const pilotIssueSource = readFileSync(
@@ -154,7 +154,7 @@ describe('ISSUE-159 product validation contract', () => {
   it('fails closed on best-effort telemetry, small cells, and evidence drift', () => {
     expect(contractSource).toContain('event送信失敗を離脱、未保存、未閲覧として扱わない')
     expect(contractSource).toContain(
-      'ISSUE-152の相関・重複・順序・completeness証跡がGoになるまでHold',
+      'ISSUE-188の相関・重複・順序・completeness証跡がGoになるまでHold',
     )
     expect(contractSource).toMatch(/分母、分子、補集合\s*`分母 - 分子`がすべて5以上/)
     expect(contractSource).toContain('secondary suppression')

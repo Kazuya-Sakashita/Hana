@@ -5,7 +5,7 @@ function source(path: string) {
   return readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8')
 }
 
-const issue = source('docs/issues/ISSUE-152-pii-safe-telemetry.md')
+const issue = source('docs/issues/ISSUE-188-telemetry-contract-round5-recovery.md')
 const contract = source('docs/observability/pii-safe-telemetry.md')
 const environmentExample = source('.env.example')
 const openApi = source('docs/openapi/openapi.yaml')
@@ -18,7 +18,7 @@ const productEvent = source('src/features/metrics/server/product-event.ts')
 const telemetry = source('src/features/metrics/server/telemetry-contract.ts')
 const webVitalsRoute = source('src/app/v1/metrics/vitals/route.ts')
 
-describe('ISSUE-152 PII-safe telemetry contract', () => {
+describe('ISSUE-188 PII-safe telemetry contract recovery', () => {
   it('binds the record flow id to the Memory idempotency key with a versioned safe payload', () => {
     expect(productEventSchema).toContain('POST /memories の Idempotency-Key と同じ値')
     expect(openApi).toContain('DB Memoryとする')
@@ -55,8 +55,8 @@ describe('ISSUE-152 PII-safe telemetry contract', () => {
     expect(telemetry).toContain("'censoring_changes_decision'")
     expect(telemetry).toContain("'secondary'")
     expect(telemetry).toContain('eligible_census_commitment')
-    expect(telemetry).toContain("TELEMETRY_QUERY_VERSION = 'issue-152-v3'")
-    expect(contract).toContain('Version: `issue-152-v3`')
+    expect(telemetry).toContain("TELEMETRY_QUERY_VERSION = 'issue-188-v1'")
+    expect(contract).toContain('Version: `issue-188-v1`')
     expect(contract).toContain('versioned expectation manifestとreceived ID')
     expect(contract).toContain('primary suppression')
     expect(contract).toContain('secondary suppression')

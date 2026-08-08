@@ -2,7 +2,7 @@
 id: ISSUE-152
 title: PII-safe telemetry集約基盤を作る
 priority: P1
-status: review
+status: blocked
 size: M
 created_at: 2026-08-03
 github_issue: 322
@@ -77,6 +77,8 @@ HMAC key lifecycleはISSUE-185へ分離し、両方のreadinessが完了する�
 
 ## 実装結果
 
+> 2026-08-08: 正式な第5巡で7件の必須修正が残ったため未完了。追加commitは常時HOLDの第6巡になるため、GitHub Issue #322とPR #378を未マージでcloseし、全受け入れ条件をISSUE-188 / GitHub Issue #381へ置換した。
+
 - 共通event schema、sampling、90日保持、cardinality、completeness、suppression、right-censor、status-only evidenceを固定した
 - ProductEventを送信前にdurable outboxへ保存し、204応答だけをackとして同一event IDで再送するようにした
 - 発生minuteをUUIDv7 event IDへ埋め込み、既存DB `event_id / created_at`から発生minuteとreceipt timeを復元できるようにした
@@ -115,6 +117,9 @@ HMAC key lifecycleはISSUE-185へ分離し、両方のreadinessが完了する�
 - 第4巡前preflightでanalytics 2件、security 1件、privacy 3件を検出して修正し、3領域とも独立再レビューで`NO FINDINGS`。正式な第4巡には数えない
 - 正式な第4巡はcommit `b51a946`を6つの必須roleが独立reviewし、implementation / securityはGO、test reliability 4件、analytics 3件、API contract 1件、privacy 1件でHOLD
 - 第4巡HOLDは例外証跡を付けた専用App run `31225195289`で`specialist-review-gate`と`merge-eligibility`へ反映し、9件を修正した
+- 正式な第5巡はcommit `8764fad`を6つの必須roleが独立reviewし、analytics 3件、implementation 1件、test reliability 1件、API contract 2件、security / privacy 0件でHOLD
+- 専用App run `31227992622`が第5巡の7 findingsを`specialist-review-gate` / `merge-eligibility` failureとして発行した
+- 第6巡は常にHOLDのためPR #378を凍結し、旧review・例外proof・breaking waiverを再利用しないISSUE-188へ置換した
 
 ## 専門review履歴
 
@@ -141,6 +146,12 @@ HMAC key lifecycleはISSUE-185へ分離し、両方のreadinessが完了する�
 | 4   | `b51a946` | API contract                | HOLD |                   1 |
 | 4   | `b51a946` | security / authorization    | GO   |                   0 |
 | 4   | `b51a946` | privacy / data protection   | HOLD |                   1 |
+| 5   | `8764fad` | spec acceptance / analytics | HOLD |                   3 |
+| 5   | `8764fad` | implementation correctness  | HOLD |                   1 |
+| 5   | `8764fad` | test reliability            | HOLD |                   1 |
+| 5   | `8764fad` | API contract                | HOLD |                   2 |
+| 5   | `8764fad` | security / authorization    | GO   |                   0 |
+| 5   | `8764fad` | privacy / data protection   | GO   |                   0 |
 
 ## 参考
 
@@ -151,3 +162,5 @@ HMAC key lifecycleはISSUE-185へ分離し、両方のreadinessが完了する�
 - ISSUE-185
 - GitHub Issue #379（ISSUE-186: ProductEvent DB authority / retention fallback）
 - GitHub Issue #380（ISSUE-187: Web Vitals edge attestation / shared rate limit）
+- GitHub Issue #381（ISSUE-188: 第5巡HOLDからの置換。全受け入れ条件と7 findingsを引き継ぐ）
+- GitHub PR #378（未マージclose。第5巡HOLD証跡を凍結）

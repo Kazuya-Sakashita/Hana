@@ -60,6 +60,27 @@ describe('parseProductEventReport', () => {
         NOW,
       ),
     ).toThrow()
+    expect(() =>
+      parseProductEventReport(
+        { ...validReport, flow_id: 'urn:uuid:123e4567-e89b-42d3-a456-426614174000' },
+        NOW,
+      ),
+    ).toThrow()
+  })
+
+  it('accepts the generic bare UUID contract and canonicalizes flow_id', () => {
+    expect(
+      parseProductEventReport(
+        { ...validReport, flow_id: 'ABCDEFAB-CDEF-9999-7000-ABCDEFABCDEF' },
+        NOW,
+      ).flow_id,
+    ).toBe('abcdefab-cdef-9999-7000-abcdefabcdef')
+    expect(
+      parseProductEventReport(
+        { ...validReport, flow_id: '00000000-0000-0000-0000-000000000000' },
+        NOW,
+      ).flow_id,
+    ).toBe('00000000-0000-0000-0000-000000000000')
   })
 
   it('rejects an event id whose embedded minute differs from the report', () => {

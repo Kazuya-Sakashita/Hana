@@ -2,11 +2,12 @@ import type { components } from '@/lib/api/generated/schema'
 import { problems } from '@/server/api/problems'
 import {
   isWebVitalStatusDurationCombination,
-  OPENAPI_UUID_PATTERN,
   WEB_VITAL_DURATION_BUCKETS,
   WEB_VITAL_OPERATIONS,
+  WEB_VITAL_ROUTE_GROUPS,
   WEB_VITAL_STATUSES,
 } from '../shared/web-vitals-dimensions'
+import { canonicalizeBareUuid } from '@/lib/uuid'
 import { shouldSampleTelemetry, type TelemetryDimensions } from './telemetry-contract'
 
 export type WebVitalsReport = components['schemas']['WebVitalsReport']
@@ -21,15 +22,7 @@ const ALLOWED_KEYS = [
   'duration_bucket',
 ] as const
 const OPERATIONS = new Set<WebVitalsReport['operation']>(WEB_VITAL_OPERATIONS)
-const ROUTE_GROUPS = new Set<WebVitalsReport['route_group']>([
-  'public',
-  'auth',
-  'home',
-  'record',
-  'memory',
-  'settings',
-  'other_private',
-])
+const ROUTE_GROUPS = new Set<WebVitalsReport['route_group']>(WEB_VITAL_ROUTE_GROUPS)
 const STATUSES = new Set<WebVitalsReport['status']>(WEB_VITAL_STATUSES)
 const DURATION_BUCKETS = new Set<WebVitalsReport['duration_bucket']>(WEB_VITAL_DURATION_BUCKETS)
 const DEVELOPMENT_SAMPLING_KEY = 'hana-web-vitals-development-sampling-key'
@@ -55,7 +48,8 @@ export function parseWebVitalsReport(raw: unknown): WebVitalsReport {
   if (input.schema_version !== 'hana-web-vitals-report/v2') {
     validation('body.schema_version', '対応していないschema versionです')
   }
-  if (typeof input.event_id !== 'string' || !OPENAPI_UUID_PATTERN.test(input.event_id)) {
+  const eventId = typeof input.event_id === 'string' ? canonicalizeBareUuid(input.event_id) : null
+  if (!eventId) {
     validation('body.event_id', 'UUID形式で指定してください')
   }
   if (typeof input.operation !== 'string' || !OPERATIONS.has(input.operation as never)) {
@@ -92,7 +86,7 @@ export function parseWebVitalsReport(raw: unknown): WebVitalsReport {
 
   return {
     schema_version: 'hana-web-vitals-report/v2',
-    event_id: input.event_id as string,
+    event_id: eventId,
     operation: input.operation as WebVitalsReport['operation'],
     reason: 'not_applicable',
     route_group: input.route_group as WebVitalsReport['route_group'],
@@ -112,7 +106,8 @@ export function toWebVitalsTelemetryDimensions(report: WebVitalsReport): Telemet
 }
 
 export function shouldSampleWebVitals(eventId: string): boolean {
-  if (!OPENAPI_UUID_PATTERN.test(eventId)) validation('body.event_id', 'UUID形式で指定してください')
+  const canonicalEventId = canonicalizeBareUuid(eventId)
+  if (!canonicalEventId) validation('body.event_id', 'UUID形式で指定してください')
   const configured = process.env.WEB_VITALS_SAMPLING_KEY
   const configuredVersion = process.env.WEB_VITALS_SAMPLING_KEY_VERSION
   if (
@@ -132,7 +127,7 @@ export function shouldSampleWebVitals(eventId: string): boolean {
     SAMPLING_KEY_VERSION_PATTERN.test(configuredVersion)
       ? configuredVersion
       : DEVELOPMENT_SAMPLING_KEY_VERSION
-  return shouldSampleTelemetry('web_vital', eventId, {
+  return shouldSampleTelemetry('web_vital', canonicalEventId, {
     key_version: keyVersion,
     key,
   })

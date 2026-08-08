@@ -1013,6 +1013,7 @@ export interface components {
             /**
              * Format: uuid
              * @description report単位のrandom UUID。actor識別には使わず、server-only HMAC samplingへ使う。
+             *     ハイフン区切りのbare UUIDだけを受け付け、urn:uuid表現は受け付けない。
              */
             event_id: string;
             /** @enum {string} */
@@ -1025,7 +1026,7 @@ export interface components {
             status: "good" | "needs_improvement" | "poor";
             /** @enum {string} */
             duration_bucket: "not_applicable" | "under_100ms" | "from_100_to_500ms" | "from_501_to_1000ms" | "from_1001_to_2500ms" | "from_2501_to_4000ms" | "over_4000ms";
-        } & unknown;
+        } & (unknown & unknown & unknown & unknown & unknown);
         /**
          * @description 記録体験のファネル計測に使う仮名化イベント。
          *     許可された5フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
@@ -1049,6 +1050,7 @@ export interface components {
              * @description 1回の記録フロー内だけで共有するUUID。記録作成フローでは
              *     POST /memories の Idempotency-Key と同じ値を使い、DB確定Memoryとの相関に使う。
              *     下書き復元と通信retryでは継承し、写真構成変更または409 conflict後の再試行では再採番する。
+             *     ハイフン区切りのbare UUIDだけを受け付け、urn:uuid表現は受け付けない。
              * @example 123e4567-e89b-42d3-a456-426614174000
              */
             flow_id: string;

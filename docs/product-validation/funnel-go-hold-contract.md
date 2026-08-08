@@ -24,7 +24,7 @@ Go / Hold / No-Goを判断できる状態を目的とする。
 4. `Hana_PRD_v1.md` — product要求と検証仮説
 
 この文書は新しいevent、API、永続fieldを追加しない。計測には既存のProfile、Memoryと、
-ISSUE-111で許可済みの5 eventだけを使う。runtimeの相関、集約、削除はISSUE-152とISSUE-185、
+ISSUE-111で許可済みの5 eventだけを使う。runtimeの相関、集約、削除はISSUE-188とISSUE-185、
 pilot protocolはISSUE-160、releaseのfail-closed gateはISSUE-162が実装する。
 
 ## Claim status
@@ -86,7 +86,7 @@ payloadは`event_name / event_id / flow_id / elapsed_bucket`だけを許可す�
 - event flowは`actor_hash + actor_key_version + flow_id`で識別し、同一event名の最初の1件だけを使う。
 - event依存cohortは1つの`actor_key_version`だけを使う。観測窓中のkey rotationでversionを跨ぐcohortは
   結合せず無効化し、新versionの観測窓を開始する。
-- eventからDB Memoryへの相関は、ISSUE-152で`flow_id`と`Memory.idempotencyKey`に同じUUIDを使い、
+- eventからDB Memoryへの相関は、ISSUE-188で`flow_id`と`Memory.idempotencyKey`に同じUUIDを使い、
   DB作成を保存の正にできるまで未確認とする。
 
 ### Evidence entry windows
@@ -119,13 +119,13 @@ ProductEventのDB `createdAt`はreceipt timeとして遅延と順序の検証だ
 | ID  | gate                | eligible unit / window                          | numerator or value                         | min                       | missing rule                         | target                                             |
 | --- | ------------------- | ----------------------------------------------- | ------------------------------------------ | ------------------------- | ------------------------------------ | -------------------------------------------------- |
 | M1  | required            | 24時間を観測完了したProfile                     | 24時間以内にMemoryを1件以上作成したProfile | 20 Profile                | DB再現不能ならHold                   | 70%以上                                            |
-| M2  | required            | `photo_selected`から30分を観測したdistinct flow | 30分未満に同じUUIDで相関したDB Memory作成  | 20 Profile / flow         | ISSUE-152完了前またはevent欠測はHold | 85%以上                                            |
-| M3  | required            | `ai_draft_shown`から30分を観測したdistinct flow | 30分未満に同じUUIDで相関したDB Memory作成  | 20 Profile / flow         | ISSUE-152完了前またはevent欠測はHold | 75%以上                                            |
+| M2  | required            | `photo_selected`から30分を観測したdistinct flow | 30分未満に同じUUIDで相関したDB Memory作成  | 20 Profile / flow         | ISSUE-188完了前またはevent欠測はHold | 85%以上                                            |
+| M3  | required            | `ai_draft_shown`から30分を観測したdistinct flow | 30分未満に同じUUIDで相関したDB Memory作成  | 20 Profile / flow         | ISSUE-188完了前またはevent欠測はHold | 75%以上                                            |
 | M4  | required usability  | ISSUE-160のAI / 手動各経路の初回試行            | 操作可能画面の提示からDB保存確認までの秒数 | 各経路5完了               | retry、timeout、中断の分類不能はHold | 各経路p50 ≤30秒、p85 ≤60秒、完了5/5                |
 | M5  | required            | D7窓を観測完了したProfile                       | D7窓にMemoryを1件以上作成したProfile       | 20 Profile                | DB再現不能ならHold                   | 40%以上                                            |
 | M6  | required            | D30窓を観測完了したProfile                      | D30窓にMemoryを1件以上作成したProfile      | 20 Profile                | DB再現不能ならHold                   | 25%以上                                            |
 | M7  | required            | 7日を観測完了したProfile-week                   | 週内にMemoryを1件以上作成したProfile-week  | 20 Profile / Profile-week | DB再現不能ならHold                   | 40%以上                                            |
-| M8  | guardrail           | 月初にMemoryを持つ観測完了Profile               | 月内に`memory_viewed`が1件以上あるProfile  | 20 Profile                | ISSUE-152のcompleteness Go前はHold   | 独立baseline cohort後、評価cohort前にProductが固定 |
+| M8  | guardrail           | 月初にMemoryを持つ観測完了Profile               | 月内に`memory_viewed`が1件以上あるProfile  | 20 Profile                | ISSUE-188のcompleteness Go前はHold   | 独立baseline cohort後、評価cohort前にProductが固定 |
 | M9  | guardrail           | view後7日を観測できるdistinct Profile           | 7日以内にMemoryを1件以上作成したProfile    | 20 Profile                | view event欠測または相関不能ならHold | 独立baseline cohort後、評価cohort前にProductが固定 |
 | M10 | required usability  | ISSUE-160のAI経路5名                            | 軽微編集以下で保存可能、重大な創作         | 5回答                     | 回答欠測はHold                       | 保存可能4/5以上、重大な創作0件                     |
 | M11 | guardrail usability | ISSUE-160の5名                                  | 「見返したときに残してよかった」肯定       | 5回答                     | 回答欠測はHold                       | 4/5以上                                            |
@@ -144,17 +144,17 @@ release Goへ読み替えない。
 ## Missing data and telemetry completeness
 
 - event送信失敗を離脱、未保存、未閲覧として扱わない。DB Memory作成は保存の正とする。
-- event依存のM2、M3、M8、M9はISSUE-152の相関・重複・順序・completeness証跡がGoになるまでHoldとする。
+- event依存のM2、M3、M8、M9はISSUE-188の相関・重複・順序・completeness証跡がGoになるまでHoldとする。
 - event endpoint、retention job、aggregate query、actor key versionのいずれかが観測期間中に未確認なら該当cohortはHoldにする。
 - 観測窓未完了、min不足、重複排除不能、時計境界不明、削除で分母を再現不能な場合もHoldにする。
 - 欠測を補完、推定、外挿してGoへ変更しない。
-- `memory_saved` eventの欠測と利用者離脱を同一視せず、ISSUE-152のDB相関結果を使う。
-- ISSUE-152がeventごとのserver truthまたはdurable ack / retryとexpected-versus-receivedを証明できない限り、
+- `memory_saved` eventの欠測と利用者離脱を同一視せず、ISSUE-188のDB相関結果を使う。
+- ISSUE-188がeventごとのserver truthまたはdurable ack / retryとexpected-versus-receivedを証明できない限り、
   best-effort event依存metricのcompletenessはPASSにしない。
 
 ### Account deletion during observation
 
-- 観測開始時のeligible censusはISSUE-152の制限付きjobで固定し、actor hashやuser IDを証跡へ出さない。
+- 観測開始時のeligible censusはISSUE-188の制限付きjobで固定し、actor hashやuser IDを証跡へ出さない。
 - maturity前に退会purgeされたunitはright-censoredとして元のeligible censusに残し、結果を見た後の
   任意除外を禁止する。観測成功数を`s`、元のeligible数を`N`、censor数を`c`とする。
 - 高いほど良いproduction rateは、全censorを失敗とする下限`s / N`と、全censorを成功とする上限
@@ -166,7 +166,7 @@ release Goへ読み替えない。
 
 ## Privacy aggregation and suppression
 
-- raw eventとactor hashはISSUE-152の最小権限aggregate jobだけが読み、ad hoc queryやPR reviewerへ開示しない。
+- raw eventとactor hashはISSUE-188の最小権限aggregate jobだけが読み、ad hoc queryやPR reviewerへ開示しない。
 - 制限付きaggregate jobは判定のためにexact count / rate / percentileを一時的に計算できるが、
   raw値をrepo、PR、CI、release dossierへ出力しない。
 - Product / Privacyの制限付き集計画面でratio / countを表示する場合は、分母、分子、補集合
@@ -178,7 +178,7 @@ release Goへ読み替えない。
 - status-only判定に必要なmin、completeness、query versionをjobが証明できなければHoldとする。
 - 5名pilotは同意済み全体cohortだけを扱い、属性別に分割しない。個別観測とp50 / p85 / rate / countは
   pilot protocolの期限まで制限付き一時領域だけで扱い、repo、PR、CI、release dossierにはmetric IDとstatusだけを残す。
-- raw eventの保持・削除はADRとISSUE-152、退会時の全key version purgeはISSUE-185を正とする。
+- raw eventの保持・削除はADRとISSUE-188、退会時の全key version purgeはISSUE-185を正とする。
 
 ## Evidence version
 
@@ -212,7 +212,7 @@ event依存cohortがkey rotationを跨いだ場合もevidence versionを無効�
 
 - M1〜M7、M10〜M12がtargetを満たし、M8 / M9は独立baseline後に固定したtargetを評価cohortで満たす。
 - 必須cohort、観測窓、telemetry completeness、suppression、evidence versionが有効である。
-- ISSUE-152、ISSUE-160、ISSUE-161、ISSUE-185の各privacy / product gateがGoである。
+- ISSUE-188、ISSUE-160、ISSUE-161、ISSUE-185の各privacy / product gateがGoである。
 - ProductとPrivacyの人間reviewが同じevidence versionへGoを記録している。
 
 ### Hold
@@ -221,7 +221,7 @@ event依存cohortがkey rotationを跨いだ場合もevidence versionを無効�
 
 - cohort不足、観測窓未完了、欠測、status-only判定条件未確認、baselineのみ、evidence version不一致がある。
 - required metricまたはguardrailが最初の有効evaluationで目標未達となり、原因仮説と再計測期限を持つ改善がまだ評価されていない。
-- Product、Privacy、AI vendor attestation、ISSUE-152 / 160 / 185のreviewがpendingである。
+- Product、Privacy、AI vendor attestation、ISSUE-188 / 160 / 185のreviewがpendingである。
 - 未検証claimの公開文言がactive UI、LP、store copyに残っている。
 
 ### No-Go
@@ -238,13 +238,13 @@ No-Goはデータ削除、incident対応、公開停止など該当runbookを優
 ## North Star and guardrails
 
 North Starは「月間アクティブProfileあたりの保存Memory数」とするが、単独でGoを判断しない。
-activeの定義とevent completenessがISSUE-152で確定するまではdiagnosticである。保存数を増やすために
+activeの定義とevent completenessがISSUE-188で確定するまではdiagnosticである。保存数を増やすために
 不要な通知、重複保存、罪悪感を誘うUIを最適化しないよう、M5、M6、M8、M9、M11、M12を同時に確認する。
 
 ## Current decision
 
 **Hold（2026-08-07）**。M1〜M12の有効なcohort evidence、M8 / M9の独立baselineと固定target、
-ISSUE-152、ISSUE-160、ISSUE-161、ISSUE-185、Product / Privacy reviewが未完了である。
+ISSUE-188、ISSUE-160、ISSUE-161、ISSUE-185、Product / Privacy reviewが未完了である。
 active UIと公開LPには、30秒、短時間、感情成果、PWA / native store提供を確認済み事実として表示しない。
 
 ## Human review
@@ -261,7 +261,7 @@ ProductまたはPrivacyがpending / Hold / No-Goなら、総合判定はGoにな
 ## Related issues
 
 - ISSUE-111: 個人情報を含めない記録ファネル計測
-- ISSUE-152: PII-safe telemetry相関・集約基盤
+- ISSUE-188: PII-safe telemetry相関・集約基盤
 - ISSUE-159: PRD契約とfunnelのGo・Hold基準
 - ISSUE-160: 5名pilot
 - ISSUE-161: AI vendor attestation

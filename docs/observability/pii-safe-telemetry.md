@@ -1,7 +1,7 @@
 # PII-safe telemetry contract
 
 - Status: active
-- Version: `issue-152-v3`
+- Version: `issue-188-v1`
 - Event schema: `hana-telemetry-event/v2`
 - Retention: 90 days
 
@@ -60,12 +60,16 @@ Web Vitals requestは`hana-web-vitals-report/v2`の固定dimensionだけを送�
 navigation typeはrequestへ入れず、`fetch`の`credentials: omit`と`keepalive`だけを使う。serverは
 body parseとlogより前にbounded rate limitを適用し、validation後・log前にkeyed 10% samplingする。
 sample-outは204かつlogなしで、sampling policy versionと期待manifestの不一致はcompleteness Holdである。
-event IDはOpenAPI `format: uuid`と同じ範囲を受理する。statusとduration bucketは共有threshold表から
-同じraw valueが取り得る組み合わせだけを許可し、矛盾する組み合わせは422で拒否する。
+event IDはOpenAPIでハイフン区切りのbare UUIDへ限定し、`urn:uuid:`を拒否する。大小文字はserverで
+lowercaseへcanonical化してからsamplingする。statusとduration bucketは共有threshold表とOpenAPIの
+全105組で同じ判定にし、矛盾する組み合わせは422で拒否する。Web Vitalsのroute groupは
+`public / auth / home / record / memory / settings / other_private`だけを許可する。
 
 ## ProductEvent flow lifecycle
 
 記録作成ではProductEvent `flow_id`とMemory作成の`Idempotency-Key`に同じUUIDを使う。
+両方ともハイフン区切りのbare UUIDだけを受け付け、lowercase canonical値で相関する。nil UUID、
+version 9、非RFC variantもOpenAPI `format: uuid`の契約どおり受理し、version / variantを追加制限しない。
 
 | transition                    | flow rule                  | stage rule                                          |
 | ----------------------------- | -------------------------- | --------------------------------------------------- |
@@ -93,6 +97,8 @@ continuityを確認した新bindingで同じevent IDを再送する。401 / 403�
 送信と再取得は`AbortController`とbinding generationで隔離し、旧generationの遅延応答が新sessionのoutboxや
 current-user cacheを変更しないようにする。degradationはcontinuity単位で保持し、別sessionでは`NONE`から
 開始する。401 / 403による停止または破棄はackではなく、該当観測窓をHoldにする認証境界である。
+outbox復元と新規enqueueは`event_name × elapsed_bucket`をserverと同じpure allowlistで検証し、
+不正rootをnetworkへ送らず削除して`STORAGE_UNAVAILABLE`だけを残す。
 
 ## Server truth and completeness
 
@@ -121,6 +127,9 @@ worst-caseでPass / Failを確定し、境界をまたぐ場合、actor不一致
 Holdにする。時刻の正本はDB `event_id`から復元した`[minute, minute + 1 minute)`で、区間全体がevidence
 entry window内にない場合はHoldにする。DB `created_at`はreceiptと遅延・順序の検証だけに使い、entryや
 maturityの起点にしない。
+M9はentry window内でProfileごとの最初のeligible `memory_viewed`を選び、発生minute区間の終端から
+7日後まではHOLDにする。最初のDB Memoryとの順序と7日境界をminute区間のworst caseで判定し、
+receipt timeをentry、maturity、conversionの起点にしない。
 
 ## Aggregation and privacy
 
@@ -131,6 +140,8 @@ domain、UTC window、key versionをHMAC-SHA256へdomain-separated入力し、�
 ならFail、両端で判定が変わる場合はHoldとする。exact census / success / censor / rateは出力しない。
 このright-censor rate evaluatorは高いほど良いproduction rateのM1 / M2 / M3 / M5 / M6 / M7 / M8 / M9
 だけに使う。M12など方向が異なる指標は同式へ入れず、`unsupported_metric_direction`でHoldにする。
+status-only evidenceはmetric IDごとのreason allowlistも検証し、callerがM12などへright-censor reasonを
+直接組み合わせてPASS / FAILを作ることを拒否する。
 
 restricted tableで数値を表示する場合もcell 5未満をprimary suppressionする。行・列・合計など1個の
 suppressed cellを差分復元できるgroupでは、最小のvisible cellをsecondary suppressionする。CI、PR、

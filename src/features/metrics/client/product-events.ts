@@ -1,7 +1,13 @@
 'use client'
 
 import type { components } from '@/lib/api/generated/schema'
+import { canonicalizeBareUuid } from '@/lib/uuid'
 import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurrence'
+import {
+  isProductEventElapsedBucket,
+  isProductEventElapsedBucketForName,
+  isProductEventName,
+} from '../shared/product-event-dimensions'
 
 type ProductEventReport = components['schemas']['ProductEventReport']
 export type ProductEventName = ProductEventReport['event_name']
@@ -15,24 +21,8 @@ const PRODUCT_EVENT_OUTBOX_MAX_FLUSH_PER_RUN = 20
 const PRODUCT_EVENT_OUTBOX_MAX_RETRY_MS = 60_000
 export const PRODUCT_EVENT_SEND_TIMEOUT_MS = 10_000
 export const PRODUCT_EVENT_AUTH_REFRESH_TIMEOUT_MS = 5_000
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const TELEMETRY_BINDING_PATTERN = /^v3\.(\d{10})\.([0-9a-f]{64})\.[0-9a-f]{64}$/
 const OCCURRED_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
-const EVENT_NAMES = new Set<ProductEventName>([
-  'record_started',
-  'photo_selected',
-  'ai_draft_shown',
-  'memory_saved',
-  'memory_viewed',
-])
-const ELAPSED_BUCKETS = new Set<ProductEventElapsedBucket>([
-  'not_applicable',
-  'under_10s',
-  'from_10_to_30s',
-  'from_31_to_60s',
-  'over_60s',
-])
-
 type ProductEventOutboxEntry = {
   report: ProductEventReport
   queuedAt: number
@@ -178,14 +168,13 @@ function isProductEventReport(value: unknown): value is ProductEventReport {
       'elapsed_bucket',
       'occurred_minute_utc',
     ]) &&
-    typeof report.event_name === 'string' &&
-    EVENT_NAMES.has(report.event_name as ProductEventName) &&
+    isProductEventName(report.event_name) &&
     typeof report.event_id === 'string' &&
     productEventOccurrenceMinuteFromEventId(report.event_id) === report.occurred_minute_utc &&
     typeof report.flow_id === 'string' &&
-    UUID_PATTERN.test(report.flow_id) &&
-    typeof report.elapsed_bucket === 'string' &&
-    ELAPSED_BUCKETS.has(report.elapsed_bucket as ProductEventElapsedBucket) &&
+    canonicalizeBareUuid(report.flow_id) === report.flow_id &&
+    isProductEventElapsedBucket(report.elapsed_bucket) &&
+    isProductEventElapsedBucketForName(report.event_name, report.elapsed_bucket) &&
     typeof report.occurred_minute_utc === 'string' &&
     OCCURRED_MINUTE_PATTERN.test(report.occurred_minute_utc)
   )
@@ -308,7 +297,7 @@ function writeOutbox(outbox: StoredProductEventOutbox): boolean {
 }
 
 function enqueue(report: ProductEventReport, now = Date.now()): boolean {
-  if (!activeTelemetryBinding) return false
+  if (!activeTelemetryBinding || !isProductEventReport(report)) return false
   const outbox = readOutbox(now)
   const existingStage = outbox.entries.find(
     (entry) =>
@@ -709,10 +698,12 @@ export function reportProductEvent({
   try {
     if (!adoptReportTelemetryBinding(telemetryBinding) || !activeTelemetryBinding) return
     const occurredAt = new Date(Math.floor(Date.now() / 60_000) * 60_000)
+    const canonicalFlowId = canonicalizeBareUuid(flowId ?? crypto.randomUUID())
+    if (!canonicalFlowId) return
     const report: ProductEventReport = {
       event_name: eventName,
       event_id: createProductEventId(occurredAt),
-      flow_id: flowId ?? crypto.randomUUID(),
+      flow_id: canonicalFlowId,
       elapsed_bucket: productEventElapsedBucket(elapsedMs),
       occurred_minute_utc: occurredAt.toISOString().replace('.000Z', 'Z'),
     }

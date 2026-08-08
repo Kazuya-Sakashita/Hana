@@ -34,10 +34,12 @@ properties:
   flow_id:
     type: string
     format: uuid
+    pattern: '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
     description: |
       1回の記録フロー内だけで共有するUUID。記録作成フローでは
       POST /memories の Idempotency-Key と同じ値を使い、DB確定Memoryとの相関に使う。
       下書き復元と通信retryでは継承し、写真構成変更または409 conflict後の再試行では再採番する。
+      ハイフン区切りのbare UUIDだけを受け付け、urn:uuid表現は受け付けない。
     example: 123e4567-e89b-42d3-a456-426614174000
   occurred_minute_utc:
     type: string

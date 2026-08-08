@@ -1,6 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { components } from '@/lib/api/generated/schema'
+import { BARE_UUID_PATTERN, canonicalizeBareUuid } from '@/lib/uuid'
 import { problems } from '@/server/api/problems'
+import {
+  isProductEventElapsedBucket,
+  isProductEventElapsedBucketForName,
+  isProductEventName,
+} from '../shared/product-event-dimensions'
 import { productEventOccurrenceMinuteFromEventId } from './product-event-occurrence'
 
 export { productEventOccurrenceMinuteFromEventId } from './product-event-occurrence'
@@ -25,21 +31,6 @@ const ALLOWED_KEYS = new Set([
   'occurred_minute_utc',
   'elapsed_bucket',
 ])
-const EVENT_NAMES = new Set<ProductEventReport['event_name']>([
-  'record_started',
-  'photo_selected',
-  'ai_draft_shown',
-  'memory_saved',
-  'memory_viewed',
-])
-const ELAPSED_BUCKETS = new Set<ProductEventReport['elapsed_bucket']>([
-  'not_applicable',
-  'under_10s',
-  'from_10_to_30s',
-  'from_31_to_60s',
-  'over_60s',
-])
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UTC_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
 const TELEMETRY_BINDING_PATTERN = /^v3\.(\d{10})\.([0-9a-f]{64})\.([0-9a-f]{64})$/
 const PRODUCT_EVENT_MAX_REQUEST_BUCKETS = 4096
@@ -95,7 +86,7 @@ export function productEventTelemetryBinding(
   sessionId: string,
   now = new Date(),
 ): string {
-  if (!UUID_PATTERN.test(userId) || !UUID_PATTERN.test(sessionId)) {
+  if (!BARE_UUID_PATTERN.test(userId) || !BARE_UUID_PATTERN.test(sessionId)) {
     throw new Error('invalid telemetry session')
   }
   const expiresAtMs =
@@ -191,7 +182,7 @@ export function parseProductEventReport(raw: unknown, now = new Date()): Product
     validation(`body.${unknownKey}`, '許可されていない項目です')
   }
 
-  if (typeof input.event_name !== 'string' || !EVENT_NAMES.has(input.event_name as never)) {
+  if (!isProductEventName(input.event_name)) {
     validation('body.event_name', '許可されていないイベント名です')
   }
   if (
@@ -200,7 +191,8 @@ export function parseProductEventReport(raw: unknown, now = new Date()): Product
   ) {
     validation('body.event_id', 'UTC分を埋め込んだUUIDv7形式で指定してください')
   }
-  if (typeof input.flow_id !== 'string' || !UUID_PATTERN.test(input.flow_id)) {
+  const flowId = typeof input.flow_id === 'string' ? canonicalizeBareUuid(input.flow_id) : null
+  if (!flowId) {
     validation('body.flow_id', 'UUID形式で指定してください')
   }
   if (typeof input.occurred_minute_utc !== 'string') {
@@ -218,25 +210,17 @@ export function parseProductEventReport(raw: unknown, now = new Date()): Product
   ) {
     validation('body.occurred_minute_utc', '直近24時間以内のUTC分を指定してください')
   }
-  if (
-    typeof input.elapsed_bucket !== 'string' ||
-    !ELAPSED_BUCKETS.has(input.elapsed_bucket as never)
-  ) {
+  if (!isProductEventElapsedBucket(input.elapsed_bucket)) {
     validation('body.elapsed_bucket', '許可されていない経過時間帯です')
   }
-  if (
-    (['record_started', 'memory_viewed'].includes(input.event_name) &&
-      input.elapsed_bucket !== 'not_applicable') ||
-    (!['record_started', 'memory_viewed'].includes(input.event_name) &&
-      input.elapsed_bucket === 'not_applicable')
-  ) {
+  if (!isProductEventElapsedBucketForName(input.event_name, input.elapsed_bucket)) {
     validation('body.elapsed_bucket', 'イベントに対応する経過時間帯を指定してください')
   }
 
   return {
     event_name: input.event_name as ProductEventReport['event_name'],
     event_id: input.event_id as string,
-    flow_id: input.flow_id as string,
+    flow_id: flowId,
     occurred_minute_utc: input.occurred_minute_utc,
     elapsed_bucket: input.elapsed_bucket as ProductEventReport['elapsed_bucket'],
   }

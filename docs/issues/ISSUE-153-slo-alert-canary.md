@@ -8,7 +8,7 @@ created_at: 2026-08-03
 github_issue: 329
 blocked_by:
   - ISSUE-105
-  - ISSUE-152
+  - ISSUE-188
 release_gate: reliability
 requires_human_review:
   - reliability

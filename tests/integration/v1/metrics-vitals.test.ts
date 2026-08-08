@@ -116,6 +116,15 @@ describe('POST /v1/metrics/vitals', () => {
     await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response })
   })
 
+  it('accepts uppercase bare UUIDs and uses the canonical sampling assignment', async () => {
+    const uppercaseEventId = sampledEventId.toUpperCase()
+    const response = await POST(jsonRequest({ ...validPayload, event_id: uppercaseEventId }))
+
+    expect(response.status).toBe(204)
+    expect(shouldSampleWebVitals(uppercaseEventId)).toBe(shouldSampleWebVitals(sampledEventId))
+    await assertOpenApiResponse({ method: 'POST', route: '/metrics/vitals', response })
+  })
+
   it('changes sampling assignment when the server-only key rotates', () => {
     let changed = false
     for (let index = 1; index < 10_000; index += 1) {
@@ -197,6 +206,10 @@ describe('POST /v1/metrics/vitals', () => {
   it.each([
     [{ ...validPayload, schema_version: 'legacy' }, 'schema version'],
     [{ ...validPayload, event_id: 'not-a-uuid' }, 'event id'],
+    [
+      { ...validPayload, event_id: `urn:uuid:${sampledEventId}` },
+      'UUID URN outside the bare UUID contract',
+    ],
     [{ ...validPayload, operation: 'web_vital_nope' }, 'operation'],
     [{ ...validPayload, reason: 'none' }, 'reason'],
     [{ ...validPayload, route_group: '/memory/raw-id' }, 'route group'],

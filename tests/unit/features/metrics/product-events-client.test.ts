@@ -100,6 +100,40 @@ describe('reportProductEvent', () => {
     expect(new Headers(init.headers).get('x-hana-telemetry-binding')).toBe(TELEMETRY_BINDING_A)
   })
 
+  it('accepts a generic bare flow UUID and sends its canonical lowercase form', async () => {
+    vi.stubGlobal('sessionStorage', new MemoryStorage())
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: 'ABCDEFAB-CDEF-9999-7000-ABCDEFABCDEF',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).flow_id).toBe(
+      'abcdefab-cdef-9999-7000-abcdefabcdef',
+    )
+  })
+
+  it('does not enqueue or send UUID URN flow ids', () => {
+    vi.stubGlobal('sessionStorage', new MemoryStorage())
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: 'urn:uuid:00000000-0000-0000-0000-000000000000',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
   it('swallows network failures so recording is not blocked', async () => {
     vi.stubGlobal('sessionStorage', new MemoryStorage())
     const fetchMock = vi.fn().mockRejectedValue(new Error('offline'))
@@ -417,6 +451,75 @@ describe('durable ProductEvent outbox', () => {
       entries: [],
     })
   })
+
+  it.each([
+    ['record_started', 'under_10s'],
+    ['photo_selected', 'not_applicable'],
+  ])(
+    'fails closed before sending a persisted v4 root with %s and %s',
+    (eventName, elapsedBucket) => {
+      const storage = new MemoryStorage()
+      vi.stubGlobal('sessionStorage', storage)
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+      storage.setItem(
+        PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+        JSON.stringify({
+          version: 4,
+          telemetryBinding: TELEMETRY_BINDING_A,
+          degradation: 'NONE',
+          entries: [
+            {
+              report: {
+                event_name: eventName,
+                event_id: '019fd985-0000-7000-8000-000000000001',
+                flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+                occurred_minute_utc: '2026-08-07T00:00:00Z',
+                elapsed_bucket: elapsedBucket,
+              },
+              queuedAt: Date.now(),
+              attempts: 0,
+              nextAttemptAt: Date.now(),
+            },
+          ],
+        }),
+      )
+
+      setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(readProductEventOutboxForTest()).toHaveLength(0)
+      const sanitized = storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY) ?? ''
+      expect(sanitized).not.toContain(eventName)
+      expect(JSON.parse(sanitized)).toMatchObject({
+        version: 4,
+        degradation: 'STORAGE_UNAVAILABLE',
+        entries: [],
+      })
+    },
+  )
+
+  it.each([
+    ['record_started', 5_000],
+    ['photo_selected', null],
+  ] as const)(
+    'does not enqueue a new invalid %s event and elapsed value %s',
+    (eventName, elapsedMs) => {
+      vi.stubGlobal('sessionStorage', new MemoryStorage())
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+
+      reportProductEvent({
+        eventName,
+        flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+        elapsedMs,
+        telemetryBinding: TELEMETRY_BINDING_A,
+      })
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(readProductEventOutboxForTest()).toHaveLength(0)
+    },
+  )
 
   it.each([
     ['UUIDv4 event id', '123e4567-e89b-42d3-a456-426614174000', '2026-08-07T00:00:00Z'],

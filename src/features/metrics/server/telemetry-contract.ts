@@ -1,7 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { canonicalizeBareUuid } from '@/lib/uuid'
 import {
   isWebVitalStatusDurationCombination,
   OPENAPI_UUID_PATTERN,
+  WEB_VITAL_ROUTE_GROUPS,
   type WebVitalDurationBucket,
   type WebVitalOperation,
   type WebVitalStatus,
@@ -12,7 +14,7 @@ export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
 export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v2' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
   'hana-telemetry-expectation-manifest/v2' as const
-export const TELEMETRY_QUERY_VERSION = 'issue-152-v3' as const
+export const TELEMETRY_QUERY_VERSION = 'issue-188-v1' as const
 export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
 export const TELEMETRY_RETENTION_DAYS = 90
@@ -323,6 +325,7 @@ function validDimensionsCombination(dimensions: TelemetryDimensions): boolean {
   if (source === 'web_vital') {
     return (
       dimensions.reason === 'not_applicable' &&
+      includes(WEB_VITAL_ROUTE_GROUPS, dimensions.route_group) &&
       ['good', 'needs_improvement', 'poor'].includes(dimensions.status) &&
       isWebVitalStatusDurationCombination({
         operation: dimensions.operation as WebVitalOperation,
@@ -638,7 +641,12 @@ export type SyntheticFunnelEvent = {
   event_id: string
   flow_id: string
   actor: SyntheticActorRef
-  event_name: 'record_started' | 'photo_selected' | 'ai_draft_shown' | 'memory_saved'
+  event_name:
+    | 'record_started'
+    | 'photo_selected'
+    | 'ai_draft_shown'
+    | 'memory_saved'
+    | 'memory_viewed'
   occurred_minute_utc: string
   received_at_utc: string
   anchor_trust: 'verified' | 'unverified'
@@ -649,6 +657,8 @@ export type SyntheticMemoryTruth = {
   actor: SyntheticActorRef
   created_at_utc: string
 }
+
+export type SyntheticProfileMemoryTruth = Pick<SyntheticMemoryTruth, 'actor' | 'created_at_utc'>
 
 function validSyntheticActorRef(
   actor: SyntheticActorRef | null | undefined,
@@ -673,6 +683,45 @@ function sameSyntheticActor(
   )
 }
 
+type OccurrenceMinuteInterval = {
+  start: number
+  end: number
+}
+
+function verifiedOccurrenceMinuteInterval(input: {
+  event: SyntheticFunnelEvent
+  expected_operation: SyntheticFunnelEvent['event_name']
+  received_by_id: ReadonlyMap<string, TelemetryEnvelope>
+  generated_at: number
+  window_start: number
+  window_end: number
+}):
+  | { interval: OccurrenceMinuteInterval; reason: null }
+  | { interval: null; reason: 'telemetry_incomplete' | 'stage_time_invalid' } {
+  const envelope = input.received_by_id.get(input.event.event_id)
+  if (envelope?.dimensions.operation !== input.expected_operation) {
+    return { interval: null, reason: 'telemetry_incomplete' }
+  }
+  const decodedOccurredMinute = productEventOccurrenceMinuteFromEventId(input.event.event_id)
+  const occurredAt = decodedOccurredMinute ? parseUtc(decodedOccurredMinute) : null
+  const envelopeOccurredAt = parseUtc(envelope.occurred_at_utc)
+  const receivedAt = parseUtc(input.event.received_at_utc)
+  if (
+    decodedOccurredMinute !== input.event.occurred_minute_utc ||
+    !UTC_MINUTE_PATTERN.test(input.event.occurred_minute_utc) ||
+    occurredAt === null ||
+    envelopeOccurredAt !== occurredAt ||
+    occurredAt < input.window_start ||
+    occurredAt + 60 * 1000 > input.window_end ||
+    receivedAt === null ||
+    receivedAt < occurredAt ||
+    receivedAt > input.generated_at
+  ) {
+    return { interval: null, reason: 'stage_time_invalid' }
+  }
+  return { interval: { start: occurredAt, end: occurredAt + 60 * 1000 }, reason: null }
+}
+
 export function evaluateSyntheticFunnelFlow(input: {
   metric_id: 'M2' | 'M3'
   flow_id: string
@@ -686,9 +735,10 @@ export function evaluateSyntheticFunnelFlow(input: {
   status: MetricStatus
   reason: TelemetryMetricReason
 } {
+  const flowId = canonicalizeBareUuid(input.flow_id)
   if (
     !validSyntheticActorRef(input.expected_actor) ||
-    !UUID_PATTERN.test(input.flow_id) ||
+    !flowId ||
     input.expected_actor.actor_key_version !== input.completeness_input.actor_key_version
   ) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
@@ -703,7 +753,7 @@ export function evaluateSyntheticFunnelFlow(input: {
   }
   const stageName = input.metric_id === 'M2' ? 'photo_selected' : 'ai_draft_shown'
   const sameFlowStages = input.events.filter(
-    (event) => event.flow_id === input.flow_id && event.event_name === stageName,
+    (event) => canonicalizeBareUuid(event.flow_id) === flowId && event.event_name === stageName,
   )
   if (
     sameFlowStages.some(
@@ -717,63 +767,44 @@ export function evaluateSyntheticFunnelFlow(input: {
   const verifiedReceived = new Map(
     input.completeness_input.received.map((envelope) => [envelope.event_id, envelope]),
   )
-  const matchingStages = sameFlowStages.filter((event) => {
-    const envelope = verifiedReceived.get(event.event_id)
-    return envelope?.dimensions.operation === event.event_name
-  })
-  if (matchingStages.length !== sameFlowStages.length) {
-    return { metric_id: input.metric_id, status: 'HOLD', reason: 'telemetry_incomplete' }
-  }
-  if (matchingStages.length === 0) {
+  if (sameFlowStages.length === 0) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_missing' }
   }
-  if (matchingStages.some((event) => event.anchor_trust !== 'verified')) {
+  if (sameFlowStages.some((event) => event.anchor_trust !== 'verified')) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_anchor_unverified' }
   }
   const generatedAt = parseUtc(input.generated_at_utc)
   const windowStart = parseUtc(input.completeness_input.window_start_utc)
   const windowEnd = parseUtc(input.completeness_input.window_end_utc)
-  const stages = matchingStages.map((event) => {
-    const envelope = verifiedReceived.get(event.event_id)
-    const decodedOccurredMinute = productEventOccurrenceMinuteFromEventId(event.event_id)
-    const occurredAt = decodedOccurredMinute ? parseUtc(decodedOccurredMinute) : null
-    return {
-      ...event,
-      occurredAt,
-      decodedOccurredMinute,
-      envelopeOccurredAt: envelope ? parseUtc(envelope.occurred_at_utc) : null,
-      receivedAt: parseUtc(event.received_at_utc),
-    }
-  })
-  if (
-    generatedAt === null ||
-    windowStart === null ||
-    windowEnd === null ||
-    stages.some(
-      (event) =>
-        event.decodedOccurredMinute !== event.occurred_minute_utc ||
-        !UTC_MINUTE_PATTERN.test(event.occurred_minute_utc) ||
-        !validSyntheticActorRef(event.actor) ||
-        event.occurredAt === null ||
-        event.envelopeOccurredAt !== event.occurredAt ||
-        event.occurredAt < windowStart ||
-        event.occurredAt + 60 * 1000 > windowEnd ||
-        event.receivedAt === null ||
-        event.receivedAt < event.occurredAt ||
-        event.receivedAt > generatedAt,
-    ) ||
-    new Set(stages.map((event) => event.occurredAt)).size !== 1
-  ) {
+  if (generatedAt === null || windowStart === null || windowEnd === null) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_time_invalid' }
   }
-  const stageMinuteStart = stages[0]!.occurredAt!
-  const stageMinuteEnd = stageMinuteStart + 60 * 1000
+  const stageIntervals = sameFlowStages.map((event) =>
+    verifiedOccurrenceMinuteInterval({
+      event,
+      expected_operation: stageName,
+      received_by_id: verifiedReceived,
+      generated_at: generatedAt,
+      window_start: windowStart,
+      window_end: windowEnd,
+    }),
+  )
+  const invalidStage = stageIntervals.find((result) => result.interval === null)
+  if (invalidStage) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: invalidStage.reason }
+  }
+  const intervals = stageIntervals.map((result) => result.interval!)
+  if (new Set(intervals.map((interval) => interval.start)).size !== 1) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_time_invalid' }
+  }
+  const stageMinuteStart = intervals[0]!.start
+  const stageMinuteEnd = intervals[0]!.end
   const conversionWindowMs = 30 * 60 * 1000
   if (generatedAt < stageMinuteEnd + conversionWindowMs) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'window_not_mature' }
   }
   const sameFlowMemories = input.memories.filter(
-    (candidate) => candidate.idempotency_key === input.flow_id,
+    (candidate) => canonicalizeBareUuid(candidate.idempotency_key) === flowId,
   )
   if (
     sameFlowMemories.some(
@@ -786,13 +817,13 @@ export function evaluateSyntheticFunnelFlow(input: {
   }
   const matchingMemories = sameFlowMemories.filter(
     (candidate) =>
-      candidate.idempotency_key === input.flow_id &&
+      canonicalizeBareUuid(candidate.idempotency_key) === flowId &&
       sameSyntheticActor(candidate.actor, input.expected_actor),
   )
   if (
     matchingMemories.some(
       (candidate) =>
-        !UUID_PATTERN.test(candidate.idempotency_key) ||
+        canonicalizeBareUuid(candidate.idempotency_key) === null ||
         !validSyntheticActorRef(candidate.actor) ||
         parseUtc(candidate.created_at_utc) === null ||
         parseUtc(candidate.created_at_utc)! > generatedAt,
@@ -820,6 +851,105 @@ export function evaluateSyntheticFunnelFlow(input: {
     return { metric_id: input.metric_id, status: 'FAIL', reason: 'memory_saved_after_window' }
   }
   return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_anchor_boundary' }
+}
+
+export function evaluateSyntheticM9ViewToMemory(input: {
+  expected_actor: SyntheticActorRef
+  generated_at_utc: string
+  completeness_input: TelemetryCompletenessInput
+  events: readonly SyntheticFunnelEvent[]
+  memories: readonly SyntheticProfileMemoryTruth[]
+}): { metric_id: 'M9'; status: MetricStatus; reason: TelemetryMetricReason } {
+  const hold = (reason: TelemetryMetricReason) => ({
+    metric_id: 'M9' as const,
+    status: 'HOLD' as const,
+    reason,
+  })
+  if (
+    !validSyntheticActorRef(input.expected_actor) ||
+    input.expected_actor.actor_key_version !== input.completeness_input.actor_key_version
+  ) {
+    return hold('actor_reference_invalid')
+  }
+  const completeness = evaluateTelemetryCompleteness(input.completeness_input)
+  if (
+    completeness.source !== 'funnel' ||
+    completeness.status !== 'PASS' ||
+    completeness.reason !== 'complete'
+  ) {
+    return hold('telemetry_incomplete')
+  }
+  const views = input.events.filter((event) => event.event_name === 'memory_viewed')
+  if (
+    views.some(
+      (event) =>
+        !validSyntheticActorRef(event.actor) ||
+        !sameSyntheticActor(event.actor, input.expected_actor),
+    ) ||
+    input.memories.some(
+      (memory) =>
+        !validSyntheticActorRef(memory.actor) ||
+        !sameSyntheticActor(memory.actor, input.expected_actor),
+    )
+  ) {
+    return hold('actor_reference_invalid')
+  }
+  if (views.length === 0) return hold('stage_missing')
+  if (views.some((event) => event.anchor_trust !== 'verified')) {
+    return hold('stage_anchor_unverified')
+  }
+  const generatedAt = parseUtc(input.generated_at_utc)
+  const windowStart = parseUtc(input.completeness_input.window_start_utc)
+  const windowEnd = parseUtc(input.completeness_input.window_end_utc)
+  if (generatedAt === null || windowStart === null || windowEnd === null) {
+    return hold('stage_time_invalid')
+  }
+  const verifiedReceived = new Map(
+    input.completeness_input.received.map((envelope) => [envelope.event_id, envelope]),
+  )
+  const viewIntervals = views.map((event) =>
+    verifiedOccurrenceMinuteInterval({
+      event,
+      expected_operation: 'memory_viewed',
+      received_by_id: verifiedReceived,
+      generated_at: generatedAt,
+      window_start: windowStart,
+      window_end: windowEnd,
+    }),
+  )
+  const invalidView = viewIntervals.find((result) => result.interval === null)
+  if (invalidView) return hold(invalidView.reason)
+  const firstView = viewIntervals
+    .map((result) => result.interval!)
+    .sort((left, right) => left.start - right.start)[0]!
+  const conversionWindowMs = 7 * 24 * 60 * 60 * 1000
+  if (generatedAt < firstView.end + conversionWindowMs) return hold('window_not_mature')
+  const parsedMemories = input.memories.map((memory) => ({
+    ...memory,
+    createdAt: parseUtc(memory.created_at_utc),
+  }))
+  if (
+    parsedMemories.some((memory) => memory.createdAt === null || memory.createdAt > generatedAt)
+  ) {
+    return hold('stage_time_invalid')
+  }
+  const memory = parsedMemories
+    .filter(
+      (candidate): candidate is typeof candidate & { createdAt: number } =>
+        candidate.createdAt !== null && candidate.createdAt >= firstView.start,
+    )
+    .sort((left, right) => left.createdAt - right.createdAt)[0]
+  if (!memory) return { metric_id: 'M9', status: 'FAIL', reason: 'memory_not_saved' }
+  if (memory.createdAt < firstView.end) return hold('event_reordered_after_truth')
+  const longestPossibleDuration = memory.createdAt - firstView.start
+  const shortestPossibleDuration = memory.createdAt - firstView.end
+  if (longestPossibleDuration < conversionWindowMs) {
+    return { metric_id: 'M9', status: 'PASS', reason: 'memory_saved_within_window' }
+  }
+  if (shortestPossibleDuration >= conversionWindowMs) {
+    return { metric_id: 'M9', status: 'FAIL', reason: 'memory_saved_after_window' }
+  }
+  return hold('stage_anchor_boundary')
 }
 
 export function evaluateCensoredRate(input: {
@@ -1017,6 +1147,58 @@ const METRIC_REASON_STATUS: Record<TelemetryMetricReason, MetricStatus> = {
   unsupported_metric_direction: 'HOLD',
 }
 
+const CENSORED_RATE_REASONS = [
+  'invalid_census',
+  'minimum_not_met',
+  'worst_case_passed',
+  'best_case_failed',
+  'censoring_changes_decision',
+] as const satisfies readonly TelemetryMetricReason[]
+const FUNNEL_CORRELATION_REASONS = [
+  'memory_saved_within_window',
+  'memory_not_saved',
+  'memory_saved_after_window',
+  'telemetry_incomplete',
+  'stage_missing',
+  'window_not_mature',
+  'event_reordered_after_truth',
+  'stage_anchor_unverified',
+  'stage_anchor_boundary',
+  'stage_time_invalid',
+  'actor_reference_invalid',
+] as const satisfies readonly TelemetryMetricReason[]
+
+const METRIC_REASON_ALLOWLIST = {
+  M1: CENSORED_RATE_REASONS,
+  M2: [...CENSORED_RATE_REASONS, ...FUNNEL_CORRELATION_REASONS],
+  M3: [...CENSORED_RATE_REASONS, ...FUNNEL_CORRELATION_REASONS],
+  M4: ['unsupported_metric_direction'],
+  M5: CENSORED_RATE_REASONS,
+  M6: CENSORED_RATE_REASONS,
+  M7: CENSORED_RATE_REASONS,
+  M8: [...CENSORED_RATE_REASONS, 'target_not_configured'],
+  M9: [...CENSORED_RATE_REASONS, ...FUNNEL_CORRELATION_REASONS, 'target_not_configured'],
+  M10: ['unsupported_metric_direction'],
+  M11: ['unsupported_metric_direction'],
+  M12: ['unsupported_metric_direction'],
+  north_star_monthly_memories_per_active_profile: [
+    'database_truth_complete',
+    'unsupported_metric_direction',
+  ],
+} as const satisfies Record<TelemetryMetricId, readonly TelemetryMetricReason[]>
+
+function validMetricResult(metric: TelemetryMetricResult): boolean {
+  return (
+    includes(METRIC_IDS, metric.metric_id) &&
+    includes(METRIC_STATUSES, metric.status) &&
+    includes(METRIC_REASONS, metric.reason) &&
+    METRIC_REASON_STATUS[metric.reason] === metric.status &&
+    (METRIC_REASON_ALLOWLIST[metric.metric_id] as readonly TelemetryMetricReason[]).includes(
+      metric.reason,
+    )
+  )
+}
+
 function validCompletenessResult(result: TelemetryCompletenessResult): boolean {
   const validReasonStatus =
     (result.reason === 'complete' && result.status === 'PASS') ||
@@ -1079,13 +1261,7 @@ export function buildTelemetryEvidence(input: {
     SOURCES.some((source) => !input.completeness.some((item) => item.source === source)) ||
     input.completeness.some((item) => !validCompletenessResult(item)) ||
     new Set(input.metrics.map((metric) => metric.metric_id)).size !== input.metrics.length ||
-    input.metrics.some(
-      (metric) =>
-        !includes(METRIC_IDS, metric.metric_id) ||
-        !includes(METRIC_STATUSES, metric.status) ||
-        !includes(METRIC_REASONS, metric.reason) ||
-        METRIC_REASON_STATUS[metric.reason as TelemetryMetricReason] !== metric.status,
-    )
+    input.metrics.some((metric) => !validMetricResult(metric))
   ) {
     throw new TelemetryContractError('invalid_input')
   }

@@ -1,5 +1,6 @@
-export const OPENAPI_UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import { BARE_UUID_PATTERN } from '@/lib/uuid'
+
+export const OPENAPI_UUID_PATTERN = BARE_UUID_PATTERN
 
 export const WEB_VITAL_OPERATIONS = [
   'web_vital_cls',
@@ -10,6 +11,16 @@ export const WEB_VITAL_OPERATIONS = [
 ] as const
 
 export const WEB_VITAL_STATUSES = ['good', 'needs_improvement', 'poor'] as const
+
+export const WEB_VITAL_ROUTE_GROUPS = [
+  'public',
+  'auth',
+  'home',
+  'record',
+  'memory',
+  'settings',
+  'other_private',
+] as const
 
 export const WEB_VITAL_DURATION_BUCKETS = [
   'not_applicable',
@@ -24,6 +35,7 @@ export const WEB_VITAL_DURATION_BUCKETS = [
 export type WebVitalOperation = (typeof WEB_VITAL_OPERATIONS)[number]
 export type WebVitalStatus = (typeof WEB_VITAL_STATUSES)[number]
 export type WebVitalDurationBucket = (typeof WEB_VITAL_DURATION_BUCKETS)[number]
+export type WebVitalRouteGroup = (typeof WEB_VITAL_ROUTE_GROUPS)[number]
 
 export const WEB_VITAL_OPERATION_BY_NAME = {
   CLS: 'web_vital_cls',
@@ -39,6 +51,16 @@ export const WEB_VITAL_THRESHOLDS: Record<WebVitalOperation, readonly [number, n
   web_vital_inp: [200, 500],
   web_vital_lcp: [2500, 4000],
   web_vital_ttfb: [800, 1800],
+}
+
+export function webVitalRouteGroupForPathname(pathname: string): WebVitalRouteGroup {
+  if (pathname === '/lp' || pathname === '/privacy') return 'public'
+  if (pathname === '/') return 'home'
+  if (pathname === '/sign-in' || pathname.startsWith('/auth/')) return 'auth'
+  if (pathname === '/record' || pathname.startsWith('/record/')) return 'record'
+  if (pathname.startsWith('/memory/')) return 'memory'
+  if (pathname === '/settings' || pathname.startsWith('/settings/')) return 'settings'
+  return 'other_private'
 }
 
 type NumericInterval = {

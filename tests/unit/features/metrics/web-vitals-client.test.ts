@@ -68,6 +68,36 @@ describe('createWebVitalsReport', () => {
     expect(() => createWebVitalsReport(metric('LCP', 2500), '/', 'not-a-uuid')).toThrow(
       'invalid_web_vital_event_id',
     )
+    expect(
+      createWebVitalsReport(metric('LCP', 2500), '/', 'ABCDEFAB-CDEF-9999-7000-ABCDEFABCDEF')
+        .event_id,
+    ).toBe('abcdefab-cdef-9999-7000-abcdefabcdef')
+    expect(() =>
+      createWebVitalsReport(
+        metric('LCP', 2500),
+        '/',
+        'urn:uuid:00000000-0000-0000-0000-000000000000',
+      ),
+    ).toThrow('invalid_web_vital_event_id')
+  })
+
+  it.each([
+    ['/lp', 'public'],
+    ['/privacy', 'public'],
+    ['/sign-in', 'auth'],
+    ['/auth/callback', 'auth'],
+    ['/', 'home'],
+    ['/record', 'record'],
+    ['/record/retry', 'record'],
+    ['/memory/00000000-0000-0000-0000-000000000000', 'memory'],
+    ['/settings', 'settings'],
+    ['/settings/privacy', 'settings'],
+    ['/account', 'other_private'],
+  ] as const)('maps %s to the shared %s route group', (pathname, routeGroup) => {
+    expect(
+      createWebVitalsReport(metric('LCP', 2500), pathname, '00000000-0000-0000-0000-000000000000')
+        .route_group,
+    ).toBe(routeGroup)
   })
 
   it.each([
