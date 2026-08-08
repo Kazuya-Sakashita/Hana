@@ -161,7 +161,8 @@ export function assertProductEventIngestReady(): void {
   if (
     process.env.NODE_ENV === 'production' &&
     (process.env.PRODUCT_EVENT_INGEST_ACTIVATION !== 'issue-186-retention-v1' ||
-      process.env.PRODUCT_EVENT_PURGE_ACTIVATION !== 'issue-185-purge-v1')
+      process.env.PRODUCT_EVENT_PURGE_ACTIVATION !== 'issue-185-purge-v1' ||
+      process.env.PRODUCT_EVENT_DEGRADATION_ACTIVATION !== 'issue-190-v1')
   ) {
     throw problems.telemetryUnavailable()
   }

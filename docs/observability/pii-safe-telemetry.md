@@ -10,7 +10,8 @@
 API、AI、Web Vitals、記録funnelを、個人の行動履歴や自由記述を作らずに同じ固定dimensionへ変換する。
 外部monitoring provider、ProductEventの退会purge、HMAC key rotation、product thresholdはこの契約の
 対象外であり、それぞれ後続Issueとproduct validation contractを正とする。DB roleとretention fallbackの
-実効化はGitHub Issue #379で行い、完了するまでproduction telemetry activationをHoldにする。
+実効化はGitHub Issue #379で行う。status-only degradation ledgerはGitHub Issue #384で行い、
+両方が完了するまでproduction telemetry activationをHoldにする。
 
 ## Event schema
 
@@ -160,9 +161,11 @@ job outputはstatus-only schemaで検証し、raw row、actor hash、event ID、
 現在の共通DB credentialだけでは実効的な権限分離を証明できないため、production activationはHoldとする。
 table grant、versioned SECURITY DEFINER function、用途別non-owner credential、pg_cron不在時のretention fallbackは
 GitHub Issue #379で実装・検証する。ProductEvent全key-version退会purgeとHMAC key lifecycleは
-ISSUE-185で実装・検証する。保護された`PRODUCT_EVENT_INGEST_ACTIVATION`と`PRODUCT_EVENT_PURGE_ACTIVATION`の
-規定値が両方揃うまで、production ProductEvent endpoint自身が503でwriteを拒否する。片方だけの有効化、
-欠落、未知値は同じstatus-only failureとして扱い、どの境界が不足したか、secret、PIIをresponseやlogへ出さない。
+ISSUE-185で実装・検証する。旧continuityをraw identifierなしで観測窓へ不可逆に記録するstatus-only
+degradation ledgerはGitHub Issue #384で実装・検証する。保護された`PRODUCT_EVENT_INGEST_ACTIVATION`、
+`PRODUCT_EVENT_PURGE_ACTIVATION`、`PRODUCT_EVENT_DEGRADATION_ACTIVATION`の規定値がすべて揃うまで、
+production ProductEvent endpoint自身が503でwriteを拒否する。一部だけの有効化、欠落、未知値は同じ
+status-only failureとして扱い、どの境界が不足したか、secret、PIIをresponseやlogへ出さない。
 
 匿名Web Vitalsは必須`Origin`と`Sec-Fetch-Site: same-origin`を含む同一origin JSON browser requestだけを受け、
 versioned server-only HMACでsamplingする。productionでは

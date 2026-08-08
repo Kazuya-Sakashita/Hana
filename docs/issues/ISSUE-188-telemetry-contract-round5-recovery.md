@@ -37,6 +37,7 @@ PR #378の正式な第5巡で検出された7件のtelemetry契約矛盾を、Op
 - product thresholdとGo / Holdの決定（ISSUE-159）
 - 退会purgeとHMAC key lifecycle（ISSUE-185）
 - production DB authorityとretention activation（ISSUE-186 / GitHub Issue #379）
+- status-only degradation ledger（GitHub Issue #384）
 - Web Vitals edge attestationとshared rate limit（ISSUE-187 / GitHub Issue #380）
 
 ## 影響範囲
@@ -65,7 +66,7 @@ PR #378の正式な第5巡で検出された7件のtelemetry契約矛盾を、Op
 - [x] eligible censusと退会right-censorをactor非識別aggregateとして固定し、削除後の分母縮小を検知する
 - [x] worst-case区間からPASS / FAIL / HOLDだけを生成し、exact census / censor countを証跡へ出さない
 - [x] raw event accessのauthority契約とproduction HOLD境界を固定する
-- [x] production ProductEvent ingestをISSUE-186とISSUE-185の独立したversioned activationへ二重拘束する
+- [x] production ProductEvent ingestをISSUE-186、ISSUE-185、degradation ledgerの独立したversioned activationへ3重拘束する
 - [x] primary / secondary suppressionを適用する
 - [x] completeness、query version、actor key version、eligible census digest、censoring policy / status digestをstatus-only evidenceへ含める
 - [x] North Starのactive unit、UTC entry window、重複排除、event completenessを固定する
@@ -97,13 +98,34 @@ PR #378の正式な第5巡で検出された7件のtelemetry契約矛盾を、Op
 - 壊れたoutbox payloadをnetworkへ送らず、payloadを削除してstatus-only degradationだけを残す
 - UUIDはbare canonical表現へ統一し、相関キーの曖昧性を残さない
 - raw event、actor identifier、exact countをevidenceへ含めない
-- production activationの既存二重gateを緩和しない
+- production activationの既存2条件を緩和せず、degradation ledgerの第3条件を追加する
+- degradation ledgerの専用activationを加え、3条件が揃うまでproduction ingestをHOLDする
 
 ## Review recovery
 
 - PR #378の第5巡HOLD、旧review、ISSUE-173例外proof、breaking waiverは合格証拠として再利用しない
 - ISSUE-188の最初の正式reviewを第1巡として扱う
 - 第5巡前に7 findingsをすべて修正し、正式review対象SHAを固定する
+
+## Fresh review history
+
+Round 1はbase `e6c891ecde1ba3f51b739361d3cd3de4433835a3`、head
+`e2e73989eb90a429c2c0ef5a27a8afe39f4ed88d`を6 roleが独立・read-onlyで確認した。
+
+| role                        | 判定 | findings |
+| --------------------------- | ---- | -------: |
+| spec acceptance / analytics | HOLD |        1 |
+| implementation correctness  | HOLD |        1 |
+| test reliability            | HOLD |        3 |
+| API contract                | HOLD |        2 |
+| security / authorization    | HOLD |        1 |
+| privacy / data protection   | HOLD |        3 |
+
+Issue Captainが重複したmedia type findingを統合し、10件をactionableとして保持した。M9 view集合、
+outbox continuity帰属、M1〜M12集合、UUID canonicalization、Node 26 test、JSON media type、未来queue、
+cross-actor oracleを本Issueで修正した。status-only degradation ledgerはGitHub Issue #384へ分離し、
+専用activationが完成するまでproduction ingestを503へ固定した。label付与前eventに拘束された旧CI failureは、
+修正commitのfresh pull_request eventで再評価する。修正後headはfresh Round 2で6 roleすべてを再実行する。
 
 ## 実装結果
 
@@ -113,12 +135,18 @@ PR #378の正式な第5巡で検出された7件のtelemetry契約矛盾を、Op
 - ProductEvent `flow_id`とMemory `Idempotency-Key`をgeneric bare UUIDとして受理し、lowercaseへcanonical化した
 - metric IDごとのreason allowlistを追加し、非対応metricでright-censor reasonを使うcaller bypassを拒否した
 - M9 evaluatorを最初のeligible `memory_viewed`、occurrence-minute全区間、7日maturity、DB Memory truthへ固定した
+- M9のreceived / supplied view ID集合を完全一致させ、callerによる最初のview省略をHOLDにした
+- status-only evidenceでM1〜M12を必須にし、metric欠測から全体PASSを生成できなくした
+- envelope UUIDをsampling、manifest、dedup、completeness比較前にlowercaseへcanonical化した
+- outboxのbinding帰属をpayload検証より先に行い、別continuityへのdegradation誤帰属と未来queueを拒否した
+- ProductEvent ingestをJSON-onlyにし、cross-actor event ID collisionを204で秘匿した
+- degradation ledgerをGitHub Issue #384へ分離し、専用activation未完成時のproduction ingestをHOLDにした
 - query versionを`issue-188-v1`へ更新し、ISSUE-152 evidenceとの混在を禁止した
 
 ## 検証結果
 
 - 対象11 files / 308 tests PASS
-- `pnpm pr:gate` PASS（196 files中190 PASS / 6 skip、1869 tests中1846 PASS / 23 skip、production build成功）
+- `pnpm pr:gate` PASS（196 files中190 PASS / 6 skip、1886 tests中1863 PASS / 23 skip、production build成功）
 - `pnpm openapi:lint` PASS（既存warningのみ）
 - `pnpm openapi:gen` PASS
 - 固定oasdiff imageによるmainとの差分は21件（error 16 / warning 5）

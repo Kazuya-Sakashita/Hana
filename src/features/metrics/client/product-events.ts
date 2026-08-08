@@ -19,6 +19,7 @@ export const PRODUCT_EVENT_OUTBOX_MAX_ENTRIES = 50
 const PRODUCT_EVENT_OUTBOX_LEGACY_STORAGE_KEY = 'hana:productEventOutbox:v3'
 const PRODUCT_EVENT_OUTBOX_MAX_FLUSH_PER_RUN = 20
 const PRODUCT_EVENT_OUTBOX_MAX_RETRY_MS = 60_000
+const PRODUCT_EVENT_OUTBOX_MAX_ATTEMPTS = PRODUCT_EVENT_OUTBOX_TTL_MS / 1000
 export const PRODUCT_EVENT_SEND_TIMEOUT_MS = 10_000
 export const PRODUCT_EVENT_AUTH_REFRESH_TIMEOUT_MS = 5_000
 const TELEMETRY_BINDING_PATTERN = /^v3\.(\d{10})\.([0-9a-f]{64})\.[0-9a-f]{64}$/
@@ -180,18 +181,23 @@ function isProductEventReport(value: unknown): value is ProductEventReport {
   )
 }
 
-function isOutboxEntry(value: unknown): value is ProductEventOutboxEntry {
+function isOutboxEntry(value: unknown, now: number): value is ProductEventOutboxEntry {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const entry = value as Record<string, unknown>
   return (
     hasExactKeys(entry, ['report', 'queuedAt', 'attempts', 'nextAttemptAt']) &&
     isProductEventReport(entry.report) &&
     typeof entry.queuedAt === 'number' &&
-    Number.isFinite(entry.queuedAt) &&
+    Number.isSafeInteger(entry.queuedAt) &&
+    (entry.queuedAt as number) >= 0 &&
+    (entry.queuedAt as number) <= now &&
     Number.isInteger(entry.attempts) &&
     (entry.attempts as number) >= 0 &&
+    (entry.attempts as number) <= PRODUCT_EVENT_OUTBOX_MAX_ATTEMPTS &&
     typeof entry.nextAttemptAt === 'number' &&
-    Number.isFinite(entry.nextAttemptAt)
+    Number.isSafeInteger(entry.nextAttemptAt) &&
+    (entry.nextAttemptAt as number) >= (entry.queuedAt as number) &&
+    (entry.nextAttemptAt as number) <= (entry.queuedAt as number) + PRODUCT_EVENT_OUTBOX_TTL_MS
   )
 }
 
@@ -203,27 +209,60 @@ function getSessionStorage(): Storage | null {
   }
 }
 
+function discardUnattributedOutbox(storage: Storage): StoredProductEventOutbox {
+  try {
+    storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
+  } catch {
+    markDegradation('STORAGE_UNAVAILABLE')
+  }
+  return emptyOutbox()
+}
+
 function readOutbox(now = Date.now()): StoredProductEventOutbox {
   const storage = getSessionStorage()
   if (!storage || !activeTelemetryBinding) {
     if (!storage && activeTelemetryBinding) markDegradation('STORAGE_UNAVAILABLE')
     return emptyOutbox()
   }
+  let raw: string | null
   try {
     storage.removeItem(PRODUCT_EVENT_OUTBOX_LEGACY_STORAGE_KEY)
-    const raw = storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
+    raw = storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
     if (!raw) return emptyOutbox()
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error()
-    const outbox = parsed as Record<string, unknown>
+  } catch {
+    markDegradation('STORAGE_UNAVAILABLE')
+    return emptyOutbox()
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return discardUnattributedOutbox(storage)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return discardUnattributedOutbox(storage)
+  }
+  const outbox = parsed as Record<string, unknown>
+  const storedBinding =
+    typeof outbox.telemetryBinding === 'string'
+      ? parseTelemetryBinding(outbox.telemetryBinding)
+      : null
+  const currentBinding = parseTelemetryBinding(activeTelemetryBinding)
+  if (!storedBinding || !currentBinding) {
+    return discardUnattributedOutbox(storage)
+  }
+  if (storedBinding.continuity !== currentBinding.continuity) {
+    return discardUnattributedOutbox(storage)
+  }
+
+  try {
     if (
       !hasExactKeys(outbox, ['version', 'telemetryBinding', 'degradation', 'entries']) ||
       outbox.version !== 4 ||
-      typeof outbox.telemetryBinding !== 'string' ||
-      !TELEMETRY_BINDING_PATTERN.test(outbox.telemetryBinding) ||
       !Array.isArray(outbox.entries) ||
       outbox.entries.length > PRODUCT_EVENT_OUTBOX_MAX_ENTRIES ||
-      !outbox.entries.every(isOutboxEntry) ||
+      !outbox.entries.every((entry) => isOutboxEntry(entry, now)) ||
       ![
         'NONE',
         'STORAGE_UNAVAILABLE',
@@ -233,12 +272,6 @@ function readOutbox(now = Date.now()): StoredProductEventOutbox {
       ].includes(String(outbox.degradation))
     ) {
       throw new Error()
-    }
-    if (outbox.telemetryBinding !== activeTelemetryBinding) {
-      if (!hasSameTelemetryContinuity(outbox.telemetryBinding, activeTelemetryBinding)) {
-        storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
-        return emptyOutbox()
-      }
     }
     if (outbox.degradation !== 'NONE') {
       markDegradation(outbox.degradation as Exclude<ProductEventDegradation, 'NONE'>)
@@ -551,7 +584,10 @@ async function runFlush(now: () => number, generation: number): Promise<void> {
       latest.entries[index] = {
         ...latest.entries[index]!,
         attempts,
-        nextAttemptAt: now() + retryDelay(attempts),
+        nextAttemptAt: Math.min(
+          now() + retryDelay(attempts),
+          latest.entries[index]!.queuedAt + PRODUCT_EVENT_OUTBOX_TTL_MS,
+        ),
       }
     }
     writeOutbox(latest)

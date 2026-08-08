@@ -19,6 +19,7 @@ import {
   TELEMETRY_EVIDENCE_SCHEMA_VERSION,
   TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
   TELEMETRY_QUERY_VERSION,
+  TELEMETRY_REQUIRED_METRIC_IDS,
   TELEMETRY_RETENTION_DAYS,
   TELEMETRY_SAMPLING,
   TELEMETRY_SAMPLING_POLICY_VERSION,
@@ -30,6 +31,7 @@ import {
   type TelemetryCompletenessInput,
   type TelemetryEnvelope,
   type TelemetryExpectationManifest,
+  type TelemetryMetricResult,
   type TelemetrySource,
 } from '@/features/metrics/server/telemetry-contract'
 
@@ -254,6 +256,32 @@ function fourSourceCompleteness(): TelemetryCompletenessResult[] {
   )
 }
 
+function requiredMetricResults(): TelemetryMetricResult[] {
+  return [
+    { metric_id: 'M1', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M2', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M3', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M4', status: 'HOLD', reason: 'unsupported_metric_direction' },
+    { metric_id: 'M5', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M6', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M7', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M8', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M9', status: 'PASS', reason: 'worst_case_passed' },
+    { metric_id: 'M10', status: 'HOLD', reason: 'unsupported_metric_direction' },
+    { metric_id: 'M11', status: 'HOLD', reason: 'unsupported_metric_direction' },
+    { metric_id: 'M12', status: 'HOLD', reason: 'unsupported_metric_direction' },
+  ]
+}
+
+function replaceMetric(
+  metrics: readonly TelemetryMetricResult[],
+  replacement: TelemetryMetricResult,
+): TelemetryMetricResult[] {
+  return metrics.some((metric) => metric.metric_id === replacement.metric_id)
+    ? metrics.map((metric) => (metric.metric_id === replacement.metric_id ? replacement : metric))
+    : [...metrics, replacement]
+}
+
 function evidenceInput() {
   return {
     source_sha: 'a'.repeat(40),
@@ -266,7 +294,7 @@ function evidenceInput() {
     eligible_census: { exact_count: 23, private_actor: ACTOR_A.actor_token },
     censoring_status: { exact_censored: 2 },
     completeness: fourSourceCompleteness(),
-    metrics: [{ metric_id: 'M2', status: 'PASS', reason: 'worst_case_passed' }] as const,
+    metrics: requiredMetricResults(),
   }
 }
 
@@ -447,6 +475,36 @@ describe('telemetry completeness manifest and sampling', () => {
         vector.sampled,
       )
     }
+  })
+
+  it('canonicalizes UUID case before sampling and completeness comparison', () => {
+    const lowercase = 'abcdefab-cdef-9999-7000-000000000004'
+    const uppercase = lowercase.toUpperCase()
+    expect(shouldSampleTelemetry('web_vital', lowercase, samplingFor('web_vital'))).toBe(true)
+    expect(shouldSampleTelemetry('web_vital', uppercase, samplingFor('web_vital'))).toBe(
+      shouldSampleTelemetry('web_vital', lowercase, samplingFor('web_vital')),
+    )
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('web_vital', manifest([uppercase], { source: 'web_vital' }), [
+          sourceEnvelope('web_vital', uppercase),
+        ]),
+      ),
+    ).toMatchObject({ status: 'PASS', reason: 'complete' })
+    expect(sourceEnvelope('web_vital', uppercase).event_id).toBe(lowercase)
+  })
+
+  it('rejects a manifest with UUIDs that collide after case canonicalization', () => {
+    const lowercase = 'abcdefab-cdef-9999-7000-000000000004'
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput(
+          'web_vital',
+          manifest([lowercase, lowercase.toUpperCase()], { source: 'web_vital' }),
+          [sourceEnvelope('web_vital', lowercase)],
+        ),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
   })
 
   it('detects duplicate and reorder without turning a complete set into loss', () => {
@@ -955,6 +1013,53 @@ describe('M9 occurrence-minute view-to-memory correlation', () => {
     ).toMatchObject({ status: 'FAIL', reason: 'memory_saved_after_window' })
   })
 
+  it('holds when the caller omits the first received eligible view', () => {
+    const laterMinute = '2026-08-07T12:00:00Z'
+    const laterEventId = uuidV7ForMinute(laterMinute, '000000000011')
+    const completeness = completenessInput('funnel', manifest([EVENT_B, laterEventId]), [
+      envelope(EVENT_B, 'memory_viewed'),
+      envelope(laterEventId, 'memory_viewed', laterMinute),
+    ])
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        completeness_input: completeness,
+        events: [
+          viewedEvent({
+            event_id: laterEventId,
+            occurred_minute_utc: laterMinute,
+            received_at_utc: '2026-08-07T12:20:00Z',
+          }),
+        ],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+  })
+
+  it('holds on excess or duplicate supplied and received view IDs', () => {
+    const laterMinute = '2026-08-07T12:00:00Z'
+    const laterEventId = uuidV7ForMinute(laterMinute, '000000000011')
+    const laterView = viewedEvent({
+      event_id: laterEventId,
+      occurred_minute_utc: laterMinute,
+      received_at_utc: '2026-08-07T12:20:00Z',
+    })
+    expect(
+      evaluateSyntheticM9ViewToMemory({ ...base, events: [viewedEvent(), laterView] }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({ ...base, events: [viewedEvent(), viewedEvent()] }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        completeness_input: completenessInput('funnel', manifest([EVENT_B]), [
+          envelope(EVENT_B, 'memory_viewed'),
+          envelope(EVENT_B, 'memory_viewed'),
+        ]),
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+  })
+
   it('holds unverified, actor-mismatched, incomplete and invalid occurrence anchors', () => {
     expect(
       evaluateSyntheticM9ViewToMemory({
@@ -1161,12 +1266,48 @@ describe('status-only evidence v2', () => {
     ).toThrow('invalid_input')
   })
 
+  it('requires the versioned M1 through M12 metric set without duplicates', () => {
+    expect(TELEMETRY_REQUIRED_METRIC_IDS).toEqual([
+      'M1',
+      'M2',
+      'M3',
+      'M4',
+      'M5',
+      'M6',
+      'M7',
+      'M8',
+      'M9',
+      'M10',
+      'M11',
+      'M12',
+    ])
+    const valid = evidenceInput()
+    for (const missingMetricId of TELEMETRY_REQUIRED_METRIC_IDS) {
+      expect(() =>
+        buildTelemetryEvidence({
+          ...valid,
+          metrics: valid.metrics.filter((metric) => metric.metric_id !== missingMetricId),
+        }),
+      ).toThrow('invalid_input')
+    }
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metrics: [...valid.metrics, valid.metrics[0]!],
+      }),
+    ).toThrow('invalid_input')
+  })
+
   it('rejects metric and completeness status/reason contradictions', () => {
     const valid = evidenceInput()
     expect(() =>
       buildTelemetryEvidence({
         ...valid,
-        metrics: [{ metric_id: 'M2', status: 'PASS', reason: 'telemetry_incomplete' }],
+        metrics: replaceMetric(valid.metrics, {
+          metric_id: 'M2',
+          status: 'PASS',
+          reason: 'telemetry_incomplete',
+        }),
       }),
     ).toThrow('invalid_input')
     expect(() =>
@@ -1196,7 +1337,7 @@ describe('status-only evidence v2', () => {
     expect(() =>
       buildTelemetryEvidence({
         ...valid,
-        metrics: [{ metric_id: 'M12', status, reason }],
+        metrics: replaceMetric(valid.metrics, { metric_id: 'M12', status, reason }),
       }),
     ).toThrow('invalid_input')
   })
@@ -1210,7 +1351,12 @@ describe('status-only evidence v2', () => {
         { metric_id: metricId, status: 'FAIL', reason: 'best_case_failed' },
         { metric_id: metricId, status: 'HOLD', reason: 'censoring_changes_decision' },
       ] as const) {
-        expect(buildTelemetryEvidence({ ...valid, metrics: [metric] }).metrics).toEqual([metric])
+        expect(
+          buildTelemetryEvidence({
+            ...valid,
+            metrics: replaceMetric(valid.metrics, metric),
+          }).metrics,
+        ).toContainEqual(metric)
       }
     },
   )
@@ -1222,7 +1368,11 @@ describe('status-only evidence v2', () => {
       expect(() =>
         buildTelemetryEvidence({
           ...valid,
-          metrics: [{ metric_id: metricId, status: 'PASS', reason: 'worst_case_passed' }],
+          metrics: replaceMetric(valid.metrics, {
+            metric_id: metricId,
+            status: 'PASS',
+            reason: 'worst_case_passed',
+          }),
         }),
       ).toThrow('invalid_input')
     },
@@ -1233,7 +1383,11 @@ describe('status-only evidence v2', () => {
     expect(() =>
       buildTelemetryEvidence({
         ...valid,
-        metrics: [{ metric_id: 'M1', status: 'PASS', reason: 'memory_saved_within_window' }],
+        metrics: replaceMetric(valid.metrics, {
+          metric_id: 'M1',
+          status: 'PASS',
+          reason: 'memory_saved_within_window',
+        }),
       }),
     ).toThrow('invalid_input')
   })

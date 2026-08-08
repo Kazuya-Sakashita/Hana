@@ -68,11 +68,13 @@ describe('ISSUE-188 PII-safe telemetry contract recovery', () => {
     expect(telemetry).not.toContain('PRODUCT_EVENT_HASH_PEPPER')
   })
 
-  it('requires independent authority-retention and purge readiness before production ingest', () => {
+  it('requires authority, purge and degradation-ledger readiness before production ingest', () => {
     expect(issue).toContain('GitHub Issue #379')
+    expect(issue).toContain('GitHub Issue #384')
     expect(issue).toContain('ISSUE-185')
     expect(contract).toContain('production telemetry activationをHold')
     expect(contract).toContain('GitHub Issue #379で実装・検証')
+    expect(contract).toContain('GitHub Issue #384で実装・検証')
     expect(contract).toContain('ISSUE-185で実装・検証')
     expect(productEvent).toContain(
       "process.env.PRODUCT_EVENT_INGEST_ACTIVATION !== 'issue-186-retention-v1'",
@@ -80,8 +82,14 @@ describe('ISSUE-188 PII-safe telemetry contract recovery', () => {
     expect(productEvent).toContain(
       "process.env.PRODUCT_EVENT_PURGE_ACTIVATION !== 'issue-185-purge-v1'",
     )
+    expect(productEvent).toContain(
+      "process.env.PRODUCT_EVENT_DEGRADATION_ACTIVATION !== 'issue-190-v1'",
+    )
     expect(environmentExample).toMatch(/^PRODUCT_EVENT_INGEST_ACTIVATION=$/m)
     expect(environmentExample).toMatch(/^PRODUCT_EVENT_PURGE_ACTIVATION=$/m)
-    expect(environmentExample).not.toMatch(/^PRODUCT_EVENT_(?:INGEST|PURGE)_ACTIVATION=issue-/m)
+    expect(environmentExample).toMatch(/^PRODUCT_EVENT_DEGRADATION_ACTIVATION=$/m)
+    expect(environmentExample).not.toMatch(
+      /^PRODUCT_EVENT_(?:INGEST|PURGE|DEGRADATION)_ACTIVATION=issue-/m,
+    )
   })
 })

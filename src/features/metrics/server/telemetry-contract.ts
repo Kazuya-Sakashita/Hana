@@ -2,7 +2,6 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { canonicalizeBareUuid } from '@/lib/uuid'
 import {
   isWebVitalStatusDurationCombination,
-  OPENAPI_UUID_PATTERN,
   WEB_VITAL_ROUTE_GROUPS,
   type WebVitalDurationBucket,
   type WebVitalOperation,
@@ -135,6 +134,20 @@ const METRIC_IDS = [
   'M12',
   'north_star_monthly_memories_per_active_profile',
 ] as const
+export const TELEMETRY_REQUIRED_METRIC_IDS = [
+  'M1',
+  'M2',
+  'M3',
+  'M4',
+  'M5',
+  'M6',
+  'M7',
+  'M8',
+  'M9',
+  'M10',
+  'M11',
+  'M12',
+] as const satisfies readonly (typeof METRIC_IDS)[number][]
 const METRIC_REASONS = [
   'memory_saved_within_window',
   'memory_not_saved',
@@ -156,7 +169,6 @@ const METRIC_REASONS = [
   'target_not_configured',
   'unsupported_metric_direction',
 ] as const
-const UUID_PATTERN = OPENAPI_UUID_PATTERN
 const SHA256_PATTERN = /^[0-9a-f]{64}$/
 const SHA_PATTERN = /^[0-9a-f]{40}$/
 const UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/
@@ -366,10 +378,10 @@ export function parseTelemetryEnvelope(raw: unknown): TelemetryEnvelope {
   if (!hasExactKeys(raw, ['schema_version', 'event_id', 'occurred_at_utc', 'dimensions'])) {
     throw new TelemetryContractError('unknown_field')
   }
+  const eventId = typeof raw.event_id === 'string' ? canonicalizeBareUuid(raw.event_id) : null
   if (
     raw.schema_version !== TELEMETRY_EVENT_SCHEMA_VERSION ||
-    typeof raw.event_id !== 'string' ||
-    !UUID_PATTERN.test(raw.event_id) ||
+    eventId === null ||
     typeof raw.occurred_at_utc !== 'string' ||
     parseUtc(raw.occurred_at_utc) === null ||
     !isRecord(raw.dimensions)
@@ -401,7 +413,7 @@ export function parseTelemetryEnvelope(raw: unknown): TelemetryEnvelope {
   }
   return {
     schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
-    event_id: raw.event_id,
+    event_id: eventId,
     occurred_at_utc: raw.occurred_at_utc,
     dimensions: raw.dimensions as TelemetryDimensions,
   }
@@ -516,9 +528,11 @@ function validExpectationManifest(
     Array.isArray(manifest.expected_event_ids) &&
     manifest.expected_event_ids.length > 0 &&
     manifest.expected_event_ids.every(
-      (eventId): eventId is string => typeof eventId === 'string' && UUID_PATTERN.test(eventId),
+      (eventId): eventId is string =>
+        typeof eventId === 'string' && canonicalizeBareUuid(eventId) !== null,
     ) &&
-    new Set(manifest.expected_event_ids).size === manifest.expected_event_ids.length
+    new Set(manifest.expected_event_ids.map((eventId) => canonicalizeBareUuid(eventId))).size ===
+      manifest.expected_event_ids.length
   )
 }
 
@@ -559,12 +573,14 @@ export function evaluateTelemetryCompleteness(
   }
   let sampledExpectedEventIds: readonly string[]
   try {
-    sampledExpectedEventIds = manifest.expected_event_ids.filter((eventId) =>
-      shouldSampleTelemetry(input.source, eventId, {
-        key_version: input.sampling_key_version,
-        key: input.sampling_key,
-      }),
-    )
+    sampledExpectedEventIds = manifest.expected_event_ids
+      .map((eventId) => canonicalizeBareUuid(eventId)!)
+      .filter((eventId) =>
+        shouldSampleTelemetry(input.source, eventId, {
+          key_version: input.sampling_key_version,
+          key: input.sampling_key,
+        }),
+      )
   } catch {
     return completenessHold(input.source, 'sampling_policy_mismatch')
   }
@@ -698,7 +714,8 @@ function verifiedOccurrenceMinuteInterval(input: {
 }):
   | { interval: OccurrenceMinuteInterval; reason: null }
   | { interval: null; reason: 'telemetry_incomplete' | 'stage_time_invalid' } {
-  const envelope = input.received_by_id.get(input.event.event_id)
+  const canonicalEventId = canonicalizeBareUuid(input.event.event_id)
+  const envelope = canonicalEventId ? input.received_by_id.get(canonicalEventId) : undefined
   if (envelope?.dimensions.operation !== input.expected_operation) {
     return { interval: null, reason: 'telemetry_incomplete' }
   }
@@ -765,7 +782,10 @@ export function evaluateSyntheticFunnelFlow(input: {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
   }
   const verifiedReceived = new Map(
-    input.completeness_input.received.map((envelope) => [envelope.event_id, envelope]),
+    input.completeness_input.received.map((envelope) => [
+      canonicalizeBareUuid(envelope.event_id)!,
+      envelope,
+    ]),
   )
   if (sameFlowStages.length === 0) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_missing' }
@@ -895,6 +915,20 @@ export function evaluateSyntheticM9ViewToMemory(input: {
     return hold('actor_reference_invalid')
   }
   if (views.length === 0) return hold('stage_missing')
+  const suppliedViewIds = views.map((event) => canonicalizeBareUuid(event.event_id))
+  const receivedViewIds = input.completeness_input.received
+    .filter((envelope) => envelope.dimensions.operation === 'memory_viewed')
+    .map((envelope) => canonicalizeBareUuid(envelope.event_id))
+  if (
+    suppliedViewIds.some((eventId) => eventId === null) ||
+    receivedViewIds.some((eventId) => eventId === null) ||
+    new Set(suppliedViewIds).size !== suppliedViewIds.length ||
+    new Set(receivedViewIds).size !== receivedViewIds.length ||
+    suppliedViewIds.length !== receivedViewIds.length ||
+    suppliedViewIds.some((eventId) => !receivedViewIds.includes(eventId))
+  ) {
+    return hold('telemetry_incomplete')
+  }
   if (views.some((event) => event.anchor_trust !== 'verified')) {
     return hold('stage_anchor_unverified')
   }
@@ -905,7 +939,10 @@ export function evaluateSyntheticM9ViewToMemory(input: {
     return hold('stage_time_invalid')
   }
   const verifiedReceived = new Map(
-    input.completeness_input.received.map((envelope) => [envelope.event_id, envelope]),
+    input.completeness_input.received.map((envelope) => [
+      canonicalizeBareUuid(envelope.event_id)!,
+      envelope,
+    ]),
   )
   const viewIntervals = views.map((event) =>
     verifiedOccurrenceMinuteInterval({
@@ -1099,7 +1136,8 @@ export function shouldSampleTelemetry(
   eventId: string,
   sampling: { key_version: string; key: string | null },
 ): boolean {
-  if (!UUID_PATTERN.test(eventId)) throw new TelemetryContractError('invalid_input')
+  const canonicalEventId = canonicalizeBareUuid(eventId)
+  if (canonicalEventId === null) throw new TelemetryContractError('invalid_input')
   const rate = TELEMETRY_SAMPLING[source]
   if (!validSamplingConfiguration(source, sampling)) {
     throw new TelemetryContractError('invalid_input')
@@ -1113,7 +1151,7 @@ export function shouldSampleTelemetry(
       .update('\0')
       .update(sampling.key_version)
       .update('\0')
-      .update(eventId)
+      .update(canonicalEventId)
       .digest()
       .readUInt32BE(0) / 0x1_0000_0000
   return bucket < rate
@@ -1256,11 +1294,14 @@ export function buildTelemetryEvidence(input: {
     input.eligible_census === undefined ||
     input.censoring_status === undefined ||
     input.completeness.length !== SOURCES.length ||
-    input.metrics.length === 0 ||
+    input.metrics.length < TELEMETRY_REQUIRED_METRIC_IDS.length ||
     new Set(input.completeness.map((item) => item.source)).size !== input.completeness.length ||
     SOURCES.some((source) => !input.completeness.some((item) => item.source === source)) ||
     input.completeness.some((item) => !validCompletenessResult(item)) ||
     new Set(input.metrics.map((metric) => metric.metric_id)).size !== input.metrics.length ||
+    TELEMETRY_REQUIRED_METRIC_IDS.some(
+      (metricId) => !input.metrics.some((metric) => metric.metric_id === metricId),
+    ) ||
     input.metrics.some((metric) => !validMetricResult(metric))
   ) {
     throw new TelemetryContractError('invalid_input')

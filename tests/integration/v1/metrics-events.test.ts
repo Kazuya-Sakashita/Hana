@@ -160,6 +160,31 @@ describe('POST /v1/metrics/events', () => {
     expect(mocks.eventCreate).not.toHaveBeenCalled()
   })
 
+  it.each([undefined, 'text/plain'])(
+    'rejects the %s content type before authentication, parsing or storage',
+    async (contentType) => {
+      const headers = new Headers({
+        'X-Hana-Telemetry-Binding': productEventTelemetryBinding(USER_ID, SESSION_ID),
+      })
+      if (contentType) headers.set('Content-Type', contentType)
+      const invalidRequest = new Request('http://localhost:3000/v1/metrics/events', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(validReport),
+      })
+
+      const response = await POST(invalidRequest)
+
+      expect(response.status).toBe(422)
+      expect(response.headers.get('content-type')).toContain('application/problem+json')
+      expect(await response.json()).toMatchObject({ reason: 'validation_error' })
+      expect(mocks.getUser).not.toHaveBeenCalled()
+      expect(mocks.transaction).not.toHaveBeenCalled()
+      expect(mocks.eventFindUnique).not.toHaveBeenCalled()
+      expect(mocks.eventCreate).not.toHaveBeenCalled()
+    },
+  )
+
   it.each([
     ['missing session_id', { sub: USER_ID }],
     ['getUser subject mismatch', { sub: OTHER_USER_ID, session_id: SESSION_ID }],
@@ -241,13 +266,7 @@ describe('POST /v1/metrics/events', () => {
     expect(response.status).toBe(204)
   })
 
-  it('returns 409 when the same event id is reused for different content', async () => {
-    mocks.eventCreate.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError('duplicate event', {
-        code: 'P2002',
-        clientVersion: '7.8.0',
-      }),
-    )
+  it('does not reveal a cross-actor event id collision', async () => {
     mocks.eventFindUnique.mockResolvedValue({
       eventId: validReport.event_id,
       actorHash: 'different-actor',
@@ -257,7 +276,44 @@ describe('POST /v1/metrics/events', () => {
     })
 
     const response = await POST(request(validReport))
+    expect(response.status).toBe(204)
+    expect(await response.text()).toBe('')
+    expect(mocks.eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('returns 409 when the same actor reuses an event id for different content', async () => {
+    mocks.eventFindUnique.mockResolvedValue({
+      eventId: validReport.event_id,
+      actorHash: productEventActorHash(USER_ID),
+      flowId: '5c5b4f2f-451c-4ace-b1e5-25545d9d4db1',
+      eventName: validReport.event_name,
+      elapsedBucket: validReport.elapsed_bucket,
+    })
+
+    const response = await POST(request(validReport))
+
     expect(response.status).toBe(409)
+  })
+
+  it('does not reveal a cross-actor collision discovered after a uniqueness race', async () => {
+    mocks.eventFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      eventId: validReport.event_id,
+      actorHash: 'different-actor',
+      flowId: validReport.flow_id,
+      eventName: validReport.event_name,
+      elapsedBucket: validReport.elapsed_bucket,
+    })
+    mocks.eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('duplicate event', {
+        code: 'P2002',
+        clientVersion: '7.8.0',
+      }),
+    )
+
+    const response = await POST(request(validReport))
+
+    expect(response.status).toBe(204)
+    expect(await response.text()).toBe('')
   })
 
   it('returns 409 when the same event id is reused with a different occurrence minute', async () => {
@@ -342,10 +398,13 @@ describe('POST /v1/metrics/events', () => {
     ['invalid retention ingest', 'PRODUCT_EVENT_INGEST_ACTIVATION', 'issue-186-retention-v0'],
     ['missing purge', 'PRODUCT_EVENT_PURGE_ACTIVATION', ''],
     ['invalid purge', 'PRODUCT_EVENT_PURGE_ACTIVATION', 'issue-185-purge-v0'],
+    ['missing degradation ledger', 'PRODUCT_EVENT_DEGRADATION_ACTIVATION', ''],
+    ['invalid degradation ledger', 'PRODUCT_EVENT_DEGRADATION_ACTIVATION', 'issue-190-v0'],
   ] as const)('fails closed before production writes for %s activation', async (_, key, value) => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('PRODUCT_EVENT_INGEST_ACTIVATION', 'issue-186-retention-v1')
     vi.stubEnv('PRODUCT_EVENT_PURGE_ACTIVATION', 'issue-185-purge-v1')
+    vi.stubEnv('PRODUCT_EVENT_DEGRADATION_ACTIVATION', 'issue-190-v1')
     vi.stubEnv(key, value)
 
     const response = await POST(request(validReport))
@@ -356,10 +415,11 @@ describe('POST /v1/metrics/events', () => {
     expect(mocks.transaction).not.toHaveBeenCalled()
   })
 
-  it('accepts production writes only when both exact activation values are present', async () => {
+  it('accepts production writes only when all exact activation values are present', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('PRODUCT_EVENT_INGEST_ACTIVATION', 'issue-186-retention-v1')
     vi.stubEnv('PRODUCT_EVENT_PURGE_ACTIVATION', 'issue-185-purge-v1')
+    vi.stubEnv('PRODUCT_EVENT_DEGRADATION_ACTIVATION', 'issue-190-v1')
 
     const response = await POST(request(validReport))
 

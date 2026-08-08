@@ -21,8 +21,15 @@ ProductEvent outbox、status-only metric reason、M9の7日評価に7件の矛�
 - Web Vitals route groupはOpenAPIの7値を共有allowlistとして全入口で使う。
 - ProductEvent `event_name × elapsed_bucket`を共有pure helperで検証し、不正outbox rootを送信しない。
 - status-only evidenceはmetric IDごとのreason allowlistを検証する。
+- status-only evidenceはM1〜M12の完全なmetric集合を必須にし、欠測metricからPASSを生成しない。
 - M9は最初のeligible `memory_viewed`のoccurrence-minute区間と7日maturityを使い、receipt timeを
-  entryまたはmaturityの起点にしない。
+  entryまたはmaturityの起点にしない。completenessのview ID集合と評価入力を完全一致させる。
+- telemetry envelopeのUUIDはsampling、dedup、expected / received比較前にlowercaseへcanonical化する。
+- outboxはbinding continuityをpayloadより先に判定し、未来queueと不正retry metadataを送信しない。
+- ProductEvent runtimeはOpenAPIどおりJSONだけをparse前に受理し、cross-actor event IDの存在を応答で
+  区別しない。
+- status-only degradation ledgerはGitHub Issue #384へ分離し、`issue-190-v1`専用activationがない限り
+  production ProductEvent ingestを503でHOLDする。
 - query versionを`issue-188-v1`へ上げ、旧evidenceと混在させない。
 
 ## Compatibility and approval
@@ -47,9 +54,10 @@ SHA-256は`5b1e916b4ef35c448101624354d73f86d9d0de277fe88dbc7fe8025873e8bc35`で�
 - OpenAPI-valid / runtime-invalidのvalidation oracleを除去できる。
 - flow IDとMemory idempotency keyは大小文字やUUID variantに左右されず同じ値へ相関する。
 - 壊れたoutbox、矛盾dimension、metric reasonのcaller bypassをnetworkまたはevidenceへ通さない。
+- 別sessionのraw outboxを送信せず、durable degradation authority未完成の状態でproduction eventを蓄積しない。
 - 旧clientがUUID URNまたは矛盾Web Vitals payloadを送る場合は422になるため、client/serverの原子的更新が必要になる。
 
 ## Rollback
 
-production telemetry activationの既存二重gateを維持したままPR全体をrevertする。OpenAPIだけ、
+production telemetry activationの3つの独立gateを維持したままPR全体をrevertする。OpenAPIだけ、
 clientだけ、serverだけを部分的に戻さず、query versionを旧値へ再利用しない。

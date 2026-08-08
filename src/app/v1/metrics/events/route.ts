@@ -29,6 +29,19 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
+function assertJsonRequest(request: Request): void {
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+  if (contentType !== 'application/json') {
+    throw problems.validation([
+      {
+        path: 'headers.content-type',
+        reason: 'request_boundary_invalid',
+        message: 'JSON requestだけを受け付けます',
+      },
+    ])
+  }
+}
+
 function matchesEvent(
   existing: ProductEvent,
   event: ReturnType<typeof parseProductEventReport>,
@@ -46,6 +59,7 @@ function matchesEvent(
 export async function POST(request: Request) {
   try {
     assertProductEventIngestReady()
+    assertJsonRequest(request)
     const telemetryBinding = request.headers.get('x-hana-telemetry-binding')
     if (!telemetryBinding) throw problems.forbidden()
     const now = new Date()
@@ -66,6 +80,7 @@ export async function POST(request: Request) {
           where: { eventId: event.event_id },
         })
         if (existingById) {
+          if (existingById.actorHash !== actorHash) return
           if (matchesEvent(existingById, event, actorHash)) return
           throw problems.productEventConflict()
         }
@@ -106,6 +121,9 @@ export async function POST(request: Request) {
           where: { eventId: event.event_id },
         })
         if (existingById) {
+          if (existingById.actorHash !== actorHash) {
+            return new NextResponse(null, { status: 204 })
+          }
           if (matchesEvent(existingById, event, actorHash))
             return new NextResponse(null, { status: 204 })
           throw problems.productEventConflict()
