@@ -86,8 +86,9 @@ outbox rootへserver-minted telemetry bindingと固定degradation statusを1つ�
 `getUser()`で検証したactorと`getClaims()`で検証したJWT `sub / session_id`、期限bucketへ拘束し、
 同じ`session_id`のtoken rotationだけをopaque continuity tagで継続する。request headerだけに使い、
 body、DB row、通常log、evidenceへ出さない。204だけをackとし、同じevent IDと発生minuteを指数backoffで
-再送する。409 / 422を含む認証以外のterminal 4xxは再送せずraw entryを削除し、`DELIVERY_REJECTED`だけを
-残す。event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、restricted aggregateはDB event IDから
+再送する。4xxは原則terminalとして再送せずraw entryを削除し、`DELIVERY_REJECTED`だけを残す。
+401 / 403はbinding再取得、408 / 425 / 429はretryの例外とする。event IDは発生minuteを先頭48 bitへ
+埋め込んだUUIDv7とし、restricted aggregateはDB event IDから
 minuteを復元し、DB `created_at`をreceipt timeとして使う。最大50件、TTL 24時間で、容量超過時に
 古い未ack eventを追い出してcompletenessを偽装しない。TTLとretry上限は`queuedAt`ではなくUUIDv7の
 発生minuteから計算し、future、24時間超、発生minuteより前のqueueをnetwork前に破棄する。outboxが使えないbrowserでは記録操作を止めないが、
@@ -100,8 +101,10 @@ continuityを確認した新bindingで同じevent IDを再送する。401 / 403�
 送信と再取得は`AbortController`とbinding generationで隔離し、旧generationの遅延応答が新sessionのoutboxや
 current-user cacheを変更しないようにする。degradationはcontinuity単位で保持し、別sessionでは`NONE`から
 開始する。401 / 403による停止または破棄はackではなく、該当観測窓をHoldにする認証境界である。
-outbox復元と新規enqueueは`event_name × elapsed_bucket`をserverと同じpure allowlistで検証し、
-不正rootをnetworkへ送らず削除して`STORAGE_UNAVAILABLE`だけを残す。
+outbox復元と新規enqueueは`event_name × elapsed_bucket`をserverと同じpure allowlistで検証する。
+malformed、primitive、binding帰属不能なrootはnetworkへ送らずraw値を削除し、現在continuityへ
+`STORAGE_UNAVAILABLE`だけを永続化する。構文解析でき、別continuityと検証できたrootだけは、現在continuityを
+degradeせず削除する。
 
 ## Server truth and completeness
 
@@ -110,13 +113,21 @@ outbox復元と新規enqueueは`event_name × elapsed_bucket`をserverと同じp
 - Web Vitals: endpoint受理と固定dimension logの組をtruthとし、raw valueは保持しない。
 - API / AI: serverで確定したstatusとstable reasonだけをtruthとする。
 
+ProductEvent ingestはactor advisory lock内でactor-scoped idempotency / stage確認、actor DB quota、global event ID
+collisionの順に評価する。quota到達時はglobal IDを照会せず、他actor既存IDと未知IDを同じ429 Problem Details、
+同じheaderへ固定する。unique race後の再判定も同じ順序を使う。
+
 sourceごとに観測開始前のversioned expectation manifestとreceived IDを比較し、loss、duplicate、reorderを
 別々に判定する。manifestはsource、sampling policy version、sampling key version、sampling key commitment、
 degradation status、sampling適用前のexpected event IDを固定する。sampling key commitmentは別のcommitment keyで
 domain-separated HMACを作り、同じversion文字列に誤ったsecretが配布された場合もfail closedにする。
 manifestとは別に、保護されたauthority jobが観測開始前にquery version、source、actor token / key version、
-半開観測窓、canonicalな全eligible event IDを`authoritative_event_universe` domainへ登録する。
-`TELEMETRY_AUTHORITY_COMMITMENT_KEY`はmanifest commitment keyと分離し、通常aggregate callerへ渡さない。
+半開観測窓、sampling policy / key commitment、canonicalなevent ID / operation / flow / actor / occurrenceを
+`authoritative_event_universe` domainへ登録する。独立したappend-only registryは登録commitment、receipt ID、
+`registered_at_utc`を別keyで署名し、登録時刻がwindow開始以上ならHOLDにする。ingest / DBはevent IDと
+DB由来`received_at_utc`をさらに別keyで署名し、caller supplied receipt timeを判定根拠にしない。
+`TELEMETRY_AUTHORITY_COMMITMENT_KEY`、`TELEMETRY_SAMPLING_COMMITMENT_KEY`、registry key、ingest receipt key、
+manifest commitment key、sampling keyはすべて異なる32文字以上のsecretとし、通常aggregate callerへ渡さない。
 evaluatorは保護Environmentのkey versionとHMACをconstant-timeで検証し、authority universeとmanifestが
 順序を含め完全一致してから同じversioned policyを適用する。空manifest、manifest欠落、
 source不一致、degraded、

@@ -77,12 +77,11 @@ export async function POST(request: Request) {
         await transaction.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtextextended(${actorHash}, 0))
         `
-        const existingById = await transaction.productEvent.findUnique({
-          where: { eventId: event.event_id },
+        const existingForActorById = await transaction.productEvent.findFirst({
+          where: { eventId: event.event_id, actorHash },
         })
-        if (existingById) {
-          if (existingById.actorHash !== actorHash) return
-          if (matchesEvent(existingById, event, actorHash)) return
+        if (existingForActorById) {
+          if (matchesEvent(existingForActorById, event, actorHash)) return
           throw problems.productEventConflict()
         }
         const existingStage = await transaction.productEvent.findFirst({
@@ -104,6 +103,11 @@ export async function POST(request: Request) {
           throw problems.rateLimited()
         }
 
+        const existingById = await transaction.productEvent.findUnique({
+          where: { eventId: event.event_id },
+        })
+        if (existingById) return
+
         await transaction.productEvent.create({
           data: {
             eventId: event.event_id,
@@ -116,26 +120,46 @@ export async function POST(request: Request) {
       })
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const existingById = await prisma.productEvent.findUnique({
-          where: { eventId: event.event_id },
-        })
-        if (existingById) {
-          if (existingById.actorHash !== actorHash) {
-            return new NextResponse(null, { status: 204 })
+        await prisma.$transaction(async (transaction) => {
+          await transaction.$executeRaw`
+            SELECT pg_advisory_xact_lock(hashtextextended(${actorHash}, 0))
+          `
+          const existingForActorById = await transaction.productEvent.findFirst({
+            where: { eventId: event.event_id, actorHash },
+          })
+          if (existingForActorById) {
+            if (matchesEvent(existingForActorById, event, actorHash)) return
+            throw problems.productEventConflict()
           }
-          if (matchesEvent(existingById, event, actorHash))
-            return new NextResponse(null, { status: 204 })
-          throw problems.productEventConflict()
-        }
 
-        const existingStage = await prisma.productEvent.findFirst({
-          where: {
-            actorHash,
-            flowId: event.flow_id,
-            eventName: event.event_name,
-          },
+          const existingStage = await transaction.productEvent.findFirst({
+            where: {
+              actorHash,
+              flowId: event.flow_id,
+              eventName: event.event_name,
+            },
+          })
+          if (existingStage) return
+
+          const recentReports = await transaction.productEvent.count({
+            where: {
+              actorHash,
+              createdAt: { gte: new Date(now.getTime() - PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS) },
+            },
+          })
+          if (recentReports >= PRODUCT_EVENT_MAX_REPORTS_PER_WINDOW) {
+            throw problems.rateLimited()
+          }
+
+          const existingById = await transaction.productEvent.findUnique({
+            where: { eventId: event.event_id },
+          })
+          if (existingById) return
+
+          throw error
         })
-        if (existingStage) return new NextResponse(null, { status: 204 })
+
+        return new NextResponse(null, { status: 204 })
       }
       throw error
     }

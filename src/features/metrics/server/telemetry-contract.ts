@@ -12,9 +12,12 @@ import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurr
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
 export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v2' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
-  'hana-telemetry-expectation-manifest/v3' as const
+  'hana-telemetry-expectation-manifest/v4' as const
 export const TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION =
-  'hana-telemetry-authority-registration/v1' as const
+  'hana-telemetry-authority-registration/v2' as const
+export const TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION =
+  'hana-telemetry-authority-registry-receipt/v1' as const
+export const TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION = 'hana-telemetry-ingest-receipt/v1' as const
 export const TELEMETRY_QUERY_VERSION = 'issue-188-v1' as const
 export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
@@ -181,6 +184,8 @@ const TELEMETRY_COMMITMENT_KEY_MIN_LENGTH = 32
 const TELEMETRY_SAMPLING_KEY_MIN_LENGTH = 32
 const TELEMETRY_SAMPLING_DOMAIN = 'hana-telemetry-stable-sampling/v3\0'
 const TELEMETRY_SAMPLING_KEY_COMMITMENT_DOMAIN = 'hana-telemetry-sampling-key-commitment/v1\0'
+const TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_DOMAIN = 'hana-telemetry-authority-registry-receipt/v1\0'
+const TELEMETRY_INGEST_RECEIPT_DOMAIN = 'hana-telemetry-ingest-receipt/v1\0'
 const HIGHER_IS_BETTER_PRODUCTION_METRICS = new Set<TelemetryMetricId>([
   'M1',
   'M2',
@@ -264,7 +269,35 @@ export type TelemetryAuthorityRegistration = {
   window_start_utc: string
   window_end_utc: string
   authority_key_version: string
-  eligible_event_ids: readonly string[]
+  sampling_policy_version: typeof TELEMETRY_SAMPLING_POLICY_VERSION
+  sampling_key_version: string
+  sampling_key_commitment: string
+  eligible_events: readonly TelemetryAuthorityEvent[]
+}
+
+export type TelemetryAuthorityEvent = {
+  event_id: string
+  operation: TelemetryOperation
+  flow_id: string | null
+  actor: SyntheticActorRef | null
+  occurred_at_utc: string
+}
+
+export type TelemetryAuthorityRegistryReceipt = {
+  schema_version: typeof TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION
+  receipt_id: string
+  registered_at_utc: string
+  registration_commitment: string
+  registry_key_version: string
+  registry_commitment: string
+}
+
+export type TelemetryIngestReceipt = {
+  schema_version: typeof TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION
+  event_id: string
+  received_at_utc: string
+  receipt_key_version: string
+  receipt_commitment: string
 }
 
 export type TelemetryCompletenessInput = {
@@ -275,6 +308,8 @@ export type TelemetryCompletenessInput = {
   window_end_utc: string
   actor_key_version: string
   authority_registration: TelemetryAuthorityRegistration
+  authority_registry_receipt: TelemetryAuthorityRegistryReceipt
+  received_receipts: readonly TelemetryIngestReceipt[]
   sampling_key_version: string
   sampling_key: string | null
   manifest_commitment: string
@@ -477,6 +512,38 @@ export function createTelemetryAuthorityRegistrationCommitment(input: {
   })
 }
 
+export function createTelemetryAuthorityRegistryReceiptCommitment(input: {
+  receipt: Omit<TelemetryAuthorityRegistryReceipt, 'registry_commitment'>
+  commitment_key: string
+}): string {
+  if (
+    typeof input.commitment_key !== 'string' ||
+    Buffer.byteLength(input.commitment_key, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH
+  ) {
+    throw new TelemetryContractError('invalid_input')
+  }
+  return createHmac('sha256', input.commitment_key)
+    .update(TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_DOMAIN)
+    .update(JSON.stringify(stableValue(input.receipt)))
+    .digest('hex')
+}
+
+export function createTelemetryIngestReceiptCommitment(input: {
+  receipt: Omit<TelemetryIngestReceipt, 'receipt_commitment'>
+  commitment_key: string
+}): string {
+  if (
+    typeof input.commitment_key !== 'string' ||
+    Buffer.byteLength(input.commitment_key, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH
+  ) {
+    throw new TelemetryContractError('invalid_input')
+  }
+  return createHmac('sha256', input.commitment_key)
+    .update(TELEMETRY_INGEST_RECEIPT_DOMAIN)
+    .update(JSON.stringify(stableValue(input.receipt)))
+    .digest('hex')
+}
+
 function validSamplingConfiguration(
   source: TelemetrySource,
   sampling: { key_version: string; key: string | null },
@@ -541,7 +608,10 @@ function validAuthorityRegistration(input: TelemetryCompletenessInput): boolean 
       'window_start_utc',
       'window_end_utc',
       'authority_key_version',
-      'eligible_event_ids',
+      'sampling_policy_version',
+      'sampling_key_version',
+      'sampling_key_commitment',
+      'eligible_events',
     ]) ||
     registration.schema_version !== TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION ||
     registration.query_version !== TELEMETRY_QUERY_VERSION ||
@@ -549,25 +619,89 @@ function validAuthorityRegistration(input: TelemetryCompletenessInput): boolean 
     registration.window_start_utc !== input.window_start_utc ||
     registration.window_end_utc !== input.window_end_utc ||
     !ACTOR_KEY_VERSION_PATTERN.test(registration.authority_key_version) ||
+    registration.sampling_policy_version !== TELEMETRY_SAMPLING_POLICY_VERSION ||
+    !SHA256_PATTERN.test(registration.sampling_key_commitment) ||
     (registration.expected_actor !== null &&
       (!validSyntheticActorRef(registration.expected_actor) ||
         registration.expected_actor.actor_key_version !== input.actor_key_version)) ||
-    !Array.isArray(registration.eligible_event_ids) ||
-    registration.eligible_event_ids.length === 0 ||
-    registration.eligible_event_ids.some(
-      (eventId) => typeof eventId !== 'string' || canonicalizeBareUuid(eventId) !== eventId,
-    ) ||
-    new Set(registration.eligible_event_ids).size !== registration.eligible_event_ids.length
+    (registration.source === 'funnel' && registration.expected_actor === null) ||
+    !Array.isArray(registration.eligible_events) ||
+    registration.eligible_events.length === 0 ||
+    registration.eligible_events.some((event) => {
+      if (
+        !isRecord(event) ||
+        !hasExactKeys(event, ['event_id', 'operation', 'flow_id', 'actor', 'occurred_at_utc']) ||
+        typeof event.event_id !== 'string' ||
+        canonicalizeBareUuid(event.event_id) !== event.event_id ||
+        !includes(OPERATIONS, event.operation) ||
+        telemetrySourceForOperation(event.operation) !== registration.source ||
+        (event.flow_id !== null &&
+          (typeof event.flow_id !== 'string' ||
+            canonicalizeBareUuid(event.flow_id) !== event.flow_id)) ||
+        (event.actor !== null &&
+          !validSyntheticActorRef(event.actor as SyntheticActorRef | undefined)) ||
+        typeof event.occurred_at_utc !== 'string'
+      ) {
+        return true
+      }
+      const occurredAt = parseUtc(event.occurred_at_utc)
+      const windowStart = parseUtc(registration.window_start_utc)
+      const windowEnd = parseUtc(registration.window_end_utc)
+      return (
+        occurredAt === null ||
+        windowStart === null ||
+        windowEnd === null ||
+        occurredAt < windowStart ||
+        occurredAt >= windowEnd ||
+        (registration.source === 'funnel' && (event.flow_id === null || event.actor === null)) ||
+        (registration.expected_actor !== null &&
+          !sameSyntheticActor(
+            event.actor as SyntheticActorRef | null | undefined,
+            registration.expected_actor,
+          ))
+      )
+    }) ||
+    new Set(registration.eligible_events.map((event) => event.event_id)).size !==
+      registration.eligible_events.length
   ) {
     return false
   }
+  const registeredEventIds = registration.eligible_events.map((event) => event.event_id)
   return (
     input.manifest.query_version === registration.query_version &&
     input.manifest.authority_key_version === registration.authority_key_version &&
-    input.manifest.expected_event_ids.length === registration.eligible_event_ids.length &&
+    input.manifest.sampling_policy_version === registration.sampling_policy_version &&
+    input.manifest.sampling_key_version === registration.sampling_key_version &&
+    input.manifest.sampling_key_commitment === registration.sampling_key_commitment &&
+    input.manifest.expected_event_ids.length === registeredEventIds.length &&
     input.manifest.expected_event_ids.every(
-      (eventId, index) => canonicalizeBareUuid(eventId) === registration.eligible_event_ids[index],
+      (eventId, index) => canonicalizeBareUuid(eventId) === registeredEventIds[index],
     )
+  )
+}
+
+function configuredCommitmentKeys(
+  input: TelemetryCompletenessInput,
+): readonly (string | undefined)[] {
+  return [
+    input.commitment_key,
+    process.env.TELEMETRY_AUTHORITY_COMMITMENT_KEY,
+    process.env.TELEMETRY_SAMPLING_COMMITMENT_KEY,
+    process.env.TELEMETRY_AUTHORITY_REGISTRY_COMMITMENT_KEY,
+    process.env.TELEMETRY_INGEST_RECEIPT_COMMITMENT_KEY,
+  ]
+}
+
+function protectedCommitmentKeysAreDistinct(input: TelemetryCompletenessInput): boolean {
+  const keys = configuredCommitmentKeys(input)
+  return (
+    keys.every(
+      (key) =>
+        typeof key === 'string' &&
+        Buffer.byteLength(key, 'utf8') >= TELEMETRY_COMMITMENT_KEY_MIN_LENGTH,
+    ) &&
+    new Set(keys).size === keys.length &&
+    (input.sampling_key === null || !keys.includes(input.sampling_key))
   )
 }
 
@@ -579,7 +713,7 @@ function validAuthorityCommitment(input: TelemetryCompletenessInput): boolean {
     configuredVersion !== registration.authority_key_version ||
     typeof configuredKey !== 'string' ||
     Buffer.byteLength(configuredKey, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH ||
-    configuredKey === input.commitment_key ||
+    !protectedCommitmentKeysAreDistinct(input) ||
     !SHA256_PATTERN.test(input.manifest.authority_commitment)
   ) {
     return false
@@ -593,6 +727,52 @@ function validAuthorityCommitment(input: TelemetryCompletenessInput): boolean {
       'hex',
     )
     const received = Buffer.from(input.manifest.authority_commitment, 'hex')
+    return expected.length === received.length && timingSafeEqual(expected, received)
+  } catch {
+    return false
+  }
+}
+
+function validAuthorityRegistryReceipt(input: TelemetryCompletenessInput): boolean {
+  const receipt = input.authority_registry_receipt as TelemetryAuthorityRegistryReceipt | undefined
+  const configuredVersion = process.env.TELEMETRY_AUTHORITY_REGISTRY_KEY_VERSION
+  const configuredKey = process.env.TELEMETRY_AUTHORITY_REGISTRY_COMMITMENT_KEY
+  if (
+    !receipt ||
+    !isRecord(receipt) ||
+    !hasExactKeys(receipt, [
+      'schema_version',
+      'receipt_id',
+      'registered_at_utc',
+      'registration_commitment',
+      'registry_key_version',
+      'registry_commitment',
+    ]) ||
+    receipt.schema_version !== TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION ||
+    canonicalizeBareUuid(receipt.receipt_id) !== receipt.receipt_id ||
+    receipt.registry_key_version !== configuredVersion ||
+    !ACTOR_KEY_VERSION_PATTERN.test(receipt.registry_key_version) ||
+    receipt.registration_commitment !== input.manifest.authority_commitment ||
+    !SHA256_PATTERN.test(receipt.registration_commitment) ||
+    !SHA256_PATTERN.test(receipt.registry_commitment) ||
+    typeof configuredKey !== 'string' ||
+    !protectedCommitmentKeysAreDistinct(input)
+  ) {
+    return false
+  }
+  const registeredAt = parseUtc(receipt.registered_at_utc)
+  const windowStart = parseUtc(input.window_start_utc)
+  if (registeredAt === null || windowStart === null || registeredAt >= windowStart) return false
+  try {
+    const { registry_commitment: _registryCommitment, ...unsignedReceipt } = receipt
+    const expected = Buffer.from(
+      createTelemetryAuthorityRegistryReceiptCommitment({
+        receipt: unsignedReceipt,
+        commitment_key: configuredKey,
+      }),
+      'hex',
+    )
+    const received = Buffer.from(receipt.registry_commitment, 'hex')
     return expected.length === received.length && timingSafeEqual(expected, received)
   } catch {
     return false
@@ -652,14 +832,91 @@ function validExpectationManifest(
 }
 
 function validSamplingKeyCommitment(input: TelemetryCompletenessInput): boolean {
-  if (!SHA256_PATTERN.test(input.manifest.sampling_key_commitment)) return false
+  const configuredKey = process.env.TELEMETRY_SAMPLING_COMMITMENT_KEY
+  if (
+    !SHA256_PATTERN.test(input.manifest.sampling_key_commitment) ||
+    typeof configuredKey !== 'string' ||
+    !protectedCommitmentKeysAreDistinct(input)
+  ) {
+    return false
+  }
   try {
-    const expected = Buffer.from(createTelemetrySamplingKeyCommitment(input), 'hex')
+    const expected = Buffer.from(
+      createTelemetrySamplingKeyCommitment({ ...input, commitment_key: configuredKey }),
+      'hex',
+    )
     const received = Buffer.from(input.manifest.sampling_key_commitment, 'hex')
     return expected.length === received.length && timingSafeEqual(expected, received)
   } catch {
     return false
   }
+}
+
+function validReceivedReceipts(
+  input: TelemetryCompletenessInput,
+  envelopes: readonly TelemetryEnvelope[],
+): ReadonlyMap<string, TelemetryIngestReceipt> | null {
+  const configuredVersion = process.env.TELEMETRY_INGEST_RECEIPT_KEY_VERSION
+  const configuredKey = process.env.TELEMETRY_INGEST_RECEIPT_COMMITMENT_KEY
+  if (
+    !Array.isArray(input.received_receipts) ||
+    typeof configuredVersion !== 'string' ||
+    !ACTOR_KEY_VERSION_PATTERN.test(configuredVersion) ||
+    typeof configuredKey !== 'string' ||
+    !protectedCommitmentKeysAreDistinct(input)
+  ) {
+    return null
+  }
+  const uniqueEnvelopeIds = new Set(envelopes.map((envelope) => envelope.event_id))
+  if (input.received_receipts.length !== uniqueEnvelopeIds.size) return null
+  const receipts = new Map<string, TelemetryIngestReceipt>()
+  for (const rawReceipt of input.received_receipts) {
+    if (
+      !isRecord(rawReceipt) ||
+      !hasExactKeys(rawReceipt, [
+        'schema_version',
+        'event_id',
+        'received_at_utc',
+        'receipt_key_version',
+        'receipt_commitment',
+      ]) ||
+      rawReceipt.schema_version !== TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION ||
+      typeof rawReceipt.event_id !== 'string' ||
+      typeof rawReceipt.received_at_utc !== 'string' ||
+      typeof rawReceipt.receipt_key_version !== 'string' ||
+      typeof rawReceipt.receipt_commitment !== 'string' ||
+      canonicalizeBareUuid(rawReceipt.event_id) !== rawReceipt.event_id ||
+      rawReceipt.receipt_key_version !== configuredVersion ||
+      !SHA256_PATTERN.test(rawReceipt.receipt_commitment) ||
+      receipts.has(rawReceipt.event_id) ||
+      !uniqueEnvelopeIds.has(rawReceipt.event_id)
+    ) {
+      return null
+    }
+    const receipt = rawReceipt as TelemetryIngestReceipt
+    const receivedAt = parseUtc(receipt.received_at_utc)
+    const envelope = envelopes.find((candidate) => candidate.event_id === receipt.event_id)
+    const occurredAt = envelope ? parseUtc(envelope.occurred_at_utc) : null
+    if (receivedAt === null || occurredAt === null || receivedAt < occurredAt) {
+      return null
+    }
+    try {
+      const { receipt_commitment: _receiptCommitment, ...unsignedReceipt } = receipt
+      const expected = Buffer.from(
+        createTelemetryIngestReceiptCommitment({
+          receipt: unsignedReceipt,
+          commitment_key: configuredKey,
+        }),
+        'hex',
+      )
+      const received = Buffer.from(receipt.receipt_commitment, 'hex')
+      if (expected.length !== received.length || !timingSafeEqual(expected, received)) return null
+    } catch {
+      return null
+    }
+    receipts.set(receipt.event_id, receipt)
+  }
+  return receipts
 }
 
 function receivedEnvelopeSignature(envelope: TelemetryEnvelope): string {
@@ -678,6 +935,7 @@ export function evaluateTelemetryCompleteness(
     !validExpectationManifest(manifest, input.source) ||
     !validAuthorityRegistration(input) ||
     !validAuthorityCommitment(input) ||
+    !validAuthorityRegistryReceipt(input) ||
     !validManifestCommitment(input)
   ) {
     return completenessHold(input.source, 'expected_manifest_untrusted')
@@ -726,6 +984,13 @@ export function evaluateTelemetryCompleteness(
     }
     validatedReceived.push(envelope)
   }
+  const receivedReceipts = validReceivedReceipts(input, validatedReceived)
+  if (receivedReceipts === null) {
+    return completenessHold(input.source, 'received_envelope_invalid')
+  }
+  const authorityEvents = new Map(
+    input.authority_registration.eligible_events.map((event) => [event.event_id, event]),
+  )
   const expected = new Set(sampledExpectedEventIds)
   const firstReceived: string[] = []
   const received = new Set<string>()
@@ -751,9 +1016,13 @@ export function evaluateTelemetryCompleteness(
       receivedSignatures.set(envelope.event_id, signature)
     }
     received.add(envelope.event_id)
+    const authorityEvent = authorityEvents.get(envelope.event_id)
     if (
       !expected.has(envelope.event_id) ||
-      telemetrySourceForOperation(envelope.dimensions.operation) !== input.source
+      telemetrySourceForOperation(envelope.dimensions.operation) !== input.source ||
+      authorityEvent?.operation !== envelope.dimensions.operation ||
+      authorityEvent?.occurred_at_utc !== envelope.occurred_at_utc ||
+      !receivedReceipts.has(envelope.event_id)
     ) {
       unexpected = true
     }
@@ -828,6 +1097,8 @@ function verifiedOccurrenceMinuteInterval(input: {
   event: SyntheticFunnelEvent
   expected_operation: SyntheticFunnelEvent['event_name']
   received_by_id: ReadonlyMap<string, TelemetryEnvelope>
+  receipt_by_id: ReadonlyMap<string, TelemetryIngestReceipt>
+  authority_event_by_id: ReadonlyMap<string, TelemetryAuthorityEvent>
   generated_at: number
   window_start: number
   window_end: number
@@ -836,18 +1107,30 @@ function verifiedOccurrenceMinuteInterval(input: {
   | { interval: null; reason: 'telemetry_incomplete' | 'stage_time_invalid' } {
   const canonicalEventId = canonicalizeBareUuid(input.event.event_id)
   const envelope = canonicalEventId ? input.received_by_id.get(canonicalEventId) : undefined
-  if (envelope?.dimensions.operation !== input.expected_operation) {
+  const receipt = canonicalEventId ? input.receipt_by_id.get(canonicalEventId) : undefined
+  const authorityEvent = canonicalEventId
+    ? input.authority_event_by_id.get(canonicalEventId)
+    : undefined
+  if (
+    envelope?.dimensions.operation !== input.expected_operation ||
+    receipt === undefined ||
+    authorityEvent?.operation !== input.expected_operation ||
+    canonicalizeBareUuid(input.event.flow_id) !== authorityEvent.flow_id ||
+    !sameSyntheticActor(input.event.actor, authorityEvent.actor)
+  ) {
     return { interval: null, reason: 'telemetry_incomplete' }
   }
   const decodedOccurredMinute = productEventOccurrenceMinuteFromEventId(input.event.event_id)
   const occurredAt = decodedOccurredMinute ? parseUtc(decodedOccurredMinute) : null
   const envelopeOccurredAt = parseUtc(envelope.occurred_at_utc)
-  const receivedAt = parseUtc(input.event.received_at_utc)
+  const receivedAt = parseUtc(receipt.received_at_utc)
   if (
     decodedOccurredMinute !== input.event.occurred_minute_utc ||
     !UTC_MINUTE_PATTERN.test(input.event.occurred_minute_utc) ||
     occurredAt === null ||
     envelopeOccurredAt !== occurredAt ||
+    authorityEvent.occurred_at_utc !== decodedOccurredMinute ||
+    input.event.received_at_utc !== receipt.received_at_utc ||
     occurredAt < input.window_start ||
     occurredAt + 60 * 1000 > input.window_end ||
     receivedAt === null ||
@@ -915,6 +1198,15 @@ export function evaluateSyntheticFunnelFlow(input: {
       envelope,
     ]),
   )
+  const verifiedReceipts = new Map(
+    input.completeness_input.received_receipts.map((receipt) => [receipt.event_id, receipt]),
+  )
+  const authorityEvents = new Map(
+    input.completeness_input.authority_registration.eligible_events.map((event) => [
+      event.event_id,
+      event,
+    ]),
+  )
   if (sameFlowStages.length === 0) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'stage_missing' }
   }
@@ -932,6 +1224,8 @@ export function evaluateSyntheticFunnelFlow(input: {
       event,
       expected_operation: stageName,
       received_by_id: verifiedReceived,
+      receipt_by_id: verifiedReceipts,
+      authority_event_by_id: authorityEvents,
       generated_at: generatedAt,
       window_start: windowStart,
       window_end: windowEnd,
@@ -1080,11 +1374,22 @@ export function evaluateSyntheticM9ViewToMemory(input: {
       envelope,
     ]),
   )
+  const verifiedReceipts = new Map(
+    input.completeness_input.received_receipts.map((receipt) => [receipt.event_id, receipt]),
+  )
+  const authorityEvents = new Map(
+    input.completeness_input.authority_registration.eligible_events.map((event) => [
+      event.event_id,
+      event,
+    ]),
+  )
   const viewIntervals = views.map((event) =>
     verifiedOccurrenceMinuteInterval({
       event,
       expected_operation: 'memory_viewed',
       received_by_id: verifiedReceived,
+      receipt_by_id: verifiedReceipts,
+      authority_event_by_id: authorityEvents,
       generated_at: generatedAt,
       window_start: windowStart,
       window_end: windowEnd,

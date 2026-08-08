@@ -5,14 +5,18 @@ import { resetWebVitalsRateLimitForTests } from '@/features/metrics/server/web-v
 import { shouldSampleWebVitals } from '@/features/metrics/server/web-vitals'
 import {
   createTelemetryAuthorityRegistrationCommitment,
+  createTelemetryAuthorityRegistryReceiptCommitment,
   createTelemetryExpectationManifestCommitment,
+  createTelemetryIngestReceiptCommitment,
   createTelemetrySamplingKeyCommitment,
   evaluateTelemetryCompleteness,
   parseTelemetryEnvelope,
   shouldSampleTelemetry,
   TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
+  TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION,
   TELEMETRY_EVENT_SCHEMA_VERSION,
   TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
+  TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION,
   TELEMETRY_QUERY_VERSION,
   TELEMETRY_SAMPLING_POLICY_VERSION,
   type TelemetryAuthorityRegistration,
@@ -25,6 +29,11 @@ const SAMPLING_KEY_VERSION = 'integration-v1'
 const COMMITMENT_KEY = 'integration-commitment-key-32-bytes-minimum'
 const AUTHORITY_KEY = 'integration-authority-key-32-bytes-minimum'
 const AUTHORITY_KEY_VERSION = 'integration-authority-v1'
+const SAMPLING_COMMITMENT_KEY = 'integration-sampling-commitment-key-minimum'
+const REGISTRY_KEY = 'integration-registry-key-32-bytes-minimum'
+const REGISTRY_KEY_VERSION = 'integration-registry-v1'
+const INGEST_RECEIPT_KEY = 'integration-ingest-receipt-key-minimum'
+const INGEST_RECEIPT_KEY_VERSION = 'integration-ingest-v1'
 
 function jsonRequest(body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/v1/metrics/vitals', {
@@ -162,6 +171,12 @@ describe('POST /v1/metrics/vitals', () => {
 
     vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', AUTHORITY_KEY_VERSION)
     vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', AUTHORITY_KEY)
+    vi.stubEnv('TELEMETRY_SAMPLING_COMMITMENT_KEY', SAMPLING_COMMITMENT_KEY)
+    vi.stubEnv('TELEMETRY_AUTHORITY_REGISTRY_KEY_VERSION', REGISTRY_KEY_VERSION)
+    vi.stubEnv('TELEMETRY_AUTHORITY_REGISTRY_COMMITMENT_KEY', REGISTRY_KEY)
+    vi.stubEnv('TELEMETRY_INGEST_RECEIPT_KEY_VERSION', INGEST_RECEIPT_KEY_VERSION)
+    vi.stubEnv('TELEMETRY_INGEST_RECEIPT_COMMITMENT_KEY', INGEST_RECEIPT_KEY)
+    const occurredAtUtc = '2026-08-07T00:00:00Z'
     const authorityRegistration: TelemetryAuthorityRegistration = {
       schema_version: TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
       query_version: TELEMETRY_QUERY_VERSION,
@@ -170,7 +185,21 @@ describe('POST /v1/metrics/vitals', () => {
       window_start_utc: '2026-08-07T00:00:00Z',
       window_end_utc: '2026-08-08T00:00:00Z',
       authority_key_version: AUTHORITY_KEY_VERSION,
-      eligible_event_ids: [sampledIn, sampledOut],
+      sampling_policy_version: TELEMETRY_SAMPLING_POLICY_VERSION,
+      sampling_key_version: SAMPLING_KEY_VERSION,
+      sampling_key_commitment: createTelemetrySamplingKeyCommitment({
+        source: 'web_vital',
+        sampling_key_version: SAMPLING_KEY_VERSION,
+        sampling_key: SAMPLING_KEY,
+        commitment_key: SAMPLING_COMMITMENT_KEY,
+      }),
+      eligible_events: [sampledIn, sampledOut].map((eventId) => ({
+        event_id: eventId,
+        operation: 'web_vital_lcp' as const,
+        flow_id: null,
+        actor: null,
+        occurred_at_utc: occurredAtUtc,
+      })),
     }
     const manifest: TelemetryExpectationManifest = {
       schema_version: TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
@@ -183,7 +212,7 @@ describe('POST /v1/metrics/vitals', () => {
         source: 'web_vital',
         sampling_key_version: SAMPLING_KEY_VERSION,
         sampling_key: SAMPLING_KEY,
-        commitment_key: COMMITMENT_KEY,
+        commitment_key: SAMPLING_COMMITMENT_KEY,
       }),
       query_version: TELEMETRY_QUERY_VERSION,
       authority_key_version: AUTHORITY_KEY_VERSION,
@@ -193,6 +222,20 @@ describe('POST /v1/metrics/vitals', () => {
       }),
       expected_event_ids: [sampledIn, sampledOut],
     }
+    const registrationCommitment = manifest.authority_commitment
+    const unsignedRegistryReceipt = {
+      schema_version: TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION,
+      receipt_id: '00000000-0000-4000-8000-000000000099',
+      registered_at_utc: '2026-08-06T23:59:59Z',
+      registration_commitment: registrationCommitment,
+      registry_key_version: REGISTRY_KEY_VERSION,
+    }
+    const unsignedIngestReceipt = {
+      schema_version: TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION,
+      event_id: sampledIn,
+      received_at_utc: occurredAtUtc,
+      receipt_key_version: INGEST_RECEIPT_KEY_VERSION,
+    }
     const boundary = {
       source: 'web_vital' as const,
       manifest,
@@ -200,7 +243,7 @@ describe('POST /v1/metrics/vitals', () => {
         parseTelemetryEnvelope({
           schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
           event_id: sampledIn,
-          occurred_at_utc: '2026-08-07T00:00:00Z',
+          occurred_at_utc: occurredAtUtc,
           dimensions: {
             operation: 'web_vital_lcp',
             reason: 'not_applicable',
@@ -214,6 +257,22 @@ describe('POST /v1/metrics/vitals', () => {
       window_end_utc: '2026-08-08T00:00:00Z',
       actor_key_version: 'v2',
       authority_registration: authorityRegistration,
+      authority_registry_receipt: {
+        ...unsignedRegistryReceipt,
+        registry_commitment: createTelemetryAuthorityRegistryReceiptCommitment({
+          receipt: unsignedRegistryReceipt,
+          commitment_key: REGISTRY_KEY,
+        }),
+      },
+      received_receipts: [
+        {
+          ...unsignedIngestReceipt,
+          receipt_commitment: createTelemetryIngestReceiptCommitment({
+            receipt: unsignedIngestReceipt,
+            commitment_key: INGEST_RECEIPT_KEY,
+          }),
+        },
+      ],
       sampling_key_version: SAMPLING_KEY_VERSION,
       sampling_key: SAMPLING_KEY,
       commitment_key: COMMITMENT_KEY,

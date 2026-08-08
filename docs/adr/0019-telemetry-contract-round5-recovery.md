@@ -27,11 +27,17 @@ ProductEvent outbox、status-only metric reason、M9の7日評価に7件の矛�
 - telemetry envelopeのUUIDはsampling、dedup、expected / received比較前にlowercaseへcanonical化する。
 - outboxはbinding continuityをpayloadより先に判定し、未来queueと不正retry metadataを送信しない。
 - outboxの24時間TTLとretry上限はUUIDv7の発生minuteを起点にし、terminal 4xxはraw entryを削除して
-  `DELIVERY_REJECTED`だけを残す。
+  `DELIVERY_REJECTED`だけを残す。4xxの例外は401 / 403のbinding再取得と408 / 425 / 429のretryだけにする。
+- malformed、primitive、binding帰属不能なoutbox rootは現在continuityを`STORAGE_UNAVAILABLE`へ固定し、
+  構文解析できた別continuity rootだけを現在continuityのdegradationなしで削除する。
 - ProductEvent runtimeはOpenAPIどおりJSONだけをparse前に受理し、cross-actor event IDの存在を応答で
-  区別しない。payload固有validationはactor別DB lookupより先に完了する。
+  区別しない。payload固有validationはactor別DB lookupより先に完了する。actor DB quota到達時はglobal
+  event ID lookupを行わず、他actor既存IDと未知IDを同じ429へ固定する。unique raceも同じ順序で再判定する。
 - completenessはmanifestと独立した保護authority登録を必須にする。authority HMACはquery version、source、
-  actor scope、観測窓、全eligible event IDを拘束し、manifest用keyと同値の場合もHOLDする。
+  actor scope、観測窓、sampling policy / key commitment、eligible eventごとのID / operation / flow / actor /
+  occurrenceを拘束する。独立registry receiptはwindow開始前の登録を証明し、ingest receiptはDB由来の
+  `received_at`を証明する。manifest、authority、sampling commitment、registry、ingest receipt、samplingの
+  key reuseはいずれもHOLDする。
 - status-only degradation ledgerはGitHub Issue #384へ分離し、`issue-190-v1`専用activationがない限り
   production ProductEvent ingestを503でHOLDする。
 - query versionを`issue-188-v1`へ上げ、旧evidenceと混在させない。
@@ -58,7 +64,8 @@ SHA-256は`5b1e916b4ef35c448101624354d73f86d9d0de277fe88dbc7fe8025873e8bc35`で�
 - OpenAPI-valid / runtime-invalidのvalidation oracleを除去できる。
 - flow IDとMemory idempotency keyは大小文字やUUID variantに左右されず同じ値へ相関する。
 - 壊れたoutbox、矛盾dimension、metric reasonのcaller bypassをnetworkまたはevidenceへ通さない。
-- callerがmanifest、received、評価eventから同じ早期eventを省略しても、独立authority universeによりHOLDできる。
+- callerがmanifest、received、評価eventから同じ早期eventを省略、relabel、flow / actor rebindingしても、
+  pre-window authority universeとtrusted receiptによりHOLDできる。
 - 別sessionのraw outboxを送信せず、durable degradation authority未完成の状態でproduction eventを蓄積しない。
 - 旧clientがUUID URNまたは矛盾Web Vitals payloadを送る場合は422になるため、client/serverの原子的更新が必要になる。
 

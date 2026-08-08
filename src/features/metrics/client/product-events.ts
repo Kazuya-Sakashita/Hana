@@ -222,6 +222,17 @@ function getSessionStorage(): Storage | null {
 }
 
 function discardUnattributedOutbox(storage: Storage): StoredProductEventOutbox {
+  markDegradation('STORAGE_UNAVAILABLE')
+  try {
+    storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
+    storage.setItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY, JSON.stringify(emptyOutbox()))
+  } catch {
+    return emptyOutbox()
+  }
+  return emptyOutbox()
+}
+
+function discardForeignOutbox(storage: Storage): StoredProductEventOutbox {
   try {
     storage.removeItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)
   } catch {
@@ -265,7 +276,7 @@ function readOutbox(now = Date.now()): StoredProductEventOutbox {
     return discardUnattributedOutbox(storage)
   }
   if (storedBinding.continuity !== currentBinding.continuity) {
-    return discardUnattributedOutbox(storage)
+    return discardForeignOutbox(storage)
   }
 
   try {
@@ -410,7 +421,11 @@ async function send(
         if (response.status === 401 || response.status === 403) {
           return 'authentication_rejected'
         }
-        if ([400, 404, 405, 409, 413, 415, 422].includes(response.status)) {
+        if (
+          response.status >= 400 &&
+          response.status < 500 &&
+          ![408, 425, 429].includes(response.status)
+        ) {
           return 'rejected'
         }
         return 'retry'

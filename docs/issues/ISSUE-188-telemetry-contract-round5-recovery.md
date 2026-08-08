@@ -89,6 +89,15 @@ PR #378の正式な第5巡で検出された7件のtelemetry契約矛盾を、Op
 - [x] ProductEvent payload固有validationをactor別DB lookupより前に完了し、validation順序の存在oracleを閉じる
 - [x] M9 DB Memory truthのactor不一致と、E2E DB oracleへの別actor同一flow混入を回帰testでHOLD / 除外する
 
+### Round 3 findings
+
+- [x] authority登録をevent IDだけでなくoperation、flow、actor、occurrence、保護sampling構成へ拘束する
+- [x] window開始前の独立registry receiptとingest / DB由来の受領receiptを検証し、post-hoc登録とreceipt改ざんをHOLDにする
+- [x] malformed / primitive / 帰属不能outbox rootを送信せず削除し、現在continuityを`STORAGE_UNAVAILABLE`へ固定する
+- [x] 4xxを原則terminal rejectionとし、401 / 403、408、425、429だけを専用経路またはretryへ残す
+- [x] outbox timing metadata testを固定時刻、valid control、単一変異、exact boundaryで検証する
+- [x] DB quota到達時のglobal event ID照会を防ぎ、他actor既存IDと未知IDを同じ429へ固定する
+
 ### 検証と承認
 
 - [x] OpenAPIを先に更新し、生成型を`pnpm openapi:gen`だけで同期する
@@ -150,6 +159,24 @@ Issue Captainが重複したauthority universe findingとoutbox occurrence findi
 保持した。独立authority登録、発生minute基準TTL、terminal 4xx破棄、DB lookup前validation、M9 DB truth actor反例、
 E2E actor-scoped oracleを本Issueで修正する。修正後headを固定し、通常上限のRound 3で6 roleすべてを再実行する。
 
+Round 3はbase `e6c891ecde1ba3f51b739361d3cd3de4433835a3`、head
+`201abc3f039971846a3912ce4e132d8a7de68633`を6 roleが独立・read-onlyで確認した。
+
+| role                        | 判定 | findings |
+| --------------------------- | ---- | -------: |
+| spec acceptance / analytics | HOLD |        2 |
+| implementation correctness  | HOLD |        3 |
+| test reliability            | HOLD |        2 |
+| API contract                | GO   |        0 |
+| security / authorization    | HOLD |        2 |
+| privacy / data protection   | GO   |        0 |
+
+Issue Captainが生9件を6つの修正単位へ統合した。authority event semantics、sampling authority、
+pre-window registrationとtrusted receiptを1つのcryptographic boundaryとして修正し、malformed outbox、
+terminal 4xx、timing test、DB quota oracleを独立回帰testで閉じる。通常上限のRound 3でfindingが出たため、
+修正後headに一致するISSUE-173 protected Environment / GitHub OIDC / dedicated App checkが成功するまで
+Round 4を開始しない。
+
 ## 実装結果
 
 - `event_name × elapsed_bucket`を生成schema型付きshared predicateへ集約し、client outboxとserver parserを同期した
@@ -166,21 +193,33 @@ E2E actor-scoped oracleを本Issueで修正する。修正後headを固定し、
 - ProductEvent ingestをJSON-onlyにし、cross-actor event ID collisionを204で秘匿した
 - ProductEventのpayload固有validationをactor別DB lookupより先に完了させた
 - query version、actor scope、観測窓、全eligible IDを別keyで事前署名するauthority登録を必須にした
+- expectation manifest v4 / authority registration v2へ上げ、eventごとのoperation、flow、actor、occurrenceと
+  protected sampling commitmentをauthority HMACへ拘束した
+- window開始前の独立registry receiptと、event ID / DB由来received timeのingest receiptを別keyで検証し、
+  protected key reuse、post-hoc登録、receipt改ざんをHOLDにした
+- M2 / M3 / M9をauthority tupleとsigned receiptへ照合し、operation relabel、flow / actor rebinding、
+  caller supplied receipt timeからPASSを生成できないようにした
+- malformed / primitive / 帰属不能outbox rootを現在continuityの`STORAGE_UNAVAILABLE`へ置換し、4xxを
+  401 / 403、408 / 425 / 429以外terminal rejectionにした
+- actor-scoped dedup、DB quota、global collisionの順序を通常・unique raceで共通化し、quota時の
+  他actor既存IDと未知IDを同じ429 responseへ固定した
 - E2E telemetry DB oracleをserver-derived actor hashへ限定し、同じflowの別actor noiseを除外した
 - degradation ledgerをGitHub Issue #384へ分離し、専用activation未完成時のproduction ingestをHOLDにした
 - query versionを`issue-188-v1`へ更新し、ISSUE-152 evidenceとの混在を禁止した
 
 ## 検証結果
 
+- Round 3修正の統合focused suite 5 files / 314 tests PASS。追加のoperation relabel / flow rebind反例2件PASS
+- 最新`pnpm pr:gate` PASS（196 files中190 PASS / 6 skip、2005 tests中1982 PASS / 23 skip、production build成功）
+- 最新専用PostgreSQL 16へ19 migrationを適用し、認証済みChromium E2E 5件PASS。合成containerは検証後削除
 - Round 2修正対象5 files / 209 tests PASS
-- `pnpm pr:gate` PASS（196 files中190 PASS / 6 skip、1898 tests中1875 PASS / 23 skip、production build成功）
-- 専用PostgreSQL 16へ19 migrationを適用し、別actor同一flow noiseを含む認証済みbrowser E2E 5件PASS
 - `pnpm openapi:lint` PASS（既存warningのみ）
 - `pnpm openapi:gen` PASS
 - 固定oasdiff imageによるmainとの差分は21件（error 16 / warning 5）
 - GitHub Action互換の改行正規化後exact report SHA-256は`5b1e916b4ef35c448101624354d73f86d9d0de277fe88dbc7fe8025873e8bc35`
 - 2026-08-08T01:48:02Zに`Kazuya-Sakashita`が上記21件とexact report SHA-256だけを明示承認した
-- waiver `issue-188-telemetry-contract-v1`を期限2026-08-22で記録した。保護labelとfresh round 1 reviewはpending
+- waiver `issue-188-telemetry-contract-v1`を期限2026-08-22で記録し、保護labelを付与した。
+  最新head専用のRound 4 exception proofとfresh 6 role reviewはpending
 
 ## 参考
 

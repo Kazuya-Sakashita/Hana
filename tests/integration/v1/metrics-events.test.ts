@@ -253,13 +253,16 @@ describe('POST /v1/metrics/events', () => {
         clientVersion: '7.8.0',
       }),
     )
-    mocks.eventFindUnique.mockResolvedValue({
-      eventId: validReport.event_id,
-      actorHash: productEventActorHash(USER_ID),
-      flowId: validReport.flow_id,
-      eventName: validReport.event_name,
-      elapsedBucket: validReport.elapsed_bucket,
-    })
+    mocks.eventFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        eventId: validReport.event_id,
+        actorHash: productEventActorHash(USER_ID),
+        flowId: validReport.flow_id,
+        eventName: validReport.event_name,
+        elapsedBucket: validReport.elapsed_bucket,
+      })
 
     const response = await POST(request(validReport))
 
@@ -282,7 +285,7 @@ describe('POST /v1/metrics/events', () => {
   })
 
   it('returns 409 when the same actor reuses an event id for different content', async () => {
-    mocks.eventFindUnique.mockResolvedValue({
+    mocks.eventFindFirst.mockResolvedValueOnce({
       eventId: validReport.event_id,
       actorHash: productEventActorHash(USER_ID),
       flowId: '5c5b4f2f-451c-4ace-b1e5-25545d9d4db1',
@@ -345,7 +348,9 @@ describe('POST /v1/metrics/events', () => {
         clientVersion: '7.8.0',
       }),
     )
-    mocks.eventFindFirst.mockResolvedValue({ eventId: 'existing-stage' })
+    mocks.eventFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ eventId: 'existing-stage' })
 
     const response = await POST(request(validReport))
     expect(response.status).toBe(204)
@@ -360,9 +365,86 @@ describe('POST /v1/metrics/events', () => {
     expect(mocks.eventCreate).not.toHaveBeenCalled()
   })
 
+  it('returns indistinguishable 429 responses for cross-actor and unknown ids at quota', async () => {
+    const crossActorEvent = {
+      eventId: validReport.event_id,
+      actorHash: 'different-actor',
+      flowId: validReport.flow_id,
+      eventName: validReport.event_name,
+      elapsedBucket: validReport.elapsed_bucket,
+    }
+    const unknownReport = {
+      ...validReport,
+      event_id: validReport.event_id.replace(/1$/, '2'),
+    }
+
+    mocks.eventCount.mockResolvedValue(60)
+    mocks.eventFindUnique.mockResolvedValue(crossActorEvent)
+    const crossActorResponse = await POST(request(validReport))
+
+    mocks.eventFindUnique.mockResolvedValue(null)
+    const unknownResponse = await POST(request(unknownReport))
+
+    expect({
+      status: crossActorResponse.status,
+      body: await crossActorResponse.text(),
+      headers: Object.fromEntries(crossActorResponse.headers.entries()),
+    }).toEqual({
+      status: unknownResponse.status,
+      body: await unknownResponse.text(),
+      headers: Object.fromEntries(unknownResponse.headers.entries()),
+    })
+    expect(crossActorResponse.status).toBe(429)
+    expect(mocks.eventFindUnique).not.toHaveBeenCalled()
+  })
+
+  it('keeps P2002 race responses indistinguishable before a global id lookup at quota', async () => {
+    const crossActorEvent = {
+      eventId: validReport.event_id,
+      actorHash: 'different-actor',
+      flowId: validReport.flow_id,
+      eventName: validReport.event_name,
+      elapsedBucket: validReport.elapsed_bucket,
+    }
+
+    async function raceResponse(racedEvent: typeof crossActorEvent | null) {
+      resetProductEventRequestRateLimitForTests()
+      mocks.eventCount.mockReset().mockResolvedValueOnce(59).mockResolvedValueOnce(60)
+      mocks.eventFindFirst.mockReset().mockResolvedValue(null)
+      mocks.eventFindUnique
+        .mockReset()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(racedEvent)
+      mocks.eventCreate.mockReset().mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('duplicate event', {
+          code: 'P2002',
+          clientVersion: '7.8.0',
+        }),
+      )
+
+      const response = await POST(request(validReport))
+      return {
+        response: {
+          status: response.status,
+          body: await response.text(),
+          headers: Object.fromEntries(response.headers.entries()),
+        },
+        globalLookupCount: mocks.eventFindUnique.mock.calls.length,
+      }
+    }
+
+    const crossActor = await raceResponse(crossActorEvent)
+    const unknown = await raceResponse(null)
+
+    expect(crossActor.response).toEqual(unknown.response)
+    expect(crossActor.response.status).toBe(429)
+    expect(crossActor.globalLookupCount).toBe(1)
+    expect(unknown.globalLookupCount).toBe(1)
+  })
+
   it('returns 204 for an idempotent retry even after the rate limit is reached', async () => {
     mocks.eventCount.mockResolvedValue(60)
-    mocks.eventFindUnique.mockResolvedValue({
+    mocks.eventFindFirst.mockResolvedValueOnce({
       eventId: validReport.event_id,
       actorHash: productEventActorHash(USER_ID),
       flowId: validReport.flow_id,
@@ -373,10 +455,11 @@ describe('POST /v1/metrics/events', () => {
     const response = await POST(request(validReport))
     expect(response.status).toBe(204)
     expect(mocks.eventCount).not.toHaveBeenCalled()
+    expect(mocks.eventFindUnique).not.toHaveBeenCalled()
   })
 
   it('rate-limits duplicate requests before opening another transaction', async () => {
-    mocks.eventFindUnique.mockResolvedValue({
+    mocks.eventFindFirst.mockResolvedValue({
       eventId: validReport.event_id,
       actorHash: productEventActorHash(USER_ID),
       flowId: validReport.flow_id,
