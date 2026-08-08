@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { parse as parseYaml } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const prdSource = readFileSync(new URL('../../../Hana_PRD_v1.md', import.meta.url), 'utf8')
@@ -10,12 +11,15 @@ const productEventSchemaSource = readFileSync(
   new URL('../../../docs/openapi/components/schemas/ProductEventReport.yaml', import.meta.url),
   'utf8',
 )
+const productEventSchema = parseYaml(productEventSchemaSource) as {
+  properties?: { event_name?: { enum?: string[] } }
+}
 const issueSource = readFileSync(
   new URL('../../../docs/issues/ISSUE-159-prd-funnel-go-hold.md', import.meta.url),
   'utf8',
 )
 const telemetryIssueSource = readFileSync(
-  new URL('../../../docs/issues/ISSUE-152-pii-safe-telemetry.md', import.meta.url),
+  new URL('../../../docs/issues/ISSUE-188-telemetry-contract-round5-recovery.md', import.meta.url),
   'utf8',
 )
 const pilotIssueSource = readFileSync(
@@ -92,9 +96,7 @@ describe('ISSUE-159 product validation contract', () => {
   })
 
   it('uses only the existing allowlisted product events', () => {
-    const enumMatch = productEventSchemaSource.match(/enum: \[([^\]]+)\]/)
-    expect(enumMatch).not.toBeNull()
-    const eventNames = (enumMatch?.[1] ?? '').split(',').map((eventName) => eventName.trim())
+    const eventNames = productEventSchema.properties?.event_name?.enum ?? []
 
     expect(eventNames).toEqual([
       'record_started',
@@ -132,10 +134,16 @@ describe('ISSUE-159 product validation contract', () => {
     expect(metrics.find((metric) => metric.ID === 'M2')?.min).toBe('20 Profile / flow')
     expect(metrics.find((metric) => metric.ID === 'M7')?.min).toBe('20 Profile / Profile-week')
     expect(contractSource).toContain('すべての窓はUTCの半開区間`[start, end)`')
-    expect(contractSource).toContain('各anchorが`[window_start_utc, window_end_utc)`に入るunitだけ')
+    expect(contractSource).toContain(
+      '発生minuteの半開区間全体が`[window_start_utc, window_end_utc)`に入る場合だけ',
+    )
+    expect(contractSource).toContain(
+      'DB `createdAt`はreceipt timeとして遅延と順序の検証だけに使い、entryやmaturityの起点にしない',
+    )
     expect(contractSource).toContain('M1 / M5 / M6: `Profile.createdAt`をanchor')
-    expect(contractSource).toContain('M2: `photo_selected.createdAt`')
-    expect(contractSource).toContain('M3: `ai_draft_shown.createdAt`')
+    expect(contractSource).toContain(
+      'M2: `photo_selected`、M3: `ai_draft_shown`の発生minute区間をanchor',
+    )
     expect(contractSource).toContain('entry window内で各Profileが最初に送ったeligible')
     expect(contractSource).toContain('同じcohortを見て閾値を決めてGoにしてはならない')
     expect(contractSource).toContain(
@@ -146,7 +154,7 @@ describe('ISSUE-159 product validation contract', () => {
   it('fails closed on best-effort telemetry, small cells, and evidence drift', () => {
     expect(contractSource).toContain('event送信失敗を離脱、未保存、未閲覧として扱わない')
     expect(contractSource).toContain(
-      'ISSUE-152の相関・重複・順序・completeness証跡がGoになるまでHold',
+      'ISSUE-188の相関・重複・順序・completeness証跡がGoになるまでHold',
     )
     expect(contractSource).toMatch(/分母、分子、補集合\s*`分母 - 分子`がすべて5以上/)
     expect(contractSource).toContain('secondary suppression')

@@ -8,7 +8,7 @@ created_at: 2026-08-03
 github_issue: 331
 blocked_by:
   - ISSUE-105
-  - ISSUE-152
+  - ISSUE-188
   - ISSUE-159
   - ISSUE-161
   - ISSUE-185

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
+  getClaims: vi.fn(),
   findUnique: vi.fn(),
 }))
 
@@ -9,6 +10,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
     auth: {
       getUser: mocks.getUser,
+      getClaims: mocks.getClaims,
     },
   }),
 }))
@@ -21,7 +23,12 @@ vi.mock('@/server/db/prisma', () => ({
   },
 }))
 
-import { getCurrentUser, requireOwnership, requireUser } from '@/server/auth/current-user'
+import {
+  getCurrentUser,
+  requireOwnership,
+  requireUser,
+  requireVerifiedSessionIdentity,
+} from '@/server/auth/current-user'
 import { ApiProblemError } from '@/lib/api/error'
 
 afterEach(() => {
@@ -29,6 +36,7 @@ afterEach(() => {
 })
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
+const SESSION_ID = 'd89327d8-a5af-4f90-bc7e-93c8cad43f44'
 
 const supabaseUser = {
   id: USER_ID,
@@ -124,6 +132,40 @@ describe('requireUser', () => {
       status: 401,
     })
     expect(mocks.findUnique).not.toHaveBeenCalled()
+  })
+})
+
+describe('requireVerifiedSessionIdentity', () => {
+  it('returns only a getUser-matched subject and verified session_id claim', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
+    mocks.findUnique.mockResolvedValue(profileRow)
+    mocks.getClaims.mockResolvedValue({
+      data: { claims: { sub: USER_ID, session_id: SESSION_ID } },
+      error: null,
+    })
+
+    await expect(requireVerifiedSessionIdentity()).resolves.toEqual({
+      subject: USER_ID,
+      sessionId: SESSION_ID,
+    })
+  })
+
+  it.each([
+    ['missing session_id', { sub: USER_ID }],
+    ['malformed session_id', { sub: USER_ID, session_id: 'not-a-uuid' }],
+    [
+      'getUser subject mismatch',
+      { sub: '7f26e7f0-6f3c-4c07-9091-8f82db70b347', session_id: SESSION_ID },
+    ],
+  ])('rejects %s claims', async (_label, claims) => {
+    mocks.getUser.mockResolvedValue({ data: { user: supabaseUser } })
+    mocks.findUnique.mockResolvedValue(profileRow)
+    mocks.getClaims.mockResolvedValue({ data: { claims }, error: null })
+
+    await expect(requireVerifiedSessionIdentity()).rejects.toMatchObject({
+      reason: 'unauthorized',
+      status: 401,
+    })
   })
 })
 

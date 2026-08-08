@@ -12,7 +12,7 @@ blocked_by:
   - ISSUE-149
   - ISSUE-150
   - ISSUE-151
-  - ISSUE-152
+  - ISSUE-188
   - ISSUE-153
   - ISSUE-154
   - ISSUE-155
