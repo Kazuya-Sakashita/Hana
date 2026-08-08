@@ -145,7 +145,9 @@ ProblemDetails may expose `detail` to users, but server logs should branch on st
 - Memory delete is logical delete (`deleted_at`) per ADR-0010.
 - Profile / account deletion must remove DB rows and Storage objects. This is not fully proven for release until a dedicated deletion flow and smoke exist.
 - AI generation logs are metadata-only and may be retained for quality / quota analysis.
-- Orphan upload files can occur when signed upload succeeds but confirm is not called. Cleanup is future work and an accepted risk until public release.
+- 未confirm画像はupload reservation、confirmed後に記録へ未紐付けの画像は`images`上のleaseで追跡する。
+  cleanupは48時間後にclaimし、Storage処理をDB transaction外で行う。失敗は固定reasonと指数backoffで
+  最大10回再試行し、その後`dead_letter`へ隔離する。結果へ画像ID、URL、`storage_key`を含めない。
 
 ## MVP Accepted Risks
 
@@ -154,7 +156,7 @@ ProblemDetails may expose `detail` to users, but server logs should branch on st
 | RLS not enabled                                | keeps Prisma / Route Handler implementation simple          | ownership tests, code review, future RLS ADR                                          |
 | EXIF removal depends on client path            | server hook adds storage download / transform / upload cost | Canvas re-encode, AI/image human review                                               |
 | upload signed URL TTL is Supabase default      | SDK does not expose TTL control                             | private bucket, storage_key validation, confirm ownership                             |
-| orphan uploaded files                          | upload and confirm are intentionally separate               | future cleanup job, no public URL                                                     |
+| orphan uploaded files                          | upload and confirm are intentionally separate               | 48時間retention、lease付きcleanup、dead-letter、no public URL                         |
 | 5 minute browser cache for signed URL          | needed for mobile performance                               | `private`, TTL below signed URL lifetime, clear on sign-out                           |
 | AI vendor sends child photo outside Hana infra | core product value depends on AI vision                     | explicit opt-in, privacy policy, vendor retention review                              |
 | memory restore UI not implemented              | MVP can still support deletion without promising restore    | active UI avoids restore promises; see `docs/design/delete-restore-trust-contract.md` |

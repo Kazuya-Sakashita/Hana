@@ -1345,7 +1345,7 @@ export default function RecordPage() {
         やめる
       </button>
       <section className="flex min-h-[42dvh] flex-1 flex-col px-5 pb-5 pt-20">
-        <p className="meta-label">30びょう 記録</p>
+        <p className="meta-label">きょうの記録</p>
         <h1 className="text-ink mt-2 font-serif text-2xl leading-tight">
           きょうの {childName} ちゃんを のこす
         </h1>

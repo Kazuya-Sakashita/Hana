@@ -45,7 +45,7 @@ describe('ISSUE-083 LP soft keepsake corners', () => {
   it('turns repeated value cards into one keepsake journey and trust bridge', () => {
     expect(lpSource).toContain('data-lp-keepsake-journey="photo-to-memory"')
     expect(lpSource).toContain('paper-surface lp-soft-card px-5 py-5')
-    expect(lpSource).toContain('写真のみ')
+    expect(lpSource).toContain('写真を選ぶ')
     expect(lpSource).toContain('写真 + タイトル')
     expect(lpSource).toContain('写真 + 短い本文')
     expect(lpSource).toContain('data-lp-trust-bridge="waitlist"')

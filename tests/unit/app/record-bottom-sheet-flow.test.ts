@@ -27,7 +27,7 @@ const privacyEvidenceSource = readFileSync(
 )
 
 describe('record bottom-sheet capture flow', () => {
-  it('places the 30-second primary flow in a mobile bottom sheet', () => {
+  it('places the primary record flow in a mobile bottom sheet', () => {
     expect(recordSource).toContain('data-testid="record-bottom-sheet"')
     expect(recordSource).toContain('sticky bottom-0')
     expect(recordSource).toContain('max-h-[68dvh]')
@@ -38,7 +38,8 @@ describe('record bottom-sheet capture flow', () => {
     expect(recordSource).toContain('pb-[calc(env(safe-area-inset-bottom)+1rem)]')
     expect(recordSource).toContain('PhotoMat')
     expect(recordSource).toContain('PhotoPlaceholder')
-    expect(recordSource).toContain('30びょう 記録')
+    expect(recordSource).toContain('きょうの記録')
+    expect(recordSource).not.toContain('30びょう 記録')
     expect(recordSource).toContain('しゃしんを えらぶ')
     expect(footerStateSource).toContain('AI で 下書きする')
     expect(footerStateSource).toContain('このまま 残す')

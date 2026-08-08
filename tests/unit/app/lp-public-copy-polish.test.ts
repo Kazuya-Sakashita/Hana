@@ -21,11 +21,14 @@ const evaluationSource = readFileSync(
 
 describe('ISSUE-095 LP public copy polish', () => {
   it('normalizes visible LP count notation to 1枚', () => {
-    expect(lpSource).toContain('写真1枚から、30秒で残す育児記録')
-    expect(lpSource).toContain('写真を1枚選ぶだけ')
-    expect(lpSource).toContain('まず1枚を置いておける')
+    expect(lpSource).toContain('写真に、あとでひらけることばを')
+    expect(lpSource).toContain('写真を1枚選ぶところから')
+    expect(lpSource).toContain('1枚を選び、短い見出しを添える')
     expect(lpSource).toContain('今日の1枚')
     expect(lpSource).not.toContain('1まい')
+    expect(lpSource).not.toMatch(
+      /30秒|短時間|写真だけの日も|まず1枚を置いておける|App Store 準備中|Google Play 準備中/,
+    )
   })
 
   it('removes artifact-like public wording while preserving synthetic disclosure', () => {
