@@ -56,7 +56,7 @@ requires_human_review:
 
 - [ ] 対象main SHA、最新CI、未解決Issue、migration状態をstatus-onlyで固定する
 - [ ] contract version、source SHA、観測窓、query / event schema / actor key version、eligible census / censor policy / censor status digestを1つのevidence versionとして固定する
-- [ ] `metric_window_manifest`、`baseline_evidence_digest`、`target_decision_digest`、`target_fixed_at_utc`、`cohort_role`を同じevidence versionへ固定する
+- [ ] `metric_window_manifest_commitment`、署名済みbaseline evidence receipt、署名済みtarget decision、`target_fixed_at_utc`、`cohort_role`を同じevidence versionへ固定する
 - [ ] Security、Privacy、AI、Accessibility、Reliability、Productの人間review結果が同じevidence versionを参照する
 - [ ] SLO/alert、restore drill、performance budget、5名pilot、telemetry completeness、退会purgeの合否を参照する
 - [ ] accepted riskとwaiverにはowner、理由、期限、再確認条件を必須にする

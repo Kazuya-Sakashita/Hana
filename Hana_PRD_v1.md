@@ -980,7 +980,7 @@ ISSUE-111のallowlist以外を追加しない。
 | Engagement | M8 / M9 | 再閲覧 / 再閲覧後再記録 | 独立baseline後、評価cohort前にtarget固定 |
 | Adoption | M1 | 初回記録完了率 | 70%以上 |
 | Retention | M5 / M6 | D7 / D30のMemory作成 | 40%以上 / 25%以上 |
-| Task Success | M2 | 写真選択→DB保存 | 85%以上。ISSUE-152のdurable相関まではHold |
+| Task Success | M2 | 写真選択→DB保存 | 85%以上。ISSUE-191のdurable相関まではHold |
 | Task Success | M4 | AI / 手動経路別の所要時間 | 各経路p50 30秒以内、p85 60秒以内、完了5/5 |
 
 ## Cohort and privacy gate
@@ -994,7 +994,7 @@ ISSUE-111のallowlist以外を追加しない。
 
 ## Go / Hold / No-Go
 
-- **Go**: M1〜M12、独立baseline / 評価cohort、ISSUE-152 / 160 / 161 / 185、Privacy gate、
+- **Go**: M1〜M12、独立baseline / 評価cohort、ISSUE-191 / 160 / 161 / 185、Privacy gate、
   Product / Privacy reviewを同じevidence versionですべて満たす。
 - **Hold**: cohort不足、観測未完了、欠測、baseline未確定、review pending、または改善後の再計測前。
 - **No-Go**: opt-in前のAI送信やPII流出、AI重大創作、安全な手動経路の欠落、または有効cohortでの

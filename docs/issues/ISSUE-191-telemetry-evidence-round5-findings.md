@@ -57,6 +57,10 @@ PR #382が最終Review Round 5でHOLDになったため、Round 6へ進まず、
 - [x] status-only artifact、log、fixtureへPII、子どもの情報、生actor識別子を出力しない
 - [x] focused / full test、typecheck、lint、OpenAPI lint / gen、CI buildを通す
 - [x] ISSUE-191専用のbreaking exact report、ADR、期限付きwaiver、人間承認を取得する
+- [x] status-only artifact全体を保護されたevidence keyで署名し、status / reason改ざんを検証時に拒否する
+- [x] nested synthetic actorをexact-key schemaに限定し、再署名済み未知fieldを拒否する
+- [x] M1〜M9全件のentry / maturity単一変異とM9 baselineのcutoff ±1msを検証する
+- [x] PRDと下流ISSUE-159 / 162をISSUE-191の署名済みevidence契約へ揃える
 - [ ] 固定base / head SHAを6専門roleがRound 1からreviewし、通常上限3巡以内に全role GOを得る
 
 ## セキュリティ・プライバシー考慮

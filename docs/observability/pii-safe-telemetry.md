@@ -1,7 +1,7 @@
 # PII-safe telemetry contract
 
 - Status: active
-- Version: `issue-191-v1`
+- Version: `issue-191-v2`
 - Event schema: `hana-telemetry-event/v2`
 - Retention: 90 days
 
@@ -220,7 +220,7 @@ completeness sourceはDB Memory truthである。単独ではGoにせずdiagnost
 
 ## Evidence
 
-`hana-telemetry-evidence/v4`はsource SHA、UTC window、query / event schema version、保護されたactor key version、
+`hana-telemetry-evidence/v5`はsource SHA、UTC window、query / event schema version、保護されたactor key version、
 window manifest / eligible census / censoring statusのdomain-separated keyed commitment、4つの必須sourceの
-completeness、metric別statusとreason、全体status、evidence integrity digestだけを持つ。必須sourceの欠落・
+completeness、metric別statusとreason、全体status、artifact全体のdomain-separated keyed digestだけを持つ。必須sourceの欠落・
 余分、commitmentのdomain / window / key version不一致、metric status / reason不一致、未知値はfail closedにする。

@@ -203,7 +203,7 @@ release Goへ読み替えない。
 - `censoring_policy_version`
 - `censoring_status_digest`
 - `generated_at_utc`
-- 上記とmetric status一覧から作る`evidence_digest`
+- 上記とmetric status一覧を保護されたevidence keyと専用domainで署名する`evidence_digest`
 
 private `metric_window_manifest`、eligible census、censoring statusはversioned exact schemaで固定し、未知field、
 metric欠落、window / query / actor key version不一致を受理しない。外部へ残すcommitmentはcaller指定keyではなく、

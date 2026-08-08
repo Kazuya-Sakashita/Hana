@@ -51,7 +51,7 @@ OpenAPI、生成型、API runtime、DB、Storage、既存event payloadは変更�
 - [x] event欠測を離脱扱いせず、ISSUE-191のDB相関・completeness完了までは該当metricをHoldにする
 - [x] primary / secondary suppressionとevidence versionの無効化条件を定義する
 - [x] 退会right-censorをworst-case区間で判定し、census / censor digestをevidenceへ束縛する
-- [x] pilot、release、telemetry、purgeをISSUE-160 / 162 / 152 / 185へ分離する
+- [x] pilot、release、telemetry、purgeをISSUE-160 / 162 / 191 / 185へ分離する
 - [x] PRDの疑似SQLを撤去し、`prisma/schema.prisma`をfield / relationの正本にする
 - [x] ProductとPrivacyの人間review欄を用意する
 

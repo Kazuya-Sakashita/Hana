@@ -10,7 +10,7 @@ import {
 import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurrence'
 
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
-export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v4' as const
+export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v5' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
   'hana-telemetry-expectation-manifest/v5' as const
 export const TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION =
@@ -31,7 +31,7 @@ export const TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION =
 export const TELEMETRY_ELIGIBLE_CENSUS_SCHEMA_VERSION = 'hana-telemetry-eligible-census/v1' as const
 export const TELEMETRY_CENSORING_STATUS_SCHEMA_VERSION =
   'hana-telemetry-censoring-status/v1' as const
-export const TELEMETRY_QUERY_VERSION = 'issue-191-v1' as const
+export const TELEMETRY_QUERY_VERSION = 'issue-191-v2' as const
 export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
 export const TELEMETRY_RETENTION_DAYS = 90
@@ -138,6 +138,7 @@ const COMMITMENT_DOMAINS = [
   'eligible_census',
   'censoring_status',
 ] as const
+const TELEMETRY_EVIDENCE_DIGEST_DOMAIN = 'hana-telemetry-evidence-digest/v1\0'
 const METRIC_STATUSES = ['PASS', 'FAIL', 'HOLD'] as const
 const METRIC_IDS = [
   'M1',
@@ -1374,8 +1375,8 @@ function validSyntheticActorRef(
   actor: SyntheticActorRef | null | undefined,
 ): actor is SyntheticActorRef {
   return (
-    actor !== null &&
-    actor !== undefined &&
+    isRecord(actor) &&
+    hasExactKeys(actor, ['actor_key_version', 'actor_token']) &&
     PROTECTED_ACTOR_KEY_VERSION_PATTERN.test(actor.actor_key_version) &&
     SHA256_PATTERN.test(actor.actor_token)
   )
@@ -1955,12 +1956,19 @@ function validBaselineEvidenceReceipt(
   const windowStart = parseUtc(receipt.window_start_utc)
   const windowEnd = parseUtc(receipt.window_end_utc)
   const generatedAt = parseUtc(receipt.generated_at_utc)
+  const maturityCutoff =
+    windowEnd === null ? null : windowEnd + (metricId === 'M9' ? 7 * 24 * 60 * 60 * 1000 : 0)
   if (
     windowStart === null ||
     windowEnd === null ||
     generatedAt === null ||
+    maturityCutoff === null ||
     windowStart >= windowEnd ||
-    generatedAt < windowEnd
+    generatedAt < maturityCutoff ||
+    (metricId === 'M8' && !isUtcCalendarMonthWindow(windowStart, windowEnd)) ||
+    (metricId === 'M9' &&
+      (!UTC_MINUTE_PATTERN.test(receipt.window_start_utc) ||
+        !UTC_MINUTE_PATTERN.test(receipt.window_end_utc)))
   ) {
     return false
   }
@@ -2211,8 +2219,15 @@ function stableValue(value: unknown): unknown {
   )
 }
 
-function evidenceDigest(value: unknown): string {
-  return createHash('sha256')
+function evidenceDigest(value: unknown, commitmentKey: string): string {
+  if (
+    typeof commitmentKey !== 'string' ||
+    Buffer.byteLength(commitmentKey, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH
+  ) {
+    throw new TelemetryContractError('invalid_input')
+  }
+  return createHmac('sha256', commitmentKey)
+    .update(TELEMETRY_EVIDENCE_DIGEST_DOMAIN)
     .update(JSON.stringify(stableValue(value)))
     .digest('hex')
 }
@@ -2889,17 +2904,7 @@ function evidenceRateResultsMatch(input: {
   })
 }
 
-export function buildTelemetryEvidence(input: {
-  source_sha: string
-  window_start_utc: string
-  window_end_utc: string
-  generated_at_utc: string
-  metric_window_manifest: TelemetryMetricWindowManifest
-  eligible_census: TelemetryEligibleCensus
-  censoring_status: TelemetryCensoringStatus
-  completeness: readonly TelemetryCompletenessResult[]
-  metrics: readonly TelemetryMetricResult[]
-}): {
+export type TelemetryEvidence = {
   schema_version: typeof TELEMETRY_EVIDENCE_SCHEMA_VERSION
   source_sha: string
   query_version: typeof TELEMETRY_QUERY_VERSION
@@ -2918,7 +2923,19 @@ export function buildTelemetryEvidence(input: {
   metrics: readonly TelemetryMetricResult[]
   status: MetricStatus
   evidence_digest: string
-} {
+}
+
+export function buildTelemetryEvidence(input: {
+  source_sha: string
+  window_start_utc: string
+  window_end_utc: string
+  generated_at_utc: string
+  metric_window_manifest: TelemetryMetricWindowManifest
+  eligible_census: TelemetryEligibleCensus
+  censoring_status: TelemetryCensoringStatus
+  completeness: readonly TelemetryCompletenessResult[]
+  metrics: readonly TelemetryMetricResult[]
+}): TelemetryEvidence {
   const evidenceKeyVersion = process.env.TELEMETRY_EVIDENCE_KEY_VERSION
   const evidenceKey = process.env.TELEMETRY_EVIDENCE_COMMITMENT_KEY
   const actorKeyVersion = protectedActorKeyVersion()
@@ -3031,5 +3048,84 @@ export function buildTelemetryEvidence(input: {
     metrics: sanitizedMetrics,
     status,
   }
-  return { ...evidenceWithoutDigest, evidence_digest: evidenceDigest(evidenceWithoutDigest) }
+  return {
+    ...evidenceWithoutDigest,
+    evidence_digest: evidenceDigest(evidenceWithoutDigest, evidenceKey),
+  }
+}
+
+export function verifyTelemetryEvidence(value: unknown): value is TelemetryEvidence {
+  const evidenceKeyVersion = process.env.TELEMETRY_EVIDENCE_KEY_VERSION
+  const evidenceKey = process.env.TELEMETRY_EVIDENCE_COMMITMENT_KEY
+  const actorKeyVersion = protectedActorKeyVersion()
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      'schema_version',
+      'source_sha',
+      'query_version',
+      'event_schema_version',
+      'actor_key_version',
+      'generated_at_utc',
+      'commitment_scheme',
+      'evidence_key_version',
+      'metric_window_manifest_commitment',
+      'window_start_utc',
+      'window_end_utc',
+      'eligible_census_commitment',
+      'censoring_policy_version',
+      'censoring_status_commitment',
+      'completeness',
+      'metrics',
+      'status',
+      'evidence_digest',
+    ]) ||
+    value.schema_version !== TELEMETRY_EVIDENCE_SCHEMA_VERSION ||
+    value.query_version !== TELEMETRY_QUERY_VERSION ||
+    value.event_schema_version !== TELEMETRY_EVENT_SCHEMA_VERSION ||
+    value.actor_key_version !== actorKeyVersion ||
+    value.commitment_scheme !== TELEMETRY_COMMITMENT_SCHEME ||
+    value.evidence_key_version !== evidenceKeyVersion ||
+    value.censoring_policy_version !== 'right-censor-worst-case/v1' ||
+    typeof evidenceKey !== 'string' ||
+    !protectedEnvironmentCommitmentKeysAreDistinct() ||
+    typeof value.source_sha !== 'string' ||
+    !SHA_PATTERN.test(value.source_sha) ||
+    typeof value.generated_at_utc !== 'string' ||
+    typeof value.window_start_utc !== 'string' ||
+    typeof value.window_end_utc !== 'string' ||
+    parseUtc(value.generated_at_utc) === null ||
+    parseUtc(value.window_start_utc) === null ||
+    parseUtc(value.window_end_utc) === null ||
+    parseUtc(value.window_start_utc)! >= parseUtc(value.window_end_utc)! ||
+    typeof value.metric_window_manifest_commitment !== 'string' ||
+    typeof value.eligible_census_commitment !== 'string' ||
+    typeof value.censoring_status_commitment !== 'string' ||
+    typeof value.evidence_digest !== 'string' ||
+    !SHA256_PATTERN.test(value.metric_window_manifest_commitment) ||
+    !SHA256_PATTERN.test(value.eligible_census_commitment) ||
+    !SHA256_PATTERN.test(value.censoring_status_commitment) ||
+    !SHA256_PATTERN.test(value.evidence_digest) ||
+    !Array.isArray(value.completeness) ||
+    !Array.isArray(value.metrics) ||
+    value.completeness.length !== SOURCES.length ||
+    value.metrics.length !== TELEMETRY_REQUIRED_METRIC_IDS.length ||
+    new Set(value.completeness.map((item) => (isRecord(item) ? item.source : undefined))).size !==
+      SOURCES.length ||
+    new Set(value.metrics.map((item) => (isRecord(item) ? item.metric_id : undefined))).size !==
+      TELEMETRY_REQUIRED_METRIC_IDS.length ||
+    value.completeness.some((item) => !validCompletenessResult(item as never)) ||
+    value.metrics.some((item) => !validMetricResult(item as never)) ||
+    !includes(METRIC_STATUSES, value.status)
+  ) {
+    return false
+  }
+  try {
+    const { evidence_digest: _digest, ...unsignedEvidence } = value
+    const expected = Buffer.from(evidenceDigest(unsignedEvidence, evidenceKey), 'hex')
+    const received = Buffer.from(String(value.evidence_digest), 'hex')
+    return expected.length === received.length && timingSafeEqual(expected, received)
+  } catch {
+    return false
+  }
 }

@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyTelemetrySuppression,
@@ -43,6 +43,7 @@ import {
   TELEMETRY_SAMPLING,
   TELEMETRY_SAMPLING_POLICY_VERSION,
   TELEMETRY_TARGET_DECISION_SCHEMA_VERSION,
+  verifyTelemetryEvidence,
   type SyntheticActorRef,
   type SyntheticFunnelEvent,
   type SyntheticMemoryTruth,
@@ -496,7 +497,7 @@ function withSignedReceivedAt(
 
 function withResignedEventUniverse(
   input: TelemetryCompletenessInput,
-  overrides: Partial<Pick<TelemetryEventUniverse, 'cutoff_utc' | 'sealed_at_utc'>>,
+  overrides: Partial<Omit<TelemetryEventUniverse, 'universe_commitment'>>,
 ): TelemetryCompletenessInput {
   const { universe_commitment: _universeCommitment, ...currentUnsignedUniverse } =
     input.event_universe
@@ -871,7 +872,7 @@ function baselineEvidenceReceipt(
     actor_key_version: ACTOR_KEY_VERSION,
     window_start_utc: '2026-06-01T00:00:00Z',
     window_end_utc: '2026-07-01T00:00:00Z',
-    generated_at_utc: '2026-07-01T00:00:00Z',
+    generated_at_utc: metricId === 'M9' ? '2026-07-08T00:00:00Z' : '2026-07-01T00:00:00Z',
     evidence_digest: 'd'.repeat(64),
     metric_status: 'HOLD' as const,
     metric_reason: 'baseline_only' as const,
@@ -901,7 +902,7 @@ function protectedTargetDecision(
     target: 0.5,
     direction: 'at_or_above' as const,
     baseline_evidence_receipt: baselineEvidenceReceipt(metricId),
-    target_fixed_at_utc: '2026-07-02T00:00:00Z',
+    target_fixed_at_utc: metricId === 'M9' ? '2026-07-09T00:00:00Z' : '2026-07-02T00:00:00Z',
     evaluation_window_start_utc: '2026-08-01T00:00:00Z',
     evaluation_window_end_utc: '2026-09-01T00:00:00Z',
     remeasurement_deadline_utc: '2026-10-03T00:00:00Z',
@@ -953,7 +954,7 @@ describe('PII-safe telemetry schema v2', () => {
   )
 
   it('fixes retention, sampling and cardinality to code allowlists', () => {
-    expect(TELEMETRY_QUERY_VERSION).toBe('issue-191-v1')
+    expect(TELEMETRY_QUERY_VERSION).toBe('issue-191-v2')
     expect(TELEMETRY_RETENTION_DAYS).toBe(90)
     expect(TELEMETRY_SAMPLING).toEqual({ funnel: 1, web_vital: 0.1, api: 0.1, ai: 1 })
     expect(() =>
@@ -1405,6 +1406,9 @@ describe('telemetry completeness manifest and sampling', () => {
       authorityRegistration('funnel', [EVENT_A], {
         expected_actor: null,
       }),
+      authorityRegistration('funnel', [EVENT_A], {
+        expected_actor: { ...ACTOR_A, email: 'blocked@example.invalid' } as never,
+      }),
     ]) {
       expect(
         evaluateTelemetryCompleteness(
@@ -1414,6 +1418,22 @@ describe('telemetry completeness manifest and sampling', () => {
         ),
       ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
     }
+  })
+
+  it('rejects unknown actor fields in a fully re-signed event universe', () => {
+    const valid = completenessInput('funnel', manifest([EVENT_A]), [
+      envelope(EVENT_A, 'record_started'),
+    ])
+    const rebound = withResignedEventUniverse(valid, {
+      eligible_events: valid.event_universe.eligible_events.map((event) => ({
+        ...event,
+        actor: event.actor ? ({ ...event.actor, raw_actor_id: 'blocked' } as never) : null,
+      })),
+    })
+    expect(evaluateTelemetryCompleteness(rebound)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
   })
 
   it('requires an independently signed registry receipt created before the window', () => {
@@ -1755,7 +1775,11 @@ describe('actor-scoped funnel DB truth correlation', () => {
   })
 
   it('does not attribute another actor or key version memory with the same flow', () => {
-    for (const actor of [ACTOR_B, ACTOR_A_OLD_KEY]) {
+    for (const actor of [
+      ACTOR_B,
+      ACTOR_A_OLD_KEY,
+      { ...ACTOR_A, raw_actor_id: 'blocked' } as never,
+    ]) {
       expect(
         evaluateSyntheticFunnelFlow({
           metric_id: 'M2',
@@ -2410,6 +2434,37 @@ describe('privacy aggregation', () => {
     }
   })
 
+  it('requires signed baseline evidence to reach the metric-specific maturity cutoff', () => {
+    for (const generatedAtUtc of [
+      '2026-07-07T23:59:59.999Z',
+      '2026-07-08T00:00:00Z',
+      '2026-07-08T00:00:00.001Z',
+    ]) {
+      const expectedStatus =
+        Date.parse(generatedAtUtc) < Date.parse('2026-07-08T00:00:00Z') ? 'HOLD' : 'PASS'
+      expect(
+        evaluateCensoredRate({
+          ...rateInput('M9'),
+          target_decision: protectedTargetDecision('M9', {
+            baseline_evidence_receipt: baselineEvidenceReceipt('M9', {
+              generated_at_utc: generatedAtUtc,
+            }),
+          }),
+        } as never),
+      ).toMatchObject({ status: expectedStatus })
+    }
+    expect(
+      evaluateCensoredRate({
+        ...rateInput('M8'),
+        target_decision: protectedTargetDecision('M8', {
+          baseline_evidence_receipt: baselineEvidenceReceipt('M8', {
+            generated_at_utc: '2026-07-01T00:00:00Z',
+          }),
+        }),
+      } as never),
+    ).toMatchObject({ status: 'PASS' })
+  })
+
   it.each(['M4', 'M10', 'M11', 'M12', 'north_star_monthly_memories_per_active_profile'] as const)(
     'holds right-censor evaluation for unsupported metric direction %s',
     (metricId) => {
@@ -2487,7 +2542,7 @@ describe('privacy aggregation', () => {
 })
 
 describe('status-only evidence v2', () => {
-  it('uses domain-separated keyed commitments and ordinary hashing only for evidence integrity', () => {
+  it('uses domain-separated keyed commitments for private inputs and the complete artifact', () => {
     const evidence = buildTelemetryEvidence(evidenceInput())
     expect(evidence.schema_version).toBe(TELEMETRY_EVIDENCE_SCHEMA_VERSION)
     expect(evidence.query_version).toBe(TELEMETRY_QUERY_VERSION)
@@ -2504,6 +2559,7 @@ describe('status-only evidence v2', () => {
       ]).size,
     ).toBe(3)
     expect(evidence.evidence_digest).toMatch(/^[0-9a-f]{64}$/)
+    expect(verifyTelemetryEvidence(evidence)).toBe(true)
 
     const serialized = JSON.stringify(evidence)
     expect(serialized).not.toContain(EVENT_A)
@@ -2514,6 +2570,22 @@ describe('status-only evidence v2', () => {
     expect(evidence).not.toHaveProperty('eligible_census')
     expect(evidence).not.toHaveProperty('censoring_status')
     expect(evidence).not.toHaveProperty('counts')
+  })
+
+  it('rejects status-only artifact tampering even after an ordinary SHA-256 rehash', () => {
+    const evidence = buildTelemetryEvidence(evidenceInput())
+    const { evidence_digest: _digest, ...unsignedTampered } = {
+      ...evidence,
+      status: evidence.status === 'HOLD' ? ('PASS' as const) : ('HOLD' as const),
+    }
+    const forged = {
+      ...unsignedTampered,
+      evidence_digest: createHash('sha256').update(JSON.stringify(unsignedTampered)).digest('hex'),
+    }
+    expect(verifyTelemetryEvidence(forged)).toBe(false)
+    expect(verifyTelemetryEvidence({ ...evidence, email: 'blocked@example.invalid' })).toBe(false)
+    vi.stubEnv('TELEMETRY_EVIDENCE_COMMITMENT_KEY', 'rotated-evidence-key-with-32-bytes-minimum')
+    expect(verifyTelemetryEvidence(evidence)).toBe(false)
   })
 
   it('accepts only strict private evidence dictionaries and never exposes them', () => {
@@ -2584,40 +2656,85 @@ describe('status-only evidence v2', () => {
     expect(() => buildTelemetryEvidence(valid)).toThrow('invalid_input')
   })
 
-  it('binds every M1 through M9 anchor, entry window and maturity cutoff', () => {
+  it('binds every M1 through M9 anchor, entry rule, entry window and maturity policy', () => {
     const valid = evidenceInput()
     expect(buildTelemetryEvidence(valid).status).toBe('HOLD')
     for (const entry of valid.metric_window_manifest.metric_windows) {
-      expect(() =>
-        buildTelemetryEvidence({
-          ...valid,
-          metric_window_manifest: {
-            ...valid.metric_window_manifest,
-            metric_windows: valid.metric_window_manifest.metric_windows.map((candidate) =>
-              candidate.metric_id === entry.metric_id
-                ? { ...candidate, anchor: 'caller_selected_anchor' }
-                : candidate,
-            ),
-          },
-        } as never),
-      ).toThrow('invalid_input')
+      const shiftOneMillisecond = (timestamp: string) =>
+        new Date(Date.parse(timestamp) + 1).toISOString()
+      const mutations = [
+        { anchor: 'caller_selected_anchor' },
+        { entry_rule: 'caller_selected_entry_rule' },
+        { entry_window_start_utc: shiftOneMillisecond(entry.entry_window_start_utc) },
+        { entry_window_end_utc: shiftOneMillisecond(entry.entry_window_end_utc) },
+        { maturity_rule: 'caller_selected_maturity_rule' },
+        {
+          maturity_cutoff_utc:
+            entry.maturity_cutoff_utc === null
+              ? entry.entry_window_end_utc
+              : shiftOneMillisecond(entry.maturity_cutoff_utc),
+        },
+      ]
+      for (const mutation of mutations) {
+        expect(() =>
+          buildTelemetryEvidence({
+            ...valid,
+            metric_window_manifest: {
+              ...valid.metric_window_manifest,
+              metric_windows: valid.metric_window_manifest.metric_windows.map((candidate) =>
+                candidate.metric_id === entry.metric_id ? { ...candidate, ...mutation } : candidate,
+              ),
+            },
+          } as never),
+        ).toThrow('invalid_input')
+      }
     }
-    for (const [metricId, mutation] of [
-      ['M2', { entry_window_start_utc: '2026-08-01T00:00:01Z' }],
-      ['M7', { entry_window_start_utc: '2026-08-04T00:00:00Z' }],
-      ['M8', { entry_window_end_utc: '2026-08-31T00:00:00Z' }],
-    ] as const) {
-      expect(() =>
+  })
+
+  it('holds one millisecond before and accepts every exact fixed maturity cutoff', () => {
+    const valid = evidenceInput()
+    const metricsAt = (generatedAtUtc: string) =>
+      valid.metrics.map((metric) => {
+        const cutoff = valid.metric_window_manifest.metric_windows.find(
+          (entry) => entry.metric_id === metric.metric_id,
+        )?.maturity_cutoff_utc
+        return cutoff !== null &&
+          cutoff !== undefined &&
+          Date.parse(generatedAtUtc) < Date.parse(cutoff)
+          ? {
+              metric_id: metric.metric_id,
+              status: 'HOLD' as const,
+              reason: 'window_not_mature' as const,
+            }
+          : metric
+      })
+    for (const entry of valid.metric_window_manifest.metric_windows) {
+      if (entry.maturity_cutoff_utc === null) continue
+      const cutoff = Date.parse(entry.maturity_cutoff_utc)
+      const before = new Date(cutoff - 1).toISOString()
+      const exact = new Date(cutoff).toISOString()
+      expect(
         buildTelemetryEvidence({
           ...valid,
-          metric_window_manifest: {
-            ...valid.metric_window_manifest,
-            metric_windows: valid.metric_window_manifest.metric_windows.map((entry) =>
-              entry.metric_id === metricId ? { ...entry, ...mutation } : entry,
-            ),
-          },
-        } as never),
-      ).toThrow('invalid_input')
+          generated_at_utc: before,
+          metrics: metricsAt(before),
+        }).metrics,
+      ).toContainEqual({
+        metric_id: entry.metric_id,
+        status: 'HOLD',
+        reason: 'window_not_mature',
+      })
+      expect(
+        buildTelemetryEvidence({
+          ...valid,
+          generated_at_utc: exact,
+          metrics: metricsAt(exact),
+        }).metrics,
+      ).not.toContainEqual({
+        metric_id: entry.metric_id,
+        status: 'HOLD',
+        reason: 'window_not_mature',
+      })
     }
   })
 

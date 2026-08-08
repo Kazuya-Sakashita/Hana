@@ -29,7 +29,8 @@ target decision、sealed universe chronology、Memory actor ownership、protecte
 - M2 / M3 / M9の署名済みMemory exact setは、評価対象flow以外の行も含めて全行を期待synthetic actorへ限定する。
 - `actor_key_version`は保護された環境構成から取得し、private manifestとstatus-only evidenceへ完全一致させる。
   caller指定値、未設定、未知形式、PII様値を拒否する。
-- query、evidence、metric policy、target policy、manifestのversionを更新し、ISSUE-188の署名済み証跡を受理しない。
+- query、evidence、metric policy、target policy、manifestのversionを更新し、ISSUE-188およびRound 1の署名済み証跡を受理しない。
+- status-only evidence全体は保護されたevidence keyと専用domainのHMACで署名し、固定status / reasonを含む出力改ざんを拒否する。
 - status-only evidenceにはraw event、actor、exact count、rate、子どもの情報を含めない。
 
 ## Compatibility and approval
