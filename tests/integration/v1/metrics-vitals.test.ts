@@ -165,6 +165,7 @@ describe('POST /v1/metrics/vitals', () => {
   })
 
   it('uses the exact same HMAC sampling assignment for ingest and completeness', () => {
+    vi.stubEnv('TELEMETRY_ACTOR_KEY_VERSION', 'v2')
     vi.stubEnv('WEB_VITALS_SAMPLING_KEY', SAMPLING_KEY)
     vi.stubEnv('WEB_VITALS_SAMPLING_KEY_VERSION', SAMPLING_KEY_VERSION)
     const sampledIn = eventIdWithSampling(true)

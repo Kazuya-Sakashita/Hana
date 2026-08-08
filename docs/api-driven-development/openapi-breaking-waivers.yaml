@@ -26,5 +26,14 @@ waivers:
     approved_at: '2026-08-08T01:48:02Z'
     expires_on: '2026-08-22'
     scope: openapi-breaking-report
+    status: superseded
+    report_sha256: 5b1e916b4ef35c448101624354d73f86d9d0de277fe88dbc7fe8025873e8bc35
+  - id: issue-191-telemetry-evidence-v1
+    issue: ISSUE-191
+    reason: PII-safe telemetry契約をbare UUIDとWeb Vitals全dimension matrixへ統一する21件の破壊変更をISSUE-191の新しい証跡で承認する
+    approved_by: Kazuya-Sakashita
+    approved_at: '2026-08-08T21:47:55Z'
+    expires_on: '2026-08-23'
+    scope: openapi-breaking-report
     status: approved
     report_sha256: 5b1e916b4ef35c448101624354d73f86d9d0de277fe88dbc7fe8025873e8bc35

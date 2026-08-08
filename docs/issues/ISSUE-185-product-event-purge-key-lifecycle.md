@@ -7,7 +7,7 @@ size: M
 created_at: 2026-08-07
 github_issue: 375
 blocked_by:
-  - ISSUE-188
+  - ISSUE-191
 release_gate: privacy
 requires_human_review:
   - security
@@ -55,7 +55,7 @@ actor hashも仮名化された個人データとして扱う。pepper自体やa
 ## 参考
 
 - GitHub Issue #375
-- ISSUE-188（ISSUE-152置換）
+- ISSUE-191（ISSUE-188置換）
 - ISSUE-159
 - ISSUE-160
 - ISSUE-162

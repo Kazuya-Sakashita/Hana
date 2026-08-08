@@ -48,7 +48,7 @@ OpenAPI、生成型、API runtime、DB、Storage、既存event payloadは変更�
 - [x] 各主張を確認済み事実、検証仮説、未検証、未実装・対象外へ分類する
 - [x] LP / Home / Record / current LP artifactから未検証の速度・感情成果・store claimを除く
 - [x] M1〜M12へeligible unit、UTC半開区間、min、欠測、threshold、gateを固定する
-- [x] event欠測を離脱扱いせず、ISSUE-188のDB相関・completeness完了までは該当metricをHoldにする
+- [x] event欠測を離脱扱いせず、ISSUE-191のDB相関・completeness完了までは該当metricをHoldにする
 - [x] primary / secondary suppressionとevidence versionの無効化条件を定義する
 - [x] 退会right-censorをworst-case区間で判定し、census / censor digestをevidenceへ束縛する
 - [x] pilot、release、telemetry、purgeをISSUE-160 / 162 / 152 / 185へ分離する
@@ -57,7 +57,7 @@ OpenAPI、生成型、API runtime、DB、Storage、既存event payloadは変更�
 
 ## セキュリティ・プライバシー考慮
 
-分母・分子・補集合と差分復元を抑止し、raw eventへのaccessをISSUE-188の最小権限jobへ限定する。
+分母・分子・補集合と差分復元を抑止し、raw eventへのaccessをISSUE-191の最小権限jobへ限定する。
 ProductとPrivacyは同じevidence versionをreviewし、ISSUE-185完了まではPrivacy Goにしない。
 
 ## 人間review
@@ -72,7 +72,7 @@ ProductとPrivacyは同じevidence versionをreviewし、ISSUE-185完了まで�
 ## 専門review
 
 - Round 1（2026-08-07）: 6名全員HOLD
-- Product / Privacy / Analytics / UX / Implementation / QAのP1をISSUE-159、ISSUE-188、
+- Product / Privacy / Analytics / UX / Implementation / QAのP1をISSUE-159、ISSUE-191、
   ISSUE-160、ISSUE-162、ISSUE-185へscope分割した
 - Round 2（2026-08-07）: 6名全員GO。P0 / P1なし、指摘されたP2も反映済み
 - Product / Privacyの人間reviewはpendingであり、product / releaseのHoldを変更しない
@@ -92,4 +92,4 @@ ProductとPrivacyは同じevidence versionをreviewし、ISSUE-185完了まで�
 - GitHub Issue #327
 - Hana_PRD_v1.md
 - `docs/product-validation/funnel-go-hold-contract.md`
-- ISSUE-188（ISSUE-152置換）/ ISSUE-160 / ISSUE-162 / ISSUE-185
+- ISSUE-191（ISSUE-188置換）/ ISSUE-160 / ISSUE-162 / ISSUE-185

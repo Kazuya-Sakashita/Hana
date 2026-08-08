@@ -2,7 +2,7 @@
 id: ISSUE-188
 title: 'ISSUE-152置換: PII-safe telemetry契約のRound 5所見を解消する'
 priority: P1
-status: review
+status: blocked
 size: M
 created_at: 2026-08-08
 github_issue: 381

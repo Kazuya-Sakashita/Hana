@@ -10,7 +10,7 @@ import {
 import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurrence'
 
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
-export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v3' as const
+export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v4' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
   'hana-telemetry-expectation-manifest/v5' as const
 export const TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION =
@@ -21,15 +21,17 @@ export const TELEMETRY_EVENT_UNIVERSE_SCHEMA_VERSION = 'hana-telemetry-event-uni
 export const TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION = 'hana-telemetry-ingest-receipt/v2' as const
 export const TELEMETRY_MEMORY_TRUTH_RECEIPT_SCHEMA_VERSION =
   'hana-telemetry-memory-truth-receipt/v1' as const
-export const TELEMETRY_TARGET_DECISION_SCHEMA_VERSION = 'hana-telemetry-target-decision/v1' as const
+export const TELEMETRY_TARGET_DECISION_SCHEMA_VERSION = 'hana-telemetry-target-decision/v2' as const
+export const TELEMETRY_BASELINE_EVIDENCE_RECEIPT_SCHEMA_VERSION =
+  'hana-telemetry-baseline-evidence-receipt/v1' as const
 export const TELEMETRY_BINARY_OUTCOME_TABLE_SCHEMA_VERSION =
   'hana-telemetry-binary-outcome-table/v1' as const
 export const TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION =
-  'hana-telemetry-metric-window-manifest/v1' as const
+  'hana-telemetry-metric-window-manifest/v2' as const
 export const TELEMETRY_ELIGIBLE_CENSUS_SCHEMA_VERSION = 'hana-telemetry-eligible-census/v1' as const
 export const TELEMETRY_CENSORING_STATUS_SCHEMA_VERSION =
   'hana-telemetry-censoring-status/v1' as const
-export const TELEMETRY_QUERY_VERSION = 'issue-188-v2' as const
+export const TELEMETRY_QUERY_VERSION = 'issue-191-v1' as const
 export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
 export const TELEMETRY_RETENTION_DAYS = 90
@@ -192,6 +194,7 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/
 const UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/
 const UTC_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
 const ACTOR_KEY_VERSION_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/
+const PROTECTED_ACTOR_KEY_VERSION_PATTERN = /^v[1-9][0-9]{0,5}$/
 const TELEMETRY_COMMITMENT_KEY_MIN_LENGTH = 32
 const TELEMETRY_SAMPLING_KEY_MIN_LENGTH = 32
 const TELEMETRY_SAMPLING_DOMAIN = 'hana-telemetry-stable-sampling/v3\0'
@@ -200,10 +203,11 @@ const TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_DOMAIN = 'hana-telemetry-authority-re
 const TELEMETRY_EVENT_UNIVERSE_DOMAIN = 'hana-telemetry-event-universe/v1\0'
 const TELEMETRY_INGEST_RECEIPT_DOMAIN = 'hana-telemetry-ingest-receipt/v2\0'
 const TELEMETRY_MEMORY_TRUTH_RECEIPT_DOMAIN = 'hana-telemetry-memory-truth-receipt/v1\0'
-const TELEMETRY_TARGET_DECISION_DOMAIN = 'hana-telemetry-target-decision/v1\0'
+const TELEMETRY_TARGET_DECISION_DOMAIN = 'hana-telemetry-target-decision/v2\0'
+const TELEMETRY_BASELINE_EVIDENCE_RECEIPT_DOMAIN = 'hana-telemetry-baseline-evidence-receipt/v1\0'
 const TELEMETRY_ELIGIBILITY_POLICY_VERSION = 'source-operation-actor-window/v1' as const
-const TELEMETRY_METRIC_POLICY_VERSION = 'immutable-metric-policy/v1' as const
-const TELEMETRY_TARGET_POLICY_VERSION = 'protected-baseline-target/v1' as const
+const TELEMETRY_METRIC_POLICY_VERSION = 'immutable-metric-policy/v2' as const
+const TELEMETRY_TARGET_POLICY_VERSION = 'protected-baseline-target/v2' as const
 const HIGHER_IS_BETTER_PRODUCTION_METRICS = new Set<TelemetryMetricId>([
   'M1',
   'M2',
@@ -427,6 +431,13 @@ function parseUtc(value: string): number | null {
   if (!Number.isFinite(parsed)) return null
   const canonicalInput = value.includes('.') ? value : value.replace('Z', '.000Z')
   return new Date(parsed).toISOString() === canonicalInput ? parsed : null
+}
+
+function protectedActorKeyVersion(): string | null {
+  const configured = process.env.TELEMETRY_ACTOR_KEY_VERSION
+  return typeof configured === 'string' && PROTECTED_ACTOR_KEY_VERSION_PATTERN.test(configured)
+    ? configured
+    : null
 }
 
 export function telemetrySourceForOperation(operation: TelemetryOperation): TelemetrySource {
@@ -1200,6 +1211,7 @@ export function evaluateTelemetryCompleteness(
     return completenessHold(input.source, 'sampling_policy_mismatch')
   }
   if (
+    input.actor_key_version !== protectedActorKeyVersion() ||
     !validExpectationManifest(manifest, input.source) ||
     !validAuthorityRegistration(input) ||
     !validAuthorityCommitment(input) ||
@@ -1364,7 +1376,7 @@ function validSyntheticActorRef(
   return (
     actor !== null &&
     actor !== undefined &&
-    ACTOR_KEY_VERSION_PATTERN.test(actor.actor_key_version) &&
+    PROTECTED_ACTOR_KEY_VERSION_PATTERN.test(actor.actor_key_version) &&
     SHA256_PATTERN.test(actor.actor_token)
   )
 }
@@ -1452,7 +1464,7 @@ function validMemoryTruthReceipt(input: {
         !hasExactKeys(memory, expectedKeys) ||
         typeof memory.memory_id !== 'string' ||
         canonicalizeBareUuid(memory.memory_id) !== memory.memory_id ||
-        !validSyntheticActorRef(memory.actor as SyntheticActorRef | undefined) ||
+        !sameSyntheticActor(memory.actor as SyntheticActorRef | undefined, input.expected_actor) ||
         parseUtc(memory.created_at_utc as string) === null ||
         (input.metric_id !== 'M9' &&
           canonicalizeBareUuid((memory as SyntheticMemoryTruth).idempotency_key) !==
@@ -1835,18 +1847,53 @@ const FIXED_RATE_POLICIES = {
   M7: { target: 0.4, minimum: 20, requires_distinct_units: true },
 } as const
 
+export type TelemetryBaselineEvidenceReceipt = {
+  schema_version: typeof TELEMETRY_BASELINE_EVIDENCE_RECEIPT_SCHEMA_VERSION
+  evidence_schema_version: typeof TELEMETRY_EVIDENCE_SCHEMA_VERSION
+  query_version: typeof TELEMETRY_QUERY_VERSION
+  metric_id: 'M8' | 'M9'
+  cohort_role: 'baseline'
+  actor_key_version: string
+  window_start_utc: string
+  window_end_utc: string
+  generated_at_utc: string
+  evidence_digest: string
+  metric_status: 'HOLD'
+  metric_reason: 'baseline_only'
+  evidence_key_version: string
+  receipt_commitment: string
+}
+
 export type TelemetryTargetDecision = {
   schema_version: typeof TELEMETRY_TARGET_DECISION_SCHEMA_VERSION
   policy_version: typeof TELEMETRY_TARGET_POLICY_VERSION
   metric_id: 'M8' | 'M9'
   target: number
-  baseline_evidence_digest: string
-  baseline_generated_at_utc: string
+  direction: 'at_or_above'
+  baseline_evidence_receipt: TelemetryBaselineEvidenceReceipt
   target_fixed_at_utc: string
   evaluation_window_start_utc: string
+  evaluation_window_end_utc: string
+  remeasurement_deadline_utc: string
   cohort_role: 'evaluation'
   target_key_version: string
   target_commitment: string
+}
+
+export function createTelemetryBaselineEvidenceReceiptCommitment(input: {
+  receipt: Omit<TelemetryBaselineEvidenceReceipt, 'receipt_commitment'>
+  commitment_key: string
+}): string {
+  if (
+    typeof input.commitment_key !== 'string' ||
+    Buffer.byteLength(input.commitment_key, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH
+  ) {
+    throw new TelemetryContractError('invalid_input')
+  }
+  return createHmac('sha256', input.commitment_key)
+    .update(TELEMETRY_BASELINE_EVIDENCE_RECEIPT_DOMAIN)
+    .update(JSON.stringify(stableValue(input.receipt)))
+    .digest('hex')
 }
 
 export function createTelemetryTargetDecisionCommitment(input: {
@@ -1865,9 +1912,79 @@ export function createTelemetryTargetDecisionCommitment(input: {
     .digest('hex')
 }
 
+function validBaselineEvidenceReceipt(
+  receipt: TelemetryBaselineEvidenceReceipt,
+  metricId: 'M8' | 'M9',
+): boolean {
+  const configuredActorVersion = protectedActorKeyVersion()
+  const configuredEvidenceVersion = process.env.TELEMETRY_EVIDENCE_KEY_VERSION
+  const configuredEvidenceKey = process.env.TELEMETRY_EVIDENCE_COMMITMENT_KEY
+  if (
+    !isRecord(receipt) ||
+    !hasExactKeys(receipt, [
+      'schema_version',
+      'evidence_schema_version',
+      'query_version',
+      'metric_id',
+      'cohort_role',
+      'actor_key_version',
+      'window_start_utc',
+      'window_end_utc',
+      'generated_at_utc',
+      'evidence_digest',
+      'metric_status',
+      'metric_reason',
+      'evidence_key_version',
+      'receipt_commitment',
+    ]) ||
+    receipt.schema_version !== TELEMETRY_BASELINE_EVIDENCE_RECEIPT_SCHEMA_VERSION ||
+    receipt.evidence_schema_version !== TELEMETRY_EVIDENCE_SCHEMA_VERSION ||
+    receipt.query_version !== TELEMETRY_QUERY_VERSION ||
+    receipt.metric_id !== metricId ||
+    receipt.cohort_role !== 'baseline' ||
+    receipt.actor_key_version !== configuredActorVersion ||
+    receipt.metric_status !== 'HOLD' ||
+    receipt.metric_reason !== 'baseline_only' ||
+    receipt.evidence_key_version !== configuredEvidenceVersion ||
+    typeof configuredEvidenceKey !== 'string' ||
+    !SHA256_PATTERN.test(receipt.evidence_digest) ||
+    !SHA256_PATTERN.test(receipt.receipt_commitment)
+  ) {
+    return false
+  }
+  const windowStart = parseUtc(receipt.window_start_utc)
+  const windowEnd = parseUtc(receipt.window_end_utc)
+  const generatedAt = parseUtc(receipt.generated_at_utc)
+  if (
+    windowStart === null ||
+    windowEnd === null ||
+    generatedAt === null ||
+    windowStart >= windowEnd ||
+    generatedAt < windowEnd
+  ) {
+    return false
+  }
+  try {
+    const { receipt_commitment: _commitment, ...unsignedReceipt } = receipt
+    const expected = Buffer.from(
+      createTelemetryBaselineEvidenceReceiptCommitment({
+        receipt: unsignedReceipt,
+        commitment_key: configuredEvidenceKey,
+      }),
+      'hex',
+    )
+    const received = Buffer.from(receipt.receipt_commitment, 'hex')
+    return expected.length === received.length && timingSafeEqual(expected, received)
+  } catch {
+    return false
+  }
+}
+
 function validatedProtectedTarget(input: {
   metric_id: TelemetryMetricId
   evaluation_window_start_utc: string | null
+  evaluation_window_end_utc: string | null
+  generated_at_utc: string
   target_decision: TelemetryTargetDecision | null
 }): number | null {
   if (input.metric_id !== 'M8' && input.metric_id !== 'M9') return null
@@ -1882,10 +1999,12 @@ function validatedProtectedTarget(input: {
       'policy_version',
       'metric_id',
       'target',
-      'baseline_evidence_digest',
-      'baseline_generated_at_utc',
+      'direction',
+      'baseline_evidence_receipt',
       'target_fixed_at_utc',
       'evaluation_window_start_utc',
+      'evaluation_window_end_utc',
+      'remeasurement_deadline_utc',
       'cohort_role',
       'target_key_version',
       'target_commitment',
@@ -1896,8 +2015,10 @@ function validatedProtectedTarget(input: {
     !Number.isFinite(decision.target) ||
     decision.target < 0 ||
     decision.target > 1 ||
-    !SHA256_PATTERN.test(decision.baseline_evidence_digest) ||
+    decision.direction !== 'at_or_above' ||
+    !validBaselineEvidenceReceipt(decision.baseline_evidence_receipt, input.metric_id) ||
     decision.evaluation_window_start_utc !== input.evaluation_window_start_utc ||
+    decision.evaluation_window_end_utc !== input.evaluation_window_end_utc ||
     decision.cohort_role !== 'evaluation' ||
     decision.target_key_version !== configuredVersion ||
     typeof configuredKey !== 'string' ||
@@ -1906,15 +2027,26 @@ function validatedProtectedTarget(input: {
   ) {
     return null
   }
-  const baselineGeneratedAt = parseUtc(decision.baseline_generated_at_utc)
+  const baselineWindowEnd = parseUtc(decision.baseline_evidence_receipt.window_end_utc)
+  const baselineGeneratedAt = parseUtc(decision.baseline_evidence_receipt.generated_at_utc)
   const targetFixedAt = parseUtc(decision.target_fixed_at_utc)
   const windowStart = parseUtc(decision.evaluation_window_start_utc)
+  const windowEnd = parseUtc(decision.evaluation_window_end_utc)
+  const generatedAt = parseUtc(input.generated_at_utc)
+  const remeasurementDeadline = parseUtc(decision.remeasurement_deadline_utc)
   if (
+    baselineWindowEnd === null ||
     baselineGeneratedAt === null ||
     targetFixedAt === null ||
     windowStart === null ||
+    windowEnd === null ||
+    generatedAt === null ||
+    remeasurementDeadline === null ||
+    baselineWindowEnd > baselineGeneratedAt ||
     baselineGeneratedAt > targetFixedAt ||
-    targetFixedAt >= windowStart
+    targetFixedAt >= windowStart ||
+    windowStart >= windowEnd ||
+    generatedAt > remeasurementDeadline
   ) {
     return null
   }
@@ -1944,6 +2076,8 @@ export function evaluateCensoredRate(input: {
   distinct_profiles: number | null
   distinct_eligible_units: number | null
   evaluation_window_start_utc: string | null
+  evaluation_window_end_utc: string | null
+  generated_at_utc: string
   target_decision: TelemetryTargetDecision | null
 }): { metric_id: TelemetryMetricId; status: MetricStatus; reason: TelemetryMetricReason } {
   if (!HIGHER_IS_BETTER_PRODUCTION_METRICS.has(input.metric_id)) {
@@ -1963,6 +2097,8 @@ export function evaluateCensoredRate(input: {
       'distinct_profiles',
       'distinct_eligible_units',
       'evaluation_window_start_utc',
+      'evaluation_window_end_utc',
+      'generated_at_utc',
       'target_decision',
     ]) &&
     Number.isSafeInteger(input.eligible) &&
@@ -2185,6 +2321,7 @@ const CENSORED_RATE_REASONS = [
   'best_case_failed',
   'censoring_changes_decision',
 ] as const satisfies readonly TelemetryMetricReason[]
+const EVIDENCE_RATE_REASONS = [...CENSORED_RATE_REASONS, 'window_not_mature'] as const
 const FUNNEL_CORRELATION_HOLD_REASONS = [
   'telemetry_incomplete',
   'stage_missing',
@@ -2195,17 +2332,25 @@ const FUNNEL_CORRELATION_HOLD_REASONS = [
   'stage_time_invalid',
   'actor_reference_invalid',
 ] as const satisfies readonly TelemetryMetricReason[]
+const FUNNEL_CORRELATION_OVERRIDE_REASONS = [
+  'stage_missing',
+  'event_reordered_after_truth',
+  'stage_anchor_unverified',
+  'stage_anchor_boundary',
+  'stage_time_invalid',
+  'actor_reference_invalid',
+] as const satisfies readonly TelemetryMetricReason[]
 
 const METRIC_REASON_ALLOWLIST = {
-  M1: CENSORED_RATE_REASONS,
-  M2: [...CENSORED_RATE_REASONS, ...FUNNEL_CORRELATION_HOLD_REASONS],
-  M3: [...CENSORED_RATE_REASONS, ...FUNNEL_CORRELATION_HOLD_REASONS],
+  M1: EVIDENCE_RATE_REASONS,
+  M2: [...EVIDENCE_RATE_REASONS, ...FUNNEL_CORRELATION_HOLD_REASONS],
+  M3: [...EVIDENCE_RATE_REASONS, ...FUNNEL_CORRELATION_HOLD_REASONS],
   M4: ['unsupported_metric_direction'],
-  M5: CENSORED_RATE_REASONS,
-  M6: CENSORED_RATE_REASONS,
-  M7: CENSORED_RATE_REASONS,
-  M8: [...CENSORED_RATE_REASONS, 'telemetry_incomplete', 'target_not_configured'],
-  M9: [...CENSORED_RATE_REASONS, ...FUNNEL_CORRELATION_HOLD_REASONS, 'target_not_configured'],
+  M5: EVIDENCE_RATE_REASONS,
+  M6: EVIDENCE_RATE_REASONS,
+  M7: EVIDENCE_RATE_REASONS,
+  M8: [...EVIDENCE_RATE_REASONS, 'telemetry_incomplete', 'target_not_configured'],
+  M9: [...EVIDENCE_RATE_REASONS, ...FUNNEL_CORRELATION_HOLD_REASONS, 'target_not_configured'],
   M10: ['unsupported_metric_direction'],
   M11: ['unsupported_metric_direction'],
   M12: ['unsupported_metric_direction'],
@@ -2242,14 +2387,86 @@ function validCompletenessResult(result: TelemetryCompletenessResult): boolean {
 
 type RequiredTelemetryMetricId = (typeof TELEMETRY_REQUIRED_METRIC_IDS)[number]
 
+const METRIC_WINDOW_POLICIES = {
+  M1: {
+    anchor: 'profile_created_at',
+    entry_rule: 'anchor_in_half_open_window',
+    maturity_rule: 'anchor_plus_24_hours',
+    maturity_offset_seconds: 24 * 60 * 60,
+  },
+  M2: {
+    anchor: 'photo_selected_occurrence_minute',
+    entry_rule: 'full_occurrence_minute_in_half_open_window',
+    maturity_rule: 'occurrence_minute_end_plus_30_minutes',
+    maturity_offset_seconds: 30 * 60,
+  },
+  M3: {
+    anchor: 'ai_draft_shown_occurrence_minute',
+    entry_rule: 'full_occurrence_minute_in_half_open_window',
+    maturity_rule: 'occurrence_minute_end_plus_30_minutes',
+    maturity_offset_seconds: 30 * 60,
+  },
+  M4: {
+    anchor: 'pilot_first_attempt_interactive_screen_presented_at',
+    entry_rule: 'first_attempt_anchor_in_half_open_window',
+    maturity_rule: 'db_save_confirmed_or_terminal_outcome_classified',
+    maturity_offset_seconds: null,
+  },
+  M5: {
+    anchor: 'profile_created_at',
+    entry_rule: 'anchor_in_half_open_window',
+    maturity_rule: 'anchor_plus_8_days',
+    maturity_offset_seconds: 8 * 24 * 60 * 60,
+  },
+  M6: {
+    anchor: 'profile_created_at',
+    entry_rule: 'anchor_in_half_open_window',
+    maturity_rule: 'anchor_plus_31_days',
+    maturity_offset_seconds: 31 * 24 * 60 * 60,
+  },
+  M7: {
+    anchor: 'utc_week_start',
+    entry_rule: 'whole_utc_week_in_half_open_window',
+    maturity_rule: 'utc_week_end',
+    maturity_offset_seconds: 0,
+  },
+  M8: {
+    anchor: 'utc_calendar_month_start',
+    entry_rule: 'whole_utc_calendar_month_in_half_open_window',
+    maturity_rule: 'next_utc_calendar_month_start',
+    maturity_offset_seconds: 0,
+  },
+  M9: {
+    anchor: 'first_eligible_memory_viewed_occurrence_minute_per_profile',
+    entry_rule: 'full_occurrence_minute_in_half_open_window',
+    maturity_rule: 'occurrence_minute_end_plus_7_days',
+    maturity_offset_seconds: 7 * 24 * 60 * 60,
+  },
+} as const
+
+type MetricWindowMetricId = keyof typeof METRIC_WINDOW_POLICIES
+
+export type TelemetryMetricWindowEntry = {
+  metric_id: MetricWindowMetricId
+  anchor: (typeof METRIC_WINDOW_POLICIES)[MetricWindowMetricId]['anchor']
+  entry_rule: (typeof METRIC_WINDOW_POLICIES)[MetricWindowMetricId]['entry_rule']
+  entry_window_start_utc: string
+  entry_window_end_utc: string
+  maturity_rule: (typeof METRIC_WINDOW_POLICIES)[MetricWindowMetricId]['maturity_rule']
+  maturity_cutoff_utc: string | null
+}
+
 export type TelemetryMetricWindowManifest = {
   schema_version: typeof TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION
   query_version: typeof TELEMETRY_QUERY_VERSION
-  contract_version: '2026-08-07.2'
+  contract_version: '2026-08-08.1'
   metric_policy_version: typeof TELEMETRY_METRIC_POLICY_VERSION
+  actor_key_version: string
+  cohort_role: 'evaluation'
   window_start_utc: string
   window_end_utc: string
   metric_ids: readonly RequiredTelemetryMetricId[]
+  metric_windows: readonly TelemetryMetricWindowEntry[]
   target_decisions: readonly TelemetryTargetDecision[]
 }
 
@@ -2288,10 +2505,163 @@ function hasExactRequiredMetricSet(metricIds: readonly unknown[]): boolean {
   )
 }
 
+function isUtcWeekWindow(start: number, end: number): boolean {
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  return (
+    startDate.getUTCDay() === 1 &&
+    endDate.getUTCDay() === 1 &&
+    startDate.getUTCHours() === 0 &&
+    startDate.getUTCMinutes() === 0 &&
+    startDate.getUTCSeconds() === 0 &&
+    endDate.getUTCHours() === 0 &&
+    endDate.getUTCMinutes() === 0 &&
+    endDate.getUTCSeconds() === 0 &&
+    (end - start) % (7 * 24 * 60 * 60 * 1000) === 0
+  )
+}
+
+function isUtcCalendarMonthWindow(start: number, end: number): boolean {
+  const startDate = new Date(start)
+  const expectedEnd = new Date(
+    Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 1),
+  ).getTime()
+  return (
+    startDate.getUTCDate() === 1 &&
+    startDate.getUTCHours() === 0 &&
+    startDate.getUTCMinutes() === 0 &&
+    startDate.getUTCSeconds() === 0 &&
+    end === expectedEnd
+  )
+}
+
+function canonicalUtc(timestamp: number): string {
+  return new Date(timestamp).toISOString().replace('.000Z', 'Z')
+}
+
+function innerMetricEntryWindow(
+  metricId: MetricWindowMetricId,
+  outerStart: number,
+  outerEnd: number,
+): { start: number; end: number } {
+  if (metricId === 'M2' || metricId === 'M3' || metricId === 'M9') {
+    const minute = 60 * 1000
+    return {
+      start: Math.ceil(outerStart / minute) * minute,
+      end: Math.floor(outerEnd / minute) * minute,
+    }
+  }
+  if (metricId === 'M7') {
+    const day = 24 * 60 * 60 * 1000
+    const startDay = Date.UTC(
+      new Date(outerStart).getUTCFullYear(),
+      new Date(outerStart).getUTCMonth(),
+      new Date(outerStart).getUTCDate(),
+    )
+    const startDayOfWeek = new Date(startDay).getUTCDay()
+    let start = startDay + ((8 - startDayOfWeek) % 7) * day
+    if (start < outerStart) start += 7 * day
+    const endDay = Date.UTC(
+      new Date(outerEnd).getUTCFullYear(),
+      new Date(outerEnd).getUTCMonth(),
+      new Date(outerEnd).getUTCDate(),
+    )
+    const endDayOfWeek = new Date(endDay).getUTCDay()
+    let end = endDay - ((endDayOfWeek + 6) % 7) * day
+    if (end > outerEnd) end -= 7 * day
+    return { start, end }
+  }
+  if (metricId === 'M8') {
+    const startDate = new Date(outerStart)
+    let start = Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1)
+    if (start < outerStart) {
+      start = Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 1)
+    }
+    const endDate = new Date(outerEnd)
+    let end = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), 1)
+    if (end > outerEnd) {
+      end = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() - 1, 1)
+    }
+    return { start, end }
+  }
+  return { start: outerStart, end: outerEnd }
+}
+
+function validMetricWindowEntries(input: {
+  entries: readonly TelemetryMetricWindowEntry[]
+  window_start_utc: string
+  window_end_utc: string
+}): boolean {
+  if (
+    !Array.isArray(input.entries) ||
+    input.entries.length !== Object.keys(METRIC_WINDOW_POLICIES).length ||
+    new Set(input.entries.map((entry) => (isRecord(entry) ? entry.metric_id : undefined))).size !==
+      input.entries.length
+  ) {
+    return false
+  }
+  const outerStart = parseUtc(input.window_start_utc)
+  const outerEnd = parseUtc(input.window_end_utc)
+  if (outerStart === null || outerEnd === null) return false
+  return (Object.keys(METRIC_WINDOW_POLICIES) as MetricWindowMetricId[]).every((metricId) => {
+    const entry = input.entries.find(
+      (candidate) => isRecord(candidate) && candidate.metric_id === metricId,
+    )
+    const policy = METRIC_WINDOW_POLICIES[metricId]
+    if (
+      !entry ||
+      !isRecord(entry) ||
+      !hasExactKeys(entry, [
+        'metric_id',
+        'anchor',
+        'entry_rule',
+        'entry_window_start_utc',
+        'entry_window_end_utc',
+        'maturity_rule',
+        'maturity_cutoff_utc',
+      ]) ||
+      entry.metric_id !== metricId ||
+      entry.anchor !== policy.anchor ||
+      entry.entry_rule !== policy.entry_rule ||
+      entry.maturity_rule !== policy.maturity_rule
+    ) {
+      return false
+    }
+    const entryStart = parseUtc(entry.entry_window_start_utc)
+    const entryEnd = parseUtc(entry.entry_window_end_utc)
+    const expectedWindow = innerMetricEntryWindow(metricId, outerStart, outerEnd)
+    const expectedCutoff =
+      policy.maturity_offset_seconds === null
+        ? null
+        : canonicalUtc(expectedWindow.end + policy.maturity_offset_seconds * 1000)
+    if (
+      entryStart === null ||
+      entryEnd === null ||
+      entryStart !== expectedWindow.start ||
+      entryEnd !== expectedWindow.end ||
+      entryStart >= entryEnd ||
+      entry.maturity_cutoff_utc !== expectedCutoff
+    ) {
+      return false
+    }
+    if (metricId === 'M7' && !isUtcWeekWindow(entryStart, entryEnd)) return false
+    if (metricId === 'M8' && !isUtcCalendarMonthWindow(entryStart, entryEnd)) return false
+    if (
+      (metricId === 'M2' || metricId === 'M3' || metricId === 'M9') &&
+      (!UTC_MINUTE_PATTERN.test(entry.entry_window_start_utc) ||
+        !UTC_MINUTE_PATTERN.test(entry.entry_window_end_utc))
+    ) {
+      return false
+    }
+    return true
+  })
+}
+
 function validMetricWindowManifest(
   value: TelemetryMetricWindowManifest,
   windowStartUtc: string,
   windowEndUtc: string,
+  generatedAtUtc: string,
 ): boolean {
   return (
     isRecord(value) &&
@@ -2300,19 +2670,29 @@ function validMetricWindowManifest(
       'query_version',
       'contract_version',
       'metric_policy_version',
+      'actor_key_version',
+      'cohort_role',
       'window_start_utc',
       'window_end_utc',
       'metric_ids',
+      'metric_windows',
       'target_decisions',
     ]) &&
     value.schema_version === TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION &&
     value.query_version === TELEMETRY_QUERY_VERSION &&
-    value.contract_version === '2026-08-07.2' &&
+    value.contract_version === '2026-08-08.1' &&
     value.metric_policy_version === TELEMETRY_METRIC_POLICY_VERSION &&
+    value.actor_key_version === protectedActorKeyVersion() &&
+    value.cohort_role === 'evaluation' &&
     value.window_start_utc === windowStartUtc &&
     value.window_end_utc === windowEndUtc &&
     Array.isArray(value.metric_ids) &&
     hasExactRequiredMetricSet(value.metric_ids) &&
+    validMetricWindowEntries({
+      entries: value.metric_windows,
+      window_start_utc: windowStartUtc,
+      window_end_utc: windowEndUtc,
+    }) &&
     Array.isArray(value.target_decisions) &&
     value.target_decisions.length === 2 &&
     new Set(
@@ -2326,9 +2706,16 @@ function validMetricWindowManifest(
       )
       return (
         decision !== undefined &&
+        value.metric_windows.some((entry) => entry.metric_id === metricId) &&
         validatedProtectedTarget({
           metric_id: metricId,
-          evaluation_window_start_utc: windowStartUtc,
+          evaluation_window_start_utc: value.metric_windows.find(
+            (entry) => entry.metric_id === metricId,
+          )!.entry_window_start_utc,
+          evaluation_window_end_utc: value.metric_windows.find(
+            (entry) => entry.metric_id === metricId,
+          )!.entry_window_end_utc,
+          generated_at_utc: generatedAtUtc,
           target_decision: decision,
         }) !== null
       )
@@ -2441,16 +2828,35 @@ const EVIDENCE_RATE_METRIC_IDS = ['M1', 'M2', 'M3', 'M5', 'M6', 'M7', 'M8', 'M9'
 
 function evidenceRateResultsMatch(input: {
   window_start_utc: string
+  window_end_utc: string
+  generated_at_utc: string
   metric_window_manifest: TelemetryMetricWindowManifest
   eligible_census: TelemetryEligibleCensus
   censoring_status: TelemetryCensoringStatus
+  completeness: readonly TelemetryCompletenessResult[]
   metrics: readonly TelemetryMetricResult[]
 }): boolean {
+  const funnelCompleteness = input.completeness.find((item) => item.source === 'funnel')
+  const funnelComplete =
+    funnelCompleteness?.status === 'PASS' && funnelCompleteness.reason === 'complete'
   return EVIDENCE_RATE_METRIC_IDS.every((metricId) => {
     const census = input.eligible_census.metrics.find((item) => item.metric_id === metricId)
     const censoring = input.censoring_status.metrics.find((item) => item.metric_id === metricId)
     const supplied = input.metrics.find((item) => item.metric_id === metricId)
     if (!census || !censoring || !supplied) return false
+    if (!funnelComplete && ['M2', 'M3', 'M8', 'M9'].includes(metricId)) {
+      return supplied.status === 'HOLD' && supplied.reason === 'telemetry_incomplete'
+    }
+    const metricWindow = input.metric_window_manifest.metric_windows.find(
+      (entry) => entry.metric_id === metricId,
+    )
+    const maturityCutoff =
+      metricWindow?.maturity_cutoff_utc === null || metricWindow === undefined
+        ? null
+        : parseUtc(metricWindow.maturity_cutoff_utc)
+    if (maturityCutoff !== null && parseUtc(input.generated_at_utc)! < maturityCutoff) {
+      return supplied.status === 'HOLD' && supplied.reason === 'window_not_mature'
+    }
     const requiresTarget = metricId === 'M8' || metricId === 'M9'
     const targetDecision = requiresTarget
       ? (input.metric_window_manifest.target_decisions.find(
@@ -2464,22 +2870,22 @@ function evidenceRateResultsMatch(input: {
       censored: censoring.censored,
       distinct_profiles: census.distinct_profiles,
       distinct_eligible_units: census.distinct_eligible_units,
-      evaluation_window_start_utc: requiresTarget ? input.window_start_utc : null,
+      evaluation_window_start_utc: metricWindow?.entry_window_start_utc ?? null,
+      evaluation_window_end_utc: metricWindow?.entry_window_end_utc ?? null,
+      generated_at_utc: input.generated_at_utc,
       target_decision: targetDecision,
     })
     if (supplied.status === recomputed.status && supplied.reason === recomputed.reason) return true
     if (
       supplied.status === 'HOLD' &&
       (metricId === 'M2' || metricId === 'M3' || metricId === 'M9') &&
-      (FUNNEL_CORRELATION_HOLD_REASONS as readonly TelemetryMetricReason[]).includes(
+      (FUNNEL_CORRELATION_OVERRIDE_REASONS as readonly TelemetryMetricReason[]).includes(
         supplied.reason,
       )
     ) {
       return true
     }
-    return (
-      metricId === 'M8' && supplied.status === 'HOLD' && supplied.reason === 'telemetry_incomplete'
-    )
+    return false
   })
 }
 
@@ -2487,7 +2893,6 @@ export function buildTelemetryEvidence(input: {
   source_sha: string
   window_start_utc: string
   window_end_utc: string
-  actor_key_version: string
   generated_at_utc: string
   metric_window_manifest: TelemetryMetricWindowManifest
   eligible_census: TelemetryEligibleCensus
@@ -2516,13 +2921,13 @@ export function buildTelemetryEvidence(input: {
 } {
   const evidenceKeyVersion = process.env.TELEMETRY_EVIDENCE_KEY_VERSION
   const evidenceKey = process.env.TELEMETRY_EVIDENCE_COMMITMENT_KEY
+  const actorKeyVersion = protectedActorKeyVersion()
   if (
     !isRecord(input) ||
     !hasExactKeys(input, [
       'source_sha',
       'window_start_utc',
       'window_end_utc',
-      'actor_key_version',
       'generated_at_utc',
       'metric_window_manifest',
       'eligible_census',
@@ -2534,9 +2939,8 @@ export function buildTelemetryEvidence(input: {
     parseUtc(input.window_start_utc) === null ||
     parseUtc(input.window_end_utc) === null ||
     parseUtc(input.window_start_utc)! >= parseUtc(input.window_end_utc)! ||
-    !ACTOR_KEY_VERSION_PATTERN.test(input.actor_key_version) ||
+    actorKeyVersion === null ||
     parseUtc(input.generated_at_utc) === null ||
-    parseUtc(input.generated_at_utc)! < parseUtc(input.window_end_utc)! ||
     typeof evidenceKeyVersion !== 'string' ||
     !ACTOR_KEY_VERSION_PATTERN.test(evidenceKeyVersion) ||
     typeof evidenceKey !== 'string' ||
@@ -2545,6 +2949,7 @@ export function buildTelemetryEvidence(input: {
       input.metric_window_manifest,
       input.window_start_utc,
       input.window_end_utc,
+      input.generated_at_utc,
     ) ||
     !validEligibleCensus(input.eligible_census, input.window_start_utc, input.window_end_utc) ||
     !validCensoringStatus(
@@ -2592,7 +2997,7 @@ export function buildTelemetryEvidence(input: {
   const commitmentBoundary = {
     window_start_utc: input.window_start_utc,
     window_end_utc: input.window_end_utc,
-    actor_key_version: input.actor_key_version,
+    actor_key_version: actorKeyVersion,
     commitment_key: evidenceKey,
   }
   const evidenceWithoutDigest = {
@@ -2600,7 +3005,7 @@ export function buildTelemetryEvidence(input: {
     source_sha: input.source_sha,
     query_version: TELEMETRY_QUERY_VERSION,
     event_schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
-    actor_key_version: input.actor_key_version,
+    actor_key_version: actorKeyVersion,
     generated_at_utc: input.generated_at_utc,
     commitment_scheme: TELEMETRY_COMMITMENT_SCHEME,
     evidence_key_version: evidenceKeyVersion,

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyTelemetrySuppression,
   buildTelemetryEvidence,
+  createTelemetryBaselineEvidenceReceiptCommitment,
   createTelemetryCommitment,
   createTelemetryAuthorityRegistrationCommitment,
   createTelemetryAuthorityRegistryReceiptCommitment,
@@ -24,6 +25,7 @@ import {
   TELEMETRY_ACCESS_POLICY,
   TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
   TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION,
+  TELEMETRY_BASELINE_EVIDENCE_RECEIPT_SCHEMA_VERSION,
   TELEMETRY_BINARY_OUTCOME_TABLE_SCHEMA_VERSION,
   TELEMETRY_CENSORING_STATUS_SCHEMA_VERSION,
   TELEMETRY_COMMITMENT_SCHEME,
@@ -47,6 +49,7 @@ import {
   type SyntheticProfileMemoryTruth,
   type TelemetryAuthorityRegistration,
   type TelemetryAuthorityRegistryReceipt,
+  type TelemetryBaselineEvidenceReceipt,
   type TelemetryCompletenessResult,
   type TelemetryCompletenessInput,
   type TelemetryEnvelope,
@@ -89,12 +92,13 @@ const EVIDENCE_KEY = 'synthetic-evidence-key-with-32-bytes-minimum'
 const EVIDENCE_KEY_VERSION = 'synthetic-evidence-v1'
 const SAMPLING_KEY = 'synthetic-sampling-key-with-32-bytes-minimum'
 const SAMPLING_KEY_VERSION = 'synthetic-v1'
+const ACTOR_KEY_VERSION = 'v2'
 const ACTOR_A: SyntheticActorRef = {
-  actor_key_version: 'v2',
+  actor_key_version: ACTOR_KEY_VERSION,
   actor_token: 'a'.repeat(64),
 }
 const ACTOR_B: SyntheticActorRef = {
-  actor_key_version: 'v2',
+  actor_key_version: ACTOR_KEY_VERSION,
   actor_token: 'b'.repeat(64),
 }
 const ACTOR_A_OLD_KEY: SyntheticActorRef = {
@@ -103,6 +107,7 @@ const ACTOR_A_OLD_KEY: SyntheticActorRef = {
 }
 
 beforeEach(() => {
+  vi.stubEnv('TELEMETRY_ACTOR_KEY_VERSION', ACTOR_KEY_VERSION)
   vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', AUTHORITY_KEY_VERSION)
   vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', AUTHORITY_KEY)
   vi.stubEnv('TELEMETRY_MANIFEST_KEY_VERSION', MANIFEST_KEY_VERSION)
@@ -489,6 +494,54 @@ function withSignedReceivedAt(
   }
 }
 
+function withResignedEventUniverse(
+  input: TelemetryCompletenessInput,
+  overrides: Partial<Pick<TelemetryEventUniverse, 'cutoff_utc' | 'sealed_at_utc'>>,
+): TelemetryCompletenessInput {
+  const { universe_commitment: _universeCommitment, ...currentUnsignedUniverse } =
+    input.event_universe
+  const unsignedUniverse = { ...currentUnsignedUniverse, ...overrides }
+  const eventUniverse = {
+    ...unsignedUniverse,
+    universe_commitment: createTelemetryEventUniverseCommitment({
+      universe: unsignedUniverse,
+      commitment_key: UNIVERSE_KEY,
+    }),
+  }
+  const manifestValue = {
+    ...input.manifest,
+    universe_commitment: eventUniverse.universe_commitment,
+    universe_cutoff_utc: eventUniverse.cutoff_utc,
+  }
+  const receivedReceipts = input.received_receipts.map((receipt) => {
+    const { receipt_commitment: _receiptCommitment, ...unsignedReceipt } = receipt
+    const reboundReceipt = {
+      ...unsignedReceipt,
+      universe_commitment: eventUniverse.universe_commitment,
+    }
+    return {
+      ...reboundReceipt,
+      receipt_commitment: createTelemetryIngestReceiptCommitment({
+        receipt: reboundReceipt,
+        commitment_key: INGEST_RECEIPT_KEY,
+      }),
+    }
+  })
+  const boundary = {
+    ...input,
+    manifest: manifestValue,
+    event_universe: eventUniverse,
+    received_receipts: receivedReceipts,
+  }
+  return {
+    ...boundary,
+    manifest_commitment: createTelemetryExpectationManifestCommitment({
+      ...boundary,
+      commitment_key: MANIFEST_KEY,
+    }),
+  }
+}
+
 function ingestReceiptForInput(
   input: TelemetryCompletenessInput,
   event: TelemetryEnvelope,
@@ -683,16 +736,18 @@ function evidenceInput() {
     source_sha: 'a'.repeat(40),
     window_start_utc: windowStart,
     window_end_utc: windowEnd,
-    actor_key_version: 'v2',
-    generated_at_utc: '2026-09-01T01:00:00Z',
+    generated_at_utc: '2026-10-03T00:00:00Z',
     metric_window_manifest: {
       schema_version: TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION,
       query_version: TELEMETRY_QUERY_VERSION,
-      contract_version: '2026-08-07.2' as const,
-      metric_policy_version: 'immutable-metric-policy/v1' as const,
+      contract_version: '2026-08-08.1' as const,
+      metric_policy_version: 'immutable-metric-policy/v2' as const,
+      actor_key_version: ACTOR_KEY_VERSION,
+      cohort_role: 'evaluation' as const,
       window_start_utc: windowStart,
       window_end_utc: windowEnd,
       metric_ids: TELEMETRY_REQUIRED_METRIC_IDS,
+      metric_windows: metricWindowEntries(),
       target_decisions: [protectedTargetDecision('M8'), protectedTargetDecision('M9')],
     },
     eligible_census: {
@@ -720,6 +775,120 @@ function evidenceInput() {
   }
 }
 
+function metricWindowEntries() {
+  const common = {
+    entry_window_start_utc: '2026-08-01T00:00:00Z',
+    entry_window_end_utc: '2026-09-01T00:00:00Z',
+  }
+  return [
+    {
+      metric_id: 'M1',
+      anchor: 'profile_created_at',
+      entry_rule: 'anchor_in_half_open_window',
+      maturity_rule: 'anchor_plus_24_hours',
+      maturity_cutoff_utc: '2026-09-02T00:00:00Z',
+      ...common,
+    },
+    {
+      metric_id: 'M2',
+      anchor: 'photo_selected_occurrence_minute',
+      entry_rule: 'full_occurrence_minute_in_half_open_window',
+      maturity_rule: 'occurrence_minute_end_plus_30_minutes',
+      maturity_cutoff_utc: '2026-09-01T00:30:00Z',
+      ...common,
+    },
+    {
+      metric_id: 'M3',
+      anchor: 'ai_draft_shown_occurrence_minute',
+      entry_rule: 'full_occurrence_minute_in_half_open_window',
+      maturity_rule: 'occurrence_minute_end_plus_30_minutes',
+      maturity_cutoff_utc: '2026-09-01T00:30:00Z',
+      ...common,
+    },
+    {
+      metric_id: 'M4',
+      anchor: 'pilot_first_attempt_interactive_screen_presented_at',
+      entry_rule: 'first_attempt_anchor_in_half_open_window',
+      maturity_rule: 'db_save_confirmed_or_terminal_outcome_classified',
+      maturity_cutoff_utc: null,
+      ...common,
+    },
+    {
+      metric_id: 'M5',
+      anchor: 'profile_created_at',
+      entry_rule: 'anchor_in_half_open_window',
+      maturity_rule: 'anchor_plus_8_days',
+      maturity_cutoff_utc: '2026-09-09T00:00:00Z',
+      ...common,
+    },
+    {
+      metric_id: 'M6',
+      anchor: 'profile_created_at',
+      entry_rule: 'anchor_in_half_open_window',
+      maturity_rule: 'anchor_plus_31_days',
+      maturity_cutoff_utc: '2026-10-02T00:00:00Z',
+      ...common,
+    },
+    {
+      metric_id: 'M7',
+      anchor: 'utc_week_start',
+      entry_rule: 'whole_utc_week_in_half_open_window',
+      entry_window_start_utc: '2026-08-03T00:00:00Z',
+      entry_window_end_utc: '2026-08-31T00:00:00Z',
+      maturity_rule: 'utc_week_end',
+      maturity_cutoff_utc: '2026-08-31T00:00:00Z',
+    },
+    {
+      metric_id: 'M8',
+      anchor: 'utc_calendar_month_start',
+      entry_rule: 'whole_utc_calendar_month_in_half_open_window',
+      maturity_rule: 'next_utc_calendar_month_start',
+      maturity_cutoff_utc: '2026-09-01T00:00:00Z',
+      ...common,
+    },
+    {
+      metric_id: 'M9',
+      anchor: 'first_eligible_memory_viewed_occurrence_minute_per_profile',
+      entry_rule: 'full_occurrence_minute_in_half_open_window',
+      maturity_rule: 'occurrence_minute_end_plus_7_days',
+      maturity_cutoff_utc: '2026-09-08T00:00:00Z',
+      ...common,
+    },
+  ] as const
+}
+
+function baselineEvidenceReceipt(
+  metricId: 'M8' | 'M9',
+  overrides: Partial<TelemetryBaselineEvidenceReceipt> = {},
+): TelemetryBaselineEvidenceReceipt {
+  const { receipt_commitment: suppliedCommitment, ...unsignedOverrides } = overrides
+  const unsigned = {
+    schema_version: TELEMETRY_BASELINE_EVIDENCE_RECEIPT_SCHEMA_VERSION,
+    evidence_schema_version: TELEMETRY_EVIDENCE_SCHEMA_VERSION,
+    query_version: TELEMETRY_QUERY_VERSION,
+    metric_id: metricId,
+    cohort_role: 'baseline' as const,
+    actor_key_version: ACTOR_KEY_VERSION,
+    window_start_utc: '2026-06-01T00:00:00Z',
+    window_end_utc: '2026-07-01T00:00:00Z',
+    generated_at_utc: '2026-07-01T00:00:00Z',
+    evidence_digest: 'd'.repeat(64),
+    metric_status: 'HOLD' as const,
+    metric_reason: 'baseline_only' as const,
+    evidence_key_version: EVIDENCE_KEY_VERSION,
+    ...unsignedOverrides,
+  }
+  return {
+    ...unsigned,
+    receipt_commitment:
+      suppliedCommitment ??
+      createTelemetryBaselineEvidenceReceiptCommitment({
+        receipt: unsigned,
+        commitment_key: EVIDENCE_KEY,
+      }),
+  }
+}
+
 function protectedTargetDecision(
   metricId: 'M8' | 'M9',
   overrides: Partial<TelemetryTargetDecision> = {},
@@ -727,13 +896,15 @@ function protectedTargetDecision(
   const { target_commitment: suppliedCommitment, ...unsignedOverrides } = overrides
   const unsigned = {
     schema_version: TELEMETRY_TARGET_DECISION_SCHEMA_VERSION,
-    policy_version: 'protected-baseline-target/v1' as const,
+    policy_version: 'protected-baseline-target/v2' as const,
     metric_id: metricId,
     target: 0.5,
-    baseline_evidence_digest: 'd'.repeat(64),
-    baseline_generated_at_utc: '2026-07-01T00:00:00Z',
+    direction: 'at_or_above' as const,
+    baseline_evidence_receipt: baselineEvidenceReceipt(metricId),
     target_fixed_at_utc: '2026-07-02T00:00:00Z',
     evaluation_window_start_utc: '2026-08-01T00:00:00Z',
+    evaluation_window_end_utc: '2026-09-01T00:00:00Z',
+    remeasurement_deadline_utc: '2026-10-03T00:00:00Z',
     cohort_role: 'evaluation' as const,
     target_key_version: TARGET_DECISION_KEY_VERSION,
     ...unsignedOverrides,
@@ -782,7 +953,7 @@ describe('PII-safe telemetry schema v2', () => {
   )
 
   it('fixes retention, sampling and cardinality to code allowlists', () => {
-    expect(TELEMETRY_QUERY_VERSION).toBe('issue-188-v2')
+    expect(TELEMETRY_QUERY_VERSION).toBe('issue-191-v1')
     expect(TELEMETRY_RETENTION_DAYS).toBe(90)
     expect(TELEMETRY_SAMPLING).toEqual({ funnel: 1, web_vital: 0.1, api: 0.1, ai: 1 })
     expect(() =>
@@ -1346,6 +1517,10 @@ describe('telemetry completeness manifest and sampling', () => {
     const valid = completenessInput('funnel', manifest([EVENT_A]), [
       envelope(EVENT_A, 'record_started'),
     ])
+    expect(evaluateTelemetryCompleteness(valid)).toMatchObject({
+      status: 'PASS',
+      reason: 'complete',
+    })
     expect(valid.authority_registration).not.toHaveProperty('eligible_events')
     expect(Date.parse(valid.authority_registry_receipt.registered_at_utc)).toBeLessThan(
       Date.parse(valid.window_start_utc),
@@ -1353,10 +1528,48 @@ describe('telemetry completeness manifest and sampling', () => {
     expect(Date.parse(valid.event_universe.sealed_at_utc)).toBeGreaterThanOrEqual(
       Date.parse(valid.event_universe.cutoff_utc),
     )
+    const exactBoundary = withResignedEventUniverse(valid, {
+      sealed_at_utc: valid.event_universe.cutoff_utc,
+    })
+    expect(evaluateTelemetryCompleteness(exactBoundary)).toMatchObject({
+      status: 'PASS',
+      reason: 'complete',
+    })
+    const cutoffMismatch = withResignedEventUniverse(valid, {
+      cutoff_utc: valid.window_start_utc,
+    })
+    expect(evaluateTelemetryCompleteness(cutoffMismatch)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
+    const sealedBeforeCutoff = withResignedEventUniverse(valid, {
+      sealed_at_utc: '2026-08-07T23:59:59.999Z',
+    })
+    expect(evaluateTelemetryCompleteness(sealedBeforeCutoff)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
+  })
+
+  it('binds completeness to the protected actor key version', () => {
+    const valid = completenessInput('funnel', manifest([EVENT_A]), [
+      envelope(EVENT_A, 'record_started'),
+    ])
+    expect(evaluateTelemetryCompleteness(valid)).toMatchObject({ status: 'PASS' })
+    vi.stubEnv('TELEMETRY_ACTOR_KEY_VERSION', 'v3')
+    expect(evaluateTelemetryCompleteness(valid)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
+    vi.stubEnv('TELEMETRY_ACTOR_KEY_VERSION', ACTOR_KEY_VERSION)
+    const callerVersion = { ...valid, actor_key_version: 'child_profile_123' }
     expect(
       evaluateTelemetryCompleteness({
-        ...valid,
-        event_universe: { ...valid.event_universe, cutoff_utc: valid.window_start_utc },
+        ...callerVersion,
+        manifest_commitment: createTelemetryExpectationManifestCommitment({
+          ...callerVersion,
+          commitment_key: MANIFEST_KEY,
+        }),
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
   })
@@ -1553,7 +1766,7 @@ describe('actor-scoped funnel DB truth correlation', () => {
           events: [funnelEvent()],
           memories: [memoryTruth({ actor })],
         }),
-      ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'actor_reference_invalid' })
+      ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'telemetry_incomplete' })
     }
     expect(
       evaluateSyntheticFunnelFlow({
@@ -1572,6 +1785,41 @@ describe('actor-scoped funnel DB truth correlation', () => {
       }),
     ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'actor_reference_invalid' })
   })
+
+  it.each(['M2', 'M3'] as const)(
+    'requires every signed %s Memory row to belong to the expected actor',
+    (metricId) => {
+      const eventName = metricId === 'M2' ? 'photo_selected' : 'ai_draft_shown'
+      const completeInput = completenessInput('funnel', manifest([EVENT_B]), [
+        envelope(EVENT_B, eventName),
+      ])
+      const expectedMemory = memoryTruth()
+      const unrelatedSameActor = memoryTruth({
+        memory_id: '00000000-0000-4000-8000-000000000022',
+        idempotency_key: '00000000-0000-4000-8000-000000000011',
+      })
+      const base = {
+        metric_id: metricId,
+        flow_id: FLOW_ID,
+        expected_actor: ACTOR_A,
+        generated_at_utc: '2026-08-07T01:00:00Z',
+        completeness_input: completeInput,
+        events: [funnelEvent({ event_name: eventName })],
+      }
+      expect(
+        evaluateSyntheticFunnelFlow({
+          ...base,
+          memories: [expectedMemory, unrelatedSameActor],
+        }),
+      ).toMatchObject({ status: 'PASS' })
+      expect(
+        evaluateSyntheticFunnelFlow({
+          ...base,
+          memories: [expectedMemory, { ...unrelatedSameActor, actor: ACTOR_B }],
+        }),
+      ).toEqual({ metric_id: metricId, status: 'HOLD', reason: 'telemetry_incomplete' })
+    },
+  )
 
   it('holds actor conflicts and stages that were not verified by the same completeness input', () => {
     expect(
@@ -1980,7 +2228,7 @@ describe('M9 occurrence-minute view-to-memory correlation', () => {
         ...base,
         memories: [profileMemory({ actor: ACTOR_B })],
       }),
-    ).toMatchObject({ status: 'HOLD', reason: 'actor_reference_invalid' })
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
     expect(
       evaluateSyntheticM9ViewToMemory({
         ...base,
@@ -2056,6 +2304,8 @@ describe('privacy aggregation', () => {
       distinct_profiles: requiresDistinct ? 20 : null,
       distinct_eligible_units: requiresDistinct ? 20 : null,
       evaluation_window_start_utc: requiresTarget ? '2026-08-01T00:00:00Z' : null,
+      evaluation_window_end_utc: requiresTarget ? '2026-09-01T00:00:00Z' : null,
+      generated_at_utc: '2026-10-03T00:00:00Z',
       target_decision: requiresTarget ? protectedTargetDecision(metricId) : null,
       ...overrides,
     }
@@ -2126,7 +2376,9 @@ describe('privacy aggregation', () => {
         evaluateCensoredRate({
           ...rateInput(metricId),
           target_decision: protectedTargetDecision(metricId, {
-            baseline_generated_at_utc: '2026-07-03T00:00:00Z',
+            baseline_evidence_receipt: baselineEvidenceReceipt(metricId, {
+              generated_at_utc: '2026-07-03T00:00:00Z',
+            }),
             target_fixed_at_utc: '2026-07-02T00:00:00Z',
           }),
         } as never),
@@ -2136,6 +2388,22 @@ describe('privacy aggregation', () => {
           ...rateInput(metricId),
           target_decision: protectedTargetDecision(metricId, {
             target_fixed_at_utc: '2026-08-01T00:00:00Z',
+          }),
+        } as never),
+      ).toMatchObject({ status: 'HOLD', reason: 'target_not_configured' })
+      expect(
+        evaluateCensoredRate({
+          ...rateInput(metricId),
+          target_decision: protectedTargetDecision(metricId, {
+            direction: 'at_or_below' as never,
+          }),
+        } as never),
+      ).toMatchObject({ status: 'HOLD', reason: 'target_not_configured' })
+      expect(
+        evaluateCensoredRate({
+          ...rateInput(metricId),
+          target_decision: protectedTargetDecision(metricId, {
+            remeasurement_deadline_utc: '2026-10-02T23:59:59.999Z',
           }),
         } as never),
       ).toMatchObject({ status: 'HOLD', reason: 'target_not_configured' })
@@ -2304,6 +2572,83 @@ describe('status-only evidence v2', () => {
     expect(() => buildTelemetryEvidence(valid)).toThrow('invalid_input')
   })
 
+  it('derives the evidence actor key version only from protected configuration', () => {
+    const valid = evidenceInput()
+    expect(buildTelemetryEvidence(valid).actor_key_version).toBe(ACTOR_KEY_VERSION)
+    expect(() =>
+      buildTelemetryEvidence({ ...valid, actor_key_version: 'child_profile_123' } as never),
+    ).toThrow('invalid_input')
+    vi.stubEnv('TELEMETRY_ACTOR_KEY_VERSION', 'v3')
+    expect(() => buildTelemetryEvidence(valid)).toThrow('invalid_input')
+    vi.stubEnv('TELEMETRY_ACTOR_KEY_VERSION', 'child_profile_123')
+    expect(() => buildTelemetryEvidence(valid)).toThrow('invalid_input')
+  })
+
+  it('binds every M1 through M9 anchor, entry window and maturity cutoff', () => {
+    const valid = evidenceInput()
+    expect(buildTelemetryEvidence(valid).status).toBe('HOLD')
+    for (const entry of valid.metric_window_manifest.metric_windows) {
+      expect(() =>
+        buildTelemetryEvidence({
+          ...valid,
+          metric_window_manifest: {
+            ...valid.metric_window_manifest,
+            metric_windows: valid.metric_window_manifest.metric_windows.map((candidate) =>
+              candidate.metric_id === entry.metric_id
+                ? { ...candidate, anchor: 'caller_selected_anchor' }
+                : candidate,
+            ),
+          },
+        } as never),
+      ).toThrow('invalid_input')
+    }
+    for (const [metricId, mutation] of [
+      ['M2', { entry_window_start_utc: '2026-08-01T00:00:01Z' }],
+      ['M7', { entry_window_start_utc: '2026-08-04T00:00:00Z' }],
+      ['M8', { entry_window_end_utc: '2026-08-31T00:00:00Z' }],
+    ] as const) {
+      expect(() =>
+        buildTelemetryEvidence({
+          ...valid,
+          metric_window_manifest: {
+            ...valid.metric_window_manifest,
+            metric_windows: valid.metric_window_manifest.metric_windows.map((entry) =>
+              entry.metric_id === metricId ? { ...entry, ...mutation } : entry,
+            ),
+          },
+        } as never),
+      ).toThrow('invalid_input')
+    }
+  })
+
+  it('emits window_not_mature only when the fixed cutoff is still open', () => {
+    const valid = evidenceInput()
+    const early = {
+      ...valid,
+      generated_at_utc: '2026-10-01T00:00:00Z',
+    }
+    expect(() => buildTelemetryEvidence(early)).toThrow('invalid_input')
+    const held = buildTelemetryEvidence({
+      ...early,
+      metrics: replaceMetric(early.metrics, {
+        metric_id: 'M6',
+        status: 'HOLD',
+        reason: 'window_not_mature',
+      }),
+    })
+    expect(held.metrics).toContainEqual({
+      metric_id: 'M6',
+      status: 'HOLD',
+      reason: 'window_not_mature',
+    })
+    expect(
+      buildTelemetryEvidence({
+        ...valid,
+        generated_at_utc: '2026-10-02T00:00:00Z',
+      }).metrics,
+    ).toContainEqual({ metric_id: 'M6', status: 'PASS', reason: 'worst_case_passed' })
+  })
+
   it('binds exactly signed M8/M9 targets to baseline evidence and valid chronology', () => {
     const valid = evidenceInput()
     expect(() =>
@@ -2322,7 +2667,12 @@ describe('status-only evidence v2', () => {
         metric_window_manifest: {
           ...valid.metric_window_manifest,
           target_decisions: [
-            { ...m8, baseline_evidence_digest: 'e'.repeat(64) },
+            protectedTargetDecision('M8', {
+              baseline_evidence_receipt: {
+                ...m8.baseline_evidence_receipt,
+                evidence_digest: 'e'.repeat(64),
+              },
+            }),
             valid.metric_window_manifest.target_decisions[1]!,
           ],
         },
@@ -2334,7 +2684,11 @@ describe('status-only evidence v2', () => {
         metric_window_manifest: {
           ...valid.metric_window_manifest,
           target_decisions: [
-            protectedTargetDecision('M8', { baseline_evidence_digest: 'not-a-digest' }),
+            protectedTargetDecision('M8', {
+              baseline_evidence_receipt: baselineEvidenceReceipt('M8', {
+                evidence_digest: 'not-a-digest',
+              }),
+            }),
             protectedTargetDecision('M9'),
           ],
         },
@@ -2347,8 +2701,26 @@ describe('status-only evidence v2', () => {
           ...valid.metric_window_manifest,
           target_decisions: [
             protectedTargetDecision('M8', {
-              baseline_generated_at_utc: '2026-07-03T00:00:00Z',
+              baseline_evidence_receipt: baselineEvidenceReceipt('M8', {
+                generated_at_utc: '2026-07-03T00:00:00Z',
+              }),
               target_fixed_at_utc: '2026-07-02T00:00:00Z',
+            }),
+            protectedTargetDecision('M9'),
+          ],
+        },
+      }),
+    ).toThrow('invalid_input')
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metric_window_manifest: {
+          ...valid.metric_window_manifest,
+          target_decisions: [
+            protectedTargetDecision('M8', {
+              baseline_evidence_receipt: baselineEvidenceReceipt('M8', {
+                cohort_role: 'evaluation' as never,
+              }),
             }),
             protectedTargetDecision('M9'),
           ],
@@ -2543,10 +2915,11 @@ describe('status-only evidence v2', () => {
     })
   })
 
-  it('allows only funnel-correlation HOLD overrides and the M8 telemetry HOLD override', () => {
+  it('derives telemetry_incomplete only from funnel completeness', () => {
     const valid = evidenceInput()
-    for (const metricId of ['M2', 'M3', 'M9'] as const) {
-      expect(
+    const dependentMetricIds = ['M2', 'M3', 'M8', 'M9'] as const
+    for (const metricId of dependentMetricIds) {
+      expect(() =>
         buildTelemetryEvidence({
           ...valid,
           metrics: replaceMetric(valid.metrics, {
@@ -2554,33 +2927,52 @@ describe('status-only evidence v2', () => {
             status: 'HOLD',
             reason: 'telemetry_incomplete',
           }),
-        }).metrics,
-      ).toContainEqual({
+        }),
+      ).toThrow('invalid_input')
+    }
+
+    const heldCompleteness = valid.completeness.map((item) =>
+      item.source === 'funnel'
+        ? { ...item, status: 'HOLD' as const, reason: 'loss_detected' as const }
+        : item,
+    )
+    const heldMetrics = dependentMetricIds.reduce(
+      (metrics, metricId) =>
+        replaceMetric(metrics, {
+          metric_id: metricId,
+          status: 'HOLD',
+          reason: 'telemetry_incomplete',
+        }),
+      valid.metrics,
+    )
+    const evidence = buildTelemetryEvidence({
+      ...valid,
+      completeness: heldCompleteness,
+      metrics: heldMetrics,
+    })
+    for (const metricId of dependentMetricIds) {
+      expect(evidence.metrics).toContainEqual({
         metric_id: metricId,
         status: 'HOLD',
         reason: 'telemetry_incomplete',
       })
-      expect(() =>
-        buildTelemetryEvidence({
-          ...valid,
-          metrics: replaceMetric(valid.metrics, {
-            metric_id: metricId,
-            status: 'PASS',
-            reason: 'memory_saved_within_window',
-          }),
-        }),
-      ).toThrow('invalid_input')
     }
-    expect(
+    expect(evidence.metrics).toContainEqual({
+      metric_id: 'M1',
+      status: 'PASS',
+      reason: 'worst_case_passed',
+    })
+    expect(() =>
       buildTelemetryEvidence({
         ...valid,
-        metrics: replaceMetric(valid.metrics, {
-          metric_id: 'M8',
-          status: 'HOLD',
-          reason: 'telemetry_incomplete',
+        completeness: heldCompleteness,
+        metrics: replaceMetric(heldMetrics, {
+          metric_id: 'M9',
+          status: 'PASS',
+          reason: 'worst_case_passed',
         }),
-      }).metrics,
-    ).toContainEqual({ metric_id: 'M8', status: 'HOLD', reason: 'telemetry_incomplete' })
+      }),
+    ).toThrow('invalid_input')
   })
 
   it.each(['M4', 'M10', 'M11', 'north_star_monthly_memories_per_active_profile'] as const)(

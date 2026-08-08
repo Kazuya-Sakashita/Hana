@@ -35,18 +35,19 @@ Known superseded / clarified items:
 
 ## Data Classification
 
-| data                    | classification                   | storage / logging rule                                                                                                                 |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| child given name        | PII                              | DB 保存可。ログ禁止。AI 送信は opt-in 後、ADR-0011 の範囲のみ                                                                          |
-| child birthdate         | PII                              | DB 保存可。AI には月齢へ変換して送る。ログ禁止                                                                                         |
-| parent email            | PII                              | Supabase Auth / profile で扱う。ログ・AI 送信禁止                                                                                      |
-| child photo             | highly sensitive                 | private bucket。public URL 禁止。AI 送信は opt-in 後のみ                                                                               |
-| presigned URL           | secret-like temporary credential | API response 以外に出さない。ログ・PR・スクリーンショット禁止                                                                          |
-| storage_key             | secret-like internal locator     | normal UI response / log / PR 証跡に出さない                                                                                           |
-| AI generated title/body | sensitive user content           | memory として保存可。AI generation log / PR / test fixture へ貼らない                                                                  |
-| AI generation metadata  | operational                      | user_id / child_id / model / prompt version / token count / duration / reason / created_at は保存可。prompt 本文と生成本文は保存しない |
-| Web Vitals payload      | anonymous operational            | allowlist の metric fields のみ。URL query や user text を入れない。sampling key / versionはserver-only                                |
-| ProductEvent binding    | secret-like session credential   | 検証済みJWT `session_id`へ拘束しheaderだけで扱う。body、DB、log、evidenceへ保存しない                                                  |
+| data                           | classification                   | storage / logging rule                                                                                                                   |
+| ------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| child given name               | PII                              | DB 保存可。ログ禁止。AI 送信は opt-in 後、ADR-0011 の範囲のみ                                                                            |
+| child birthdate                | PII                              | DB 保存可。AI には月齢へ変換して送る。ログ禁止                                                                                           |
+| parent email                   | PII                              | Supabase Auth / profile で扱う。ログ・AI 送信禁止                                                                                        |
+| child photo                    | highly sensitive                 | private bucket。public URL 禁止。AI 送信は opt-in 後のみ                                                                                 |
+| presigned URL                  | secret-like temporary credential | API response 以外に出さない。ログ・PR・スクリーンショット禁止                                                                            |
+| storage_key                    | secret-like internal locator     | normal UI response / log / PR 証跡に出さない                                                                                             |
+| AI generated title/body        | sensitive user content           | memory として保存可。AI generation log / PR / test fixture へ貼らない                                                                    |
+| AI generation metadata         | operational                      | user_id / child_id / model / prompt version / token count / duration / reason / created_at は保存可。prompt 本文と生成本文は保存しない   |
+| Web Vitals payload             | anonymous operational            | allowlist の metric fields のみ。URL query や user text を入れない。sampling key / versionはserver-only                                  |
+| ProductEvent binding           | secret-like session credential   | 検証済みJWT `session_id`へ拘束しheaderだけで扱う。body、DB、log、evidenceへ保存しない                                                    |
+| ProductEvent actor key version | pseudonymous-data control        | `TELEMETRY_ACTOR_KEY_VERSION`の`vN`形式を保護Environmentからだけ取得する。caller値・氏名・cohort labelをstatus-only evidenceへ転記しない |
 
 ## Auth And Authorization
 

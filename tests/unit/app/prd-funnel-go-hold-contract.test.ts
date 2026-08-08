@@ -147,14 +147,14 @@ describe('ISSUE-159 product validation contract', () => {
     expect(contractSource).toContain('entry window内で各Profileが最初に送ったeligible')
     expect(contractSource).toContain('同じcohortを見て閾値を決めてGoにしてはならない')
     expect(contractSource).toContain(
-      '`baseline.generated_at_utc <= target_fixed_at_utc < evaluation.window_start_utc`',
+      '`baseline.window_end_utc <= baseline.generated_at_utc <= target_fixed_at_utc < evaluation.window_start_utc`',
     )
   })
 
   it('fails closed on best-effort telemetry, small cells, and evidence drift', () => {
     expect(contractSource).toContain('event送信失敗を離脱、未保存、未閲覧として扱わない')
     expect(contractSource).toContain(
-      'ISSUE-188の相関・重複・順序・completeness証跡がGoになるまでHold',
+      'ISSUE-191の相関・重複・順序・completeness証跡がGoになるまでHold',
     )
     expect(contractSource).toMatch(/分母、分子、補集合\s*`分母 - 分子`がすべて5以上/)
     expect(contractSource).toContain('secondary suppression')
@@ -163,7 +163,8 @@ describe('ISSUE-159 product validation contract', () => {
     expect(contractSource).toContain('status-only判定に必要なmin、completeness、query version')
     expect(contractSource).toContain('event依存cohortは1つの`actor_key_version`だけを使う')
     expect(contractSource).toContain('`metric_window_manifest`')
-    expect(contractSource).toContain('`target_decision_digest`')
+    expect(contractSource).toContain('`baseline_evidence_receipt`')
+    expect(contractSource).toContain('`remeasurement_deadline_utc`')
     expect(contractSource).toContain('right-censored')
     expect(contractSource).toContain('全censorを失敗とする下限`s / N`')
     expect(contractSource).toContain('全censorを成功とする上限')

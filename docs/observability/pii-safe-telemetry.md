@@ -1,7 +1,7 @@
 # PII-safe telemetry contract
 
 - Status: active
-- Version: `issue-188-v2`
+- Version: `issue-191-v1`
 - Event schema: `hana-telemetry-event/v2`
 - Retention: 90 days
 
@@ -131,7 +131,8 @@ sampling適用前のexpected event IDを、保護されたversioned manifest key
 なくcanonical envelope digest、source、query / window、policy / universe commitment、DB由来`received_at_utc`を署名し、
 dimension改変と別windowへのreplayを拒否する。受領順はcallerの配列順ではなく署名済み`received_at_utc`で決め、異なる
 eventが同時刻なら順序を推定せずHOLDにする。M2 / M3 / M9は、DB Memoryのexact set、actor、window、生成時刻、policy /
-universe commitmentを専用receiptで署名し、callerがMemoryを追加・省略・差し替えて判定を変えられないようにする。
+universe commitmentを専用receiptで署名する。receipt内の全Memory rowを期待actorへ完全一致させ、別actor・別flowの
+rowを含む正しく署名されたsetもHOLDにする。
 
 authority、universe、manifest、sampling、registry、ingest receipt、Memory truth、evidence、metric decisionの各keyと
 sampling keyはすべて異なる32文字以上のsecretとし、通常aggregate callerへ渡さない。evaluatorは保護Environmentの
@@ -144,7 +145,9 @@ expectedとreceivedが同時に欠落してもPassにしない。duplicateとreo
 検出状態を残し、event IDと件数をoutputしない。dedup後に全expected eventが存在する場合だけcompletenessを
 Passにできる。
 
-funnel correlationは`actor_key_version / actor_token / flow_id`の組で行う。stageはclient発生時刻のUTC minute
+funnel correlationは`actor_key_version / actor_token / flow_id`の組で行う。`actor_key_version`は
+`TELEMETRY_ACTOR_KEY_VERSION`の`vN`形式を保護Environmentから取得し、caller値をstatus-only evidenceへ転記しない。
+completeness inputとprivate metric manifestが保護versionに完全一致しない場合はHOLDにする。stageはclient発生時刻のUTC minute
 bucket、受信時刻、`anchor_trust`を持ち、verified anchorだけを判定する。30分windowはminute intervalの
 worst-caseでPass / Failを確定し、境界をまたぐ場合、actor不一致、key version不一致、unverified anchorは
 Holdにする。時刻の正本はDB `event_id`から復元した`[minute, minute + 1 minute)`で、区間全体がevidence
@@ -156,8 +159,10 @@ receipt timeをentry、maturity、conversionの起点にしない。
 
 ## Aggregation and privacy
 
-観測開始時のeligible censusを固定してkeyed commitmentだけをevidenceへ渡す。private metric window manifest、
-eligible census、censoring statusはversioned exact schemaで検証し、未知field、metric欠落、window / query / policy不一致を
+観測開始時のeligible censusを固定してkeyed commitmentだけをevidenceへ渡す。private metric window manifestは
+M1〜M9のexact setについて固定anchor、server-derived entry window、maturity rule / cutoffを保持する。Profile anchor、
+occurrence minute、内側のUTC週、UTC calendar monthをcode policyから導出し、callerがentry windowやcutoffを縮められない。
+eligible census、censoring statusもversioned exact schemaで検証し、未知field、metric欠落、window / query / policy不一致を
 HOLDにする。commitmentはcaller指定keyを受け取らず、保護Environmentのversioned evidence keyでdomain、UTC window、
 actor key versionをHMAC-SHA256へdomain-separated入力し、通常のSHA digestで置き換えない。
 退会中のunitは元の分母に残し、
@@ -166,8 +171,12 @@ actor key versionをHMAC-SHA256へdomain-separated入力し、通常のSHA diges
 このright-censor rate evaluatorは高いほど良いproduction rateのM1 / M2 / M3 / M5 / M6 / M7 / M8 / M9
 だけに使う。minimumとtargetはcallerから受け取らず、M1 / M2 / M3 / M5 / M6 / M7はproduct contractの固定値を
 code policyとして使う。M2 / M3はdistinct Profileとflowを、M7はdistinct ProfileとProfile-weekをそれぞれ20以上要求する。
-M8 / M9はbaseline evidence、target固定時刻、evaluation windowを専用keyで署名し、
-`baseline.generated_at_utc <= target_fixed_at_utc < evaluation.window_start_utc`を満たすevaluation cohortだけを判定する。
+funnel completenessがPASS / completeでない場合、M2 / M3 / M8 / M9は個別rateを直列化せず
+`HOLD / telemetry_incomplete`へ強制する。固定maturity cutoff前は`HOLD / window_not_mature`だけを受理する。
+M8 / M9はbaseline evidence keyで署名した`baseline` role receiptをtarget decisionへ埋め込み、target、
+`at_or_above`方向、target固定時刻、evaluation window、再計測期限を専用target keyでまとめて署名する。
+`baseline.window_end <= baseline.generated_at <= target_fixed_at < evaluation.window_start`を満たし、
+評価生成時刻が再計測期限を超えないevaluation cohortだけを判定する。
 M12など方向が異なる指標は同式へ入れず、`unsupported_metric_direction`でHoldにする。
 status-only evidenceはmetric IDごとのreason allowlistも検証し、callerがM12などへright-censor reasonを
 直接組み合わせてPASS / FAILを作ることを拒否する。
@@ -211,7 +220,7 @@ completeness sourceはDB Memory truthである。単独ではGoにせずdiagnost
 
 ## Evidence
 
-`hana-telemetry-evidence/v3`はsource SHA、UTC window、query / event schema version、actor key version、
+`hana-telemetry-evidence/v4`はsource SHA、UTC window、query / event schema version、保護されたactor key version、
 window manifest / eligible census / censoring statusのdomain-separated keyed commitment、4つの必須sourceの
 completeness、metric別statusとreason、全体status、evidence integrity digestだけを持つ。必須sourceの欠落・
 余分、commitmentのdomain / window / key version不一致、metric status / reason不一致、未知値はfail closedにする。
