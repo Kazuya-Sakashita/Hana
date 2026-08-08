@@ -43,9 +43,10 @@ export type ProductEventDegradation =
   | 'STORAGE_UNAVAILABLE'
   | 'CAPACITY_EXCEEDED'
   | 'TTL_EXPIRED'
+  | 'DELIVERY_REJECTED'
   | 'AUTH_BOUNDARY'
 
-type ProductEventSendResult = 'acknowledged' | 'authentication_rejected' | 'retry'
+type ProductEventSendResult = 'acknowledged' | 'authentication_rejected' | 'rejected' | 'retry'
 
 export type ProductEventTelemetryBindingRefreshResult =
   | { status: 'binding'; binding: string }
@@ -181,24 +182,35 @@ function isProductEventReport(value: unknown): value is ProductEventReport {
   )
 }
 
-function isOutboxEntry(value: unknown, now: number): value is ProductEventOutboxEntry {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+function classifyOutboxEntry(value: unknown, now: number): 'valid' | 'expired' | 'invalid' {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'invalid'
   const entry = value as Record<string, unknown>
-  return (
-    hasExactKeys(entry, ['report', 'queuedAt', 'attempts', 'nextAttemptAt']) &&
-    isProductEventReport(entry.report) &&
-    typeof entry.queuedAt === 'number' &&
-    Number.isSafeInteger(entry.queuedAt) &&
-    (entry.queuedAt as number) >= 0 &&
-    (entry.queuedAt as number) <= now &&
-    Number.isInteger(entry.attempts) &&
-    (entry.attempts as number) >= 0 &&
-    (entry.attempts as number) <= PRODUCT_EVENT_OUTBOX_MAX_ATTEMPTS &&
-    typeof entry.nextAttemptAt === 'number' &&
-    Number.isSafeInteger(entry.nextAttemptAt) &&
-    (entry.nextAttemptAt as number) >= (entry.queuedAt as number) &&
-    (entry.nextAttemptAt as number) <= (entry.queuedAt as number) + PRODUCT_EVENT_OUTBOX_TTL_MS
-  )
+  if (
+    !hasExactKeys(entry, ['report', 'queuedAt', 'attempts', 'nextAttemptAt']) ||
+    !isProductEventReport(entry.report) ||
+    typeof entry.queuedAt !== 'number' ||
+    !Number.isSafeInteger(entry.queuedAt) ||
+    entry.queuedAt < 0 ||
+    entry.queuedAt > now ||
+    !Number.isInteger(entry.attempts) ||
+    (entry.attempts as number) < 0 ||
+    (entry.attempts as number) > PRODUCT_EVENT_OUTBOX_MAX_ATTEMPTS ||
+    typeof entry.nextAttemptAt !== 'number' ||
+    !Number.isSafeInteger(entry.nextAttemptAt) ||
+    entry.nextAttemptAt < entry.queuedAt
+  ) {
+    return 'invalid'
+  }
+  const occurrenceStart = Date.parse(entry.report.occurred_minute_utc)
+  if (
+    !Number.isSafeInteger(occurrenceStart) ||
+    occurrenceStart < 0 ||
+    occurrenceStart > entry.queuedAt ||
+    entry.nextAttemptAt > occurrenceStart + PRODUCT_EVENT_OUTBOX_TTL_MS
+  ) {
+    return 'invalid'
+  }
+  return now - occurrenceStart > PRODUCT_EVENT_OUTBOX_TTL_MS ? 'expired' : 'valid'
 }
 
 function getSessionStorage(): Storage | null {
@@ -262,23 +274,23 @@ function readOutbox(now = Date.now()): StoredProductEventOutbox {
       outbox.version !== 4 ||
       !Array.isArray(outbox.entries) ||
       outbox.entries.length > PRODUCT_EVENT_OUTBOX_MAX_ENTRIES ||
-      !outbox.entries.every((entry) => isOutboxEntry(entry, now)) ||
       ![
         'NONE',
         'STORAGE_UNAVAILABLE',
         'CAPACITY_EXCEEDED',
         'TTL_EXPIRED',
+        'DELIVERY_REJECTED',
         'AUTH_BOUNDARY',
       ].includes(String(outbox.degradation))
     ) {
       throw new Error()
     }
+    const entryValidity = outbox.entries.map((entry) => classifyOutboxEntry(entry, now))
+    if (entryValidity.includes('invalid')) throw new Error()
     if (outbox.degradation !== 'NONE') {
       markDegradation(outbox.degradation as Exclude<ProductEventDegradation, 'NONE'>)
     }
-    const entries = outbox.entries.filter(
-      (entry) => now - entry.queuedAt <= PRODUCT_EVENT_OUTBOX_TTL_MS,
-    )
+    const entries = outbox.entries.filter((_, index) => entryValidity[index] === 'valid')
     if (
       entries.length !== outbox.entries.length ||
       outbox.telemetryBinding !== activeTelemetryBinding
@@ -397,6 +409,9 @@ async function send(
         if (response.status === 204) return 'acknowledged'
         if (response.status === 401 || response.status === 403) {
           return 'authentication_rejected'
+        }
+        if ([400, 404, 405, 409, 413, 415, 422].includes(response.status)) {
+          return 'rejected'
         }
         return 'retry'
       })
@@ -579,14 +594,18 @@ async function runFlush(now: () => number, generation: number): Promise<void> {
     if (result === 'acknowledged') {
       latest.entries.splice(index, 1)
       authRecoveryContinuity = null
+    } else if (result === 'rejected') {
+      latest.entries.splice(index, 1)
+      markDegradation('DELIVERY_REJECTED')
     } else {
       const attempts = latest.entries[index]!.attempts + 1
+      const occurrenceStart = Date.parse(latest.entries[index]!.report.occurred_minute_utc)
       latest.entries[index] = {
         ...latest.entries[index]!,
         attempts,
         nextAttemptAt: Math.min(
           now() + retryDelay(attempts),
-          latest.entries[index]!.queuedAt + PRODUCT_EVENT_OUTBOX_TTL_MS,
+          occurrenceStart + PRODUCT_EVENT_OUTBOX_TTL_MS,
         ),
       }
     }

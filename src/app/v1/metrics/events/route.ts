@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     const actorHash = productEventActorHash(user.id)
     assertProductEventRequestRateLimit(actorHash, now.getTime())
     const event = parseProductEventReport(await readJson(request), now)
+    assertProductEventOccurrenceMatchesId(event)
 
     try {
       await prisma.$transaction(async (transaction) => {
@@ -84,8 +85,6 @@ export async function POST(request: Request) {
           if (matchesEvent(existingById, event, actorHash)) return
           throw problems.productEventConflict()
         }
-        assertProductEventOccurrenceMatchesId(event)
-
         const existingStage = await transaction.productEvent.findFirst({
           where: {
             actorHash,

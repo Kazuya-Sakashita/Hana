@@ -82,6 +82,13 @@ PR #378の正式な第5巡で検出された7件のtelemetry契約矛盾を、Op
 - [x] ProductEvent `flow_id`とMemory `Idempotency-Key`のUUID契約とcanonical表現をOpenAPI、client、serverで単一化する
 - [x] Web Vitals UUIDのbare UUID / URN受理方針をOpenAPI、client、serverで完全一致させる
 
+### Round 2 findings
+
+- [x] query version、actor scope、観測窓、全eligible event IDを独立authority HMACへ事前登録し、manifestの自己申告省略をHOLDにする
+- [x] outbox復元、TTL、retry上限をUUIDv7 occurrence minuteへ拘束し、terminal 4xxを再送しない
+- [x] ProductEvent payload固有validationをactor別DB lookupより前に完了し、validation順序の存在oracleを閉じる
+- [x] M9 DB Memory truthのactor不一致と、E2E DB oracleへの別actor同一flow混入を回帰testでHOLD / 除外する
+
 ### 検証と承認
 
 - [x] OpenAPIを先に更新し、生成型を`pnpm openapi:gen`だけで同期する
@@ -127,6 +134,22 @@ cross-actor oracleを本Issueで修正した。status-only degradation ledgerは
 専用activationが完成するまでproduction ingestを503へ固定した。label付与前eventに拘束された旧CI failureは、
 修正commitのfresh pull_request eventで再評価する。修正後headはfresh Round 2で6 roleすべてを再実行する。
 
+Round 2はbase `e6c891ecde1ba3f51b739361d3cd3de4433835a3`、head
+`3fe22dfa1ad19f9d0b6264733107780e7e15132f`を6 roleが独立・read-onlyで確認した。
+
+| role                        | 判定 | findings |
+| --------------------------- | ---- | -------: |
+| spec acceptance / analytics | HOLD |        1 |
+| implementation correctness  | HOLD |        1 |
+| test reliability            | HOLD |        2 |
+| API contract                | HOLD |        1 |
+| security / authorization    | HOLD |        2 |
+| privacy / data protection   | HOLD |        1 |
+
+Issue Captainが重複したauthority universe findingとoutbox occurrence findingを統合し、6件をactionableとして
+保持した。独立authority登録、発生minute基準TTL、terminal 4xx破棄、DB lookup前validation、M9 DB truth actor反例、
+E2E actor-scoped oracleを本Issueで修正する。修正後headを固定し、通常上限のRound 3で6 roleすべてを再実行する。
+
 ## 実装結果
 
 - `event_name × elapsed_bucket`を生成schema型付きshared predicateへ集約し、client outboxとserver parserを同期した
@@ -139,14 +162,19 @@ cross-actor oracleを本Issueで修正した。status-only degradation ledgerは
 - status-only evidenceでM1〜M12を必須にし、metric欠測から全体PASSを生成できなくした
 - envelope UUIDをsampling、manifest、dedup、completeness比較前にlowercaseへcanonical化した
 - outboxのbinding帰属をpayload検証より先に行い、別continuityへのdegradation誤帰属と未来queueを拒否した
+- outboxのTTLとretry上限をUUIDv7の発生minuteへ拘束し、terminal 4xxのraw entryを再送せず削除した
 - ProductEvent ingestをJSON-onlyにし、cross-actor event ID collisionを204で秘匿した
+- ProductEventのpayload固有validationをactor別DB lookupより先に完了させた
+- query version、actor scope、観測窓、全eligible IDを別keyで事前署名するauthority登録を必須にした
+- E2E telemetry DB oracleをserver-derived actor hashへ限定し、同じflowの別actor noiseを除外した
 - degradation ledgerをGitHub Issue #384へ分離し、専用activation未完成時のproduction ingestをHOLDにした
 - query versionを`issue-188-v1`へ更新し、ISSUE-152 evidenceとの混在を禁止した
 
 ## 検証結果
 
-- 対象11 files / 308 tests PASS
-- `pnpm pr:gate` PASS（196 files中190 PASS / 6 skip、1886 tests中1863 PASS / 23 skip、production build成功）
+- Round 2修正対象5 files / 209 tests PASS
+- `pnpm pr:gate` PASS（196 files中190 PASS / 6 skip、1898 tests中1875 PASS / 23 skip、production build成功）
+- 専用PostgreSQL 16へ19 migrationを適用し、別actor同一flow noiseを含む認証済みbrowser E2E 5件PASS
 - `pnpm openapi:lint` PASS（既存warningのみ）
 - `pnpm openapi:gen` PASS
 - 固定oasdiff imageによるmainとの差分は21件（error 16 / warning 5）

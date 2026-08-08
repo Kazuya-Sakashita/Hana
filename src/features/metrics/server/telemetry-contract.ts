@@ -12,7 +12,9 @@ import { productEventOccurrenceMinuteFromEventId } from '../product-event-occurr
 export const TELEMETRY_EVENT_SCHEMA_VERSION = 'hana-telemetry-event/v2' as const
 export const TELEMETRY_EVIDENCE_SCHEMA_VERSION = 'hana-telemetry-evidence/v2' as const
 export const TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION =
-  'hana-telemetry-expectation-manifest/v2' as const
+  'hana-telemetry-expectation-manifest/v3' as const
+export const TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION =
+  'hana-telemetry-authority-registration/v1' as const
 export const TELEMETRY_QUERY_VERSION = 'issue-188-v1' as const
 export const TELEMETRY_SAMPLING_POLICY_VERSION = 'hmac-event-id/v3' as const
 export const TELEMETRY_COMMITMENT_SCHEME = 'hmac-sha256/v1' as const
@@ -115,6 +117,7 @@ const COMPLETENESS_REASONS = [
 ] as const
 const COMMITMENT_DOMAINS = [
   'metric_window_manifest',
+  'authoritative_event_universe',
   'eligible_census',
   'censoring_status',
 ] as const
@@ -241,12 +244,27 @@ export type TelemetryExpectationManifest = {
     | 'STORAGE_UNAVAILABLE'
     | 'CAPACITY_EXCEEDED'
     | 'TTL_EXPIRED'
+    | 'DELIVERY_REJECTED'
     | 'AUTH_BOUNDARY'
     | 'UNKNOWN'
   sampling_policy_version: typeof TELEMETRY_SAMPLING_POLICY_VERSION
   sampling_key_version: string
   sampling_key_commitment: string
+  query_version: typeof TELEMETRY_QUERY_VERSION
+  authority_key_version: string
+  authority_commitment: string
   expected_event_ids: readonly string[]
+}
+
+export type TelemetryAuthorityRegistration = {
+  schema_version: typeof TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION
+  query_version: typeof TELEMETRY_QUERY_VERSION
+  source: TelemetrySource
+  expected_actor: SyntheticActorRef | null
+  window_start_utc: string
+  window_end_utc: string
+  authority_key_version: string
+  eligible_event_ids: readonly string[]
 }
 
 export type TelemetryCompletenessInput = {
@@ -256,6 +274,7 @@ export type TelemetryCompletenessInput = {
   window_start_utc: string
   window_end_utc: string
   actor_key_version: string
+  authority_registration: TelemetryAuthorityRegistration
   sampling_key_version: string
   sampling_key: string | null
   manifest_commitment: string
@@ -442,6 +461,22 @@ export function createTelemetryExpectationManifestCommitment(
   })
 }
 
+export function createTelemetryAuthorityRegistrationCommitment(input: {
+  registration: TelemetryAuthorityRegistration
+  commitment_key: string
+}): string {
+  return createTelemetryCommitment({
+    domain: 'authoritative_event_universe',
+    window_start_utc: input.registration.window_start_utc,
+    window_end_utc: input.registration.window_end_utc,
+    actor_key_version:
+      input.registration.expected_actor?.actor_key_version ??
+      input.registration.authority_key_version,
+    value: input.registration,
+    commitment_key: input.commitment_key,
+  })
+}
+
 function validSamplingConfiguration(
   source: TelemetrySource,
   sampling: { key_version: string; key: string | null },
@@ -493,6 +528,77 @@ function validManifestCommitment(input: TelemetryCompletenessInput): boolean {
   }
 }
 
+function validAuthorityRegistration(input: TelemetryCompletenessInput): boolean {
+  const registration = input.authority_registration as TelemetryAuthorityRegistration | undefined
+  if (
+    !registration ||
+    !isRecord(registration) ||
+    !hasExactKeys(registration, [
+      'schema_version',
+      'query_version',
+      'source',
+      'expected_actor',
+      'window_start_utc',
+      'window_end_utc',
+      'authority_key_version',
+      'eligible_event_ids',
+    ]) ||
+    registration.schema_version !== TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION ||
+    registration.query_version !== TELEMETRY_QUERY_VERSION ||
+    registration.source !== input.source ||
+    registration.window_start_utc !== input.window_start_utc ||
+    registration.window_end_utc !== input.window_end_utc ||
+    !ACTOR_KEY_VERSION_PATTERN.test(registration.authority_key_version) ||
+    (registration.expected_actor !== null &&
+      (!validSyntheticActorRef(registration.expected_actor) ||
+        registration.expected_actor.actor_key_version !== input.actor_key_version)) ||
+    !Array.isArray(registration.eligible_event_ids) ||
+    registration.eligible_event_ids.length === 0 ||
+    registration.eligible_event_ids.some(
+      (eventId) => typeof eventId !== 'string' || canonicalizeBareUuid(eventId) !== eventId,
+    ) ||
+    new Set(registration.eligible_event_ids).size !== registration.eligible_event_ids.length
+  ) {
+    return false
+  }
+  return (
+    input.manifest.query_version === registration.query_version &&
+    input.manifest.authority_key_version === registration.authority_key_version &&
+    input.manifest.expected_event_ids.length === registration.eligible_event_ids.length &&
+    input.manifest.expected_event_ids.every(
+      (eventId, index) => canonicalizeBareUuid(eventId) === registration.eligible_event_ids[index],
+    )
+  )
+}
+
+function validAuthorityCommitment(input: TelemetryCompletenessInput): boolean {
+  const registration = input.authority_registration
+  const configuredVersion = process.env.TELEMETRY_AUTHORITY_KEY_VERSION
+  const configuredKey = process.env.TELEMETRY_AUTHORITY_COMMITMENT_KEY
+  if (
+    configuredVersion !== registration.authority_key_version ||
+    typeof configuredKey !== 'string' ||
+    Buffer.byteLength(configuredKey, 'utf8') < TELEMETRY_COMMITMENT_KEY_MIN_LENGTH ||
+    configuredKey === input.commitment_key ||
+    !SHA256_PATTERN.test(input.manifest.authority_commitment)
+  ) {
+    return false
+  }
+  try {
+    const expected = Buffer.from(
+      createTelemetryAuthorityRegistrationCommitment({
+        registration,
+        commitment_key: configuredKey,
+      }),
+      'hex',
+    )
+    const received = Buffer.from(input.manifest.authority_commitment, 'hex')
+    return expected.length === received.length && timingSafeEqual(expected, received)
+  } catch {
+    return false
+  }
+}
+
 function validExpectationManifest(
   manifest: TelemetryExpectationManifest | undefined,
   source: TelemetrySource,
@@ -508,6 +614,9 @@ function validExpectationManifest(
       'sampling_policy_version',
       'sampling_key_version',
       'sampling_key_commitment',
+      'query_version',
+      'authority_key_version',
+      'authority_commitment',
       'expected_event_ids',
     ]) &&
     manifest.schema_version === TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION &&
@@ -518,6 +627,7 @@ function validExpectationManifest(
       'STORAGE_UNAVAILABLE',
       'CAPACITY_EXCEEDED',
       'TTL_EXPIRED',
+      'DELIVERY_REJECTED',
       'AUTH_BOUNDARY',
       'UNKNOWN',
     ].includes(manifest.degradation) &&
@@ -525,6 +635,11 @@ function validExpectationManifest(
     ACTOR_KEY_VERSION_PATTERN.test(manifest.sampling_key_version) &&
     typeof manifest.sampling_key_commitment === 'string' &&
     SHA256_PATTERN.test(manifest.sampling_key_commitment) &&
+    manifest.query_version === TELEMETRY_QUERY_VERSION &&
+    typeof manifest.authority_key_version === 'string' &&
+    ACTOR_KEY_VERSION_PATTERN.test(manifest.authority_key_version) &&
+    typeof manifest.authority_commitment === 'string' &&
+    SHA256_PATTERN.test(manifest.authority_commitment) &&
     Array.isArray(manifest.expected_event_ids) &&
     manifest.expected_event_ids.length > 0 &&
     manifest.expected_event_ids.every(
@@ -559,7 +674,12 @@ export function evaluateTelemetryCompleteness(
   if (manifest.sampling_policy_version !== TELEMETRY_SAMPLING_POLICY_VERSION) {
     return completenessHold(input.source, 'sampling_policy_mismatch')
   }
-  if (!validExpectationManifest(manifest, input.source) || !validManifestCommitment(input)) {
+  if (
+    !validExpectationManifest(manifest, input.source) ||
+    !validAuthorityRegistration(input) ||
+    !validAuthorityCommitment(input) ||
+    !validManifestCommitment(input)
+  ) {
     return completenessHold(input.source, 'expected_manifest_untrusted')
   }
   if (manifest.degradation !== 'NONE') {
@@ -768,6 +888,14 @@ export function evaluateSyntheticFunnelFlow(input: {
   ) {
     return { metric_id: input.metric_id, status: 'HOLD', reason: 'telemetry_incomplete' }
   }
+  if (
+    !sameSyntheticActor(
+      input.expected_actor,
+      input.completeness_input.authority_registration.expected_actor,
+    )
+  ) {
+    return { metric_id: input.metric_id, status: 'HOLD', reason: 'actor_reference_invalid' }
+  }
   const stageName = input.metric_id === 'M2' ? 'photo_selected' : 'ai_draft_shown'
   const sameFlowStages = input.events.filter(
     (event) => canonicalizeBareUuid(event.flow_id) === flowId && event.event_name === stageName,
@@ -898,6 +1026,14 @@ export function evaluateSyntheticM9ViewToMemory(input: {
     completeness.reason !== 'complete'
   ) {
     return hold('telemetry_incomplete')
+  }
+  if (
+    !sameSyntheticActor(
+      input.expected_actor,
+      input.completeness_input.authority_registration.expected_actor,
+    )
+  ) {
+    return hold('actor_reference_invalid')
   }
   const views = input.events.filter((event) => event.event_name === 'memory_viewed')
   if (

@@ -241,7 +241,7 @@ describe('POST /v1/metrics/events', () => {
     )
 
     expect(response.status).toBe(422)
-    expect(mocks.eventFindUnique).toHaveBeenCalledTimes(1)
+    expect(mocks.eventFindUnique).not.toHaveBeenCalled()
     expect(mocks.eventFindFirst).not.toHaveBeenCalled()
     expect(mocks.eventCreate).not.toHaveBeenCalled()
   })
@@ -316,10 +316,10 @@ describe('POST /v1/metrics/events', () => {
     expect(await response.text()).toBe('')
   })
 
-  it('returns 409 when the same event id is reused with a different occurrence minute', async () => {
+  it('rejects a minute mismatch before revealing a cross-actor event id', async () => {
     mocks.eventFindUnique.mockResolvedValue({
       eventId: validReport.event_id,
-      actorHash: productEventActorHash(USER_ID),
+      actorHash: 'different-actor',
       flowId: validReport.flow_id,
       eventName: validReport.event_name,
       elapsedBucket: validReport.elapsed_bucket,
@@ -333,7 +333,8 @@ describe('POST /v1/metrics/events', () => {
       }),
     )
 
-    expect(response.status).toBe(409)
+    expect(response.status).toBe(422)
+    expect(mocks.eventFindUnique).not.toHaveBeenCalled()
     expect(mocks.eventCreate).not.toHaveBeenCalled()
   })
 

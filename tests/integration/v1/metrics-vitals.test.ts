@@ -4,14 +4,18 @@ import { POST } from '@/app/v1/metrics/vitals/route'
 import { resetWebVitalsRateLimitForTests } from '@/features/metrics/server/web-vitals-rate-limit'
 import { shouldSampleWebVitals } from '@/features/metrics/server/web-vitals'
 import {
+  createTelemetryAuthorityRegistrationCommitment,
   createTelemetryExpectationManifestCommitment,
   createTelemetrySamplingKeyCommitment,
   evaluateTelemetryCompleteness,
   parseTelemetryEnvelope,
   shouldSampleTelemetry,
+  TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
   TELEMETRY_EVENT_SCHEMA_VERSION,
   TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
+  TELEMETRY_QUERY_VERSION,
   TELEMETRY_SAMPLING_POLICY_VERSION,
+  type TelemetryAuthorityRegistration,
   type TelemetryCompletenessInput,
   type TelemetryExpectationManifest,
 } from '@/features/metrics/server/telemetry-contract'
@@ -19,6 +23,8 @@ import {
 const SAMPLING_KEY = 'integration-web-vitals-sampling-key-32-bytes'
 const SAMPLING_KEY_VERSION = 'integration-v1'
 const COMMITMENT_KEY = 'integration-commitment-key-32-bytes-minimum'
+const AUTHORITY_KEY = 'integration-authority-key-32-bytes-minimum'
+const AUTHORITY_KEY_VERSION = 'integration-authority-v1'
 
 function jsonRequest(body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/v1/metrics/vitals', {
@@ -154,6 +160,18 @@ describe('POST /v1/metrics/vitals', () => {
       )
     }
 
+    vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', AUTHORITY_KEY_VERSION)
+    vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', AUTHORITY_KEY)
+    const authorityRegistration: TelemetryAuthorityRegistration = {
+      schema_version: TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
+      query_version: TELEMETRY_QUERY_VERSION,
+      source: 'web_vital',
+      expected_actor: null,
+      window_start_utc: '2026-08-07T00:00:00Z',
+      window_end_utc: '2026-08-08T00:00:00Z',
+      authority_key_version: AUTHORITY_KEY_VERSION,
+      eligible_event_ids: [sampledIn, sampledOut],
+    }
     const manifest: TelemetryExpectationManifest = {
       schema_version: TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
       source: 'web_vital',
@@ -166,6 +184,12 @@ describe('POST /v1/metrics/vitals', () => {
         sampling_key_version: SAMPLING_KEY_VERSION,
         sampling_key: SAMPLING_KEY,
         commitment_key: COMMITMENT_KEY,
+      }),
+      query_version: TELEMETRY_QUERY_VERSION,
+      authority_key_version: AUTHORITY_KEY_VERSION,
+      authority_commitment: createTelemetryAuthorityRegistrationCommitment({
+        registration: authorityRegistration,
+        commitment_key: AUTHORITY_KEY,
       }),
       expected_event_ids: [sampledIn, sampledOut],
     }
@@ -189,6 +213,7 @@ describe('POST /v1/metrics/vitals', () => {
       window_start_utc: '2026-08-07T00:00:00Z',
       window_end_utc: '2026-08-08T00:00:00Z',
       actor_key_version: 'v2',
+      authority_registration: authorityRegistration,
       sampling_key_version: SAMPLING_KEY_VERSION,
       sampling_key: SAMPLING_KEY,
       commitment_key: COMMITMENT_KEY,

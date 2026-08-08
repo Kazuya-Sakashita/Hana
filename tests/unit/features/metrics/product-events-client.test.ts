@@ -266,6 +266,8 @@ describe('durable ProductEvent outbox', () => {
   })
 
   it('preserves degradation and rebinds a persisted queue across same-session rotation', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-07T00:30:00Z'))
     const storage = new MemoryStorage()
     vi.stubGlobal('sessionStorage', storage)
     const queuedAt = Date.now()
@@ -601,6 +603,53 @@ describe('durable ProductEvent outbox', () => {
   })
 
   it.each([
+    ['future occurrence', '2026-08-07T00:00:00Z', '2026-08-06T23:59:59Z', '2026-08-06T23:59:59Z'],
+    [
+      'occurrence after queuedAt',
+      '2026-08-07T00:00:00Z',
+      '2026-08-06T23:59:59Z',
+      '2026-08-07T00:30:00Z',
+    ],
+  ])('rejects a persisted %s before network access', (_label, minute, queuedAtIso, nowIso) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(nowIso))
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const queuedAt = Date.parse(queuedAtIso)
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 4,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: [
+          {
+            report: {
+              event_name: 'record_started',
+              event_id: '019fd985-0000-7000-8000-000000000001',
+              flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+              occurred_minute_utc: minute,
+              elapsed_bucket: 'not_applicable',
+            },
+            queuedAt,
+            attempts: 0,
+            nextAttemptAt: queuedAt,
+          },
+        ],
+      }),
+    )
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(readProductEventDegradationForTest()).toBe('STORAGE_UNAVAILABLE')
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).not.toContain('record_started')
+  })
+
+  it.each([
     ['record_started', 5_000],
     ['photo_selected', null],
   ] as const)(
@@ -749,6 +798,8 @@ describe('durable ProductEvent outbox', () => {
   })
 
   it('marks capacity exhaustion without evicting or directly sending an event', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-07T00:30:00Z'))
     const storage = new MemoryStorage()
     vi.stubGlobal('sessionStorage', storage)
     const fetchMock = vi.fn()
@@ -789,6 +840,7 @@ describe('durable ProductEvent outbox', () => {
   })
 
   it('marks expired durable entries as degraded', () => {
+    const occurrenceStart = Date.parse('2026-08-07T00:00:00Z')
     const storage = new MemoryStorage()
     vi.stubGlobal('sessionStorage', storage)
     setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
@@ -807,16 +859,99 @@ describe('durable ProductEvent outbox', () => {
               occurred_minute_utc: '2026-08-07T00:00:00Z',
               elapsed_bucket: 'not_applicable',
             },
-            queuedAt: 0,
+            queuedAt: occurrenceStart + PRODUCT_EVENT_OUTBOX_TTL_MS,
             attempts: 0,
-            nextAttemptAt: 0,
+            nextAttemptAt: occurrenceStart + PRODUCT_EVENT_OUTBOX_TTL_MS,
           },
         ],
       }),
     )
 
-    expect(readProductEventOutboxForTest(PRODUCT_EVENT_OUTBOX_TTL_MS + 1)).toHaveLength(0)
+    expect(
+      readProductEventOutboxForTest(occurrenceStart + PRODUCT_EVENT_OUTBOX_TTL_MS + 1),
+    ).toHaveLength(0)
     expect(readProductEventDegradationForTest()).toBe('TTL_EXPIRED')
+  })
+
+  it('keeps an entry only through the exact occurrence-minute 24-hour boundary', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-08T00:00:00Z'))
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    storage.setItem(
+      PRODUCT_EVENT_OUTBOX_STORAGE_KEY,
+      JSON.stringify({
+        version: 4,
+        telemetryBinding: TELEMETRY_BINDING_A,
+        degradation: 'NONE',
+        entries: [
+          {
+            report: {
+              event_name: 'record_started',
+              event_id: '019fd985-0000-7000-8000-000000000001',
+              flow_id: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+              occurred_minute_utc: '2026-08-07T00:00:00Z',
+              elapsed_bucket: 'not_applicable',
+            },
+            queuedAt: Date.parse('2026-08-07T00:00:30Z'),
+            attempts: 0,
+            nextAttemptAt: Date.parse('2026-08-08T00:00:00Z'),
+          },
+        ],
+      }),
+    )
+
+    setProductEventTelemetryBinding(TELEMETRY_BINDING_A)
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+  })
+
+  it.each([409, 422])('terminally drops a rejected report after response %s', async (status) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-07T00:30:00Z'))
+    const storage = new MemoryStorage()
+    vi.stubGlobal('sessionStorage', storage)
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    await flushProductEventOutbox()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readProductEventOutboxForTest()).toHaveLength(0)
+    expect(readProductEventDegradationForTest()).toBe('DELIVERY_REJECTED')
+    expect(storage.getItem(PRODUCT_EVENT_OUTBOX_STORAGE_KEY)).not.toContain('photo_selected')
+  })
+
+  it.each([408, 429, 503])('retains a retryable report after response %s', async (status) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-07T00:30:00Z'))
+    vi.stubGlobal('sessionStorage', new MemoryStorage())
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    reportProductEvent({
+      eventName: 'photo_selected',
+      flowId: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+      elapsedMs: 5_000,
+      telemetryBinding: TELEMETRY_BINDING_A,
+    })
+    await flushProductEventOutbox()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readProductEventOutboxForTest()).toHaveLength(1)
+    expect(readProductEventDegradationForTest()).toBe('NONE')
   })
 
   it('refreshes once after 403 and retries the same event id for the same continuity', async () => {

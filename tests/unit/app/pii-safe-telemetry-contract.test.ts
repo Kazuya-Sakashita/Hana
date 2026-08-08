@@ -36,6 +36,8 @@ describe('ISSUE-188 PII-safe telemetry contract recovery', () => {
     expect(outbox).toContain("'occurred_minute_utc'")
     expect(outbox).toContain("'X-Hana-Telemetry-Binding': telemetryBinding")
     expect(outbox).toContain('outbox.telemetryBinding !== activeTelemetryBinding')
+    expect(outbox).toContain("markDegradation('DELIVERY_REJECTED')")
+    expect(outbox).toContain('occurrenceStart + PRODUCT_EVENT_OUTBOX_TTL_MS')
     expect(outbox).not.toMatch(/report\.(?:email|body|storageKey|prompt|actorHash)/)
     expect(settingsPage.match(/clearProductEventOutbox\(\)/g)).toHaveLength(2)
     expect(contract).toContain('別actorまたは別`session_id`のbinding不一致')
@@ -57,6 +59,8 @@ describe('ISSUE-188 PII-safe telemetry contract recovery', () => {
     expect(telemetry).toContain("'secondary'")
     expect(telemetry).toContain('eligible_census_commitment')
     expect(telemetry).toContain("TELEMETRY_QUERY_VERSION = 'issue-188-v1'")
+    expect(telemetry).toContain("domain: 'authoritative_event_universe'")
+    expect(telemetry).toContain('process.env.TELEMETRY_AUTHORITY_COMMITMENT_KEY')
     expect(contract).toContain('Version: `issue-188-v1`')
     expect(contract).toContain('versioned expectation manifestとreceived ID')
     expect(contract).toContain('primary suppression')
@@ -89,6 +93,8 @@ describe('ISSUE-188 PII-safe telemetry contract recovery', () => {
     expect(environmentExample).toMatch(/^PRODUCT_EVENT_INGEST_ACTIVATION=$/m)
     expect(environmentExample).toMatch(/^PRODUCT_EVENT_PURGE_ACTIVATION=$/m)
     expect(environmentExample).toMatch(/^PRODUCT_EVENT_DEGRADATION_ACTIVATION=$/m)
+    expect(environmentExample).toMatch(/^TELEMETRY_AUTHORITY_KEY_VERSION=$/m)
+    expect(environmentExample).toMatch(/^TELEMETRY_AUTHORITY_COMMITMENT_KEY=$/m)
     expect(environmentExample).not.toMatch(
       /^PRODUCT_EVENT_(?:INGEST|PURGE|DEGRADATION)_ACTIVATION=issue-/m,
     )

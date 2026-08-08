@@ -86,9 +86,11 @@ outbox rootへserver-minted telemetry bindingと固定degradation statusを1つ�
 `getUser()`で検証したactorと`getClaims()`で検証したJWT `sub / session_id`、期限bucketへ拘束し、
 同じ`session_id`のtoken rotationだけをopaque continuity tagで継続する。request headerだけに使い、
 body、DB row、通常log、evidenceへ出さない。204だけをackとし、同じevent IDと発生minuteを指数backoffで
-再送する。event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、restricted aggregateはDB event IDから
+再送する。409 / 422を含む認証以外のterminal 4xxは再送せずraw entryを削除し、`DELIVERY_REJECTED`だけを
+残す。event IDは発生minuteを先頭48 bitへ埋め込んだUUIDv7とし、restricted aggregateはDB event IDから
 minuteを復元し、DB `created_at`をreceipt timeとして使う。最大50件、TTL 24時間で、容量超過時に
-古い未ack eventを追い出してcompletenessを偽装しない。outboxが使えないbrowserでは記録操作を止めないが、
+古い未ack eventを追い出してcompletenessを偽装しない。TTLとretry上限は`queuedAt`ではなくUUIDv7の
+発生minuteから計算し、future、24時間超、発生minuteより前のqueueをnetwork前に破棄する。outboxが使えないbrowserでは記録操作を止めないが、
 該当観測窓のcompletenessは証明できないためHoldにする。
 別actorまたは別`session_id`のbinding不一致、サインアウト、退会完了では送信前にoutbox全体を破棄し、
 別sessionへの再送を禁止する。token rotation中の旧bindingが401 / 403になった場合だけ、同じopaque
@@ -112,8 +114,11 @@ sourceごとに観測開始前のversioned expectation manifestとreceived IDを
 別々に判定する。manifestはsource、sampling policy version、sampling key version、sampling key commitment、
 degradation status、sampling適用前のexpected event IDを固定する。sampling key commitmentは別のcommitment keyで
 domain-separated HMACを作り、同じversion文字列に誤ったsecretが配布された場合もfail closedにする。
-観測窓・actor key version・manifest全体をdomain-separated HMAC commitmentへ事前登録し、
-evaluatorはconstant-timeで一致を検証してから同じversioned policyを適用する。空manifest、manifest欠落、
+manifestとは別に、保護されたauthority jobが観測開始前にquery version、source、actor token / key version、
+半開観測窓、canonicalな全eligible event IDを`authoritative_event_universe` domainへ登録する。
+`TELEMETRY_AUTHORITY_COMMITMENT_KEY`はmanifest commitment keyと分離し、通常aggregate callerへ渡さない。
+evaluatorは保護Environmentのkey versionとHMACをconstant-timeで検証し、authority universeとmanifestが
+順序を含め完全一致してから同じversioned policyを適用する。空manifest、manifest欠落、
 source不一致、degraded、
 policy / sampling key version不一致、loss、unexpected eventはcompleteness Holdである。received envelopeは
 型注釈を信用せずexact schemaとcanonical RFC3339 calendar dateで再parseし、発生時刻が半開観測窓の外ならHoldにする。同一event IDの

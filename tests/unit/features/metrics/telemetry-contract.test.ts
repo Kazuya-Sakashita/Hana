@@ -1,9 +1,10 @@
 import { createHmac } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   applyTelemetrySuppression,
   buildTelemetryEvidence,
   createTelemetryCommitment,
+  createTelemetryAuthorityRegistrationCommitment,
   createTelemetryExpectationManifestCommitment,
   createTelemetrySamplingKeyCommitment,
   evaluateCensoredRate,
@@ -14,6 +15,7 @@ import {
   parseTelemetryEnvelope,
   shouldSampleTelemetry,
   TELEMETRY_ACCESS_POLICY,
+  TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
   TELEMETRY_COMMITMENT_SCHEME,
   TELEMETRY_EVENT_SCHEMA_VERSION,
   TELEMETRY_EVIDENCE_SCHEMA_VERSION,
@@ -27,6 +29,7 @@ import {
   type SyntheticFunnelEvent,
   type SyntheticMemoryTruth,
   type SyntheticProfileMemoryTruth,
+  type TelemetryAuthorityRegistration,
   type TelemetryCompletenessResult,
   type TelemetryCompletenessInput,
   type TelemetryEnvelope,
@@ -46,6 +49,8 @@ const EVENT_C = '00000000-0000-4000-8000-000000000003'
 const EVENT_D = '00000000-0000-4000-8000-000000000004'
 const FLOW_ID = '00000000-0000-4000-8000-000000000010'
 const COMMITMENT_KEY = 'synthetic-commitment-key-32-bytes-minimum'
+const AUTHORITY_KEY = 'synthetic-authority-key-32-bytes-minimum'
+const AUTHORITY_KEY_VERSION = 'synthetic-authority-v1'
 const SAMPLING_KEY = 'synthetic-sampling-key-with-32-bytes-minimum'
 const SAMPLING_KEY_VERSION = 'synthetic-v1'
 const ACTOR_A: SyntheticActorRef = {
@@ -60,6 +65,15 @@ const ACTOR_A_OLD_KEY: SyntheticActorRef = {
   actor_key_version: 'v1',
   actor_token: 'c'.repeat(64),
 }
+
+beforeEach(() => {
+  vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', AUTHORITY_KEY_VERSION)
+  vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', AUTHORITY_KEY)
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 function envelope(
   eventId: string,
@@ -123,12 +137,32 @@ function samplingFor(source: TelemetrySource) {
     : { key_version: SAMPLING_KEY_VERSION, key: SAMPLING_KEY }
 }
 
+function authorityRegistration(
+  source: TelemetrySource,
+  eligibleEventIds: readonly string[],
+  overrides: Partial<TelemetryAuthorityRegistration> = {},
+): TelemetryAuthorityRegistration {
+  const canonicalEligibleEventIds = eligibleEventIds.map((eventId) => eventId.toLowerCase())
+  return {
+    schema_version: TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
+    query_version: TELEMETRY_QUERY_VERSION,
+    source,
+    expected_actor: ACTOR_A,
+    window_start_utc: '2026-08-07T00:00:00Z',
+    window_end_utc: '2026-08-08T00:00:00Z',
+    authority_key_version: AUTHORITY_KEY_VERSION,
+    eligible_event_ids: canonicalEligibleEventIds,
+    ...overrides,
+  }
+}
+
 function manifest(
   expectedEventIds: readonly string[],
   overrides: Partial<TelemetryExpectationManifest> = {},
 ): TelemetryExpectationManifest {
   const source = overrides.source ?? 'funnel'
   const sampling = samplingFor(source)
+  const registration = authorityRegistration(source, expectedEventIds)
   return {
     schema_version: TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
     source,
@@ -142,6 +176,12 @@ function manifest(
       sampling_key: sampling.key,
       commitment_key: COMMITMENT_KEY,
     }),
+    query_version: TELEMETRY_QUERY_VERSION,
+    authority_key_version: AUTHORITY_KEY_VERSION,
+    authority_commitment: createTelemetryAuthorityRegistrationCommitment({
+      registration,
+      commitment_key: AUTHORITY_KEY,
+    }),
     expected_event_ids: expectedEventIds,
     ...overrides,
   }
@@ -153,11 +193,14 @@ function completenessInput(
   received: readonly TelemetryEnvelope[],
   overrides: Partial<TelemetryCompletenessInput> = {},
 ): TelemetryCompletenessInput {
-  const { manifest_commitment: suppliedCommitment, ...boundaryOverrides } = overrides
+  const {
+    manifest_commitment: suppliedCommitment,
+    authority_registration: suppliedAuthority,
+    ...boundaryOverrides
+  } = overrides
   const sampling = samplingFor(source)
-  const boundary = {
+  const unsignedBoundary = {
     source,
-    manifest: expectation,
     received,
     window_start_utc: '2026-08-07T00:00:00Z',
     window_end_utc: '2026-08-08T00:00:00Z',
@@ -166,6 +209,26 @@ function completenessInput(
     sampling_key: sampling.key,
     commitment_key: COMMITMENT_KEY,
     ...boundaryOverrides,
+  }
+  const registration =
+    suppliedAuthority ??
+    authorityRegistration(source, expectation.expected_event_ids, {
+      window_start_utc: unsignedBoundary.window_start_utc,
+      window_end_utc: unsignedBoundary.window_end_utc,
+    })
+  const boundExpectation = {
+    ...expectation,
+    authority_commitment: createTelemetryAuthorityRegistrationCommitment({
+      registration,
+      commitment_key: AUTHORITY_KEY,
+    }),
+  }
+  const boundary = {
+    ...unsignedBoundary,
+    manifest: (Object.prototype.hasOwnProperty.call(boundaryOverrides, 'manifest')
+      ? boundaryOverrides.manifest
+      : boundExpectation) as TelemetryExpectationManifest,
+    authority_registration: registration,
   }
   return {
     ...boundary,
@@ -689,6 +752,66 @@ describe('telemetry completeness manifest and sampling', () => {
       ),
     ).toMatchObject({ status: 'HOLD', reason: 'unexpected_event' })
   })
+
+  it('requires an independently signed actor, query, window and full eligible universe', () => {
+    const fullRegistration = authorityRegistration('funnel', [EVENT_A, EVENT_B])
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_B]), [envelope(EVENT_B, 'record_started')], {
+          authority_registration: fullRegistration,
+        }),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+
+    const valid = completenessInput('funnel', manifest([EVENT_A]), [
+      envelope(EVENT_A, 'record_started'),
+    ])
+    const tamperedActor = {
+      ...valid,
+      authority_registration: {
+        ...valid.authority_registration,
+        expected_actor: ACTOR_B,
+      },
+    }
+    expect(evaluateTelemetryCompleteness(tamperedActor)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
+
+    const oldQueryRegistration = authorityRegistration('funnel', [EVENT_A], {
+      query_version: 'issue-187-v1' as never,
+    })
+    expect(
+      evaluateTelemetryCompleteness(
+        completenessInput('funnel', manifest([EVENT_A]), [envelope(EVENT_A, 'record_started')], {
+          authority_registration: oldQueryRegistration,
+        }),
+      ),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+  })
+
+  it('fails closed when the protected authority key is missing, mismatched or reused', () => {
+    const input = completenessInput('funnel', manifest([EVENT_A]), [
+      envelope(EVENT_A, 'record_started'),
+    ])
+    vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', '')
+    expect(evaluateTelemetryCompleteness(input)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
+    vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', AUTHORITY_KEY)
+    vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', 'unknown-v1')
+    expect(evaluateTelemetryCompleteness(input)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
+    vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', AUTHORITY_KEY_VERSION)
+    vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', COMMITMENT_KEY)
+    expect(evaluateTelemetryCompleteness(input)).toMatchObject({
+      status: 'HOLD',
+      reason: 'expected_manifest_untrusted',
+    })
+  })
 })
 
 describe('actor-scoped funnel DB truth correlation', () => {
@@ -713,6 +836,28 @@ describe('actor-scoped funnel DB truth correlation', () => {
     })
     expect(JSON.stringify(result)).not.toContain(ACTOR_A.actor_token)
     expect(result).not.toHaveProperty('actor')
+  })
+
+  it('rejects completeness registered for another actor with the same key version', () => {
+    const actorBRegistration = authorityRegistration('funnel', [EVENT_B], {
+      expected_actor: ACTOR_B,
+    })
+    expect(
+      evaluateSyntheticFunnelFlow({
+        metric_id: 'M2',
+        flow_id: FLOW_ID,
+        expected_actor: ACTOR_A,
+        generated_at_utc: '2026-08-07T01:00:00Z',
+        completeness_input: completenessInput(
+          'funnel',
+          manifest([EVENT_B]),
+          [envelope(EVENT_B, 'photo_selected')],
+          { authority_registration: actorBRegistration },
+        ),
+        events: [funnelEvent()],
+        memories: [memoryTruth()],
+      }),
+    ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'actor_reference_invalid' })
   })
 
   it('uses the same generic bare UUID contract and canonical comparison as ingestion', () => {
@@ -1035,6 +1180,30 @@ describe('M9 occurrence-minute view-to-memory correlation', () => {
     ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
   })
 
+  it('holds when the manifest, received data and caller all omit an authoritative early view', () => {
+    const laterMinute = '2026-08-07T12:00:00Z'
+    const laterEventId = uuidV7ForMinute(laterMinute, '000000000011')
+    const fullRegistration = authorityRegistration('funnel', [EVENT_B, laterEventId])
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        completeness_input: completenessInput(
+          'funnel',
+          manifest([laterEventId]),
+          [envelope(laterEventId, 'memory_viewed', laterMinute)],
+          { authority_registration: fullRegistration },
+        ),
+        events: [
+          viewedEvent({
+            event_id: laterEventId,
+            occurred_minute_utc: laterMinute,
+            received_at_utc: '2026-08-07T12:20:00Z',
+          }),
+        ],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+  })
+
   it('holds on excess or duplicate supplied and received view IDs', () => {
     const laterMinute = '2026-08-07T12:00:00Z'
     const laterEventId = uuidV7ForMinute(laterMinute, '000000000011')
@@ -1071,6 +1240,12 @@ describe('M9 occurrence-minute view-to-memory correlation', () => {
       evaluateSyntheticM9ViewToMemory({
         ...base,
         events: [viewedEvent({ actor: ACTOR_B })],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'actor_reference_invalid' })
+    expect(
+      evaluateSyntheticM9ViewToMemory({
+        ...base,
+        memories: [profileMemory({ actor: ACTOR_B })],
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'actor_reference_invalid' })
     expect(

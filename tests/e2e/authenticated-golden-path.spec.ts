@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { E2E_CHILD_ID, E2E_FIXTURE_CONTROL_TOKEN } from './support/constants'
-import { readSyntheticTelemetryFlow, seedSyntheticAccount } from './support/database'
+import {
+  cleanupCrossActorTelemetryNoise,
+  readSyntheticTelemetryFlow,
+  seedCrossActorTelemetryNoise,
+  seedSyntheticAccount,
+} from './support/database'
 import type { components } from '@/lib/api/generated/schema'
 
 type UploadConfirmRequest = components['schemas']['UploadConfirmRequest']
@@ -94,20 +99,25 @@ test.describe.serial('authenticated synthetic golden path', () => {
     await expect(page).toHaveURL(new RegExp(`/album\\?month=${recordedMonth}$`))
     await expect(page.getByText('画面から残した合成記録', { exact: true })).toBeVisible()
     expect(memoryIdempotencyKey).toMatch(/^[0-9a-f-]{36}$/)
-    await expect
-      .poll(async () => {
-        const flow = await readSyntheticTelemetryFlow(memoryIdempotencyKey)
-        return {
-          memoryIdempotencyKey: flow.memoryIdempotencyKey,
-          eventNames: flow.events.map((event) => event.eventName).sort(),
-          flowIds: [...new Set(flow.events.map((event) => event.flowId))],
-        }
-      })
-      .toEqual({
-        memoryIdempotencyKey,
-        eventNames: ['memory_saved', 'photo_selected', 'record_started'],
-        flowIds: [memoryIdempotencyKey],
-      })
+    await seedCrossActorTelemetryNoise(memoryIdempotencyKey)
+    try {
+      await expect
+        .poll(async () => {
+          const flow = await readSyntheticTelemetryFlow(memoryIdempotencyKey)
+          return {
+            memoryIdempotencyKey: flow.memoryIdempotencyKey,
+            eventNames: flow.events.map((event) => event.eventName).sort(),
+            flowIds: [...new Set(flow.events.map((event) => event.flowId))],
+          }
+        })
+        .toEqual({
+          memoryIdempotencyKey,
+          eventNames: ['memory_saved', 'photo_selected', 'record_started'],
+          flowIds: [memoryIdempotencyKey],
+        })
+    } finally {
+      await cleanupCrossActorTelemetryNoise(memoryIdempotencyKey)
+    }
     expect(
       metricRequests
         .filter((event) => event.flow_id === memoryIdempotencyKey)
