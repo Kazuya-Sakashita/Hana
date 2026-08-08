@@ -393,6 +393,10 @@ jobs:
           PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
           HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
           BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          PR_GATE_CHECK_ID: ${{ needs.begin_required_checks.outputs.pr_gate_check_id }}
+          VALIDATE_CHECK_ID: ${{ needs.begin_required_checks.outputs.validate_check_id }}
+          LOCAL_REGISTRY_CHECK_ID: ${{ needs.begin_required_checks.outputs.local_registry_check_id }}
+          SPECIALIST_REVIEW_CHECK_ID: ${{ needs.begin_required_checks.outputs.specialist_review_check_id }}
           MERGE_ELIGIBILITY_CHECK_ID: ${{ needs.begin_required_checks.outputs.merge_eligibility_check_id }}
           OPENAPI_BREAKING_DETECTED: ${{ needs.trusted_openapi_breaking.outputs.breaking_detected }}
           MERGE_REASON: ${{ needs.prepare.outputs.merge_reason }}
