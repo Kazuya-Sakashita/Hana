@@ -1,7 +1,7 @@
 # PII-safe telemetry contract
 
 - Status: active
-- Version: `issue-188-v1`
+- Version: `issue-188-v2`
 - Event schema: `hana-telemetry-event/v2`
 - Retention: 90 days
 
@@ -117,19 +117,25 @@ ProductEvent ingestはactor advisory lock内でactor-scoped idempotency / stage�
 collisionの順に評価する。quota到達時はglobal IDを照会せず、他actor既存IDと未知IDを同じ429 Problem Details、
 同じheaderへ固定する。unique race後の再判定も同じ順序を使う。
 
-sourceごとに観測開始前のversioned expectation manifestとreceived IDを比較し、loss、duplicate、reorderを
-別々に判定する。manifestはsource、sampling policy version、sampling key version、sampling key commitment、
-degradation status、sampling適用前のexpected event IDを固定する。sampling key commitmentは別のcommitment keyで
-domain-separated HMACを作り、同じversion文字列に誤ったsecretが配布された場合もfail closedにする。
-manifestとは別に、保護されたauthority jobが観測開始前にquery version、source、actor token / key version、
-半開観測窓、sampling policy / key commitment、canonicalなevent ID / operation / flow / actor / occurrenceを
-`authoritative_event_universe` domainへ登録する。独立したappend-only registryは登録commitment、receipt ID、
-`registered_at_utc`を別keyで署名し、登録時刻がwindow開始以上ならHOLDにする。ingest / DBはevent IDと
-DB由来`received_at_utc`をさらに別keyで署名し、caller supplied receipt timeを判定根拠にしない。
-`TELEMETRY_AUTHORITY_COMMITMENT_KEY`、`TELEMETRY_SAMPLING_COMMITMENT_KEY`、registry key、ingest receipt key、
-manifest commitment key、sampling keyはすべて異なる32文字以上のsecretとし、通常aggregate callerへ渡さない。
-evaluatorは保護Environmentのkey versionとHMACをconstant-timeで検証し、authority universeとmanifestが
-順序を含め完全一致してから同じversioned policyを適用する。空manifest、manifest欠落、
+sourceごとに観測開始前のversioned expectation policyと観測終了後のsealed event universeを分離する。
+authority jobはwindow開始前にquery version、source、actor scope、半開観測窓、eligible operation、cohort rule、
+synthetic / internal actor exclusion allowlistのversion / commitment、sampling policy / key commitmentだけを登録する。
+未来のevent IDや発生時刻は事前登録しない。独立した
+append-only registryはpolicy commitment、receipt ID、`registered_at_utc`を別keyで署名し、登録時刻がwindow開始以上なら
+HOLDにする。window終端を固定cutoffとし、観測後の保護jobがcanonicalなevent ID / operation / flow / actor /
+occurrenceの完全なuniverseを別keyでsealする。seal時刻がcutoffより前、policy不一致、manifestとの完全一致失敗は
+HOLDにする。
+
+manifestはsource、sampling policy version、sampling key version / commitment、degradation、sealed universe commitment、
+sampling適用前のexpected event IDを、保護されたversioned manifest keyで署名する。ingest / DB receiptはevent IDだけで
+なくcanonical envelope digest、source、query / window、policy / universe commitment、DB由来`received_at_utc`を署名し、
+dimension改変と別windowへのreplayを拒否する。受領順はcallerの配列順ではなく署名済み`received_at_utc`で決め、異なる
+eventが同時刻なら順序を推定せずHOLDにする。M2 / M3 / M9は、DB Memoryのexact set、actor、window、生成時刻、policy /
+universe commitmentを専用receiptで署名し、callerがMemoryを追加・省略・差し替えて判定を変えられないようにする。
+
+authority、universe、manifest、sampling、registry、ingest receipt、Memory truth、evidence、metric decisionの各keyと
+sampling keyはすべて異なる32文字以上のsecretとし、通常aggregate callerへ渡さない。evaluatorは保護Environmentの
+key versionとHMACをconstant-timeで検証してからversioned policyを適用する。空manifest、manifest欠落、
 source不一致、degraded、
 policy / sampling key version不一致、loss、unexpected eventはcompleteness Holdである。received envelopeは
 型注釈を信用せずexact schemaとcanonical RFC3339 calendar dateで再parseし、発生時刻が半開観測窓の外ならHoldにする。同一event IDの
@@ -150,18 +156,26 @@ receipt timeをentry、maturity、conversionの起点にしない。
 
 ## Aggregation and privacy
 
-観測開始時のeligible censusを固定してkeyed commitmentだけをevidenceへ渡す。commitmentは
-domain、UTC window、key versionをHMAC-SHA256へdomain-separated入力し、通常のSHA digestで置き換えない。
+観測開始時のeligible censusを固定してkeyed commitmentだけをevidenceへ渡す。private metric window manifest、
+eligible census、censoring statusはversioned exact schemaで検証し、未知field、metric欠落、window / query / policy不一致を
+HOLDにする。commitmentはcaller指定keyを受け取らず、保護Environmentのversioned evidence keyでdomain、UTC window、
+actor key versionをHMAC-SHA256へdomain-separated入力し、通常のSHA digestで置き換えない。
 退会中のunitは元の分母に残し、
 全censor失敗の下限と全censor成功の上限をjob内だけで計算する。下限がtarget以上ならPass、上限がtarget未満
 ならFail、両端で判定が変わる場合はHoldとする。exact census / success / censor / rateは出力しない。
 このright-censor rate evaluatorは高いほど良いproduction rateのM1 / M2 / M3 / M5 / M6 / M7 / M8 / M9
-だけに使う。M12など方向が異なる指標は同式へ入れず、`unsupported_metric_direction`でHoldにする。
+だけに使う。minimumとtargetはcallerから受け取らず、M1 / M2 / M3 / M5 / M6 / M7はproduct contractの固定値を
+code policyとして使う。M2 / M3はdistinct Profileとflowを、M7はdistinct ProfileとProfile-weekをそれぞれ20以上要求する。
+M8 / M9はbaseline evidence、target固定時刻、evaluation windowを専用keyで署名し、
+`baseline.generated_at_utc <= target_fixed_at_utc < evaluation.window_start_utc`を満たすevaluation cohortだけを判定する。
+M12など方向が異なる指標は同式へ入れず、`unsupported_metric_direction`でHoldにする。
 status-only evidenceはmetric IDごとのreason allowlistも検証し、callerがM12などへright-censor reasonを
 直接組み合わせてPASS / FAILを作ることを拒否する。
 
-restricted tableで数値を表示する場合もcell 5未満をprimary suppressionする。行・列・合計など1個の
-suppressed cellを差分復元できるgroupでは、最小のvisible cellをsecondary suppressionする。CI、PR、
+restricted tableで数値を表示する場合もcell 5未満をprimary suppressionする。suppression対象はversioned table schemaの
+固定cell IDだけを受理し、完全なrow / column / total関係をserver側で導出する。caller指定group、未知 / 重複 / 欠落cell、
+負数・非整数、合計不一致、識別子を含む任意IDを拒否する。1個のsuppressed cellを差分復元できるgroupでは、最小の
+visible cellをsecondary suppressionする。CI、PR、
 release dossierは数値tableを持たず、metric ID、固定reason、`PASS / FAIL / HOLD`だけを使う。
 
 ## Access separation
@@ -197,7 +211,7 @@ completeness sourceはDB Memory truthである。単独ではGoにせずdiagnost
 
 ## Evidence
 
-`hana-telemetry-evidence/v2`はsource SHA、UTC window、query / event schema version、actor key version、
+`hana-telemetry-evidence/v3`はsource SHA、UTC window、query / event schema version、actor key version、
 window manifest / eligible census / censoring statusのdomain-separated keyed commitment、4つの必須sourceの
 completeness、metric別statusとreason、全体status、evidence integrity digestだけを持つ。必須sourceの欠落・
 余分、commitmentのdomain / window / key version不一致、metric status / reason不一致、未知値はfail closedにする。

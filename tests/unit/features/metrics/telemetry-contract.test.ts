@@ -9,26 +9,38 @@ import {
   createTelemetryExpectationManifestCommitment,
   createTelemetryIngestReceiptCommitment,
   createTelemetrySamplingKeyCommitment,
+  createTelemetryTargetDecisionCommitment,
   evaluateCensoredRate,
-  evaluateSyntheticFunnelFlow,
-  evaluateSyntheticM9ViewToMemory,
+  evaluateSyntheticFunnelFlow as evaluateSyntheticFunnelFlowContract,
+  evaluateSyntheticM9ViewToMemory as evaluateSyntheticM9ViewToMemoryContract,
   evaluateTelemetryCompleteness,
+  createTelemetryEnvelopeDigest,
+  createTelemetryEventUniverseCommitment,
+  createTelemetryMemorySetDigest,
+  createTelemetryMemoryTruthReceiptCommitment,
   NORTH_STAR_CONTRACT,
   parseTelemetryEnvelope,
   shouldSampleTelemetry,
   TELEMETRY_ACCESS_POLICY,
   TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
   TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION,
+  TELEMETRY_BINARY_OUTCOME_TABLE_SCHEMA_VERSION,
+  TELEMETRY_CENSORING_STATUS_SCHEMA_VERSION,
   TELEMETRY_COMMITMENT_SCHEME,
   TELEMETRY_EVENT_SCHEMA_VERSION,
   TELEMETRY_EVIDENCE_SCHEMA_VERSION,
+  TELEMETRY_ELIGIBLE_CENSUS_SCHEMA_VERSION,
+  TELEMETRY_EVENT_UNIVERSE_SCHEMA_VERSION,
   TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
   TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION,
+  TELEMETRY_MEMORY_TRUTH_RECEIPT_SCHEMA_VERSION,
+  TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION,
   TELEMETRY_QUERY_VERSION,
   TELEMETRY_REQUIRED_METRIC_IDS,
   TELEMETRY_RETENTION_DAYS,
   TELEMETRY_SAMPLING,
   TELEMETRY_SAMPLING_POLICY_VERSION,
+  TELEMETRY_TARGET_DECISION_SCHEMA_VERSION,
   type SyntheticActorRef,
   type SyntheticFunnelEvent,
   type SyntheticMemoryTruth,
@@ -39,9 +51,12 @@ import {
   type TelemetryCompletenessInput,
   type TelemetryEnvelope,
   type TelemetryExpectationManifest,
+  type TelemetryEventUniverse,
   type TelemetryIngestReceipt,
+  type TelemetryMemoryTruthReceipt,
   type TelemetryMetricResult,
   type TelemetrySource,
+  type TelemetryTargetDecision,
 } from '@/features/metrics/server/telemetry-contract'
 
 function uuidV7ForMinute(minute: string, suffix: string): string {
@@ -57,11 +72,21 @@ const FLOW_ID = '00000000-0000-4000-8000-000000000010'
 const COMMITMENT_KEY = 'synthetic-commitment-key-32-bytes-minimum'
 const AUTHORITY_KEY = 'synthetic-authority-key-32-bytes-minimum'
 const AUTHORITY_KEY_VERSION = 'synthetic-authority-v1'
+const MANIFEST_KEY = 'synthetic-manifest-key-with-32-bytes-minimum'
+const MANIFEST_KEY_VERSION = 'synthetic-manifest-v1'
+const UNIVERSE_KEY = 'synthetic-universe-key-with-32-bytes-minimum'
+const UNIVERSE_KEY_VERSION = 'synthetic-universe-v1'
 const SAMPLING_COMMITMENT_KEY = 'synthetic-sampling-commitment-key-32-bytes'
 const REGISTRY_KEY = 'synthetic-registry-key-with-32-bytes-minimum'
 const REGISTRY_KEY_VERSION = 'synthetic-registry-v1'
 const INGEST_RECEIPT_KEY = 'synthetic-ingest-receipt-key-32-bytes'
 const INGEST_RECEIPT_KEY_VERSION = 'synthetic-ingest-v1'
+const MEMORY_TRUTH_KEY = 'synthetic-memory-truth-key-32-bytes-minimum'
+const MEMORY_TRUTH_KEY_VERSION = 'synthetic-memory-truth-v1'
+const TARGET_DECISION_KEY = 'synthetic-target-decision-key-32-bytes-minimum'
+const TARGET_DECISION_KEY_VERSION = 'synthetic-target-v1'
+const EVIDENCE_KEY = 'synthetic-evidence-key-with-32-bytes-minimum'
+const EVIDENCE_KEY_VERSION = 'synthetic-evidence-v1'
 const SAMPLING_KEY = 'synthetic-sampling-key-with-32-bytes-minimum'
 const SAMPLING_KEY_VERSION = 'synthetic-v1'
 const ACTOR_A: SyntheticActorRef = {
@@ -80,11 +105,21 @@ const ACTOR_A_OLD_KEY: SyntheticActorRef = {
 beforeEach(() => {
   vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', AUTHORITY_KEY_VERSION)
   vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', AUTHORITY_KEY)
+  vi.stubEnv('TELEMETRY_MANIFEST_KEY_VERSION', MANIFEST_KEY_VERSION)
+  vi.stubEnv('TELEMETRY_MANIFEST_COMMITMENT_KEY', MANIFEST_KEY)
+  vi.stubEnv('TELEMETRY_EVENT_UNIVERSE_KEY_VERSION', UNIVERSE_KEY_VERSION)
+  vi.stubEnv('TELEMETRY_EVENT_UNIVERSE_COMMITMENT_KEY', UNIVERSE_KEY)
   vi.stubEnv('TELEMETRY_SAMPLING_COMMITMENT_KEY', SAMPLING_COMMITMENT_KEY)
   vi.stubEnv('TELEMETRY_AUTHORITY_REGISTRY_KEY_VERSION', REGISTRY_KEY_VERSION)
   vi.stubEnv('TELEMETRY_AUTHORITY_REGISTRY_COMMITMENT_KEY', REGISTRY_KEY)
   vi.stubEnv('TELEMETRY_INGEST_RECEIPT_KEY_VERSION', INGEST_RECEIPT_KEY_VERSION)
   vi.stubEnv('TELEMETRY_INGEST_RECEIPT_COMMITMENT_KEY', INGEST_RECEIPT_KEY)
+  vi.stubEnv('TELEMETRY_MEMORY_TRUTH_KEY_VERSION', MEMORY_TRUTH_KEY_VERSION)
+  vi.stubEnv('TELEMETRY_MEMORY_TRUTH_COMMITMENT_KEY', MEMORY_TRUTH_KEY)
+  vi.stubEnv('TELEMETRY_TARGET_DECISION_KEY_VERSION', TARGET_DECISION_KEY_VERSION)
+  vi.stubEnv('TELEMETRY_TARGET_DECISION_COMMITMENT_KEY', TARGET_DECISION_KEY)
+  vi.stubEnv('TELEMETRY_EVIDENCE_KEY_VERSION', EVIDENCE_KEY_VERSION)
+  vi.stubEnv('TELEMETRY_EVIDENCE_COMMITMENT_KEY', EVIDENCE_KEY)
 })
 
 afterEach(() => {
@@ -158,7 +193,11 @@ function authorityRegistration(
   eligibleEventIds: readonly string[],
   overrides: Partial<TelemetryAuthorityRegistration> = {},
 ): TelemetryAuthorityRegistration {
-  const canonicalEligibleEventIds = eligibleEventIds.map((eventId) => eventId.toLowerCase())
+  const eligibleOperations = [
+    ...new Set(
+      eligibleEventIds.map((eventId) => sourceEnvelope(source, eventId).dimensions.operation),
+    ),
+  ]
   const sampling = samplingFor(source)
   const expectedActor = overrides.expected_actor === undefined ? ACTOR_A : overrides.expected_actor
   return {
@@ -177,16 +216,12 @@ function authorityRegistration(
       sampling_key: sampling.key,
       commitment_key: SAMPLING_COMMITMENT_KEY,
     }),
-    eligible_events: canonicalEligibleEventIds.map((eventId) => {
-      const event = sourceEnvelope(source, eventId)
-      return {
-        event_id: eventId,
-        operation: event.dimensions.operation,
-        flow_id: source === 'funnel' ? FLOW_ID : null,
-        actor: expectedActor,
-        occurred_at_utc: event.occurred_at_utc,
-      }
-    }),
+    eligibility_policy_version: 'source-operation-actor-window/v1',
+    eligible_operations: eligibleOperations,
+    cohort_rule: expectedActor === null ? 'all_actors' : 'expected_actor_only',
+    exclusion_rule: 'pre_registered_actor_allowlist',
+    exclusion_policy_version: 'synthetic-allowlist-v1',
+    exclusion_policy_commitment: 'e'.repeat(64),
     ...overrides,
   }
 }
@@ -217,6 +252,10 @@ function manifest(
       registration,
       commitment_key: AUTHORITY_KEY,
     }),
+    universe_key_version: UNIVERSE_KEY_VERSION,
+    universe_commitment: '0'.repeat(64),
+    universe_cutoff_utc: '2026-08-08T00:00:00Z',
+    manifest_key_version: MANIFEST_KEY_VERSION,
     expected_event_ids: expectedEventIds,
     ...overrides,
   }
@@ -232,6 +271,7 @@ function completenessInput(
     manifest_commitment: suppliedCommitment,
     authority_registration: suppliedAuthority,
     authority_registry_receipt: suppliedRegistryReceipt,
+    event_universe: suppliedUniverse,
     received_receipts: suppliedReceivedReceipts,
     ...boundaryOverrides
   } = overrides
@@ -244,51 +284,110 @@ function completenessInput(
     actor_key_version: 'v2',
     sampling_key_version: sampling.key_version,
     sampling_key: sampling.key,
-    commitment_key: COMMITMENT_KEY,
     ...boundaryOverrides,
   }
+  const eligibleEvents = expectation.expected_event_ids.map((eventId) => {
+    const canonicalEventId = eventId.toLowerCase()
+    const event =
+      received.find((candidate) => candidate.event_id === canonicalEventId) ??
+      sourceEnvelope(source, eventId)
+    const occurredAt = Date.parse(event.occurred_at_utc)
+    const windowStart = Date.parse(unsignedBoundary.window_start_utc)
+    const windowEnd = Date.parse(unsignedBoundary.window_end_utc)
+    const authoritativeOccurrence =
+      Number.isFinite(occurredAt) && occurredAt >= windowStart && occurredAt < windowEnd
+        ? event.occurred_at_utc
+        : sourceEnvelope(source, eventId).occurred_at_utc
+    return {
+      event_id: canonicalEventId,
+      operation: event.dimensions.operation,
+      flow_id: source === 'funnel' ? FLOW_ID : null,
+      actor: source === 'funnel' ? ACTOR_A : null,
+      occurred_at_utc: authoritativeOccurrence,
+    }
+  })
+  eligibleEvents.sort((left, right) => {
+    const occurrenceDifference =
+      Date.parse(left.occurred_at_utc) - Date.parse(right.occurred_at_utc)
+    return occurrenceDifference === 0
+      ? left.event_id.localeCompare(right.event_id)
+      : occurrenceDifference
+  })
   const registration =
     suppliedAuthority ??
     authorityRegistration(source, expectation.expected_event_ids, {
       window_start_utc: unsignedBoundary.window_start_utc,
       window_end_utc: unsignedBoundary.window_end_utc,
-      eligible_events: expectation.expected_event_ids.map((eventId) => {
-        const event =
-          received.find((candidate) => candidate.event_id === eventId.toLowerCase()) ??
-          sourceEnvelope(source, eventId)
-        const occurredAt = Date.parse(event.occurred_at_utc)
-        const windowStart = Date.parse(unsignedBoundary.window_start_utc)
-        const windowEnd = Date.parse(unsignedBoundary.window_end_utc)
-        const authoritativeOccurrence =
-          Number.isFinite(occurredAt) && occurredAt >= windowStart && occurredAt < windowEnd
-            ? event.occurred_at_utc
-            : sourceEnvelope(source, eventId).occurred_at_utc
-        return {
-          event_id: eventId.toLowerCase(),
-          operation: event.dimensions.operation,
-          flow_id: source === 'funnel' ? FLOW_ID : null,
-          actor: ACTOR_A,
-          occurred_at_utc: authoritativeOccurrence,
-        }
-      }),
+      eligible_operations: [...new Set(eligibleEvents.map((event) => event.operation))],
     })
+  const registrationCommitment = createTelemetryAuthorityRegistrationCommitment({
+    registration,
+    commitment_key: AUTHORITY_KEY,
+  })
+  const unsignedUniverse = {
+    schema_version: TELEMETRY_EVENT_UNIVERSE_SCHEMA_VERSION,
+    query_version: TELEMETRY_QUERY_VERSION,
+    source,
+    window_start_utc: unsignedBoundary.window_start_utc,
+    window_end_utc: unsignedBoundary.window_end_utc,
+    cutoff_utc: unsignedBoundary.window_end_utc,
+    sealed_at_utc: new Date(Date.parse(unsignedBoundary.window_end_utc) + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .replace('.000Z', 'Z'),
+    registration_commitment: registrationCommitment,
+    universe_key_version: UNIVERSE_KEY_VERSION,
+    eligible_events: eligibleEvents.map((event) => ({
+      ...event,
+      actor: registration.expected_actor,
+    })),
+  }
+  const universe: TelemetryEventUniverse = suppliedUniverse ?? {
+    ...unsignedUniverse,
+    universe_commitment: createTelemetryEventUniverseCommitment({
+      universe: unsignedUniverse,
+      commitment_key: UNIVERSE_KEY,
+    }),
+  }
   const boundExpectation = {
     ...expectation,
-    authority_commitment: createTelemetryAuthorityRegistrationCommitment({
-      registration,
-      commitment_key: AUTHORITY_KEY,
-    }),
+    authority_commitment: registrationCommitment,
+    universe_key_version: universe.universe_key_version,
+    universe_commitment: universe.universe_commitment,
+    universe_cutoff_utc: universe.cutoff_utc,
+    manifest_key_version: MANIFEST_KEY_VERSION,
+    expected_event_ids: universe.eligible_events.map((event) => event.event_id),
+  }
+  const manifestValue = (
+    Object.prototype.hasOwnProperty.call(boundaryOverrides, 'manifest')
+      ? boundaryOverrides.manifest
+      : boundExpectation
+  ) as TelemetryExpectationManifest
+  const receiptContext = {
+    source,
+    query_version: TELEMETRY_QUERY_VERSION,
+    window_start_utc: unsignedBoundary.window_start_utc,
+    window_end_utc: unsignedBoundary.window_end_utc,
+    registration_commitment: manifestValue?.authority_commitment ?? registrationCommitment,
+    universe_commitment: manifestValue?.universe_commitment ?? universe.universe_commitment,
   }
   const boundary = {
     ...unsignedBoundary,
-    manifest: (Object.prototype.hasOwnProperty.call(boundaryOverrides, 'manifest')
-      ? boundaryOverrides.manifest
-      : boundExpectation) as TelemetryExpectationManifest,
+    manifest: manifestValue,
     authority_registration: registration,
     authority_registry_receipt:
       suppliedRegistryReceipt ?? authorityRegistryReceipt(boundExpectation.authority_commitment),
+    event_universe: universe,
     received_receipts: suppliedReceivedReceipts ?? [
-      ...new Map(received.map((event) => [event.event_id, ingestReceiptFor(event)])).values(),
+      ...new Map(
+        [...received].reverse().map((event) => [
+          event.event_id,
+          ingestReceiptFor(event, receiptContext, {
+            received_at_utc: new Date(Date.parse(event.occurred_at_utc) + 20 * 60 * 1000)
+              .toISOString()
+              .replace('.000Z', 'Z'),
+          }),
+        ]),
+      ).values(),
     ],
   }
   return {
@@ -298,6 +397,7 @@ function completenessInput(
       createTelemetryExpectationManifestCommitment({
         ...boundary,
         manifest: boundary.manifest ?? expectation,
+        commitment_key: MANIFEST_KEY,
       }),
   }
 }
@@ -328,16 +428,27 @@ function authorityRegistryReceipt(
 
 function ingestReceiptFor(
   event: TelemetryEnvelope,
+  context: Pick<
+    TelemetryIngestReceipt,
+    | 'source'
+    | 'query_version'
+    | 'window_start_utc'
+    | 'window_end_utc'
+    | 'registration_commitment'
+    | 'universe_commitment'
+  >,
   overrides: Partial<TelemetryIngestReceipt> = {},
 ): TelemetryIngestReceipt {
   const { receipt_commitment: suppliedCommitment, ...unsignedOverrides } = overrides
   const unsigned = {
     schema_version: TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION,
     event_id: event.event_id,
+    envelope_digest: createTelemetryEnvelopeDigest(event),
     received_at_utc: new Date(Date.parse(event.occurred_at_utc) + 20 * 60 * 1000)
       .toISOString()
       .replace('.000Z', 'Z'),
     receipt_key_version: INGEST_RECEIPT_KEY_VERSION,
+    ...context,
     ...unsignedOverrides,
   }
   return {
@@ -361,10 +472,40 @@ function withSignedReceivedAt(
     ...input,
     received_receipts: input.received_receipts.map((receipt) =>
       receipt.event_id === eventId
-        ? ingestReceiptFor(event, { received_at_utc: receivedAtUtc })
+        ? ingestReceiptFor(
+            event,
+            {
+              source: receipt.source,
+              query_version: receipt.query_version,
+              window_start_utc: receipt.window_start_utc,
+              window_end_utc: receipt.window_end_utc,
+              registration_commitment: receipt.registration_commitment,
+              universe_commitment: receipt.universe_commitment,
+            },
+            { received_at_utc: receivedAtUtc },
+          )
         : receipt,
     ),
   }
+}
+
+function ingestReceiptForInput(
+  input: TelemetryCompletenessInput,
+  event: TelemetryEnvelope,
+  overrides: Partial<TelemetryIngestReceipt> = {},
+): TelemetryIngestReceipt {
+  return ingestReceiptFor(
+    event,
+    {
+      source: input.source,
+      query_version: TELEMETRY_QUERY_VERSION,
+      window_start_utc: input.window_start_utc,
+      window_end_utc: input.window_end_utc,
+      registration_commitment: input.manifest.authority_commitment,
+      universe_commitment: input.manifest.universe_commitment,
+    },
+    overrides,
+  )
 }
 
 function complete(source: TelemetrySource, eventId: string): TelemetryCompletenessResult {
@@ -403,6 +544,7 @@ function funnelEvent(overrides: Partial<SyntheticFunnelEvent> = {}): SyntheticFu
 
 function memoryTruth(overrides: Partial<SyntheticMemoryTruth> = {}): SyntheticMemoryTruth {
   return {
+    memory_id: '00000000-0000-4000-8000-000000000020',
     idempotency_key: FLOW_ID,
     actor: ACTOR_A,
     created_at_utc: '2026-08-07T00:20:00Z',
@@ -427,10 +569,67 @@ function profileMemory(
   overrides: Partial<SyntheticProfileMemoryTruth> = {},
 ): SyntheticProfileMemoryTruth {
   return {
+    memory_id: '00000000-0000-4000-8000-000000000021',
     actor: ACTOR_A,
     created_at_utc: '2026-08-13T23:59:59Z',
     ...overrides,
   }
+}
+
+function memoryTruthReceiptFor(input: {
+  metric_id: 'M2' | 'M3' | 'M9'
+  expected_actor: SyntheticActorRef
+  generated_at_utc: string
+  completeness_input: TelemetryCompletenessInput
+  memories: readonly (SyntheticMemoryTruth | SyntheticProfileMemoryTruth)[]
+}): TelemetryMemoryTruthReceipt {
+  const unsigned = {
+    schema_version: TELEMETRY_MEMORY_TRUTH_RECEIPT_SCHEMA_VERSION,
+    metric_id: input.metric_id,
+    actor: input.expected_actor,
+    generated_at_utc: input.generated_at_utc,
+    window_start_utc: input.completeness_input.window_start_utc,
+    window_end_utc: input.completeness_input.window_end_utc,
+    registration_commitment: input.completeness_input.manifest.authority_commitment,
+    universe_commitment: input.completeness_input.manifest.universe_commitment,
+    memory_set_digest: createTelemetryMemorySetDigest(input.memories),
+    record_count: input.memories.length,
+    receipt_key_version: MEMORY_TRUTH_KEY_VERSION,
+  }
+  return {
+    ...unsigned,
+    receipt_commitment: createTelemetryMemoryTruthReceiptCommitment({
+      receipt: unsigned,
+      commitment_key: MEMORY_TRUTH_KEY,
+    }),
+  }
+}
+
+function evaluateSyntheticFunnelFlow(
+  input: Omit<Parameters<typeof evaluateSyntheticFunnelFlowContract>[0], 'memory_truth_receipt'> & {
+    memory_truth_receipt?: TelemetryMemoryTruthReceipt
+  },
+) {
+  return evaluateSyntheticFunnelFlowContract({
+    ...input,
+    memory_truth_receipt:
+      input.memory_truth_receipt ?? memoryTruthReceiptFor({ ...input, metric_id: input.metric_id }),
+  })
+}
+
+function evaluateSyntheticM9ViewToMemory(
+  input: Omit<
+    Parameters<typeof evaluateSyntheticM9ViewToMemoryContract>[0],
+    'memory_truth_receipt'
+  > & {
+    memory_truth_receipt?: TelemetryMemoryTruthReceipt
+  },
+) {
+  return evaluateSyntheticM9ViewToMemoryContract({
+    ...input,
+    memory_truth_receipt:
+      input.memory_truth_receipt ?? memoryTruthReceiptFor({ ...input, metric_id: 'M9' }),
+  })
 }
 
 function fourSourceCompleteness(): TelemetryCompletenessResult[] {
@@ -472,18 +671,81 @@ function replaceMetric(
 }
 
 function evidenceInput() {
+  const windowStart = '2026-08-01T00:00:00Z'
+  const windowEnd = '2026-09-01T00:00:00Z'
+  const censusMetrics = TELEMETRY_REQUIRED_METRIC_IDS.map((metricId) => ({
+    metric_id: metricId,
+    eligible: 23,
+    distinct_profiles: ['M2', 'M3', 'M7'].includes(metricId) ? 20 : null,
+    distinct_eligible_units: ['M2', 'M3', 'M7'].includes(metricId) ? 23 : null,
+  }))
   return {
     source_sha: 'a'.repeat(40),
-    window_start_utc: '2026-08-01T00:00:00Z',
-    window_end_utc: '2026-09-01T00:00:00Z',
+    window_start_utc: windowStart,
+    window_end_utc: windowEnd,
     actor_key_version: 'v2',
     generated_at_utc: '2026-09-01T01:00:00Z',
-    commitment_key: COMMITMENT_KEY,
-    metric_window_manifest: { metric: 'M2', private_event_id: EVENT_A },
-    eligible_census: { exact_count: 23, private_actor: ACTOR_A.actor_token },
-    censoring_status: { exact_censored: 2 },
+    metric_window_manifest: {
+      schema_version: TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION,
+      query_version: TELEMETRY_QUERY_VERSION,
+      contract_version: '2026-08-07.2' as const,
+      metric_policy_version: 'immutable-metric-policy/v1' as const,
+      window_start_utc: windowStart,
+      window_end_utc: windowEnd,
+      metric_ids: TELEMETRY_REQUIRED_METRIC_IDS,
+      target_decisions: [protectedTargetDecision('M8'), protectedTargetDecision('M9')],
+    },
+    eligible_census: {
+      schema_version: TELEMETRY_ELIGIBLE_CENSUS_SCHEMA_VERSION,
+      query_version: TELEMETRY_QUERY_VERSION,
+      census_policy_version: 'distinct-profile-and-unit/v1' as const,
+      window_start_utc: windowStart,
+      window_end_utc: windowEnd,
+      metrics: censusMetrics,
+    },
+    censoring_status: {
+      schema_version: TELEMETRY_CENSORING_STATUS_SCHEMA_VERSION,
+      query_version: TELEMETRY_QUERY_VERSION,
+      censoring_policy_version: 'right-censor-worst-case/v1' as const,
+      window_start_utc: windowStart,
+      window_end_utc: windowEnd,
+      metrics: TELEMETRY_REQUIRED_METRIC_IDS.map((metricId) => ({
+        metric_id: metricId,
+        succeeded: 20,
+        censored: 2,
+      })),
+    },
     completeness: fourSourceCompleteness(),
     metrics: requiredMetricResults(),
+  }
+}
+
+function protectedTargetDecision(
+  metricId: 'M8' | 'M9',
+  overrides: Partial<TelemetryTargetDecision> = {},
+): TelemetryTargetDecision {
+  const { target_commitment: suppliedCommitment, ...unsignedOverrides } = overrides
+  const unsigned = {
+    schema_version: TELEMETRY_TARGET_DECISION_SCHEMA_VERSION,
+    policy_version: 'protected-baseline-target/v1' as const,
+    metric_id: metricId,
+    target: 0.5,
+    baseline_evidence_digest: 'd'.repeat(64),
+    baseline_generated_at_utc: '2026-07-01T00:00:00Z',
+    target_fixed_at_utc: '2026-07-02T00:00:00Z',
+    evaluation_window_start_utc: '2026-08-01T00:00:00Z',
+    cohort_role: 'evaluation' as const,
+    target_key_version: TARGET_DECISION_KEY_VERSION,
+    ...unsignedOverrides,
+  }
+  return {
+    ...unsigned,
+    target_commitment:
+      suppliedCommitment ??
+      createTelemetryTargetDecisionCommitment({
+        decision: unsigned,
+        commitment_key: TARGET_DECISION_KEY,
+      }),
   }
 }
 
@@ -520,7 +782,7 @@ describe('PII-safe telemetry schema v2', () => {
   )
 
   it('fixes retention, sampling and cardinality to code allowlists', () => {
-    expect(TELEMETRY_QUERY_VERSION).toBe('issue-188-v1')
+    expect(TELEMETRY_QUERY_VERSION).toBe('issue-188-v2')
     expect(TELEMETRY_RETENTION_DAYS).toBe(90)
     expect(TELEMETRY_SAMPLING).toEqual({ funnel: 1, web_vital: 0.1, api: 0.1, ai: 1 })
     expect(() =>
@@ -697,16 +959,22 @@ describe('telemetry completeness manifest and sampling', () => {
   })
 
   it('detects duplicate and reorder without turning a complete set into loss', () => {
-    expect(
-      evaluateTelemetryCompleteness(
-        completenessInput('funnel', manifest([EVENT_A, EVENT_B, EVENT_C]), [
-          envelope(EVENT_B, 'photo_selected'),
-          envelope(EVENT_A, 'record_started'),
-          envelope(EVENT_B, 'photo_selected'),
-          envelope(EVENT_C, 'memory_saved'),
-        ]),
+    const input = completenessInput('funnel', manifest([EVENT_A, EVENT_B, EVENT_C]), [
+      envelope(EVENT_B, 'photo_selected'),
+      envelope(EVENT_A, 'record_started'),
+      envelope(EVENT_B, 'photo_selected'),
+      envelope(EVENT_C, 'memory_saved'),
+    ])
+    const signedOrder = withSignedReceivedAt(
+      withSignedReceivedAt(
+        withSignedReceivedAt(input, EVENT_B, '2026-08-07T00:20:00Z'),
+        EVENT_A,
+        '2026-08-07T00:21:00Z',
       ),
-    ).toEqual({
+      EVENT_C,
+      '2026-08-07T00:22:00Z',
+    )
+    expect(evaluateTelemetryCompleteness(signedOrder)).toEqual({
       source: 'funnel',
       status: 'PASS',
       reason: 'complete',
@@ -880,14 +1148,23 @@ describe('telemetry completeness manifest and sampling', () => {
   })
 
   it('requires an independently signed actor, query, window and full eligible universe', () => {
-    const fullRegistration = authorityRegistration('funnel', [EVENT_A, EVENT_B])
+    const fullRegistration = authorityRegistration('funnel', [EVENT_A, EVENT_B], {
+      eligible_operations: ['record_started'],
+    })
+    const fullInput = completenessInput(
+      'funnel',
+      manifest([EVENT_A, EVENT_B]),
+      [envelope(EVENT_A, 'record_started'), envelope(EVENT_B, 'record_started')],
+      { authority_registration: fullRegistration },
+    )
     expect(
       evaluateTelemetryCompleteness(
         completenessInput('funnel', manifest([EVENT_B]), [envelope(EVENT_B, 'record_started')], {
           authority_registration: fullRegistration,
+          event_universe: fullInput.event_universe,
         }),
       ),
-    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+    ).toMatchObject({ status: 'HOLD', reason: 'loss_detected' })
 
     const valid = completenessInput('funnel', manifest([EVENT_A]), [
       envelope(EVENT_A, 'record_started'),
@@ -925,7 +1202,7 @@ describe('telemetry completeness manifest and sampling', () => {
       evaluateTelemetryCompleteness({
         ...valid,
         received: [changedOperation],
-        received_receipts: [ingestReceiptFor(changedOperation)],
+        received_receipts: [ingestReceiptForInput(valid, changedOperation)],
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'unexpected_event' })
 
@@ -934,43 +1211,25 @@ describe('telemetry completeness manifest and sampling', () => {
       evaluateTelemetryCompleteness({
         ...valid,
         received: [changedOccurrence],
-        received_receipts: [ingestReceiptFor(changedOccurrence)],
+        received_receipts: [ingestReceiptForInput(valid, changedOccurrence)],
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'unexpected_event' })
 
     for (const invalidRegistration of [
       authorityRegistration('funnel', [EVENT_A], {
-        eligible_events: [
-          {
-            event_id: EVENT_A,
-            operation: 'record_started',
-            flow_id: null,
-            actor: ACTOR_A,
-            occurred_at_utc: '2026-08-07T00:00:00Z',
-          },
-        ],
+        eligible_operations: ['api_request'],
       }),
       authorityRegistration('funnel', [EVENT_A], {
-        eligible_events: [
-          {
-            event_id: EVENT_A,
-            operation: 'record_started',
-            flow_id: FLOW_ID,
-            actor: null,
-            occurred_at_utc: '2026-08-07T00:00:00Z',
-          },
-        ],
+        cohort_rule: 'all_actors',
       }),
       authorityRegistration('funnel', [EVENT_A], {
-        eligible_events: [
-          {
-            event_id: EVENT_A,
-            operation: 'record_started',
-            flow_id: FLOW_ID,
-            actor: ACTOR_B,
-            occurred_at_utc: '2026-08-07T00:00:00Z',
-          },
-        ],
+        exclusion_rule: 'caller_defined' as never,
+      }),
+      authorityRegistration('funnel', [EVENT_A], {
+        exclusion_policy_version: 'INVALID',
+      }),
+      authorityRegistration('funnel', [EVENT_A], {
+        exclusion_policy_commitment: 'not-a-commitment',
       }),
       authorityRegistration('funnel', [EVENT_A], {
         expected_actor: null,
@@ -1042,6 +1301,7 @@ describe('telemetry completeness manifest and sampling', () => {
       manifest_commitment: createTelemetryExpectationManifestCommitment({
         ...valid,
         manifest: substitutedManifest,
+        commitment_key: COMMITMENT_KEY,
       }),
     }
     expect(evaluateTelemetryCompleteness(substituted)).toMatchObject({
@@ -1052,7 +1312,77 @@ describe('telemetry completeness manifest and sampling', () => {
     vi.stubEnv('TELEMETRY_SAMPLING_COMMITMENT_KEY', COMMITMENT_KEY)
     expect(evaluateTelemetryCompleteness(valid)).toMatchObject({
       status: 'HOLD',
-      reason: 'expected_manifest_untrusted',
+      reason: 'sampling_policy_mismatch',
+    })
+  })
+
+  it('does not let a caller erase a signed degradation with an arbitrary manifest key', () => {
+    const degraded = completenessInput(
+      'funnel',
+      manifest([EVENT_A], { degradation: 'STORAGE_UNAVAILABLE' }),
+      [envelope(EVENT_A, 'record_started')],
+    )
+    expect(evaluateTelemetryCompleteness(degraded)).toMatchObject({
+      status: 'HOLD',
+      reason: 'telemetry_degraded',
+    })
+    const substitutedManifest = { ...degraded.manifest, degradation: 'NONE' as const }
+    expect(
+      evaluateTelemetryCompleteness({
+        ...degraded,
+        manifest: substitutedManifest,
+        manifest_commitment: createTelemetryExpectationManifestCommitment({
+          manifest: substitutedManifest,
+          window_start_utc: degraded.window_start_utc,
+          window_end_utc: degraded.window_end_utc,
+          actor_key_version: degraded.actor_key_version,
+          commitment_key: COMMITMENT_KEY,
+        }),
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+  })
+
+  it('separates the pre-window policy from the post-window sealed event universe', () => {
+    const valid = completenessInput('funnel', manifest([EVENT_A]), [
+      envelope(EVENT_A, 'record_started'),
+    ])
+    expect(valid.authority_registration).not.toHaveProperty('eligible_events')
+    expect(Date.parse(valid.authority_registry_receipt.registered_at_utc)).toBeLessThan(
+      Date.parse(valid.window_start_utc),
+    )
+    expect(Date.parse(valid.event_universe.sealed_at_utc)).toBeGreaterThanOrEqual(
+      Date.parse(valid.event_universe.cutoff_utc),
+    )
+    expect(
+      evaluateTelemetryCompleteness({
+        ...valid,
+        event_universe: { ...valid.event_universe, cutoff_utc: valid.window_start_utc },
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'expected_manifest_untrusted' })
+  })
+
+  it('uses signed receipt time for ordering and fails closed on ties', () => {
+    const original = completenessInput('funnel', manifest([EVENT_A, EVENT_C]), [
+      envelope(EVENT_A, 'record_started'),
+      envelope(EVENT_C, 'memory_saved'),
+    ])
+    const signed = withSignedReceivedAt(
+      withSignedReceivedAt(original, EVENT_A, '2026-08-07T00:20:00Z'),
+      EVENT_C,
+      '2026-08-07T00:21:00Z',
+    )
+    const reversedCallerArray = { ...signed, received: [...signed.received].reverse() }
+    expect(evaluateTelemetryCompleteness(signed)).toMatchObject({
+      status: 'PASS',
+      reorder: 'NONE',
+    })
+    expect(evaluateTelemetryCompleteness(reversedCallerArray)).toEqual(
+      evaluateTelemetryCompleteness(signed),
+    )
+    const tied = withSignedReceivedAt(signed, EVENT_C, '2026-08-07T00:20:00Z')
+    expect(evaluateTelemetryCompleteness(tied)).toMatchObject({
+      status: 'HOLD',
+      reason: 'received_order_ambiguous',
     })
   })
 
@@ -1084,6 +1414,18 @@ describe('telemetry completeness manifest and sampling', () => {
             receipt_key_version: 'other-v1',
           },
         ],
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'received_envelope_invalid' })
+    const mutatedEnvelope = envelope(EVENT_A, 'photo_selected')
+    expect(evaluateTelemetryCompleteness({ ...valid, received: [mutatedEnvelope] })).toMatchObject({
+      status: 'HOLD',
+      reason: 'received_envelope_invalid',
+    })
+    const otherContext = completenessInput('funnel', manifest([EVENT_A]), [mutatedEnvelope])
+    expect(
+      evaluateTelemetryCompleteness({
+        ...valid,
+        received_receipts: otherContext.received_receipts,
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'received_envelope_invalid' })
   })
@@ -1139,15 +1481,7 @@ describe('actor-scoped funnel DB truth correlation', () => {
   it('rejects completeness registered for another actor with the same key version', () => {
     const actorBRegistration = authorityRegistration('funnel', [EVENT_B], {
       expected_actor: ACTOR_B,
-      eligible_events: [
-        {
-          event_id: EVENT_B,
-          operation: 'photo_selected',
-          flow_id: FLOW_ID,
-          actor: ACTOR_B,
-          occurred_at_utc: '2026-08-07T00:00:00Z',
-        },
-      ],
+      eligible_operations: ['photo_selected'],
     })
     expect(
       evaluateSyntheticFunnelFlow({
@@ -1396,6 +1730,41 @@ describe('actor-scoped funnel DB truth correlation', () => {
       }),
     ).toMatchObject({ status: 'PASS' })
   })
+
+  it('requires a protected exact-set DB Memory receipt for M2 and M3', () => {
+    const memories = [memoryTruth()]
+    const evaluation = {
+      metric_id: 'M2' as const,
+      flow_id: FLOW_ID,
+      expected_actor: ACTOR_A,
+      generated_at_utc: '2026-08-07T01:00:00Z',
+      completeness_input: completeFunnel,
+      events: [funnelEvent()],
+      memories,
+    }
+    const receipt = memoryTruthReceiptFor(evaluation)
+    expect(
+      evaluateSyntheticFunnelFlowContract({ ...evaluation, memory_truth_receipt: receipt }),
+    ).toMatchObject({ status: 'PASS' })
+    expect(
+      evaluateSyntheticFunnelFlowContract({
+        ...evaluation,
+        memories: [],
+        memory_truth_receipt: receipt,
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+    expect(
+      evaluateSyntheticFunnelFlowContract({
+        ...evaluation,
+        memories: [...memories, memoryTruth({ memory_id: '00000000-0000-4000-8000-000000000022' })],
+        memory_truth_receipt: receipt,
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+    vi.stubEnv('TELEMETRY_MEMORY_TRUTH_COMMITMENT_KEY', MANIFEST_KEY)
+    expect(
+      evaluateSyntheticFunnelFlowContract({ ...evaluation, memory_truth_receipt: receipt }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+  })
 })
 
 describe('M9 occurrence-minute view-to-memory correlation', () => {
@@ -1531,30 +1900,22 @@ describe('M9 occurrence-minute view-to-memory correlation', () => {
   it('holds when an authoritative early view is relabelled before M9 evaluation', () => {
     const laterMinute = '2026-08-07T12:00:00Z'
     const laterEventId = uuidV7ForMinute(laterMinute, '000000000011')
-    const registration = authorityRegistration('funnel', [EVENT_B, laterEventId], {
-      eligible_events: [
-        {
-          event_id: EVENT_B,
-          operation: 'memory_viewed',
-          flow_id: FLOW_ID,
-          actor: ACTOR_A,
-          occurred_at_utc: '2026-08-07T00:00:00Z',
-        },
-        {
-          event_id: laterEventId,
-          operation: 'memory_viewed',
-          flow_id: FLOW_ID,
-          actor: ACTOR_A,
-          occurred_at_utc: laterMinute,
-        },
-      ],
-    })
-    const relabelled = completenessInput(
-      'funnel',
-      manifest([EVENT_B, laterEventId]),
-      [envelope(EVENT_B, 'record_started'), envelope(laterEventId, 'memory_viewed', laterMinute)],
-      { authority_registration: registration },
-    )
+    const authoritative = completenessInput('funnel', manifest([EVENT_B, laterEventId]), [
+      envelope(EVENT_B, 'memory_viewed'),
+      envelope(laterEventId, 'memory_viewed', laterMinute),
+    ])
+    const changedFirst = envelope(EVENT_B, 'record_started')
+    const relabelled = {
+      ...authoritative,
+      received: [changedFirst, envelope(laterEventId, 'memory_viewed', laterMinute)],
+      received_receipts: authoritative.received_receipts.map((receipt) =>
+        receipt.event_id === EVENT_B
+          ? ingestReceiptForInput(authoritative, changedFirst, {
+              received_at_utc: receipt.received_at_utc,
+            })
+          : receipt,
+      ),
+    }
 
     expect(evaluateTelemetryCompleteness(relabelled)).toMatchObject({
       status: 'HOLD',
@@ -1664,40 +2025,121 @@ describe('M9 occurrence-minute view-to-memory correlation', () => {
       }),
     ).toMatchObject({ status: 'HOLD', reason: 'stage_time_invalid' })
   })
+
+  it('requires the signed M9 DB Memory set to match exactly', () => {
+    const receipt = memoryTruthReceiptFor({ ...base, metric_id: 'M9' })
+    expect(
+      evaluateSyntheticM9ViewToMemoryContract({ ...base, memory_truth_receipt: receipt }),
+    ).toMatchObject({ status: 'PASS' })
+    expect(
+      evaluateSyntheticM9ViewToMemoryContract({
+        ...base,
+        memories: [],
+        memory_truth_receipt: receipt,
+      }),
+    ).toMatchObject({ status: 'HOLD', reason: 'telemetry_incomplete' })
+  })
 })
 
 describe('privacy aggregation', () => {
+  function rateInput(
+    metricId: TelemetryMetricResult['metric_id'],
+    overrides: Record<string, unknown> = {},
+  ) {
+    const requiresDistinct = ['M2', 'M3', 'M7'].includes(metricId)
+    const requiresTarget = metricId === 'M8' || metricId === 'M9'
+    return {
+      metric_id: metricId,
+      eligible: 20,
+      succeeded: 20,
+      censored: 0,
+      distinct_profiles: requiresDistinct ? 20 : null,
+      distinct_eligible_units: requiresDistinct ? 20 : null,
+      evaluation_window_start_utc: requiresTarget ? '2026-08-01T00:00:00Z' : null,
+      target_decision: requiresTarget ? protectedTargetDecision(metricId) : null,
+      ...overrides,
+    }
+  }
+
   it('uses worst-case right-censor intervals without returning counts', () => {
     expect(
       evaluateCensoredRate({
-        metric_id: 'M2',
-        eligible: 20,
+        ...rateInput('M2'),
         succeeded: 17,
         censored: 0,
-        minimum: 20,
-        target: 0.85,
-      }),
+      } as never),
     ).toEqual({ metric_id: 'M2', status: 'PASS', reason: 'worst_case_passed' })
     expect(
       evaluateCensoredRate({
-        metric_id: 'M2',
-        eligible: 20,
+        ...rateInput('M2'),
         succeeded: 10,
         censored: 2,
-        minimum: 20,
-        target: 0.85,
-      }),
+      } as never),
     ).toEqual({ metric_id: 'M2', status: 'FAIL', reason: 'best_case_failed' })
     expect(
       evaluateCensoredRate({
-        metric_id: 'M2',
-        eligible: 20,
+        ...rateInput('M2'),
         succeeded: 16,
         censored: 2,
-        minimum: 20,
-        target: 0.85,
-      }),
+      } as never),
     ).toEqual({ metric_id: 'M2', status: 'HOLD', reason: 'censoring_changes_decision' })
+  })
+
+  it.each([
+    ['M1', 14],
+    ['M2', 17],
+    ['M3', 15],
+    ['M5', 8],
+    ['M6', 5],
+    ['M7', 8],
+  ] as const)('uses the immutable threshold for %s', (metricId, succeeded) => {
+    expect(evaluateCensoredRate({ ...rateInput(metricId), succeeded } as never)).toMatchObject({
+      status: 'PASS',
+      reason: 'worst_case_passed',
+    })
+    expect(
+      evaluateCensoredRate({ ...rateInput(metricId), succeeded, target: 0 } as never),
+    ).toMatchObject({ status: 'HOLD', reason: 'invalid_census' })
+  })
+
+  it('requires 20 distinct profiles and distinct eligible units for M2, M3 and M7', () => {
+    for (const metricId of ['M2', 'M3', 'M7'] as const) {
+      expect(
+        evaluateCensoredRate({ ...rateInput(metricId), distinct_profiles: 19 } as never),
+      ).toMatchObject({ status: 'HOLD', reason: 'minimum_not_met' })
+      expect(
+        evaluateCensoredRate({
+          ...rateInput(metricId),
+          distinct_eligible_units: 19,
+        } as never),
+      ).toMatchObject({ status: 'HOLD', reason: 'invalid_census' })
+    }
+  })
+
+  it('requires a protected M8/M9 target fixed after baseline and before evaluation', () => {
+    for (const metricId of ['M8', 'M9'] as const) {
+      expect(evaluateCensoredRate(rateInput(metricId) as never)).toMatchObject({ status: 'PASS' })
+      expect(
+        evaluateCensoredRate({ ...rateInput(metricId), target_decision: null } as never),
+      ).toMatchObject({ status: 'HOLD', reason: 'target_not_configured' })
+      expect(
+        evaluateCensoredRate({
+          ...rateInput(metricId),
+          target_decision: protectedTargetDecision(metricId, {
+            baseline_generated_at_utc: '2026-07-03T00:00:00Z',
+            target_fixed_at_utc: '2026-07-02T00:00:00Z',
+          }),
+        } as never),
+      ).toMatchObject({ status: 'HOLD', reason: 'target_not_configured' })
+      expect(
+        evaluateCensoredRate({
+          ...rateInput(metricId),
+          target_decision: protectedTargetDecision(metricId, {
+            target_fixed_at_utc: '2026-08-01T00:00:00Z',
+          }),
+        } as never),
+      ).toMatchObject({ status: 'HOLD', reason: 'target_not_configured' })
+    }
   })
 
   it.each(['M4', 'M10', 'M11', 'M12', 'north_star_monthly_memories_per_active_profile'] as const)(
@@ -1705,13 +2147,8 @@ describe('privacy aggregation', () => {
     (metricId) => {
       expect(
         evaluateCensoredRate({
-          metric_id: metricId,
-          eligible: 20,
-          succeeded: 20,
-          censored: 0,
-          minimum: 20,
-          target: metricId === 'M12' ? 0 : 0.5,
-        }),
+          ...rateInput(metricId),
+        } as never),
       ).toEqual({
         metric_id: metricId,
         status: 'HOLD',
@@ -1723,18 +2160,61 @@ describe('privacy aggregation', () => {
   it('adds secondary suppression when one hidden cell could be reconstructed', () => {
     expect(
       applyTelemetrySuppression({
+        schema_version: TELEMETRY_BINARY_OUTCOME_TABLE_SCHEMA_VERSION,
         cells: [
           { id: 'success', value: 12 },
           { id: 'failure', value: 3 },
           { id: 'total', value: 15 },
         ],
-        reconstruction_groups: [['success', 'failure', 'total']],
       }),
     ).toEqual([
       { id: 'success', value: 'suppressed', reason: 'secondary' },
       { id: 'failure', value: 'suppressed', reason: 'primary' },
       { id: 'total', value: 15, reason: 'visible' },
     ])
+  })
+
+  it('rejects omitted topology, raw IDs, duplicate/missing cells and inconsistent totals', () => {
+    const valid = {
+      schema_version: TELEMETRY_BINARY_OUTCOME_TABLE_SCHEMA_VERSION,
+      cells: [
+        { id: 'success' as const, value: 12 },
+        { id: 'failure' as const, value: 3 },
+        { id: 'total' as const, value: 15 },
+      ],
+    }
+    expect(() =>
+      applyTelemetrySuppression({ ...valid, reconstruction_groups: [] } as never),
+    ).toThrow('invalid_input')
+    expect(() =>
+      applyTelemetrySuppression({
+        ...valid,
+        cells: [{ id: 'flow_00000000-0000-4000-8000-000000000010', value: 15 }],
+      } as never),
+    ).toThrow('invalid_input')
+    expect(() => applyTelemetrySuppression({ ...valid, cells: valid.cells.slice(0, 2) })).toThrow(
+      'invalid_input',
+    )
+    expect(() =>
+      applyTelemetrySuppression({
+        ...valid,
+        cells: [valid.cells[0]!, valid.cells[0]!, valid.cells[2]!],
+      }),
+    ).toThrow('invalid_input')
+    expect(() =>
+      applyTelemetrySuppression({
+        ...valid,
+        cells: valid.cells.map((cell) => (cell.id === 'total' ? { ...cell, value: 14 } : cell)),
+      }),
+    ).toThrow('invalid_input')
+    expect(() =>
+      applyTelemetrySuppression({
+        ...valid,
+        cells: valid.cells.map((cell) =>
+          cell.id === 'success' ? { ...cell, value: Number.MAX_SAFE_INTEGER + 1 } : cell,
+        ),
+      }),
+    ).toThrow('invalid_input')
   })
 })
 
@@ -1744,6 +2224,7 @@ describe('status-only evidence v2', () => {
     expect(evidence.schema_version).toBe(TELEMETRY_EVIDENCE_SCHEMA_VERSION)
     expect(evidence.query_version).toBe(TELEMETRY_QUERY_VERSION)
     expect(evidence.commitment_scheme).toBe(TELEMETRY_COMMITMENT_SCHEME)
+    expect(evidence.evidence_key_version).toBe(EVIDENCE_KEY_VERSION)
     expect(evidence.metric_window_manifest_commitment).toMatch(/^[0-9a-f]{64}$/)
     expect(evidence.eligible_census_commitment).toMatch(/^[0-9a-f]{64}$/)
     expect(evidence.censoring_status_commitment).toMatch(/^[0-9a-f]{64}$/)
@@ -1760,10 +2241,120 @@ describe('status-only evidence v2', () => {
     expect(serialized).not.toContain(EVENT_A)
     expect(serialized).not.toContain(ACTOR_A.actor_token)
     expect(serialized).not.toContain(COMMITMENT_KEY)
+    expect(serialized).not.toContain(EVIDENCE_KEY)
     expect(evidence).not.toHaveProperty('metric_window_manifest')
     expect(evidence).not.toHaveProperty('eligible_census')
     expect(evidence).not.toHaveProperty('censoring_status')
     expect(evidence).not.toHaveProperty('counts')
+  })
+
+  it('accepts only strict private evidence dictionaries and never exposes them', () => {
+    const valid = evidenceInput()
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metric_window_manifest: {
+          ...valid.metric_window_manifest,
+          private_event_id: EVENT_A,
+        },
+      } as never),
+    ).toThrow('invalid_input')
+    const { metric_ids: _metricIds, ...missingMetricSet } = valid.metric_window_manifest
+    expect(() =>
+      buildTelemetryEvidence({ ...valid, metric_window_manifest: missingMetricSet } as never),
+    ).toThrow('invalid_input')
+    expect(() =>
+      buildTelemetryEvidence({ ...valid, commitment_key: COMMITMENT_KEY } as never),
+    ).toThrow('invalid_input')
+
+    const evidence = buildTelemetryEvidence(valid)
+    const serialized = JSON.stringify(evidence)
+    expect(serialized).not.toContain(TELEMETRY_METRIC_WINDOW_MANIFEST_SCHEMA_VERSION)
+    expect(serialized).not.toContain(TELEMETRY_ELIGIBLE_CENSUS_SCHEMA_VERSION)
+    expect(serialized).not.toContain(TELEMETRY_CENSORING_STATUS_SCHEMA_VERSION)
+    expect(Object.keys(evidence).sort()).toEqual(
+      [
+        'schema_version',
+        'source_sha',
+        'query_version',
+        'event_schema_version',
+        'actor_key_version',
+        'generated_at_utc',
+        'commitment_scheme',
+        'evidence_key_version',
+        'metric_window_manifest_commitment',
+        'window_start_utc',
+        'window_end_utc',
+        'eligible_census_commitment',
+        'censoring_policy_version',
+        'censoring_status_commitment',
+        'completeness',
+        'metrics',
+        'status',
+        'evidence_digest',
+      ].sort(),
+    )
+  })
+
+  it('requires a distinct protected versioned evidence key', () => {
+    const valid = evidenceInput()
+    vi.stubEnv('TELEMETRY_EVIDENCE_COMMITMENT_KEY', '')
+    expect(() => buildTelemetryEvidence(valid)).toThrow('invalid_input')
+    vi.stubEnv('TELEMETRY_EVIDENCE_COMMITMENT_KEY', MANIFEST_KEY)
+    expect(() => buildTelemetryEvidence(valid)).toThrow('invalid_input')
+  })
+
+  it('binds exactly signed M8/M9 targets to baseline evidence and valid chronology', () => {
+    const valid = evidenceInput()
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metric_window_manifest: {
+          ...valid.metric_window_manifest,
+          target_decisions: valid.metric_window_manifest.target_decisions.slice(0, 1),
+        },
+      }),
+    ).toThrow('invalid_input')
+    const m8 = valid.metric_window_manifest.target_decisions[0]!
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metric_window_manifest: {
+          ...valid.metric_window_manifest,
+          target_decisions: [
+            { ...m8, baseline_evidence_digest: 'e'.repeat(64) },
+            valid.metric_window_manifest.target_decisions[1]!,
+          ],
+        },
+      }),
+    ).toThrow('invalid_input')
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metric_window_manifest: {
+          ...valid.metric_window_manifest,
+          target_decisions: [
+            protectedTargetDecision('M8', { baseline_evidence_digest: 'not-a-digest' }),
+            protectedTargetDecision('M9'),
+          ],
+        },
+      }),
+    ).toThrow('invalid_input')
+    expect(() =>
+      buildTelemetryEvidence({
+        ...valid,
+        metric_window_manifest: {
+          ...valid.metric_window_manifest,
+          target_decisions: [
+            protectedTargetDecision('M8', {
+              baseline_generated_at_utc: '2026-07-03T00:00:00Z',
+              target_fixed_at_utc: '2026-07-02T00:00:00Z',
+            }),
+            protectedTargetDecision('M9'),
+          ],
+        },
+      }),
+    ).toThrow('invalid_input')
   })
 
   it('binds commitment domain, window and actor key version', () => {
@@ -1890,23 +2481,107 @@ describe('status-only evidence v2', () => {
   })
 
   it.each(['M1', 'M2', 'M3', 'M5', 'M6', 'M7', 'M8', 'M9'] as const)(
-    'accepts right-censor results only for the supported production rate metric %s',
+    'rejects a caller rate result that differs from recomputed private evidence for %s',
     (metricId) => {
       const valid = evidenceInput()
       for (const metric of [
-        { metric_id: metricId, status: 'PASS', reason: 'worst_case_passed' },
         { metric_id: metricId, status: 'FAIL', reason: 'best_case_failed' },
         { metric_id: metricId, status: 'HOLD', reason: 'censoring_changes_decision' },
       ] as const) {
-        expect(
+        expect(() =>
           buildTelemetryEvidence({
             ...valid,
             metrics: replaceMetric(valid.metrics, metric),
-          }).metrics,
-        ).toContainEqual(metric)
+          }),
+        ).toThrow('invalid_input')
       }
     },
   )
+
+  it('accepts exact PASS, FAIL and censoring HOLD results recomputed from private evidence', () => {
+    const valid = evidenceInput()
+    expect(buildTelemetryEvidence(valid).metrics).toContainEqual({
+      metric_id: 'M1',
+      status: 'PASS',
+      reason: 'worst_case_passed',
+    })
+    const withM1Censoring = (
+      succeeded: number,
+      censored: number,
+      result: TelemetryMetricResult,
+    ) => ({
+      ...valid,
+      censoring_status: {
+        ...valid.censoring_status,
+        metrics: valid.censoring_status.metrics.map((metric) =>
+          metric.metric_id === 'M1' ? { ...metric, succeeded, censored } : metric,
+        ),
+      },
+      metrics: replaceMetric(valid.metrics, result),
+    })
+    expect(
+      buildTelemetryEvidence(
+        withM1Censoring(10, 0, {
+          metric_id: 'M1',
+          status: 'FAIL',
+          reason: 'best_case_failed',
+        }),
+      ).metrics,
+    ).toContainEqual({ metric_id: 'M1', status: 'FAIL', reason: 'best_case_failed' })
+    expect(
+      buildTelemetryEvidence(
+        withM1Censoring(15, 2, {
+          metric_id: 'M1',
+          status: 'HOLD',
+          reason: 'censoring_changes_decision',
+        }),
+      ).metrics,
+    ).toContainEqual({
+      metric_id: 'M1',
+      status: 'HOLD',
+      reason: 'censoring_changes_decision',
+    })
+  })
+
+  it('allows only funnel-correlation HOLD overrides and the M8 telemetry HOLD override', () => {
+    const valid = evidenceInput()
+    for (const metricId of ['M2', 'M3', 'M9'] as const) {
+      expect(
+        buildTelemetryEvidence({
+          ...valid,
+          metrics: replaceMetric(valid.metrics, {
+            metric_id: metricId,
+            status: 'HOLD',
+            reason: 'telemetry_incomplete',
+          }),
+        }).metrics,
+      ).toContainEqual({
+        metric_id: metricId,
+        status: 'HOLD',
+        reason: 'telemetry_incomplete',
+      })
+      expect(() =>
+        buildTelemetryEvidence({
+          ...valid,
+          metrics: replaceMetric(valid.metrics, {
+            metric_id: metricId,
+            status: 'PASS',
+            reason: 'memory_saved_within_window',
+          }),
+        }),
+      ).toThrow('invalid_input')
+    }
+    expect(
+      buildTelemetryEvidence({
+        ...valid,
+        metrics: replaceMetric(valid.metrics, {
+          metric_id: 'M8',
+          status: 'HOLD',
+          reason: 'telemetry_incomplete',
+        }),
+      }).metrics,
+    ).toContainEqual({ metric_id: 'M8', status: 'HOLD', reason: 'telemetry_incomplete' })
+  })
 
   it.each(['M4', 'M10', 'M11', 'north_star_monthly_memories_per_active_profile'] as const)(
     'rejects a right-censor result for unsupported metric %s',

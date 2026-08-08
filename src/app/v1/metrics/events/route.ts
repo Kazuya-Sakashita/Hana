@@ -34,7 +34,7 @@ function assertJsonRequest(request: Request): void {
   if (contentType !== 'application/json') {
     throw problems.validation([
       {
-        path: 'headers.content-type',
+        path: 'header.Content-Type',
         reason: 'request_boundary_invalid',
         message: 'JSON requestだけを受け付けます',
       },

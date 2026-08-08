@@ -177,7 +177,10 @@ describe('POST /v1/metrics/events', () => {
 
       expect(response.status).toBe(422)
       expect(response.headers.get('content-type')).toContain('application/problem+json')
-      expect(await response.json()).toMatchObject({ reason: 'validation_error' })
+      expect(await response.json()).toMatchObject({
+        reason: 'validation_error',
+        errors: [{ path: 'header.Content-Type', reason: 'request_boundary_invalid' }],
+      })
       expect(mocks.getUser).not.toHaveBeenCalled()
       expect(mocks.transaction).not.toHaveBeenCalled()
       expect(mocks.eventFindUnique).not.toHaveBeenCalled()
@@ -350,10 +353,17 @@ describe('POST /v1/metrics/events', () => {
     )
     mocks.eventFindFirst
       .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ eventId: 'existing-stage' })
 
     const response = await POST(request(validReport))
+
     expect(response.status).toBe(204)
+    expect(await response.text()).toBe('')
+    expect(mocks.eventCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.transaction).toHaveBeenCalledTimes(2)
+    expect(mocks.eventFindUnique).toHaveBeenCalledTimes(1)
   })
 
   it('rate-limits excessive reports from the same server-derived actor', async () => {

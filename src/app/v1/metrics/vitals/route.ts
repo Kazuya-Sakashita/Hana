@@ -28,14 +28,28 @@ function assertBrowserRequestBoundary(request: Request): void {
   const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
   const origin = request.headers.get('origin')
   const fetchSite = request.headers.get('sec-fetch-site')
-  if (
-    contentType !== 'application/json' ||
-    origin !== new URL(request.url).origin ||
-    fetchSite !== 'same-origin'
-  ) {
+  if (contentType !== 'application/json') {
     throw problems.validation([
       {
-        path: 'headers',
+        path: 'header.Content-Type',
+        reason: 'request_boundary_invalid',
+        message: '同一originのJSON requestだけを受け付けます',
+      },
+    ])
+  }
+  if (origin !== new URL(request.url).origin) {
+    throw problems.validation([
+      {
+        path: 'header.Origin',
+        reason: 'request_boundary_invalid',
+        message: '同一originのJSON requestだけを受け付けます',
+      },
+    ])
+  }
+  if (fetchSite !== 'same-origin') {
+    throw problems.validation([
+      {
+        path: 'header.Sec-Fetch-Site',
         reason: 'request_boundary_invalid',
         message: '同一originのJSON requestだけを受け付けます',
       },

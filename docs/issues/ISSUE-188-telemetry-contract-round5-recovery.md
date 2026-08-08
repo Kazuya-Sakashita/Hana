@@ -101,7 +101,7 @@ PR #378の正式な第5巡で検出された7件のtelemetry契約矛盾を、Op
 ### 検証と承認
 
 - [x] OpenAPIを先に更新し、生成型を`pnpm openapi:gen`だけで同期する
-- [x] query versionを`issue-188-v1`へ更新し、旧evidenceと混在させない
+- [x] query versionを`issue-188-v2`へ更新し、旧evidenceと混在させない
 - [x] 全組み合わせcontrast test、client / server / outbox / evidence回帰testを追加する
 - [x] `pnpm openapi:lint`、`pnpm openapi:gen`、`pnpm typecheck`、全test、`pnpm pr:gate`を通す
 - [x] 新しいoasdiff exact reportを生成し、旧ISSUE-152 waiverを再利用せず新ADR、新waiver、人間承認を取得する
@@ -177,6 +177,27 @@ terminal 4xx、timing test、DB quota oracleを独立回帰testで閉じる。�
 修正後headに一致するISSUE-173 protected Environment / GitHub OIDC / dedicated App checkが成功するまで
 Round 4を開始しない。
 
+Round 4はbase `e6c891ecde1ba3f51b739361d3cd3de4433835a3`、head
+`d54e1fcb63ee5b507a54f4241a712a996a45a795`を6 roleが独立・read-onlyで確認した。開始前に
+ISSUE-173のprotected Environment、GitHub OIDC、dedicated App checkがIssue / PR / base / head / 最大5巡へ
+一致し、`review-round-exception`が成功したことを確認した。
+
+| role                        | 判定 | findings |
+| --------------------------- | ---- | -------: |
+| spec acceptance / analytics | HOLD |        4 |
+| implementation correctness  | HOLD |        1 |
+| test reliability            | HOLD |        1 |
+| API contract                | HOLD |        1 |
+| security / authorization    | HOLD |        1 |
+| privacy / data protection   | HOLD |        2 |
+
+Issue Captainは10件をactionableとして保持した。事前policy登録と観測後event universe、signed receipt順序、
+signed DB Memory truth、固定metric policyとM8 / M9 chronology、protected manifest / evidence key、full envelope
+receipt、P2002 race test、Problem Details header path、server-derived suppression topologyを本Issueで修正する。
+いずれもISSUE-188のcompletenessまたはstatus-only privacy境界へ直接関係するため、別Issueへ分離しない。
+修正後head専用のISSUE-173 proofを再取得し、許可上限のRound 5で6 roleすべてを再実行する。Round 5で
+findingが残った場合はRound 6へ進まずHOLDとする。
+
 ## 実装結果
 
 - `event_name × elapsed_bucket`を生成schema型付きshared predicateへ集約し、client outboxとserver parserを同期した
@@ -193,8 +214,8 @@ Round 4を開始しない。
 - ProductEvent ingestをJSON-onlyにし、cross-actor event ID collisionを204で秘匿した
 - ProductEventのpayload固有validationをactor別DB lookupより先に完了させた
 - query version、actor scope、観測窓、全eligible IDを別keyで事前署名するauthority登録を必須にした
-- expectation manifest v4 / authority registration v2へ上げ、eventごとのoperation、flow、actor、occurrenceと
-  protected sampling commitmentをauthority HMACへ拘束した
+- expectation manifest v5 / authority policy v3へ上げ、window開始前のpolicy登録と観測後のsealed event universeを
+  分離し、protected sampling commitmentとeventごとのoperation、flow、actor、occurrenceを別署名へ拘束した
 - window開始前の独立registry receiptと、event ID / DB由来received timeのingest receiptを別keyで検証し、
   protected key reuse、post-hoc登録、receipt改ざんをHOLDにした
 - M2 / M3 / M9をauthority tupleとsigned receiptへ照合し、operation relabel、flow / actor rebinding、
@@ -205,10 +226,24 @@ Round 4を開始しない。
   他actor既存IDと未知IDを同じ429 responseへ固定した
 - E2E telemetry DB oracleをserver-derived actor hashへ限定し、同じflowの別actor noiseを除外した
 - degradation ledgerをGitHub Issue #384へ分離し、専用activation未完成時のproduction ingestをHOLDにした
-- query versionを`issue-188-v1`へ更新し、ISSUE-152 evidenceとの混在を禁止した
+- ingest receipt v2をcanonical envelope全体、source、query / window、authority / universeへ拘束し、署名済み
+  `received_at_utc`で順序を判定して同時刻をHOLDにした
+- M2 / M3 / M9のDB Memory exact setを専用receiptで署名し、callerによる追加・省略・差し替えをHOLDにした
+- manifestとstatus-only evidenceのcommitment keyを保護Environmentへ移し、全telemetry keyの再利用を拒否した
+- M1 / M2 / M3 / M5 / M6 / M7のminimum / targetをcode policyへ固定し、M2 / M3 / M7の2種類の
+  distinct minimumを検証した。M8 / M9はbaseline digestとtarget chronologyを署名したevaluationだけを判定する
+- private metric manifest / census / censoringをexact schema化し、8 rate metricを再計算してstatus不一致を拒否した
+- suppressionを固定binary outcome schemaへ限定し、group省略、未知 / raw ID、欠落 / 重複cell、合計不一致を拒否した
+- metrics APIのProblem Details header pathを`header.<Field-Name>`へ統一し、P2002 race testを実分岐へ修正した
+- query versionを`issue-188-v2`へ更新し、ISSUE-152およびRound 3 evidenceとの混在を禁止した
 
 ## 検証結果
 
+- Round 4修正のcombined focused suite 4 files / 179 tests PASS
+- `pnpm typecheck`、変更対象ESLint、Prettier、`git diff --check` PASS
+- `pnpm pr:gate`のformat / lint / issue / OpenAPI contract / typecheck / 全test / 全contract QA PASS。
+  sandboxのport bind制限で停止したproduction buildは同一環境変数の権限付き`pnpm build:ci`でPASS
+- `pnpm openapi:lint` PASS（既存warningのみ）、`pnpm openapi:gen`後の生成差分なし
 - Round 3修正の統合focused suite 5 files / 314 tests PASS。追加のoperation relabel / flow rebind反例2件PASS
 - 最新`pnpm pr:gate` PASS（196 files中190 PASS / 6 skip、2005 tests中1982 PASS / 23 skip、production build成功）
 - 最新専用PostgreSQL 16へ19 migrationを適用し、認証済みChromium E2E 5件PASS。合成containerは検証後削除

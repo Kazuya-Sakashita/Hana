@@ -136,6 +136,10 @@ Productが閾値、方向、再計測期限を署名付きdecision recordで固�
 decision recordのdigest、baseline evidence digest、`target_fixed_at_utc`、baseline / evaluationのcohort roleを
 evidence versionへ含め、
 `baseline.generated_at_utc <= target_fixed_at_utc < evaluation.window_start_utc`を必須にする。
+M1 / M2 / M3 / M5 / M6 / M7のminimumとtargetはこの表からcode policyへ固定し、aggregate callerによる
+上書きを許可しない。M2 / M3はdistinct Profileとflow、M7はdistinct ProfileとProfile-weekの両方がminimumを
+満たす場合だけrateを判定する。M8 / M9のdecision recordは保護されたversioned keyで検証し、欠落、改変、
+chronology不一致、baseline cohortの自己評価はHoldにする。
 
 productionの`elapsed_bucket`から正確なp50 / p85を再構成しない。分位点はISSUE-160で事前固定した
 nearest-rank algorithmを使い、AI / 手動経路を混ぜない。pilotのusability Goをproduct validationや
@@ -197,6 +201,11 @@ release Goへ読み替えない。
 - `censoring_status_digest`
 - `generated_at_utc`
 - 上記とmetric status一覧から作る`evidence_digest`
+
+private `metric_window_manifest`、eligible census、censoring statusはversioned exact schemaで固定し、未知field、
+metric欠落、window / query / actor key version不一致を受理しない。外部へ残すcommitmentはcaller指定keyではなく、
+保護されたversioned evidence keyで作る。suppression tableもversioned fixed schemaからrow / column / total関係を
+server側で導出し、callerによるreconstruction group省略を許可しない。
 
 構成要素の変更、digest不一致、異なるevidence versionを参照するreviewは判定を無効化してHoldに戻す。
 ISSUE-162はこのfail-closed ruleをrelease dossierへ実装する。

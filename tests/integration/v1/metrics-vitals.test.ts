@@ -7,6 +7,8 @@ import {
   createTelemetryAuthorityRegistrationCommitment,
   createTelemetryAuthorityRegistryReceiptCommitment,
   createTelemetryExpectationManifestCommitment,
+  createTelemetryEnvelopeDigest,
+  createTelemetryEventUniverseCommitment,
   createTelemetryIngestReceiptCommitment,
   createTelemetrySamplingKeyCommitment,
   evaluateTelemetryCompleteness,
@@ -15,6 +17,7 @@ import {
   TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
   TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION,
   TELEMETRY_EVENT_SCHEMA_VERSION,
+  TELEMETRY_EVENT_UNIVERSE_SCHEMA_VERSION,
   TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
   TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION,
   TELEMETRY_QUERY_VERSION,
@@ -26,14 +29,20 @@ import {
 
 const SAMPLING_KEY = 'integration-web-vitals-sampling-key-32-bytes'
 const SAMPLING_KEY_VERSION = 'integration-v1'
-const COMMITMENT_KEY = 'integration-commitment-key-32-bytes-minimum'
 const AUTHORITY_KEY = 'integration-authority-key-32-bytes-minimum'
 const AUTHORITY_KEY_VERSION = 'integration-authority-v1'
+const MANIFEST_KEY = 'integration-manifest-key-32-bytes-minimum'
+const MANIFEST_KEY_VERSION = 'integration-manifest-v1'
+const UNIVERSE_KEY = 'integration-universe-key-32-bytes-minimum'
+const UNIVERSE_KEY_VERSION = 'integration-universe-v1'
 const SAMPLING_COMMITMENT_KEY = 'integration-sampling-commitment-key-minimum'
 const REGISTRY_KEY = 'integration-registry-key-32-bytes-minimum'
 const REGISTRY_KEY_VERSION = 'integration-registry-v1'
 const INGEST_RECEIPT_KEY = 'integration-ingest-receipt-key-minimum'
 const INGEST_RECEIPT_KEY_VERSION = 'integration-ingest-v1'
+const MEMORY_TRUTH_KEY = 'integration-memory-truth-key-32-bytes-minimum'
+const TARGET_DECISION_KEY = 'integration-target-decision-key-32-bytes-minimum'
+const EVIDENCE_KEY = 'integration-evidence-key-32-bytes-minimum'
 
 function jsonRequest(body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/v1/metrics/vitals', {
@@ -171,11 +180,18 @@ describe('POST /v1/metrics/vitals', () => {
 
     vi.stubEnv('TELEMETRY_AUTHORITY_KEY_VERSION', AUTHORITY_KEY_VERSION)
     vi.stubEnv('TELEMETRY_AUTHORITY_COMMITMENT_KEY', AUTHORITY_KEY)
+    vi.stubEnv('TELEMETRY_MANIFEST_KEY_VERSION', MANIFEST_KEY_VERSION)
+    vi.stubEnv('TELEMETRY_MANIFEST_COMMITMENT_KEY', MANIFEST_KEY)
+    vi.stubEnv('TELEMETRY_EVENT_UNIVERSE_KEY_VERSION', UNIVERSE_KEY_VERSION)
+    vi.stubEnv('TELEMETRY_EVENT_UNIVERSE_COMMITMENT_KEY', UNIVERSE_KEY)
     vi.stubEnv('TELEMETRY_SAMPLING_COMMITMENT_KEY', SAMPLING_COMMITMENT_KEY)
     vi.stubEnv('TELEMETRY_AUTHORITY_REGISTRY_KEY_VERSION', REGISTRY_KEY_VERSION)
     vi.stubEnv('TELEMETRY_AUTHORITY_REGISTRY_COMMITMENT_KEY', REGISTRY_KEY)
     vi.stubEnv('TELEMETRY_INGEST_RECEIPT_KEY_VERSION', INGEST_RECEIPT_KEY_VERSION)
     vi.stubEnv('TELEMETRY_INGEST_RECEIPT_COMMITMENT_KEY', INGEST_RECEIPT_KEY)
+    vi.stubEnv('TELEMETRY_MEMORY_TRUTH_COMMITMENT_KEY', MEMORY_TRUTH_KEY)
+    vi.stubEnv('TELEMETRY_TARGET_DECISION_COMMITMENT_KEY', TARGET_DECISION_KEY)
+    vi.stubEnv('TELEMETRY_EVIDENCE_COMMITMENT_KEY', EVIDENCE_KEY)
     const occurredAtUtc = '2026-08-07T00:00:00Z'
     const authorityRegistration: TelemetryAuthorityRegistration = {
       schema_version: TELEMETRY_AUTHORITY_REGISTRATION_SCHEMA_VERSION,
@@ -193,13 +209,41 @@ describe('POST /v1/metrics/vitals', () => {
         sampling_key: SAMPLING_KEY,
         commitment_key: SAMPLING_COMMITMENT_KEY,
       }),
-      eligible_events: [sampledIn, sampledOut].map((eventId) => ({
+      eligibility_policy_version: 'source-operation-actor-window/v1',
+      eligible_operations: ['web_vital_lcp'],
+      cohort_rule: 'all_actors',
+      exclusion_rule: 'pre_registered_actor_allowlist',
+      exclusion_policy_version: 'synthetic-allowlist-v1',
+      exclusion_policy_commitment: 'e'.repeat(64),
+    }
+    const registrationCommitment = createTelemetryAuthorityRegistrationCommitment({
+      registration: authorityRegistration,
+      commitment_key: AUTHORITY_KEY,
+    })
+    const unsignedUniverse = {
+      schema_version: TELEMETRY_EVENT_UNIVERSE_SCHEMA_VERSION,
+      query_version: TELEMETRY_QUERY_VERSION,
+      source: 'web_vital' as const,
+      window_start_utc: '2026-08-07T00:00:00Z',
+      window_end_utc: '2026-08-08T00:00:00Z',
+      cutoff_utc: '2026-08-08T00:00:00Z',
+      sealed_at_utc: '2026-08-08T00:00:01Z',
+      registration_commitment: registrationCommitment,
+      universe_key_version: UNIVERSE_KEY_VERSION,
+      eligible_events: [sampledIn, sampledOut].sort().map((eventId) => ({
         event_id: eventId,
         operation: 'web_vital_lcp' as const,
         flow_id: null,
         actor: null,
         occurred_at_utc: occurredAtUtc,
       })),
+    }
+    const eventUniverse = {
+      ...unsignedUniverse,
+      universe_commitment: createTelemetryEventUniverseCommitment({
+        universe: unsignedUniverse,
+        commitment_key: UNIVERSE_KEY,
+      }),
     }
     const manifest: TelemetryExpectationManifest = {
       schema_version: TELEMETRY_EXPECTATION_MANIFEST_SCHEMA_VERSION,
@@ -216,13 +260,13 @@ describe('POST /v1/metrics/vitals', () => {
       }),
       query_version: TELEMETRY_QUERY_VERSION,
       authority_key_version: AUTHORITY_KEY_VERSION,
-      authority_commitment: createTelemetryAuthorityRegistrationCommitment({
-        registration: authorityRegistration,
-        commitment_key: AUTHORITY_KEY,
-      }),
-      expected_event_ids: [sampledIn, sampledOut],
+      authority_commitment: registrationCommitment,
+      universe_key_version: UNIVERSE_KEY_VERSION,
+      universe_commitment: eventUniverse.universe_commitment,
+      universe_cutoff_utc: eventUniverse.cutoff_utc,
+      manifest_key_version: MANIFEST_KEY_VERSION,
+      expected_event_ids: eventUniverse.eligible_events.map((event) => event.event_id),
     }
-    const registrationCommitment = manifest.authority_commitment
     const unsignedRegistryReceipt = {
       schema_version: TELEMETRY_AUTHORITY_REGISTRY_RECEIPT_SCHEMA_VERSION,
       receipt_id: '00000000-0000-4000-8000-000000000099',
@@ -230,33 +274,40 @@ describe('POST /v1/metrics/vitals', () => {
       registration_commitment: registrationCommitment,
       registry_key_version: REGISTRY_KEY_VERSION,
     }
+    const receivedEnvelope = parseTelemetryEnvelope({
+      schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
+      event_id: sampledIn,
+      occurred_at_utc: occurredAtUtc,
+      dimensions: {
+        operation: 'web_vital_lcp',
+        reason: 'not_applicable',
+        route_group: 'record',
+        status: 'good',
+        duration_bucket: 'from_1001_to_2500ms',
+      },
+    })
     const unsignedIngestReceipt = {
       schema_version: TELEMETRY_INGEST_RECEIPT_SCHEMA_VERSION,
       event_id: sampledIn,
+      envelope_digest: createTelemetryEnvelopeDigest(receivedEnvelope),
       received_at_utc: occurredAtUtc,
+      source: 'web_vital' as const,
+      query_version: TELEMETRY_QUERY_VERSION,
+      window_start_utc: '2026-08-07T00:00:00Z',
+      window_end_utc: '2026-08-08T00:00:00Z',
+      registration_commitment: registrationCommitment,
+      universe_commitment: eventUniverse.universe_commitment,
       receipt_key_version: INGEST_RECEIPT_KEY_VERSION,
     }
     const boundary = {
       source: 'web_vital' as const,
       manifest,
-      received: [
-        parseTelemetryEnvelope({
-          schema_version: TELEMETRY_EVENT_SCHEMA_VERSION,
-          event_id: sampledIn,
-          occurred_at_utc: occurredAtUtc,
-          dimensions: {
-            operation: 'web_vital_lcp',
-            reason: 'not_applicable',
-            route_group: 'record',
-            status: 'good',
-            duration_bucket: 'from_1001_to_2500ms',
-          },
-        }),
-      ],
+      received: [receivedEnvelope],
       window_start_utc: '2026-08-07T00:00:00Z',
       window_end_utc: '2026-08-08T00:00:00Z',
       actor_key_version: 'v2',
       authority_registration: authorityRegistration,
+      event_universe: eventUniverse,
       authority_registry_receipt: {
         ...unsignedRegistryReceipt,
         registry_commitment: createTelemetryAuthorityRegistryReceiptCommitment({
@@ -275,11 +326,13 @@ describe('POST /v1/metrics/vitals', () => {
       ],
       sampling_key_version: SAMPLING_KEY_VERSION,
       sampling_key: SAMPLING_KEY,
-      commitment_key: COMMITMENT_KEY,
     }
     const input: TelemetryCompletenessInput = {
       ...boundary,
-      manifest_commitment: createTelemetryExpectationManifestCommitment(boundary),
+      manifest_commitment: createTelemetryExpectationManifestCommitment({
+        ...boundary,
+        commitment_key: MANIFEST_KEY,
+      }),
     }
     expect(evaluateTelemetryCompleteness(input)).toMatchObject({
       status: 'PASS',
@@ -403,20 +456,32 @@ describe('POST /v1/metrics/vitals', () => {
   })
 
   it.each([
-    [{ Origin: 'https://attacker.invalid', 'Sec-Fetch-Site': 'cross-site' }, 'cross origin'],
-    [{ 'Content-Type': 'text/plain' }, 'non JSON'],
-  ])('rejects a %s browser request before parsing or logging', async (headers, _label) => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const parse = vi.fn()
-    const request = jsonRequest(validPayload, headers)
-    Object.defineProperty(request, 'json', { value: parse })
+    [
+      { Origin: 'https://attacker.invalid', 'Sec-Fetch-Site': 'cross-site' },
+      'cross origin',
+      'header.Origin',
+    ],
+    [{ 'Content-Type': 'text/plain' }, 'non JSON', 'header.Content-Type'],
+    [{ 'Sec-Fetch-Site': 'cross-site' }, 'cross site', 'header.Sec-Fetch-Site'],
+  ])(
+    'rejects a $label browser request before parsing or logging',
+    async (headers, _label, path) => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const parse = vi.fn()
+      const request = jsonRequest(validPayload, headers)
+      Object.defineProperty(request, 'json', { value: parse })
 
-    const response = await POST(request)
+      const response = await POST(request)
 
-    expect(response.status).toBe(422)
-    expect(parse).not.toHaveBeenCalled()
-    expect(logSpy).not.toHaveBeenCalled()
-  })
+      expect(response.status).toBe(422)
+      expect(await response.json()).toMatchObject({
+        reason: 'validation_error',
+        errors: [{ path, reason: 'request_boundary_invalid' }],
+      })
+      expect(parse).not.toHaveBeenCalled()
+      expect(logSpy).not.toHaveBeenCalled()
+    },
+  )
 
   it('fails closed in production until the trusted shared rate-limit boundary is active', async () => {
     vi.stubEnv('NODE_ENV', 'production')
