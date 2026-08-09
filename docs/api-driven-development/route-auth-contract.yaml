@@ -284,12 +284,10 @@ operations:
   'POST /metrics/vitals':
     operation_id: reportWebVitals
     source: src/app/v1/metrics/vitals/route.ts
-    access: optional_session
-    guard: getCurrentUser
-    ownership_strategy: session_actor_if_present
-    ownership_evidence:
-      - call:userIdHash
-      - member:user.id
+    access: public
+    guard: none
+    ownership_strategy: not_applicable
+    ownership_evidence: []
     ownership_denials: []
 
   'POST /metrics/events':

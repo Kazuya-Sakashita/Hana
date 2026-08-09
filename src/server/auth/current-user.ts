@@ -6,6 +6,13 @@ import type { AppUser } from '@/lib/supabase/types'
 import { problems } from '@/server/api/problems'
 import { prisma } from '@/server/db/prisma'
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+export type VerifiedSessionIdentity = {
+  subject: string
+  sessionId: string
+}
+
 // Supabase の auth.users と Hana 固有 profiles を結合し、Hana のドメイン用 AppUser を返す。
 // Profile 作成は OAuth callback に限定し、退会済み subject を通常リクエストで復活させない。
 //
@@ -38,10 +45,47 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   }
 })
 
+export const getVerifiedSessionIdentity = cache(
+  async (): Promise<VerifiedSessionIdentity | null> => {
+    const account = await getAuthenticatedAccount()
+    if (!account) return null
+
+    const supabase = await createSupabaseServerClient()
+    let claimsResult: Awaited<ReturnType<typeof supabase.auth.getClaims>>
+    try {
+      claimsResult = await supabase.auth.getClaims()
+    } catch {
+      return null
+    }
+    const { data, error } = claimsResult
+    if (error) return null
+
+    const subject = data?.claims.sub
+    const sessionId = data?.claims.session_id
+    if (
+      typeof subject !== 'string' ||
+      typeof sessionId !== 'string' ||
+      !UUID_PATTERN.test(subject) ||
+      !UUID_PATTERN.test(sessionId) ||
+      subject !== account.authUser.id
+    ) {
+      return null
+    }
+
+    return { subject, sessionId }
+  },
+)
+
 export async function requireUser(): Promise<AppUser> {
   const user = await getCurrentUser()
   if (!user) throw problems.unauthorized()
   return user
+}
+
+export async function requireVerifiedSessionIdentity(): Promise<VerifiedSessionIdentity> {
+  const identity = await getVerifiedSessionIdentity()
+  if (!identity) throw problems.unauthorized()
+  return identity
 }
 
 export async function requireAuthenticatedAccount() {

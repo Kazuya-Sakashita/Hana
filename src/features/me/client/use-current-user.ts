@@ -8,7 +8,7 @@ export type CurrentUser = components['schemas']['AppUser']
 
 export const currentUserQueryKey = ['me'] as const
 
-async function fetchCurrentUser(signal?: AbortSignal): Promise<CurrentUser> {
+export async function fetchCurrentUser(signal?: AbortSignal): Promise<CurrentUser> {
   const { data } = await getBrowserApiClient().GET('/me', { signal })
   if (!data) throw new Error('GET /me returned empty response')
   return data
