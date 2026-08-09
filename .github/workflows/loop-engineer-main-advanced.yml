@@ -1,0 +1,56 @@
+name: loop-engineer-main-advanced
+
+run-name: loop-engineer-main-advanced-${{ github.run_id }}
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loop-engineer-main-advanced
+  cancel-in-progress: true
+
+jobs:
+  invalidate_previous_main_generations:
+    if: >-
+      ${{ github.event.before != '0000000000000000000000000000000000000000' &&
+          github.event.after != '0000000000000000000000000000000000000000' }}
+    environment: hana-merge-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          path: trusted-control
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          run_install: false
+          package_json_file: trusted-control/package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted-control/pnpm-lock.yaml
+      - run: pnpm --dir trusted-control install --frozen-lockfile
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          private-key: ${{ secrets.LOOP_ENGINEER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+          permission-contents: read
+          permission-pull-requests: read
+      - name: Invalidate check generations bound to an earlier main SHA
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          LOOP_ENGINEER_APP_ID: ${{ vars.LOOP_ENGINEER_APP_ID }}
+          PREVIOUS_MAIN_SHA: ${{ github.event.before }}
+          CURRENT_MAIN_SHA: ${{ github.event.after }}
+        run: pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-check-generation.ts main-advanced

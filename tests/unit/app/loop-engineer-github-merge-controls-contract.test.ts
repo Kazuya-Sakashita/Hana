@@ -141,7 +141,9 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).toContain('OPENAPI_BREAKING_DETECTED')
     expect(controller).toContain('external_id: input.externalId')
     expect(source).toContain('BASE_SHA')
-    expect(source).toContain('.base.sha')
+    expect(source).not.toContain('base_sha:.base.sha')
+    expect(controller).toContain('git/ref/heads/main')
+    expect(controller).not.toContain('base_sha: String(response.base?.sha)')
     expect(source).toContain(
       'oasdiff/oasdiff-action/breaking@1c611ffb1253a72924624aa4fb662e302b3565d3',
     )
@@ -151,6 +153,117 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).not.toContain('pnpm/action-setup@v4')
     expect(source).not.toContain('integration_id: 15368')
     expect(source).not.toContain('OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(')
+  })
+
+  it('flows the prepare main ref SHA through attestation comparison and base_sha output', () => {
+    const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
+      jobs: Record<
+        string,
+        {
+          outputs?: Record<string, string>
+          steps?: Array<{ id?: string; run?: string }>
+        }
+      >
+    }
+    const prepare = workflow.jobs.prepare!
+    const gateScript = prepare.steps?.find(({ id }) => id === 'gate')?.run ?? ''
+    const readMainRef =
+      'live_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq \'.object.sha\')"'
+    const compareDeclaredMergeBase = '"$declared_merge_base_sha" != "$live_base_sha"'
+    const publishBaseSha = 'echo "base_sha=$live_base_sha" >> "$GITHUB_OUTPUT"'
+    const readIndex = gateScript.indexOf(readMainRef)
+    const compareIndex = gateScript.indexOf(compareDeclaredMergeBase)
+    const publishIndex = gateScript.indexOf(publishBaseSha)
+
+    expect(prepare.outputs?.base_sha).toBe('${{ steps.gate.outputs.base_sha }}')
+    expect(readIndex).toBeGreaterThanOrEqual(0)
+    expect(compareIndex).toBeGreaterThan(readIndex)
+    expect(publishIndex).toBeGreaterThan(compareIndex)
+  })
+
+  it('invalidates previous-main generations from a pinned trusted-main workflow', () => {
+    const source = read('.github/workflows/loop-engineer-main-advanced.yml')
+    const controller = read('scripts/loop-engineer/github-check-generation.ts')
+    const workflow = parse(source) as {
+      on: { push: { branches: string[] } }
+      permissions: Record<string, string>
+      concurrency: { group: string; 'cancel-in-progress': boolean }
+      jobs: Record<
+        string,
+        {
+          if?: string
+          environment?: string
+          steps?: Array<{
+            name?: string
+            id?: string
+            uses?: string
+            run?: string
+            env?: Record<string, string>
+            with?: Record<string, string | boolean>
+          }>
+        }
+      >
+    }
+    const invalidate = workflow.jobs.invalidate_previous_main_generations!
+    const steps = invalidate.steps ?? []
+    const checkout = steps.find(({ uses }) => uses?.startsWith('actions/checkout@'))
+    const installIndex = steps.findIndex(
+      ({ run }) => run === 'pnpm --dir trusted-control install --frozen-lockfile',
+    )
+    const tokenIndex = steps.findIndex(({ id }) => id === 'app-token')
+    const controllerIndex = steps.findIndex(({ run }) => run?.includes('main-advanced'))
+    const controllerStep = steps[controllerIndex]
+
+    expect(workflow.on).toEqual({ push: { branches: ['main'] } })
+    expect(workflow.permissions).toEqual({ contents: 'read' })
+    expect(workflow.concurrency).toEqual({
+      group: 'loop-engineer-main-advanced',
+      'cancel-in-progress': true,
+    })
+    expect(invalidate.environment).toBe('hana-merge-publisher')
+    expect(invalidate.if).toContain('github.event.before')
+    expect(invalidate.if).toContain('github.event.after')
+    expect(steps.filter(({ uses }) => uses?.startsWith('actions/checkout@'))).toEqual([
+      {
+        uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+        with: {
+          ref: 'main',
+          path: 'trusted-control',
+          'persist-credentials': false,
+        },
+      },
+    ])
+    expect(checkout?.with?.ref).toBe('main')
+    expect(
+      steps
+        .filter(({ uses }) => uses !== undefined)
+        .every(({ uses }) => /@[0-9a-f]{40}$/.test(uses!)),
+    ).toBe(true)
+    expect(steps[tokenIndex]?.with).toMatchObject({
+      'permission-checks': 'write',
+      'permission-contents': 'read',
+      'permission-pull-requests': 'read',
+    })
+    expect(installIndex).toBeGreaterThanOrEqual(0)
+    expect(installIndex).toBeLessThan(tokenIndex)
+    expect(tokenIndex).toBeLessThan(controllerIndex)
+    expect(controllerStep).toMatchObject({
+      env: {
+        GH_TOKEN: '${{ steps.app-token.outputs.token }}',
+        LOOP_ENGINEER_APP_ID: '${{ vars.LOOP_ENGINEER_APP_ID }}',
+        PREVIOUS_MAIN_SHA: '${{ github.event.before }}',
+        CURRENT_MAIN_SHA: '${{ github.event.after }}',
+      },
+      run: 'pnpm --dir trusted-control exec tsx scripts/loop-engineer/github-check-generation.ts main-advanced',
+    })
+    expect(steps.some(({ run }) => run?.includes('${{ secrets.'))).toBe(false)
+    expect(source).not.toContain('pull_request_target')
+    expect(source).not.toContain('github.event.pull_request')
+    expect(source).not.toContain('continue-on-error')
+    expect(controller).toContain('export async function invalidateChecksAfterMainAdvance')
+    expect(controller).toContain("summary: 'current_main_sha_mismatch'")
+    expect(controller).toContain("'--paginate'")
+    expect(controller).toContain("'--slurp'")
   })
 
   it('accepts an OpenAPI waiver only for a freshly generated non-empty report', () => {

@@ -22,6 +22,51 @@ export type PullRequestSnapshot = {
   breaking_approval_label_present: boolean
 }
 
+type PullRequestApiResponse = {
+  state?: unknown
+  draft?: unknown
+  base?: { ref?: unknown; sha?: unknown }
+  head?: { sha?: unknown }
+  mergeable?: unknown
+  labels?: Array<{ name?: unknown }>
+}
+
+type GitRefApiResponse = { object?: { sha?: unknown } }
+
+type OpenPullRequestApiResponse = {
+  number?: unknown
+  state?: unknown
+  base?: { ref?: unknown }
+  head?: { sha?: unknown }
+}
+
+export type OpenPullRequestSnapshot = {
+  number: number
+  base_ref: string
+  head_sha: string
+}
+
+export type CheckRunSnapshot = {
+  id: number
+  externalId: string
+}
+
+export function toPullRequestSnapshot(
+  response: PullRequestApiResponse,
+  mainRef: GitRefApiResponse,
+): PullRequestSnapshot {
+  return {
+    state: String(response.state),
+    draft: response.draft === true,
+    base_ref: String(response.base?.ref),
+    base_sha: String(mainRef.object?.sha),
+    head_sha: String(response.head?.sha),
+    mergeable: response.mergeable === true,
+    breaking_approval_label_present:
+      response.labels?.some((label) => label.name === 'openapi-breaking-approved') === true,
+  }
+}
+
 type CreateCheckRunInput = {
   name: CheckName
   headSha: string
@@ -39,15 +84,22 @@ type UpdateCheckRunInput = {
 }
 
 export type GitHubCheckGenerationClient = {
+  readMainSha(repository: string): Promise<string>
+  readOpenPullRequests(repository: string): Promise<OpenPullRequestSnapshot[]>
   readPullRequest(repository: string, prNumber: number): Promise<PullRequestSnapshot>
-  readLatestCheckRunIds(
+  readLatestCheckRuns(
     repository: string,
     headSha: string,
     name: CheckName,
     appId: number,
-  ): Promise<number[]>
+  ): Promise<CheckRunSnapshot[]>
   createCheckRun(repository: string, input: CreateCheckRunInput): Promise<{ id: number }>
   updateCheckRun(repository: string, checkId: number, input: UpdateCheckRunInput): Promise<void>
+}
+
+export type GitHubApiTransport = {
+  requestJson<T>(args: string[], input?: unknown): T
+  requestVoid(args: string[], input: unknown): void
 }
 
 export type CheckIds = {
@@ -91,7 +143,7 @@ export type ApproveCheckGenerationInput = {
   prNumber: number
   headSha: string
   baseSha: string
-  mergeEligibilityCheckId: number
+  checkIds: CheckIds
   openapiBreakingDetected: boolean
   mergeReason: string
 }
@@ -100,6 +152,14 @@ export type RevokeBreakingWaiverInput = {
   repository: string
   prNumber: number
   eventHeadSha: string
+  runId: string
+}
+
+export type InvalidateChecksAfterMainAdvanceInput = {
+  repository: string
+  appId: number
+  previousMainSha: string
+  currentMainSha: string
   runId: string
 }
 
@@ -117,6 +177,8 @@ const evidenceOrder: Array<{ name: CheckName; id: keyof CheckIds }> = [
   { name: 'local-registry', id: 'local_registry_check_id' },
   { name: 'specialist-review-gate', id: 'specialist_review_check_id' },
 ]
+
+const checkGenerationExternalIdSchema = 'loop-engineer-check-generation/v1'
 
 function isSha(value: string): boolean {
   return /^[0-9a-f]{40}$/.test(value)
@@ -153,6 +215,24 @@ function validateCheckIds(checkIds: CheckIds): void {
   for (const id of Object.values(checkIds)) requirePositiveInteger(id, 'invalid_check_id')
 }
 
+function checkGenerationExternalId(runId: string, baseSha: string, name: CheckName): string {
+  return `${checkGenerationExternalIdSchema}|${runId}|${baseSha}|${name}`
+}
+
+function checkGenerationBaseSha(externalId: string, name: CheckName): string | null {
+  const [schema, runId, baseSha, checkName, extra] = externalId.split('|')
+  if (
+    schema !== checkGenerationExternalIdSchema ||
+    !/^\d+$/.test(runId ?? '') ||
+    !isSha(baseSha ?? '') ||
+    checkName !== name ||
+    extra !== undefined
+  ) {
+    return null
+  }
+  return baseSha ?? null
+}
+
 function isCurrentPullRequest(
   pullRequest: PullRequestSnapshot,
   input: { headSha: string; baseSha: string },
@@ -171,6 +251,39 @@ function isCurrentPullRequest(
 
 function normalizeResult(value: string): CheckConclusion {
   return value === 'success' ? 'success' : 'failure'
+}
+
+async function readCurrentGeneration(
+  client: GitHubCheckGenerationClient,
+  repository: string,
+  input: {
+    appId: number
+    prNumber: number
+    headSha: string
+    baseSha: string
+    mergeEligibilityCheckId: number
+    requireBreakingApproval: boolean
+  },
+): Promise<{ pullRequest: PullRequestSnapshot; matches: boolean }> {
+  const [pullRequest, latestMergeRuns] = await Promise.all([
+    client.readPullRequest(repository, input.prNumber),
+    client.readLatestCheckRuns(repository, input.headSha, 'merge-eligibility', input.appId),
+  ])
+  return {
+    pullRequest,
+    matches:
+      isCurrentPullRequest(pullRequest, input, input.requireBreakingApproval) &&
+      latestMergeRuns.length === 1 &&
+      latestMergeRuns[0]?.id === input.mergeEligibilityCheckId,
+  }
+}
+
+function generationMismatchReason(
+  pullRequest: PullRequestSnapshot,
+  baseSha: string,
+  fallback: 'stale_generation' | 'stale_human_approval',
+): 'current_main_sha_mismatch' | 'stale_generation' | 'stale_human_approval' {
+  return pullRequest.base_sha === baseSha ? fallback : 'current_main_sha_mismatch'
 }
 
 async function completeCheck(
@@ -208,6 +321,94 @@ async function failGeneration(
   )
 }
 
+async function requireCurrentGeneration(
+  client: GitHubCheckGenerationClient,
+  repository: string,
+  generationInput: Parameters<typeof readCurrentGeneration>[2],
+  checkIds: CheckIds,
+  fallback: 'stale_generation' | 'stale_human_approval',
+): Promise<void> {
+  const currentGeneration = await readCurrentGeneration(client, repository, generationInput)
+  if (currentGeneration.matches) return
+
+  const reason = generationMismatchReason(
+    currentGeneration.pullRequest,
+    generationInput.baseSha,
+    fallback,
+  )
+  await failGeneration(client, repository, checkIds, reason)
+  throw new Error(reason)
+}
+
+async function createMainAdvanceInvalidationGeneration(
+  client: GitHubCheckGenerationClient,
+  repository: string,
+  headSha: string,
+  currentMainSha: string,
+  runId: string,
+): Promise<void> {
+  for (const check of generationOrder) {
+    await client.createCheckRun(repository, {
+      name: check.name,
+      headSha,
+      externalId: checkGenerationExternalId(runId, currentMainSha, check.name),
+      status: 'completed',
+      conclusion: 'failure',
+      summary: 'current_main_sha_mismatch',
+    })
+  }
+}
+
+export async function invalidateChecksAfterMainAdvance(
+  input: InvalidateChecksAfterMainAdvanceInput,
+  client: GitHubCheckGenerationClient,
+): Promise<{ invalidated: number }> {
+  const repository = requireRepository(input.repository)
+  requirePositiveInteger(input.appId, 'invalid_app_id')
+  requireSha(input.previousMainSha, 'invalid_previous_main_sha')
+  requireSha(input.currentMainSha, 'invalid_current_main_sha')
+  requireRunId(input.runId)
+  if (input.previousMainSha === input.currentMainSha) throw new Error('invalid_main_advance')
+
+  const liveMainSha = await client.readMainSha(repository)
+  if (liveMainSha !== input.currentMainSha) throw new Error('stale_main_advance_event')
+
+  const pullRequests = await client.readOpenPullRequests(repository)
+  let invalidated = 0
+  for (const pullRequest of pullRequests) {
+    const latestMergeRuns = await client.readLatestCheckRuns(
+      repository,
+      pullRequest.head_sha,
+      'merge-eligibility',
+      input.appId,
+    )
+    if (latestMergeRuns.length === 0) continue
+
+    const currentGenerationAlreadyStarted =
+      latestMergeRuns.length === 1 &&
+      checkGenerationBaseSha(latestMergeRuns[0]?.externalId ?? '', 'merge-eligibility') ===
+        input.currentMainSha
+    if (currentGenerationAlreadyStarted) continue
+
+    if ((await client.readMainSha(repository)) !== input.currentMainSha) {
+      throw new Error('stale_main_advance_event')
+    }
+    await createMainAdvanceInvalidationGeneration(
+      client,
+      repository,
+      pullRequest.head_sha,
+      input.currentMainSha,
+      input.runId,
+    )
+    invalidated += 1
+  }
+
+  if ((await client.readMainSha(repository)) !== input.currentMainSha) {
+    throw new Error('stale_main_advance_event')
+  }
+  return { invalidated }
+}
+
 export async function beginCheckGeneration(
   input: BeginCheckGenerationInput,
   client: GitHubCheckGenerationClient,
@@ -219,14 +420,16 @@ export async function beginCheckGeneration(
   requireRunId(input.runId)
 
   const pullRequest = await client.readPullRequest(repository, input.prNumber)
-  if (!isCurrentPullRequest(pullRequest, input, false)) throw new Error('stale_generation')
+  if (!isCurrentPullRequest(pullRequest, input, false)) {
+    throw new Error(generationMismatchReason(pullRequest, input.baseSha, 'stale_generation'))
+  }
 
   const checkIds = {} as CheckIds
   for (const check of generationOrder) {
     const created = await client.createCheckRun(repository, {
       name: check.name,
       headSha: input.headSha,
-      externalId: `loop-engineer-run-${input.runId}-${check.name}`,
+      externalId: checkGenerationExternalId(input.runId, input.baseSha, check.name),
       status: 'in_progress',
       summary: 'generation_evaluation_in_progress',
     })
@@ -253,19 +456,21 @@ export async function finalizeCheckGeneration(
     throw new Error('invalid_merge_decision')
   }
 
-  const [pullRequest, latestMergeIds] = await Promise.all([
-    client.readPullRequest(repository, input.prNumber),
-    client.readLatestCheckRunIds(repository, input.headSha, 'merge-eligibility', input.appId),
-  ])
-  const currentGeneration =
-    isCurrentPullRequest(pullRequest, input, input.openapiBreakingDetected) &&
-    latestMergeIds.length === 1 &&
-    latestMergeIds[0] === input.checkIds.merge_eligibility_check_id
-
-  if (!currentGeneration) {
-    await failGeneration(client, repository, input.checkIds, 'stale_generation')
-    throw new Error('stale_generation')
+  const generationInput = {
+    appId: input.appId,
+    prNumber: input.prNumber,
+    headSha: input.headSha,
+    baseSha: input.baseSha,
+    mergeEligibilityCheckId: input.checkIds.merge_eligibility_check_id,
+    requireBreakingApproval: input.openapiBreakingDetected,
   }
+  await requireCurrentGeneration(
+    client,
+    repository,
+    generationInput,
+    input.checkIds,
+    'stale_generation',
+  )
 
   const conclusions = {
     prGate: normalizeResult(input.prGateResult),
@@ -313,6 +518,13 @@ export async function finalizeCheckGeneration(
     (conclusion) => conclusion === 'success',
   )
   if (input.mergeDecision === 'HUMAN_REQUIRED' && allEvidencePassed) {
+    await requireCurrentGeneration(
+      client,
+      repository,
+      generationInput,
+      input.checkIds,
+      'stale_generation',
+    )
     return { status: 'in_progress', conclusion: null }
   }
 
@@ -324,6 +536,15 @@ export async function finalizeCheckGeneration(
       : input.mergeDecision === 'HOLD'
         ? `hold_${input.mergeReason}`
         : 'human_candidate_failure'
+  if (mergeConclusion === 'success') {
+    await requireCurrentGeneration(
+      client,
+      repository,
+      generationInput,
+      input.checkIds,
+      'stale_generation',
+    )
+  }
   await completeCheck(
     client,
     repository,
@@ -332,6 +553,15 @@ export async function finalizeCheckGeneration(
     mergeConclusion,
     summary,
   )
+  if (mergeConclusion === 'success') {
+    await requireCurrentGeneration(
+      client,
+      repository,
+      generationInput,
+      input.checkIds,
+      'stale_generation',
+    )
+  }
   return { status: 'completed', conclusion: mergeConclusion }
 }
 
@@ -342,38 +572,48 @@ export async function approveCheckGeneration(
   const repository = requireRepository(input.repository)
   requirePositiveInteger(input.appId, 'invalid_app_id')
   requirePositiveInteger(input.prNumber, 'invalid_pr_number')
-  requirePositiveInteger(input.mergeEligibilityCheckId, 'invalid_check_id')
+  validateCheckIds(input.checkIds)
   requireSha(input.headSha, 'invalid_head_sha')
   requireSha(input.baseSha, 'invalid_base_sha')
   requireReason(input.mergeReason)
 
-  const [pullRequest, latestMergeIds] = await Promise.all([
-    client.readPullRequest(repository, input.prNumber),
-    client.readLatestCheckRunIds(repository, input.headSha, 'merge-eligibility', input.appId),
-  ])
-  const currentGeneration =
-    isCurrentPullRequest(pullRequest, input, input.openapiBreakingDetected) &&
-    latestMergeIds.length === 1 &&
-    latestMergeIds[0] === input.mergeEligibilityCheckId
-  if (!currentGeneration) {
-    await completeCheck(
-      client,
-      repository,
-      input.mergeEligibilityCheckId,
-      'merge-eligibility',
-      'failure',
-      'stale_human_approval',
-    )
-    throw new Error('stale_human_approval')
+  const generationInput = {
+    appId: input.appId,
+    prNumber: input.prNumber,
+    headSha: input.headSha,
+    baseSha: input.baseSha,
+    mergeEligibilityCheckId: input.checkIds.merge_eligibility_check_id,
+    requireBreakingApproval: input.openapiBreakingDetected,
   }
+  await requireCurrentGeneration(
+    client,
+    repository,
+    generationInput,
+    input.checkIds,
+    'stale_human_approval',
+  )
+  await requireCurrentGeneration(
+    client,
+    repository,
+    generationInput,
+    input.checkIds,
+    'stale_human_approval',
+  )
 
   await completeCheck(
     client,
     repository,
-    input.mergeEligibilityCheckId,
+    input.checkIds.merge_eligibility_check_id,
     'merge-eligibility',
     'success',
     `human_${input.mergeReason}_approved`,
+  )
+  await requireCurrentGeneration(
+    client,
+    repository,
+    generationInput,
+    input.checkIds,
+    'stale_human_approval',
   )
   return { status: 'completed', conclusion: 'success' }
 }
@@ -436,32 +676,68 @@ function ghVoid(args: string[], input: unknown): void {
   }
 }
 
-function createGitHubClient(): GitHubCheckGenerationClient {
+const githubCliTransport: GitHubApiTransport = {
+  requestJson: ghJson,
+  requestVoid: ghVoid,
+}
+
+export function createGitHubClient(
+  transport: GitHubApiTransport = githubCliTransport,
+): GitHubCheckGenerationClient {
+  const readMainSha = async (repository: string): Promise<string> => {
+    const mainRef = transport.requestJson<GitRefApiResponse>([
+      `repos/${repository}/git/ref/heads/main`,
+    ])
+    return requireSha(String(mainRef.object?.sha), 'invalid_current_main_sha')
+  }
+
   return {
-    async readPullRequest(repository, prNumber) {
-      const response = ghJson<{
-        state?: unknown
-        draft?: unknown
-        base?: { ref?: unknown; sha?: unknown }
-        head?: { sha?: unknown }
-        mergeable?: unknown
-        labels?: Array<{ name?: unknown }>
-      }>([`repos/${repository}/pulls/${prNumber}`])
-      return {
-        state: String(response.state),
-        draft: response.draft === true,
-        base_ref: String(response.base?.ref),
-        base_sha: String(response.base?.sha),
-        head_sha: String(response.head?.sha),
-        mergeable: response.mergeable === true,
-        breaking_approval_label_present:
-          response.labels?.some((label) => label.name === 'openapi-breaking-approved') === true,
+    readMainSha,
+    async readOpenPullRequests(repository) {
+      const pages = transport.requestJson<unknown>([
+        '--paginate',
+        '--slurp',
+        `repos/${repository}/pulls?state=open&base=main&per_page=100`,
+      ])
+      if (!Array.isArray(pages) || !pages.every((page) => Array.isArray(page))) {
+        throw new Error('invalid_pull_request_inventory')
       }
+      return pages.flatMap((page) =>
+        page.map((item: unknown) => {
+          if (typeof item !== 'object' || item === null) {
+            throw new Error('invalid_pull_request_inventory')
+          }
+          const response = item as OpenPullRequestApiResponse
+          const pullRequest = {
+            number: requirePositiveInteger(
+              Number(response.number),
+              'invalid_pull_request_inventory',
+            ),
+            state: String(response.state),
+            base_ref: String(response.base?.ref),
+            head_sha: requireSha(String(response.head?.sha), 'invalid_pull_request_inventory'),
+          }
+          if (pullRequest.state !== 'open' || pullRequest.base_ref !== 'main') {
+            throw new Error('invalid_pull_request_inventory')
+          }
+          return {
+            number: pullRequest.number,
+            base_ref: pullRequest.base_ref,
+            head_sha: pullRequest.head_sha,
+          }
+        }),
+      )
     },
-    async readLatestCheckRunIds(repository, headSha, name, dedicatedAppId) {
-      const response = ghJson<{
+    async readPullRequest(repository, prNumber) {
+      const response = transport.requestJson<PullRequestApiResponse>([
+        `repos/${repository}/pulls/${prNumber}`,
+      ])
+      return toPullRequestSnapshot(response, { object: { sha: await readMainSha(repository) } })
+    },
+    async readLatestCheckRuns(repository, headSha, name, dedicatedAppId) {
+      const response = transport.requestJson<{
         total_count?: unknown
-        check_runs?: Array<{ id?: unknown }>
+        check_runs?: Array<{ id?: unknown; external_id?: unknown }>
       }>([
         `repos/${repository}/commits/${headSha}/check-runs?filter=latest&check_name=${name}&app_id=${dedicatedAppId}&per_page=100`,
       ])
@@ -469,10 +745,13 @@ function createGitHubClient(): GitHubCheckGenerationClient {
       if (!Number.isSafeInteger(response.total_count) || response.total_count !== runs.length) {
         throw new Error('invalid_check_inventory')
       }
-      return runs.map((run) => requirePositiveInteger(Number(run.id), 'invalid_check_id'))
+      return runs.map((run) => ({
+        id: requirePositiveInteger(Number(run.id), 'invalid_check_id'),
+        externalId: typeof run.external_id === 'string' ? run.external_id : '',
+      }))
     },
     async createCheckRun(repository, input) {
-      const response = ghJson<{ id?: unknown }>(
+      const response = transport.requestJson<{ id?: unknown }>(
         ['--method', 'POST', `repos/${repository}/check-runs`, '--input', '-'],
         {
           name: input.name,
@@ -486,11 +765,14 @@ function createGitHubClient(): GitHubCheckGenerationClient {
       return { id: requirePositiveInteger(Number(response.id), 'invalid_check_id') }
     },
     async updateCheckRun(repository, checkId, input) {
-      ghVoid(['--method', 'PATCH', `repos/${repository}/check-runs/${checkId}`, '--input', '-'], {
-        status: input.status,
-        conclusion: input.conclusion,
-        output: { title: input.name, summary: input.summary },
-      })
+      transport.requestVoid(
+        ['--method', 'PATCH', `repos/${repository}/check-runs/${checkId}`, '--input', '-'],
+        {
+          status: input.status,
+          conclusion: input.conclusion,
+          output: { title: input.name, summary: input.summary },
+        },
+      )
     },
   }
 }
@@ -534,8 +816,22 @@ function writeCheckIds(checkIds: CheckIds): void {
 async function main(): Promise<void> {
   const mode = process.argv[2]
   const client = createGitHubClient()
+  const repository = requireEnv('GITHUB_REPOSITORY')
+  if (mode === 'main-advanced') {
+    await invalidateChecksAfterMainAdvance(
+      {
+        repository,
+        appId: integerEnv('LOOP_ENGINEER_APP_ID'),
+        previousMainSha: requireEnv('PREVIOUS_MAIN_SHA'),
+        currentMainSha: requireEnv('CURRENT_MAIN_SHA'),
+        runId: requireEnv('GITHUB_RUN_ID'),
+      },
+      client,
+    )
+    return
+  }
   const common = {
-    repository: requireEnv('GITHUB_REPOSITORY'),
+    repository,
     prNumber: integerEnv('PR_NUMBER'),
   }
 
@@ -580,7 +876,7 @@ async function main(): Promise<void> {
         appId: integerEnv('LOOP_ENGINEER_APP_ID'),
         headSha: requireEnv('HEAD_SHA'),
         baseSha: requireEnv('BASE_SHA'),
-        mergeEligibilityCheckId: integerEnv('MERGE_ELIGIBILITY_CHECK_ID'),
+        checkIds: checkIdsFromEnv(),
         openapiBreakingDetected: booleanEnv('OPENAPI_BREAKING_DETECTED'),
         mergeReason: requireEnv('MERGE_REASON'),
       },
