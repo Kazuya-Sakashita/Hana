@@ -25,6 +25,7 @@ import { quietStateCopy } from '@/lib/ui/quiet-state-copy'
 import { settingsTrustCenterCopy } from '@/lib/ui/settings-trust-center-copy'
 import { signInPath } from '@/lib/auth/safe-redirect'
 import { clearLocalSessionState, signOutAndClear } from '@/features/auth/client/sign-out'
+import { clearProductEventOutbox } from '@/features/metrics/client/product-events'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -71,6 +72,7 @@ export default function SettingsPage() {
             () => queryClient.clear(),
             () => imageUrlCache.clearAll(),
             () => recordDraftStore.clear(),
+            () => clearProductEventOutbox(),
           ]),
       })
       router.push('/sign-in')
@@ -177,6 +179,7 @@ export default function SettingsPage() {
       () => queryClient.clear(),
       () => imageUrlCache.clearAll(),
       () => recordDraftStore.clear(),
+      () => clearProductEventOutbox(),
     ])
     router.replace('/account-closed')
   }

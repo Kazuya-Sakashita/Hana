@@ -11,18 +11,17 @@
 
 | status | count |
 | --- | ---: |
-| `todo` | 5 |
+| `todo` | 4 |
 | `in_progress` | 1 |
-| `review` | 9 |
+| `review` | 10 |
 | `done` | 150 |
-| `blocked` | 7 |
+| `blocked` | 10 |
 
 ## Codex Ready Queue
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
 | `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
-| `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
 | `ISSUE-156` | `#324` | `todo` | P1 | M | Critical pathのcoverage・mutation gateを導入する | - |
 | `ISSUE-157` | `#325` | `todo` | P1 | M | 現行アプリのVisual・A11y・mobile・cross-browser baselineを作る | - |
 | `ISSUE-158` | `#326` | `todo` | P1 | M | route JS・CWV・画像処理のperformance budgetをCIへ追加する | - |
@@ -48,18 +47,22 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
+| `ISSUE-192` | `#387` | `review` | P1 | M | ISSUE-191置換: telemetry metric truthとrelease consumerをfail closedにする | - |
 
 ## Blocked Or Needs Human Decision
 
 | Issue | GitHub | status | priority | size | title | blocked_by |
 | --- | ---: | --- | --- | --- | --- | --- |
 | `ISSUE-105` | `#234` | `blocked` | P0 | S | staging preflight を実行し公開前 traffic の Go/Hold を判定する | - |
-| `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
+| `ISSUE-152` | `#322` | `blocked` | P1 | M | PII-safe telemetry集約基盤を作る | - |
+| `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-192 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |
-| `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-152, ISSUE-159, ISSUE-161, ISSUE-185 |
+| `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-192, ISSUE-159, ISSUE-161, ISSUE-185 |
 | `ISSUE-161` | `#328` | `blocked` | P0 | S | AI vendorのdata-handling attestationを確定する | - |
-| `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-152, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161, ISSUE-185 |
-| `ISSUE-185` | `#375` | `blocked` | P0 | M | ProductEventの退会purgeとHMAC key lifecycleを実装する | ISSUE-152 |
+| `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-192, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161, ISSUE-185 |
+| `ISSUE-185` | `#375` | `blocked` | P0 | M | ProductEventの退会purgeとHMAC key lifecycleを実装する | ISSUE-192 |
+| `ISSUE-188` | `#381` | `blocked` | P1 | M | ISSUE-152置換: PII-safe telemetry契約のRound 5所見を解消する | - |
+| `ISSUE-191` | `#385` | `blocked` | P1 | M | ISSUE-188置換: telemetry evidenceの最終Round 5所見を解消する | - |
 
 ## All Issues
 
@@ -217,17 +220,17 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-149` | `#319` | `done` | P1 | M | Issue台帳とGitHub状態のdriftをCIで防ぐ | - |
 | `ISSUE-150` | `#320` | `done` | P1 | M | 認証方式と全Route応答契約をOpenAPIへ一致させる | - |
 | `ISSUE-151` | `#321` | `todo` | P1 | M | DB least-privilegeとRLSのtracer bulletを実装する | - |
-| `ISSUE-152` | `#322` | `todo` | P1 | M | PII-safe telemetry集約基盤を作る | - |
-| `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-152 |
+| `ISSUE-152` | `#322` | `blocked` | P1 | M | PII-safe telemetry集約基盤を作る | - |
+| `ISSUE-153` | `#329` | `blocked` | P0 | M | SLO・alert・synthetic canaryを定義する | ISSUE-105, ISSUE-192 |
 | `ISSUE-154` | `#330` | `blocked` | P0 | M | DB・Storage・Authの復旧契約と合成restore drillを作る | ISSUE-105 |
 | `ISSUE-155` | `#323` | `review` | P0 | M | confirmed cleanupへlease・backoff・dead-letterを追加する | - |
 | `ISSUE-156` | `#324` | `todo` | P1 | M | Critical pathのcoverage・mutation gateを導入する | - |
 | `ISSUE-157` | `#325` | `todo` | P1 | M | 現行アプリのVisual・A11y・mobile・cross-browser baselineを作る | - |
 | `ISSUE-158` | `#326` | `todo` | P1 | M | route JS・CWV・画像処理のperformance budgetをCIへ追加する | - |
 | `ISSUE-159` | `#327` | `review` | P1 | M | PRD契約とfunnelのGo・Hold基準を再同期する | - |
-| `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-152, ISSUE-159, ISSUE-161, ISSUE-185 |
+| `ISSUE-160` | `#331` | `blocked` | P0 | M | 5名pilotで30秒記録とAI下書き受容性を検証する | ISSUE-105, ISSUE-192, ISSUE-159, ISSUE-161, ISSUE-185 |
 | `ISSUE-161` | `#328` | `blocked` | P0 | S | AI vendorのdata-handling attestationを確定する | - |
-| `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-152, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161, ISSUE-185 |
+| `ISSUE-162` | `#332` | `blocked` | P0 | M | Release evidence dossierと最終Go・No-Goを確定する | ISSUE-105, ISSUE-148, ISSUE-149, ISSUE-150, ISSUE-151, ISSUE-192, ISSUE-153, ISSUE-154, ISSUE-155, ISSUE-156, ISSUE-157, ISSUE-158, ISSUE-159, ISSUE-160, ISSUE-161, ISSUE-185 |
 | `ISSUE-163` | `#335` | `review` | P1 | S | Loop Engineerの自動マージ方針と危険操作境界を定義する | - |
 | `ISSUE-164` | `#336` | `review` | P1 | M | PRの自動マージ適格性を機械判定する | - |
 | `ISSUE-165` | `#337` | `review` | P0 | M | 複数専門サブエージェントの独立review gateを実装する | - |
@@ -236,7 +239,10 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
-| `ISSUE-185` | `#375` | `blocked` | P0 | M | ProductEventの退会purgeとHMAC key lifecycleを実装する | ISSUE-152 |
+| `ISSUE-185` | `#375` | `blocked` | P0 | M | ProductEventの退会purgeとHMAC key lifecycleを実装する | ISSUE-192 |
+| `ISSUE-188` | `#381` | `blocked` | P1 | M | ISSUE-152置換: PII-safe telemetry契約のRound 5所見を解消する | - |
+| `ISSUE-191` | `#385` | `blocked` | P1 | M | ISSUE-188置換: telemetry evidenceの最終Round 5所見を解消する | - |
+| `ISSUE-192` | `#387` | `review` | P1 | M | ISSUE-191置換: telemetry metric truthとrelease consumerをfail closedにする | - |
 
 ## Status Rules
 

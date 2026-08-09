@@ -35,23 +35,26 @@ Known superseded / clarified items:
 
 ## Data Classification
 
-| data                    | classification                   | storage / logging rule                                                                                                                 |
-| ----------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| child given name        | PII                              | DB 保存可。ログ禁止。AI 送信は opt-in 後、ADR-0011 の範囲のみ                                                                          |
-| child birthdate         | PII                              | DB 保存可。AI には月齢へ変換して送る。ログ禁止                                                                                         |
-| parent email            | PII                              | Supabase Auth / profile で扱う。ログ・AI 送信禁止                                                                                      |
-| child photo             | highly sensitive                 | private bucket。public URL 禁止。AI 送信は opt-in 後のみ                                                                               |
-| presigned URL           | secret-like temporary credential | API response 以外に出さない。ログ・PR・スクリーンショット禁止                                                                          |
-| storage_key             | secret-like internal locator     | normal UI response / log / PR 証跡に出さない                                                                                           |
-| AI generated title/body | sensitive user content           | memory として保存可。AI generation log / PR / test fixture へ貼らない                                                                  |
-| AI generation metadata  | operational                      | user_id / child_id / model / prompt version / token count / duration / reason / created_at は保存可。prompt 本文と生成本文は保存しない |
-| Web Vitals payload      | anonymous operational            | allowlist の metric fields のみ。URL query や user text を入れない                                                                     |
+| data                           | classification                   | storage / logging rule                                                                                                                   |
+| ------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| child given name               | PII                              | DB 保存可。ログ禁止。AI 送信は opt-in 後、ADR-0011 の範囲のみ                                                                            |
+| child birthdate                | PII                              | DB 保存可。AI には月齢へ変換して送る。ログ禁止                                                                                           |
+| parent email                   | PII                              | Supabase Auth / profile で扱う。ログ・AI 送信禁止                                                                                        |
+| child photo                    | highly sensitive                 | private bucket。public URL 禁止。AI 送信は opt-in 後のみ                                                                                 |
+| presigned URL                  | secret-like temporary credential | API response 以外に出さない。ログ・PR・スクリーンショット禁止                                                                            |
+| storage_key                    | secret-like internal locator     | normal UI response / log / PR 証跡に出さない                                                                                             |
+| AI generated title/body        | sensitive user content           | memory として保存可。AI generation log / PR / test fixture へ貼らない                                                                    |
+| AI generation metadata         | operational                      | user_id / child_id / model / prompt version / token count / duration / reason / created_at は保存可。prompt 本文と生成本文は保存しない   |
+| Web Vitals payload             | anonymous operational            | allowlist の metric fields のみ。URL query や user text を入れない。sampling key / versionはserver-only                                  |
+| ProductEvent binding           | secret-like session credential   | 検証済みJWT `session_id`へ拘束しheaderだけで扱う。body、DB、log、evidenceへ保存しない                                                    |
+| ProductEvent actor key version | pseudonymous-data control        | `TELEMETRY_ACTOR_KEY_VERSION`の`vN`形式を保護Environmentからだけ取得する。caller値・氏名・cohort labelをstatus-only evidenceへ転記しない |
 
 ## Auth And Authorization
 
 - Auth provider は Supabase Auth。MVP は Google 先行、Apple は後続有効化。
 - Hana は password を持たない。password reset、bcrypt、独自 refresh token は実装しない。
 - Route Handler は最初に `requireUser()` を呼ぶ。公開・匿名許容 endpoint は OpenAPI に明示する。
+- ProductEvent ingestとbinding発行は`getUser()`のactorと`getClaims()`のJWT `sub / session_id`が一致する場合だけ許可する。
 - 非公開の`/internal/*`定期運用endpointはADR-0007のmachine認証例外とし、`CRON_SECRET`をconstant-timeで照合する。未設定・欠落・不一致は404でfail closedにし、OpenAPIへ公開しない。
 - private resource access は `requireOwnership(currentUserId, resourceUserId)` 相当の所有権確認を通す。
 - RLS は Phase 2。MVP は Route Handler 層の認可とテストで担保する。
@@ -59,12 +62,12 @@ Known superseded / clarified items:
 
 Current public / anonymous exceptions:
 
-| endpoint                             | auth policy      | reason                                |
-| ------------------------------------ | ---------------- | ------------------------------------- |
-| `GET /v1/health`                     | public           | uptime check                          |
-| `GET /v1/me/account-deletion/status` | receipt cookie   | 退会受付結果だけを照合                |
-| `POST /v1/metrics/vitals`            | optional session | RUM beacon can be sent before sign-in |
-| `POST /v1/waitlist`                  | public           | 公開前の待機リスト登録                |
+| endpoint                             | auth policy    | reason                                               |
+| ------------------------------------ | -------------- | ---------------------------------------------------- |
+| `GET /v1/health`                     | public         | uptime check                                         |
+| `GET /v1/me/account-deletion/status` | receipt cookie | 退会受付結果だけを照合                               |
+| `POST /v1/metrics/vitals`            | public         | anonymous RUM; user/session linkage is not collected |
+| `POST /v1/waitlist`                  | public         | 公開前の待機リスト登録                               |
 
 Internal machine endpoints are not public / anonymous exceptions. Scheduler専用であり、ユーザーJWTの代わりに`CRON_SECRET`を必須とする。responseとログはendpoint固有のallowlistへ限定する。
 
@@ -122,7 +125,7 @@ Allowed:
 - elapsed time
 - request_id / ProblemDetails `instance`
 - user_id hash
-- Web Vitals metric name / value / route
+- Web Vitals fixed operation / reason / route_group / status / duration_bucket
 - AI metadata: model, prompt version, token counts, duration, stable error reason
 
 Forbidden:
@@ -136,7 +139,9 @@ Forbidden:
 - AI generated title/body
 - prompt text
 - raw location
+- Web Vitals raw metric ID / value / path / navigation type
 - cookie / bearer token / service role key
+- ProductEvent telemetry binding / continuity tag / telemetry sampling key
 
 ProblemDetails may expose `detail` to users, but server logs should branch on stable `reason` and avoid copying free-form PII.
 

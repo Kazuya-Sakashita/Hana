@@ -1,11 +1,17 @@
 import { expect, test } from '@playwright/test'
 import { E2E_CHILD_ID, E2E_FIXTURE_CONTROL_TOKEN } from './support/constants'
-import { seedSyntheticAccount } from './support/database'
+import {
+  cleanupCrossActorTelemetryNoise,
+  readSyntheticTelemetryFlow,
+  seedCrossActorTelemetryNoise,
+  seedSyntheticAccount,
+} from './support/database'
 import type { components } from '@/lib/api/generated/schema'
 
 type UploadConfirmRequest = components['schemas']['UploadConfirmRequest']
 type AiGenerateRequest = components['schemas']['AiGenerateRequest']
 type Memory = components['schemas']['Memory']
+type ProductEventReport = components['schemas']['ProductEventReport']
 
 const SYNTHETIC_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZf6VfQAAAAASUVORK5CYII=',
@@ -22,18 +28,35 @@ test.describe.serial('authenticated synthetic golden path', () => {
     page,
     request,
   }) => {
+    const metricRequests: ProductEventReport[] = []
+    const metricResponseStatuses: number[] = []
+    let memoryIdempotencyKey = ''
     let resolveSignedUploadUrl: ((value: string) => void) | undefined
     const signedUploadUrl = new Promise<string>((resolve) => {
       resolveSignedUploadUrl = resolve
     })
     page.on('request', (browserRequest) => {
       const pathname = new URL(browserRequest.url()).pathname
+      if (pathname === '/v1/metrics/events' && browserRequest.method() === 'POST') {
+        metricRequests.push(browserRequest.postDataJSON() as ProductEventReport)
+      }
+      if (pathname === '/v1/memories' && browserRequest.method() === 'POST') {
+        memoryIdempotencyKey = browserRequest.headers()['idempotency-key'] ?? ''
+      }
       if (
         pathname.startsWith('/storage/v1/object/upload/sign/images/') &&
         browserRequest.method() === 'PUT'
       ) {
         resolveSignedUploadUrl?.(browserRequest.url())
         resolveSignedUploadUrl = undefined
+      }
+    })
+    page.on('response', (response) => {
+      if (
+        new URL(response.url()).pathname === '/v1/metrics/events' &&
+        response.request().method() === 'POST'
+      ) {
+        metricResponseStatuses.push(response.status())
       }
     })
     await page.goto('/record')
@@ -75,6 +98,34 @@ test.describe.serial('authenticated synthetic golden path', () => {
     await page.goto(`/album?month=${recordedMonth}`)
     await expect(page).toHaveURL(new RegExp(`/album\\?month=${recordedMonth}$`))
     await expect(page.getByText('画面から残した合成記録', { exact: true })).toBeVisible()
+    expect(memoryIdempotencyKey).toMatch(/^[0-9a-f-]{36}$/)
+    await seedCrossActorTelemetryNoise(memoryIdempotencyKey)
+    try {
+      await expect
+        .poll(async () => {
+          const flow = await readSyntheticTelemetryFlow(memoryIdempotencyKey)
+          return {
+            memoryIdempotencyKey: flow.memoryIdempotencyKey,
+            eventNames: flow.events.map((event) => event.eventName).sort(),
+            flowIds: [...new Set(flow.events.map((event) => event.flowId))],
+          }
+        })
+        .toEqual({
+          memoryIdempotencyKey,
+          eventNames: ['memory_saved', 'photo_selected', 'record_started'],
+          flowIds: [memoryIdempotencyKey],
+        })
+    } finally {
+      await cleanupCrossActorTelemetryNoise(memoryIdempotencyKey)
+    }
+    expect(
+      metricRequests
+        .filter((event) => event.flow_id === memoryIdempotencyKey)
+        .map((event) => event.event_name)
+        .sort(),
+    ).toEqual(['memory_saved', 'photo_selected', 'record_started'])
+    expect(metricResponseStatuses.length).toBeGreaterThanOrEqual(3)
+    expect(metricResponseStatuses.every((status) => status === 204)).toBe(true)
   })
 
   test('recovers a failed upload and saves through the record UI without AI', async ({

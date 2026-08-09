@@ -1,8 +1,9 @@
 import 'server-only'
 
-import { isUuid, type MemoryCreateInput } from '@/features/memories/server/parse'
+import type { MemoryCreateInput } from '@/features/memories/server/parse'
 import { sortMemoryImages } from '@/features/memories/view-models/memory'
 import { problems } from '@/server/api/problems'
+import { canonicalizeBareUuid } from '@/lib/uuid'
 
 export interface IdempotentMemory {
   childId: string
@@ -26,7 +27,8 @@ export function parseMemoryIdempotencyKey(request: Request): string {
       },
     ])
   }
-  if (!isUuid(value)) {
+  const canonicalValue = canonicalizeBareUuid(value)
+  if (!canonicalValue) {
     throw problems.validation([
       {
         path: 'header.Idempotency-Key',
@@ -35,7 +37,7 @@ export function parseMemoryIdempotencyKey(request: Request): string {
       },
     ])
   }
-  return value
+  return canonicalValue
 }
 
 export function memoryMatchesCreateInput(

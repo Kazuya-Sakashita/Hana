@@ -1,15 +1,19 @@
 import { Prisma, type ProductEvent } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import {
+  assertProductEventIngestReady,
+  assertProductEventOccurrenceMatchesId,
+  assertProductEventRequestRateLimit,
+  assertProductEventTelemetryBinding,
   parseProductEventReport,
   PRODUCT_EVENT_MAX_REPORTS_PER_WINDOW,
   PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS,
   productEventActorHash,
-  productEventRetentionCutoff,
+  productEventOccurrenceMinuteFromEventId,
 } from '@/features/metrics/server/product-event'
 import { toProblemResponse } from '@/server/api/problem-response'
 import { problems } from '@/server/api/problems'
-import { requireUser } from '@/server/auth/current-user'
+import { requireUser, requireVerifiedSessionIdentity } from '@/server/auth/current-user'
 import { prisma } from '@/server/db/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -25,6 +29,19 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
+function assertJsonRequest(request: Request): void {
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+  if (contentType !== 'application/json') {
+    throw problems.validation([
+      {
+        path: 'header.Content-Type',
+        reason: 'request_boundary_invalid',
+        message: 'JSON requestだけを受け付けます',
+      },
+    ])
+  }
+}
+
 function matchesEvent(
   existing: ProductEvent,
   event: ReturnType<typeof parseProductEventReport>,
@@ -34,34 +51,39 @@ function matchesEvent(
     existing.actorHash === actorHash &&
     existing.flowId === event.flow_id &&
     existing.eventName === event.event_name &&
+    productEventOccurrenceMinuteFromEventId(existing.eventId) === event.occurred_minute_utc &&
     existing.elapsedBucket === event.elapsed_bucket
   )
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
-    const event = parseProductEventReport(await readJson(request))
+    assertProductEventIngestReady()
+    assertJsonRequest(request)
+    const telemetryBinding = request.headers.get('x-hana-telemetry-binding')
+    if (!telemetryBinding) throw problems.forbidden()
     const now = new Date()
+    const user = await requireUser()
+    const session = await requireVerifiedSessionIdentity()
+    if (session.subject !== user.id) throw problems.unauthorized()
+    assertProductEventTelemetryBinding(user.id, session.sessionId, telemetryBinding, now)
     const actorHash = productEventActorHash(user.id)
+    assertProductEventRequestRateLimit(actorHash, now.getTime())
+    const event = parseProductEventReport(await readJson(request), now)
+    assertProductEventOccurrenceMatchesId(event)
 
     try {
       await prisma.$transaction(async (transaction) => {
         await transaction.$executeRaw`
           SELECT pg_advisory_xact_lock(hashtextextended(${actorHash}, 0))
         `
-        await transaction.productEvent.deleteMany({
-          where: { createdAt: { lt: productEventRetentionCutoff(now) } },
+        const existingForActorById = await transaction.productEvent.findFirst({
+          where: { eventId: event.event_id, actorHash },
         })
-
-        const existingById = await transaction.productEvent.findUnique({
-          where: { eventId: event.event_id },
-        })
-        if (existingById) {
-          if (matchesEvent(existingById, event, actorHash)) return
+        if (existingForActorById) {
+          if (matchesEvent(existingForActorById, event, actorHash)) return
           throw problems.productEventConflict()
         }
-
         const existingStage = await transaction.productEvent.findFirst({
           where: {
             actorHash,
@@ -81,6 +103,11 @@ export async function POST(request: Request) {
           throw problems.rateLimited()
         }
 
+        const existingById = await transaction.productEvent.findUnique({
+          where: { eventId: event.event_id },
+        })
+        if (existingById) return
+
         await transaction.productEvent.create({
           data: {
             eventId: event.event_id,
@@ -93,23 +120,46 @@ export async function POST(request: Request) {
       })
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const existingById = await prisma.productEvent.findUnique({
-          where: { eventId: event.event_id },
-        })
-        if (existingById) {
-          if (matchesEvent(existingById, event, actorHash))
-            return new NextResponse(null, { status: 204 })
-          throw problems.productEventConflict()
-        }
+        await prisma.$transaction(async (transaction) => {
+          await transaction.$executeRaw`
+            SELECT pg_advisory_xact_lock(hashtextextended(${actorHash}, 0))
+          `
+          const existingForActorById = await transaction.productEvent.findFirst({
+            where: { eventId: event.event_id, actorHash },
+          })
+          if (existingForActorById) {
+            if (matchesEvent(existingForActorById, event, actorHash)) return
+            throw problems.productEventConflict()
+          }
 
-        const existingStage = await prisma.productEvent.findFirst({
-          where: {
-            actorHash,
-            flowId: event.flow_id,
-            eventName: event.event_name,
-          },
+          const existingStage = await transaction.productEvent.findFirst({
+            where: {
+              actorHash,
+              flowId: event.flow_id,
+              eventName: event.event_name,
+            },
+          })
+          if (existingStage) return
+
+          const recentReports = await transaction.productEvent.count({
+            where: {
+              actorHash,
+              createdAt: { gte: new Date(now.getTime() - PRODUCT_EVENT_RATE_LIMIT_WINDOW_MS) },
+            },
+          })
+          if (recentReports >= PRODUCT_EVENT_MAX_REPORTS_PER_WINDOW) {
+            throw problems.rateLimited()
+          }
+
+          const existingById = await transaction.productEvent.findUnique({
+            where: { eventId: event.event_id },
+          })
+          if (existingById) return
+
+          throw error
         })
-        if (existingStage) return new NextResponse(null, { status: 204 })
+
+        return new NextResponse(null, { status: 204 })
       }
       throw error
     }

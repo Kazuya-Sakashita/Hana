@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
+  getClaims: vi.fn(),
   findUnique: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
@@ -14,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
-    auth: { getUser: mocks.getUser },
+    auth: { getUser: mocks.getUser, getClaims: mocks.getClaims },
   }),
 }))
 
@@ -27,8 +28,10 @@ vi.mock('@/server/db/prisma', () => ({
 
 import { GET } from '@/app/v1/me/route'
 import { DELETE, POST } from '@/app/v1/me/ai-consent/route'
+import { productEventTelemetryBinding } from '@/features/metrics/server/product-event'
 
 const USER_ID = '8f7e6d5c-4b3a-4291-8765-0123456789ab'
+const SESSION_ID = 'd89327d8-a5af-4f90-bc7e-93c8cad43f44'
 const CONSENT_AT = new Date('2026-06-01T00:00:00Z')
 const CREATED_AT = new Date('2026-05-14T09:30:00Z')
 
@@ -42,7 +45,16 @@ const profile = {
 
 function authed(profileOverrides: Partial<typeof profile> = {}) {
   mocks.getUser.mockResolvedValue({
-    data: { user: { id: USER_ID, email: 'parent@example.com' } },
+    data: {
+      user: {
+        id: USER_ID,
+        email: 'parent@example.com',
+      },
+    },
+  })
+  mocks.getClaims.mockResolvedValue({
+    data: { claims: { sub: USER_ID, session_id: SESSION_ID } },
+    error: null,
   })
   mocks.findUnique.mockResolvedValue({ ...profile, ...profileOverrides })
 }
@@ -52,6 +64,7 @@ function unauthed() {
 }
 
 beforeEach(() => {
+  vi.stubEnv('PRODUCT_EVENT_HASH_PEPPER', 'integration-test-product-event-pepper-32')
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
       $executeRaw: mocks.advisoryLock,
@@ -64,7 +77,10 @@ beforeEach(() => {
   )
 })
 
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.clearAllMocks()
+  vi.unstubAllEnvs()
+})
 
 describe('GET /v1/me', () => {
   it('returns 401 + ProblemDetails when not authenticated', async () => {
@@ -87,7 +103,26 @@ describe('GET /v1/me', () => {
       display_name: null,
       ai_consent_at: null,
       created_at: '2026-05-14T09:30:00.000Z',
+      telemetry_binding: productEventTelemetryBinding(USER_ID, SESSION_ID),
     })
+  })
+
+  it('returns 401 when verified claims do not match getUser', async () => {
+    authed()
+    mocks.getClaims.mockResolvedValue({
+      data: {
+        claims: {
+          sub: '7f26e7f0-6f3c-4c07-9091-8f82db70b347',
+          session_id: SESSION_ID,
+        },
+      },
+      error: null,
+    })
+
+    const res = await GET()
+
+    expect(res.status).toBe(401)
+    expect(await res.json()).toMatchObject({ reason: 'unauthorized' })
   })
 })
 
@@ -103,6 +138,7 @@ describe('POST /v1/me/ai-consent', () => {
     expect(await res.json()).toMatchObject({
       id: USER_ID,
       ai_consent_at: CONSENT_AT.toISOString(),
+      telemetry_binding: productEventTelemetryBinding(USER_ID, SESSION_ID),
     })
     expect(mocks.updateMany).toHaveBeenCalledWith({
       where: { id: USER_ID, aiConsentAt: null },
@@ -112,6 +148,16 @@ describe('POST /v1/me/ai-consent', () => {
       maxWait: 5_000,
       timeout: 40_000,
     })
+  })
+
+  it('does not update consent without a verified session_id claim', async () => {
+    authed()
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: USER_ID } }, error: null })
+
+    const res = await POST()
+
+    expect(res.status).toBe(401)
+    expect(mocks.transaction).not.toHaveBeenCalled()
   })
 })
 
@@ -133,7 +179,11 @@ describe('DELETE /v1/me/ai-consent', () => {
     const res = await DELETE()
 
     expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({ id: USER_ID, ai_consent_at: null })
+    expect(await res.json()).toMatchObject({
+      id: USER_ID,
+      ai_consent_at: null,
+      telemetry_binding: productEventTelemetryBinding(USER_ID, SESSION_ID),
+    })
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: USER_ID },
       data: { aiConsentAt: null },

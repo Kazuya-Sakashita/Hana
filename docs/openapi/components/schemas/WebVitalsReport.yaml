@@ -1,34 +1,181 @@
 type: object
 description: |
-  Web Vitals 計測 1 件の報告 payload (ISSUE-024)。
-  PII は含めない (allowlist: name / value / id / navigationType / route)。
-  user 識別はサーバ側で session cookie から SHA256(user_id) 先頭 16 文字に変換してログに出す。
-required: [name, value, id, route]
+  Web Vitals 計測 1 件の低cardinality報告 payload (ISSUE-152)。
+  clientで固定dimensionへ変換し、web-vitalsのraw id / value / route / navigationTypeを送らない。
+  event_idはstable sampling用であり、通常logやstatus-only evidenceへ出さない。
+additionalProperties: false
+required: [schema_version, event_id, operation, reason, route_group, status, duration_bucket]
+allOf:
+  - if:
+      properties:
+        operation:
+          const: web_vital_cls
+    then:
+      properties:
+        duration_bucket:
+          const: not_applicable
+  - if:
+      properties:
+        operation:
+          const: web_vital_fcp
+    then:
+      allOf:
+        - if:
+            properties:
+              status:
+                const: good
+          then:
+            properties:
+              duration_bucket:
+                enum:
+                  - under_100ms
+                  - from_100_to_500ms
+                  - from_501_to_1000ms
+                  - from_1001_to_2500ms
+        - if:
+            properties:
+              status:
+                const: needs_improvement
+          then:
+            properties:
+              duration_bucket:
+                enum: [from_1001_to_2500ms, from_2501_to_4000ms]
+        - if:
+            properties:
+              status:
+                const: poor
+          then:
+            properties:
+              duration_bucket:
+                enum: [from_2501_to_4000ms, over_4000ms]
+  - if:
+      properties:
+        operation:
+          const: web_vital_inp
+    then:
+      allOf:
+        - if:
+            properties:
+              status:
+                const: good
+          then:
+            properties:
+              duration_bucket:
+                enum: [under_100ms, from_100_to_500ms]
+        - if:
+            properties:
+              status:
+                const: needs_improvement
+          then:
+            properties:
+              duration_bucket:
+                const: from_100_to_500ms
+        - if:
+            properties:
+              status:
+                const: poor
+          then:
+            properties:
+              duration_bucket:
+                enum:
+                  - from_501_to_1000ms
+                  - from_1001_to_2500ms
+                  - from_2501_to_4000ms
+                  - over_4000ms
+  - if:
+      properties:
+        operation:
+          const: web_vital_lcp
+    then:
+      allOf:
+        - if:
+            properties:
+              status:
+                const: good
+          then:
+            properties:
+              duration_bucket:
+                enum:
+                  - under_100ms
+                  - from_100_to_500ms
+                  - from_501_to_1000ms
+                  - from_1001_to_2500ms
+        - if:
+            properties:
+              status:
+                const: needs_improvement
+          then:
+            properties:
+              duration_bucket:
+                const: from_2501_to_4000ms
+        - if:
+            properties:
+              status:
+                const: poor
+          then:
+            properties:
+              duration_bucket:
+                const: over_4000ms
+  - if:
+      properties:
+        operation:
+          const: web_vital_ttfb
+    then:
+      allOf:
+        - if:
+            properties:
+              status:
+                const: good
+          then:
+            properties:
+              duration_bucket:
+                enum: [under_100ms, from_100_to_500ms, from_501_to_1000ms]
+        - if:
+            properties:
+              status:
+                const: needs_improvement
+          then:
+            properties:
+              duration_bucket:
+                enum: [from_501_to_1000ms, from_1001_to_2500ms]
+        - if:
+            properties:
+              status:
+                const: poor
+          then:
+            properties:
+              duration_bucket:
+                enum: [from_1001_to_2500ms, from_2501_to_4000ms, over_4000ms]
 properties:
-  name:
+  schema_version:
     type: string
-    enum: [CLS, FCP, INP, LCP, TTFB]
-    description: Web Vitals メトリクス名
-    example: 'LCP'
-  value:
-    type: number
-    minimum: 0
-    description: 数値 (ms / unitless どちらか、 name に依存)
-    example: 2400
-  id:
+    enum: [hana-web-vitals-report/v2]
+  event_id:
     type: string
-    minLength: 1
-    maxLength: 128
-    description: web-vitals が発行するユニーク ID (同一メトリクスの更新で同じ id)
-    example: 'v1-1717068000000-12345'
-  navigationType:
-    type: [string, 'null']
-    enum: [navigate, reload, back-forward, back-forward-cache, prerender, restore, null]
-    description: Navigation Timing API の type
-    example: 'navigate'
-  route:
-    type: string
+    format: uuid
+    pattern: '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
     description: |
-      ページの sanitized pathname (`[memoryId]` 等の dynamic params は除去済)。
-      例: `/`, `/album`, `/memory/[memoryId]`
-    example: '/album'
+      report単位のrandom UUID。actor識別には使わず、server-only HMAC samplingへ使う。
+      ハイフン区切りのbare UUIDだけを受け付け、urn:uuid表現は受け付けない。
+  operation:
+    type: string
+    enum: [web_vital_cls, web_vital_fcp, web_vital_inp, web_vital_lcp, web_vital_ttfb]
+  reason:
+    type: string
+    enum: [not_applicable]
+  route_group:
+    type: string
+    enum: [public, auth, home, record, memory, settings, other_private]
+  status:
+    type: string
+    enum: [good, needs_improvement, poor]
+  duration_bucket:
+    type: string
+    enum:
+      - not_applicable
+      - under_100ms
+      - from_100_to_500ms
+      - from_501_to_1000ms
+      - from_1001_to_2500ms
+      - from_2501_to_4000ms
+      - over_4000ms

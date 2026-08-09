@@ -441,11 +441,14 @@ export interface paths {
         put?: never;
         /**
          * Web Vitals 計測の報告 (RUM、 ISSUE-024)
-         * @description ブラウザの `web-vitals` ライブラリから `navigator.sendBeacon` で送られる
-         *     Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受け、 構造化ログに記録する。
+         * @description ブラウザの `web-vitals` ライブラリで計測した値をclient側で固定dimensionへ変換して受ける。
          *     DB 保存はしない (Vercel Logs で十分)。
-         *     サインアウト状態でも送れる (匿名で記録)。
-         *     PII を含めない (allowlist: name / value / id / navigationType / route + userIdHash)。
+         *     senderはcredentialsをomitし、サインアウト状態と同じcookieless requestとして送る。
+         *     requestはversion、random event ID、固定operation / reason / route group / status /
+         *     duration bucket以外を拒否し、raw id / value / route / navigationTypeを収集しない。
+         *     requestは同一originのapplication/json browser fetchへ限定する。
+         *     event IDをserver-only HMACで10% samplingし、第三者によるsample対象の事前選別を防ぐ。
+         *     event ID自体は構造化logへ出さない。信頼済みedgeと共有rate limitが未有効なら503でfail closedする。
          */
         post: operations["reportWebVitals"];
         delete?: never;
@@ -469,8 +472,13 @@ export interface paths {
          *     actor は session の user_id からサーバー側で HMAC-SHA256 に変換した仮名識別子として保存し、
          *     クライアントからユーザー識別子を受け取らない。
          *
-         *     request body は event_name / event_id / flow_id / elapsed_bucket に限定する。
+         *     request body は event_name / event_id / flow_id / occurred_minute_utc / elapsed_bucket に限定する。
          *     記録本文、画像情報、氏名、生年月日、メール、URL、storage_key、自由記述は受け付けない。
+         *     記録作成フローの flow_id は POST /memories の Idempotency-Key と同じUUIDとする。
+         *     下書き復元と通信retryでは同じflowを使い、写真構成変更または409 conflict後は新しいUUIDへ切り替える。
+         *     clientは送信前にeventをdurable outboxへ保存し、204応答をackとして同じevent_idを再送する。
+         *     event_idは発生UTC分を埋め込んだUUIDv7とし、occurred_minute_utcとの一致をserverで検証する。
+         *     memory_saved eventは補助signalであり、保存成功の正本は同じUUIDを持つDB Memoryとする。
          *     同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
          *     同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
          */
@@ -647,6 +655,13 @@ export interface components {
              * @example 2026-05-14T09:30:00Z
              */
             created_at: string;
+            /**
+             * @description ProductEvent outboxを現在のactorと認証sessionへ期限付きでbindするserver-minted opaque token。
+             *     検証済みJWTのsession_idへ拘束し、同一sessionの期限rotationはopaque continuity tagで識別する。
+             *     別session、期限切れ、改ざんtokenは拒否する。
+             *     request body、DB row、通常log、status-only evidenceへ保存しない。
+             */
+            telemetry_binding: string;
         };
         /**
          * @description 子どもプロフィール。1 ユーザーにつき MVP では 1 件まで (v1 で複数対応予定)。
@@ -988,43 +1003,33 @@ export interface components {
             };
         };
         /**
-         * @description Web Vitals 計測 1 件の報告 payload (ISSUE-024)。
-         *     PII は含めない (allowlist: name / value / id / navigationType / route)。
-         *     user 識別はサーバ側で session cookie から SHA256(user_id) 先頭 16 文字に変換してログに出す。
+         * @description Web Vitals 計測 1 件の低cardinality報告 payload (ISSUE-152)。
+         *     clientで固定dimensionへ変換し、web-vitalsのraw id / value / route / navigationTypeを送らない。
+         *     event_idはstable sampling用であり、通常logやstatus-only evidenceへ出さない。
          */
         WebVitalsReport: {
+            /** @enum {string} */
+            schema_version: "hana-web-vitals-report/v2";
             /**
-             * @description Web Vitals メトリクス名
-             * @example LCP
-             * @enum {string}
+             * Format: uuid
+             * @description report単位のrandom UUID。actor識別には使わず、server-only HMAC samplingへ使う。
+             *     ハイフン区切りのbare UUIDだけを受け付け、urn:uuid表現は受け付けない。
              */
-            name: "CLS" | "FCP" | "INP" | "LCP" | "TTFB";
-            /**
-             * @description 数値 (ms / unitless どちらか、 name に依存)
-             * @example 2400
-             */
-            value: number;
-            /**
-             * @description web-vitals が発行するユニーク ID (同一メトリクスの更新で同じ id)
-             * @example v1-1717068000000-12345
-             */
-            id: string;
-            /**
-             * @description Navigation Timing API の type
-             * @example navigate
-             * @enum {string|null}
-             */
-            navigationType?: "navigate" | "reload" | "back-forward" | "back-forward-cache" | "prerender" | "restore" | null;
-            /**
-             * @description ページの sanitized pathname (`[memoryId]` 等の dynamic params は除去済)。
-             *     例: `/`, `/album`, `/memory/[memoryId]`
-             * @example /album
-             */
-            route: string;
-        };
+            event_id: string;
+            /** @enum {string} */
+            operation: "web_vital_cls" | "web_vital_fcp" | "web_vital_inp" | "web_vital_lcp" | "web_vital_ttfb";
+            /** @enum {string} */
+            reason: "not_applicable";
+            /** @enum {string} */
+            route_group: "public" | "auth" | "home" | "record" | "memory" | "settings" | "other_private";
+            /** @enum {string} */
+            status: "good" | "needs_improvement" | "poor";
+            /** @enum {string} */
+            duration_bucket: "not_applicable" | "under_100ms" | "from_100_to_500ms" | "from_501_to_1000ms" | "from_1001_to_2500ms" | "from_2501_to_4000ms" | "over_4000ms";
+        } & (unknown & unknown & unknown & unknown & unknown);
         /**
          * @description 記録体験のファネル計測に使う仮名化イベント。
-         *     許可された4フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
+         *     許可された5フィールド以外を受け付けず、ユーザー識別子はサーバー側で生成する。
          */
         ProductEventReport: {
             /**
@@ -1035,16 +1040,28 @@ export interface components {
             event_name: "record_started" | "photo_selected" | "ai_draft_shown" | "memory_saved" | "memory_viewed";
             /**
              * Format: uuid
-             * @description 冪等な再送判定に使うイベント単位のUUID
-             * @example 8f7e6d5c-4b3a-4291-8765-0123456789ab
+             * @description 冪等な再送判定に使うUUIDv7。先頭48 bitへoccurred_minute_utcと同じUTC分を埋め込み、
+             *     restricted aggregateだけがDB event_idから発生minuteを復元する。通常logやstatus-only evidenceへ出さない。
+             * @example 019fdc37-4ec0-7000-8000-000000000001
              */
             event_id: string;
             /**
              * Format: uuid
-             * @description 1回の記録フロー内だけで共有するUUID
+             * @description 1回の記録フロー内だけで共有するUUID。記録作成フローでは
+             *     POST /memories の Idempotency-Key と同じ値を使い、DB確定Memoryとの相関に使う。
+             *     下書き復元と通信retryでは継承し、写真構成変更または409 conflict後の再試行では再採番する。
+             *     ハイフン区切りのbare UUIDだけを受け付け、urn:uuid表現は受け付けない。
              * @example 123e4567-e89b-42d3-a456-426614174000
              */
             flow_id: string;
+            /**
+             * Format: date-time
+             * @description clientでstageが発生したUTC分bucket。通信retryでも同じ値を維持する。
+             *     server受信時刻より未来の分と、受信時刻から24時間を超えて古い分は受理しない。
+             *     restricted aggregateはserver受信遅延とclock境界を検証し、不確かなwindowをHOLDにする。
+             * @example 2026-08-07T12:34:00Z
+             */
+            occurred_minute_utc: string;
             /**
              * @description フロー開始からの経過時間を粗く分類した値。
              *     record_started と memory_viewed は not_applicable、それ以外のイベントは時間帯を指定する。
@@ -1052,7 +1069,7 @@ export interface components {
              * @enum {string}
              */
             elapsed_bucket: "not_applicable" | "under_10s" | "from_10_to_30s" | "from_31_to_60s" | "over_60s";
-        };
+        } & unknown;
         /**
          * @description 公開前 LP の待機リスト登録 payload。
          *     メールアドレスは待機リスト登録、β版案内、任意のインタビューやフィードバック協力のお願い、
@@ -1452,7 +1469,8 @@ export interface operations {
                      *       "email": null,
                      *       "display_name": null,
                      *       "ai_consent_at": null,
-                     *       "created_at": "2026-05-14T09:30:00Z"
+                     *       "created_at": "2026-05-14T09:30:00Z",
+                     *       "telemetry_binding": "v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -1506,7 +1524,8 @@ export interface operations {
                      *       "email": null,
                      *       "display_name": null,
                      *       "ai_consent_at": null,
-                     *       "created_at": "2026-05-14T09:30:00Z"
+                     *       "created_at": "2026-05-14T09:30:00Z",
+                     *       "telemetry_binding": "v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
                      *     }
                      */
                     "application/json": components["schemas"]["AppUser"];
@@ -2035,7 +2054,12 @@ export interface operations {
     reportWebVitals: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description browserが付与するrequest origin。serverはconfigured app originとの完全一致を検証する。 */
+                Origin: string;
+                /** @description browserが付与するFetch Metadata。同一origin requestだけを受け付ける。 */
+                "Sec-Fetch-Site": "same-origin";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2053,13 +2077,22 @@ export interface operations {
                 content?: never;
             };
             422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     reportProductEvent: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /**
+                 * @description GET /meが返す期限付きopaque actor/session binding。serverは検証済みJWTのactor・session_id・
+                 *     期限との一致をconstant-timeで検証し、同一sessionの期限rotationだけを継続扱いする。
+                 *     header値をDB、通常log、status-only evidenceへ保存しない。
+                 */
+                "X-Hana-Telemetry-Binding": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2077,10 +2110,12 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createWaitlistSignup: {

@@ -91,6 +91,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
+                telemetry_binding: 'v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -148,6 +149,7 @@ paths:
                 display_name: null
                 ai_consent_at: null
                 created_at: '2026-05-14T09:30:00Z'
+                telemetry_binding: 'v3.1786125600.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -658,6 +660,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
       requestBody:
         required: true
         content:
@@ -776,13 +779,32 @@ paths:
       operationId: reportWebVitals
       summary: Web Vitals 計測の報告 (RUM、 ISSUE-024)
       description: |
-        ブラウザの `web-vitals` ライブラリから `navigator.sendBeacon` で送られる
-        Web Vitals メトリクス (CLS / FCP / INP / LCP / TTFB) を受け、 構造化ログに記録する。
+        ブラウザの `web-vitals` ライブラリで計測した値をclient側で固定dimensionへ変換して受ける。
         DB 保存はしない (Vercel Logs で十分)。
-        サインアウト状態でも送れる (匿名で記録)。
-        PII を含めない (allowlist: name / value / id / navigationType / route + userIdHash)。
+        senderはcredentialsをomitし、サインアウト状態と同じcookieless requestとして送る。
+        requestはversion、random event ID、固定operation / reason / route group / status /
+        duration bucket以外を拒否し、raw id / value / route / navigationTypeを収集しない。
+        requestは同一originのapplication/json browser fetchへ限定する。
+        event IDをserver-only HMACで10% samplingし、第三者によるsample対象の事前選別を防ぐ。
+        event ID自体は構造化logへ出さない。信頼済みedgeと共有rate limitが未有効なら503でfail closedする。
       tags: [metrics]
       security: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          description: |
+            browserが付与するrequest origin。serverはconfigured app originとの完全一致を検証する。
+          schema:
+            type: string
+            format: uri
+        - name: Sec-Fetch-Site
+          in: header
+          required: true
+          description: browserが付与するFetch Metadata。同一origin requestだけを受け付ける。
+          schema:
+            type: string
+            const: same-origin
       requestBody:
         required: true
         content:
@@ -794,6 +816,10 @@ paths:
           description: 受信成功 (body なし)
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /metrics/events:
@@ -805,11 +831,27 @@ paths:
         actor は session の user_id からサーバー側で HMAC-SHA256 に変換した仮名識別子として保存し、
         クライアントからユーザー識別子を受け取らない。
 
-        request body は event_name / event_id / flow_id / elapsed_bucket に限定する。
+        request body は event_name / event_id / flow_id / occurred_minute_utc / elapsed_bucket に限定する。
         記録本文、画像情報、氏名、生年月日、メール、URL、storage_key、自由記述は受け付けない。
+        記録作成フローの flow_id は POST /memories の Idempotency-Key と同じUUIDとする。
+        下書き復元と通信retryでは同じflowを使い、写真構成変更または409 conflict後は新しいUUIDへ切り替える。
+        clientは送信前にeventをdurable outboxへ保存し、204応答をackとして同じevent_idを再送する。
+        event_idは発生UTC分を埋め込んだUUIDv7とし、occurred_minute_utcとの一致をserverで検証する。
+        memory_saved eventは補助signalであり、保存成功の正本は同じUUIDを持つDB Memoryとする。
         同じ event_id の同一内容再送と、同一ユーザー・flow_id・event_name の再操作は二重作成せず、
         同じ 204 を返す。イベントは90日で削除し、1ユーザーあたり毎分60件に制限する。
       tags: [metrics]
+      parameters:
+        - name: X-Hana-Telemetry-Binding
+          in: header
+          required: true
+          description: |
+            GET /meが返す期限付きopaque actor/session binding。serverは検証済みJWTのactor・session_id・
+            期限との一致をconstant-timeで検証し、同一sessionの期限rotationだけを継続扱いする。
+            header値をDB、通常log、status-only evidenceへ保存しない。
+          schema:
+            type: string
+            pattern: '^v3\.\d{10}\.[0-9a-f]{64}\.[0-9a-f]{64}$'
       requestBody:
         required: true
         content:
@@ -821,12 +863,16 @@ paths:
           description: 受信成功または冪等な再送 (body なし)
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /waitlist:

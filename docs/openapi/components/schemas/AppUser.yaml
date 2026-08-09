@@ -1,6 +1,6 @@
 type: object
 description: Hana のドメイン用ユーザー。Supabase Auth の auth.users と profiles を結合した形。
-required: [id, email, display_name, ai_consent_at, created_at]
+required: [id, email, display_name, ai_consent_at, created_at, telemetry_binding]
 properties:
   id:
     type: string
@@ -28,3 +28,11 @@ properties:
     format: date-time
     description: profile レコード作成日時
     example: '2026-05-14T09:30:00Z'
+  telemetry_binding:
+    type: string
+    pattern: '^v3\.\d{10}\.[0-9a-f]{64}\.[0-9a-f]{64}$'
+    description: |
+      ProductEvent outboxを現在のactorと認証sessionへ期限付きでbindするserver-minted opaque token。
+      検証済みJWTのsession_idへ拘束し、同一sessionの期限rotationはopaque continuity tagで識別する。
+      別session、期限切れ、改ざんtokenは拒否する。
+      request body、DB row、通常log、status-only evidenceへ保存しない。

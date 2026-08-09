@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Inter, Noto_Serif_JP } from 'next/font/google'
 import { BottomNav } from '@/components/bottom-nav'
 import { WebVitalsReporter } from '@/components/web-vitals-reporter'
+import { ProductEventOutboxFlusher } from '@/features/metrics/client/product-event-outbox-flusher'
 import { QueryProviders } from '@/lib/query/client'
 import './globals.css'
 
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           {children}
           <BottomNav />
           <WebVitalsReporter />
+          <ProductEventOutboxFlusher />
         </QueryProviders>
       </body>
     </html>
