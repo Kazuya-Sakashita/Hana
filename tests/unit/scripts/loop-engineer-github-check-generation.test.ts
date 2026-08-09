@@ -193,6 +193,18 @@ describe('ISSUE-166 dedicated-App check generation controller', () => {
       pullRequest: { base_sha: 'd'.repeat(40) },
     })
 
+    await expect(beginCheckGeneration(beginInput, client)).rejects.toThrow(
+      'current_main_sha_mismatch',
+    )
+    expect(calls).toEqual(['read:pull-request'])
+  })
+
+  it.each([
+    ['head SHA moves', { head_sha: 'c'.repeat(40) }],
+    ['the PR becomes a draft', { draft: true }],
+  ])('rejects begin with stale_generation when %s', async (_name, pullRequest) => {
+    const { client, calls } = createClient({ pullRequest })
+
     await expect(beginCheckGeneration(beginInput, client)).rejects.toThrow('stale_generation')
     expect(calls).toEqual(['read:pull-request'])
   })
@@ -338,6 +350,7 @@ describe('ISSUE-166 dedicated-App check generation controller', () => {
     ).resolves.toEqual({ status: 'in_progress', conclusion: null })
     expect(calls.filter((call) => call.includes('merge-eligibility'))).toEqual([
       'read:latest:merge-eligibility',
+      'read:latest:merge-eligibility',
     ])
 
     await expect(
@@ -356,6 +369,40 @@ describe('ISSUE-166 dedicated-App check generation controller', () => {
       ),
     ).resolves.toEqual({ status: 'completed', conclusion: 'success' })
     expect(calls.at(-1)).toBe('update:101:merge-eligibility:success')
+  })
+
+  it('fails the HUMAN_REQUIRED generation when main moves while evidence checks update', async () => {
+    const { client, calls, summaries } = createClient({
+      pullRequests: [{}, { base_sha: 'd'.repeat(40) }],
+      latestIdsSequence: [
+        [checkIds.merge_eligibility_check_id],
+        [checkIds.merge_eligibility_check_id],
+      ],
+    })
+
+    await expect(
+      finalizeCheckGeneration(
+        finalizeInput({ mergeDecision: 'HUMAN_REQUIRED', mergeReason: 'human_gate_required' }),
+        client,
+      ),
+    ).rejects.toThrow('current_main_sha_mismatch')
+    expect(calls).toEqual([
+      'read:pull-request',
+      'read:latest:merge-eligibility',
+      'update:103:pr-gate:success',
+      'update:104:validate:success',
+      'update:105:local-registry:success',
+      'update:102:specialist-review-gate:success',
+      'read:pull-request',
+      'read:latest:merge-eligibility',
+      'update:103:pr-gate:failure',
+      'update:104:validate:failure',
+      'update:105:local-registry:failure',
+      'update:102:specialist-review-gate:failure',
+      'update:101:merge-eligibility:failure',
+    ])
+    expect(calls).not.toContain('update:101:merge-eligibility:success')
+    expect(summaries.slice(-5)).toEqual(Array(5).fill('current_main_sha_mismatch'))
   })
 
   it('fails HUMAN_REQUIRED without awaiting approval when a candidate check fails', async () => {

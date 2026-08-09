@@ -141,7 +141,6 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).toContain('OPENAPI_BREAKING_DETECTED')
     expect(controller).toContain('external_id: input.externalId')
     expect(source).toContain('BASE_SHA')
-    expect(source).toContain('git/ref/heads/main')
     expect(source).not.toContain('base_sha:.base.sha')
     expect(controller).toContain('git/ref/heads/main')
     expect(controller).not.toContain('base_sha: String(response.base?.sha)')
@@ -154,6 +153,32 @@ describe('ISSUE-166 GitHub merge controls repository contract', () => {
     expect(source).not.toContain('pnpm/action-setup@v4')
     expect(source).not.toContain('integration_id: 15368')
     expect(source).not.toContain('OPENAPI_BREAKING_APPROVAL_LABEL_PRESENT: ${{ contains(')
+  })
+
+  it('flows the prepare main ref SHA through attestation comparison and base_sha output', () => {
+    const workflow = parse(read('.github/workflows/loop-engineer-merge-gates.yml')) as {
+      jobs: Record<
+        string,
+        {
+          outputs?: Record<string, string>
+          steps?: Array<{ id?: string; run?: string }>
+        }
+      >
+    }
+    const prepare = workflow.jobs.prepare!
+    const gateScript = prepare.steps?.find(({ id }) => id === 'gate')?.run ?? ''
+    const readMainRef =
+      'live_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq \'.object.sha\')"'
+    const compareDeclaredMergeBase = '"$declared_merge_base_sha" != "$live_base_sha"'
+    const publishBaseSha = 'echo "base_sha=$live_base_sha" >> "$GITHUB_OUTPUT"'
+    const readIndex = gateScript.indexOf(readMainRef)
+    const compareIndex = gateScript.indexOf(compareDeclaredMergeBase)
+    const publishIndex = gateScript.indexOf(publishBaseSha)
+
+    expect(prepare.outputs?.base_sha).toBe('${{ steps.gate.outputs.base_sha }}')
+    expect(readIndex).toBeGreaterThanOrEqual(0)
+    expect(compareIndex).toBeGreaterThan(readIndex)
+    expect(publishIndex).toBeGreaterThan(compareIndex)
   })
 
   it('accepts an OpenAPI waiver only for a freshly generated non-empty report', () => {

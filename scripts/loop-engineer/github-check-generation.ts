@@ -284,7 +284,9 @@ export async function beginCheckGeneration(
   requireRunId(input.runId)
 
   const pullRequest = await client.readPullRequest(repository, input.prNumber)
-  if (!isCurrentPullRequest(pullRequest, input, false)) throw new Error('stale_generation')
+  if (!isCurrentPullRequest(pullRequest, input, false)) {
+    throw new Error(generationMismatchReason(pullRequest, input.baseSha, 'stale_generation'))
+  }
 
   const checkIds = {} as CheckIds
   for (const check of generationOrder) {
@@ -384,6 +386,11 @@ export async function finalizeCheckGeneration(
     (conclusion) => conclusion === 'success',
   )
   if (input.mergeDecision === 'HUMAN_REQUIRED' && allEvidencePassed) {
+    const freshGeneration = await readCurrentGeneration(client, repository, generationInput)
+    if (!freshGeneration.matches) {
+      await failGeneration(client, repository, input.checkIds, 'current_main_sha_mismatch')
+      throw new Error('current_main_sha_mismatch')
+    }
     return { status: 'in_progress', conclusion: null }
   }
 
