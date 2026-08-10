@@ -52,6 +52,12 @@ function getPath(record: Record<string, unknown>, path: string): unknown {
   }, record)
 }
 
+function fixtureAt<T>(records: readonly T[], index: number): T {
+  const record = records[index]
+  if (record === undefined) throw new Error(`missing fixture at index ${index}`)
+  return record
+}
+
 function eventEnvelope(sequence: number) {
   return {
     event_id: `event_${sequence.toString(16).padStart(32, '0')}`,
@@ -141,7 +147,7 @@ const approvalSet = [
   makeApprovalReceipt('operations', 'e', 'e', 'e'),
   makeApprovalReceipt('repository_owner', 'f', 'f', 'f'),
 ]
-const approvalReceipt = approvalSet[0]
+const approvalReceipt = fixtureAt(approvalSet, 0)
 
 function approvalSetDigest(records: Array<Record<string, unknown>>): string {
   const roleOrder = invariants.approval_set_digest.role_order as string[]
@@ -433,7 +439,7 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
       errors.push('unknown approval set digest')
       return
     }
-    const receipt = set[0]
+    const receipt = fixtureAt(set, 0)
     const mappings = invariants.approval_set_digest.binding_fields[
       String(record.record_type)
     ] as Record<string, string>
@@ -716,25 +722,28 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     for (const fixture of invalidSchemaFixtures) expect(validateEvidence(fixture)).toBe(false)
 
     const mismatchedMain = structuredClone(approvalSet)
-    mismatchedMain[1].approval_payload.main_sha = gitSha('c')
+    fixtureAt(mismatchedMain, 1).approval_payload.main_sha = gitSha('c')
     expect(validateApprovalSet(mismatchedMain, '2026-08-09T00:30:00Z')).toContain(
       'mismatched approval_payload.main_sha',
     )
 
     const crossRecordSelfApproval = structuredClone(approvalSet)
-    crossRecordSelfApproval[1].approval_payload.actor_principal_id = principal('b')
+    fixtureAt(crossRecordSelfApproval, 1).approval_payload.actor_principal_id = principal('b')
     expect(validateApprovalSet(crossRecordSelfApproval, '2026-08-09T00:30:00Z')).toContain(
       'cross-record self approval',
     )
 
     const replayedNonce = structuredClone(approvalSet)
-    replayedNonce[1].approval_payload.nonce_sha256 = replayedNonce[0].approval_payload.nonce_sha256
+    fixtureAt(replayedNonce, 1).approval_payload.nonce_sha256 = fixtureAt(
+      replayedNonce,
+      0,
+    ).approval_payload.nonce_sha256
     expect(validateApprovalSet(replayedNonce, '2026-08-09T00:30:00Z')).toContain(
       'replayed approval_payload.nonce_sha256',
     )
 
     const badSignature = structuredClone(approvalSet)
-    badSignature[1].verification_receipt.signature_payload_digest_sha256 = sha('f')
+    fixtureAt(badSignature, 1).verification_receipt.signature_payload_digest_sha256 = sha('f')
     expect(validateApprovalSet(badSignature, '2026-08-09T00:30:00Z')).toContain(
       'signature payload mismatch',
     )
@@ -742,7 +751,7 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
 
     expect(approvalSetDigest([...approvalSet].reverse())).toBe(validApprovalSetDigest)
     const tamperedSet = structuredClone(approvalSet)
-    tamperedSet[0].verification_receipt.verification_receipt_digest_sha256 = sha('f')
+    fixtureAt(tamperedSet, 0).verification_receipt.verification_receipt_digest_sha256 = sha('f')
     expect(approvalSetDigest(tamperedSet)).not.toBe(validApprovalSetDigest)
     expect(invariants.approval_set_digest).toMatchObject({
       canonicalization: 'RFC8785',
@@ -889,13 +898,13 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     )
 
     const mixedCheck = structuredClone(writerSequence)
-    mixedCheck[5].check_run_id = 1001
+    fixtureAt(mixedCheck, 5).check_run_id = 1001
     expect(validateUnknownSuccessSequence(mixedCheck)).toContain(
       'writer identity mismatch: check_run_id',
     )
 
     const wrongDigest = structuredClone(writerSequence)
-    wrongDigest[6].completed_barrier_digest_sha256 = sha('f')
+    fixtureAt(wrongDigest, 6).completed_barrier_digest_sha256 = sha('f')
     expect(validateUnknownSuccessSequence(wrongDigest)).toContain('writer barrier digest mismatch')
 
     const wrongObservedStatus = {
