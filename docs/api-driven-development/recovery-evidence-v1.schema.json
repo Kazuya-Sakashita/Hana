@@ -28,11 +28,37 @@
       ],
       "issue_178_entry_gate": ["issue_363_not_synchronized", "issue_363_human_readback_missing"],
       "runtime_activation_gate": [
-        "self_review_prevention_missing",
-        "approval_receipt_invalid",
+        "solo_owner_authorization_missing",
+        "specialist_evaluation_receipt_invalid",
         "writer_barrier_missing",
         "inventory_incomplete",
         "atomic_main_freshness_missing"
+      ]
+    },
+    "governance": {
+      "mode": "solo_maintainer",
+      "human_owner_count": 1,
+      "human_owner_authorization": {
+        "mechanism": "protected_environment_deployment",
+        "prevent_self_review": false,
+        "can_admins_bypass": false,
+        "required_bindings": ["issue_id", "pr_number", "main_sha", "head_sha", "max_round"]
+      },
+      "specialist_evaluations": {
+        "required_roles": ["security", "operations", "repository_owner"],
+        "actor_principal_kind": "agent",
+        "fresh_context_per_role": true,
+        "same_head_required": true
+      },
+      "round_4_terminal_policy": {
+        "max_reviews": 1,
+        "finding_free_result": "eligible_for_owner_completion_decision",
+        "p0_or_p1_result": "hold_no_automatic_round_5"
+      },
+      "unsupported_security_claims": [
+        "human_separation_of_duties",
+        "malicious_owner_resistance",
+        "compromised_owner_identity_resistance"
       ]
     },
     "max_attempts_per_round": 3,
@@ -52,6 +78,7 @@
     },
     "approval_set": {
       "required_roles": ["security", "operations", "repository_owner"],
+      "actor_principal_kind": "agent",
       "same_fields": [
         "schema_version",
         "repository",
@@ -401,6 +428,7 @@
         "succession_id": { "$ref": "#/$defs/successionId" },
         "finding_digest": { "$ref": "#/$defs/sha256" },
         "role": { "enum": ["security", "operations", "repository_owner"] },
+        "actor_principal_kind": { "const": "agent" },
         "actor_principal_id": { "$ref": "#/$defs/principalId" },
         "requester_principal_id": { "$ref": "#/$defs/principalId" },
         "issuer_principal_id": { "$ref": "#/$defs/principalId" },
@@ -418,6 +446,7 @@
         "succession_id",
         "finding_digest",
         "role",
+        "actor_principal_kind",
         "actor_principal_id",
         "requester_principal_id",
         "issuer_principal_id",

@@ -7,7 +7,7 @@
 - Human review: Security approved, Operations approved
 - Activation gate: ISSUE-164、ISSUE-165、ISSUE-166を完了し、ISSUE-167のdry-run後に人間がGOを出すこと
 - Terminal HOLD recovery: ISSUE-177 policy acceptance pending、runtime activation deferred
-- Recovery review gate: Security、Operations、Repository Ownerによる方針文書の独立確認
+- Recovery review gate: solo Repository Ownerの明示GO + Security、Operations、Repository Owner観点の独立agent評価
 
 ## Context
 
@@ -286,8 +286,8 @@ round stateは`evaluation_completed`、`completed_with_findings`、`finding_free
 直接記録、両方の記録、同じ終端状態の再記録を拒否する。同一lineageで次progressionを発行する前に旧progression
 authorityを失効させ、activeなprogressionを同時に複数持たない。
 
-mainだけが移動した場合はfreshな3者承認と新attemptにより同じprogressionを再試行できる。headが
-移動した場合は旧headのprogression authorityとfencing generationを先に失効させ、freshな3者承認と
+mainだけが移動した場合はfreshなOwner authorization、3役agent評価と新attemptにより同じprogressionを再試行できる。headが
+移動した場合は旧headのprogression authorityとfencing generationを先に失効させ、freshなOwner authorization、3役agent評価と
 新head専用のprogression authorityを発行し、`round + 1`へ進む。successionはlineageについて1回だけ
 消費済みのままで、head変更ごとに再消費または2回目のsuccessionを作らない。通常3巡、ISSUE-173例外
 でも最大5巡、第6巡、追加reviewer、別Issue / PR、証跡copyによる上限回避を常に`HOLD`とする。
@@ -301,7 +301,7 @@ Rulesetへ提示する最終状態は、Hana専用GitHub Appが発行する固�
 最新の完全inventoryから導出した現在値である。
 
 `success`へ投影できるのは、immutable lineage anchor、消費済みの1回限りのsuccession、現在head専用の
-progression authorityとattempt、3者approval receipt、`finding_free`、必須Checkが完全一致する場合だけとする。
+progression authorityとattempt、solo Owner authorization、3役agent evaluation receipt、`finding_free`、必須Checkが完全一致する場合だけとする。
 各`projection_event`はtarget PR / headに加えて`main_sha`、`progression_id`、`attempt_id`を直接持ち、
 projection生成時の完全inventoryと同じrecordへ束縛する。`check_status=success`は
 `check_reason=finding_free`とだけ組み合わせ、stale inventory、rollback、unknown-success recovery、
@@ -342,20 +342,23 @@ controller停止後に同じIDの最終failureを再確認する。
 
 回復順は次のstageで固定する。前stageを満たすまで後stageへ進まず、実装着手と特権activationを混同しない。
 
-| stage                                     | entry / exit gate                                                                                                          | 許可する操作                                                                              |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `issue_177_policy`                        | ISSUE-177をmainへ入れる                                                                                                    | 文書と契約testだけ。権限発行、Check更新、runtime安全性の主張は禁止                        |
-| `issue_178_entry_gate`                    | GitHub Issue #363の本文、AC、依存、ADR参照を本方針へ同期し、人間がreadbackする                                             | Issue同期だけ。本Issueでは実施しない                                                      |
-| `issue_178_non_privileged_implementation` | entry gate後、ISSUE-178をmainへ入れる                                                                                      | trusted-mainの検証器、authority、fencing、invalidatorを実装するが、権限は発行・消費しない |
-| `issue_179_non_privileged_bootstrap`      | ISSUE-178 main後、最新mainからISSUE-179の文書・コード・Draft PR / headを確定する                                           | Check更新、権限発行・消費、success、merge予約を行わない                                   |
-| `runtime_activation_gate`                 | self-review防止の是正/readback、freshな3者approval receipt、完全inventory、writer barrier、atomic main freshnessを確認する | 検証のみ。1件でも未達なら特権操作は禁止                                                   |
-| `privileged_recovery`                     | activation gate通過後                                                                                                      | 1回限りのsuccession消費、head専用progression / attempt、固定Check更新を許可               |
+| stage                                     | entry / exit gate                                                                                                            | 許可する操作                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `issue_177_policy`                        | ISSUE-177をmainへ入れる                                                                                                      | 文書と契約testだけ。権限発行、Check更新、runtime安全性の主張は禁止                        |
+| `issue_178_entry_gate`                    | GitHub Issue #363の本文、AC、依存、ADR参照を本方針へ同期し、人間がreadbackする                                               | Issue同期だけ。本Issueでは実施しない                                                      |
+| `issue_178_non_privileged_implementation` | entry gate後、ISSUE-178をmainへ入れる                                                                                        | trusted-mainの検証器、authority、fencing、invalidatorを実装するが、権限は発行・消費しない |
+| `issue_179_non_privileged_bootstrap`      | ISSUE-178 main後、最新mainからISSUE-179の文書・コード・Draft PR / headを確定する                                             | Check更新、権限発行・消費、success、merge予約を行わない                                   |
+| `runtime_activation_gate`                 | freshなsolo Owner authorization、3役agent evaluation receipt、完全inventory、writer barrier、atomic main freshnessを確認する | 検証のみ。1件でも未達なら特権操作は禁止                                                   |
+| `privileged_recovery`                     | activation gate通過後                                                                                                        | 1回限りのsuccession消費、head専用progression / attempt、固定Check更新を許可               |
 
 #363の同期と人間readbackが完了する前にISSUE-178を実装しない。
 ISSUE-178自身のPRは新しい権限で自己承認または自己mergeしない。ISSUE-179はPR #361のコード、commit、review、
 Check、attestation、例外証跡をcopyまたはcherry-pickしない。
 
-3者approval receiptはSecurity、Operations、Repository Ownerの別roleかつdistinctなstable非PII principalを要求する。
+Hanaは人間のRepository Ownerが1名だけの`solo_maintainer` modeを採用する。保護Environmentの同一Owner承認は
+意図確認と最終責任の記録であり、独立した人間reviewまたはseparation of dutiesとは扱わない。
+3役agent evaluation receiptはSecurity、Operations、Repository Ownerの別roleかつdistinctなstable非PII agent
+principalを要求する。
 各receiptはschemaの`record_reference`、`approval_payload`、`verification_receipt`へ分離し、source / target、
 main / head、succession、finding digest、署名対象payload digest、trusted verifier receiptへ束縛する。
 3件でrecord reference、target、main / head、succession、finding digest、approval run、requester / issuerを
@@ -363,33 +366,38 @@ main / head、succession、finding digest、署名対象payload digest、trusted
 requester / issuerとのcross-record自己承認、replay、期限切れ、
 署名またはreceipt不正、未知field、値の不一致を拒否して`runtime_activation_gate`を`HOLD`にする。
 
-現行EnvironmentだけではSecurity、Operations、Repository Ownerの3者独立承認を証明できない。
-distinct actor、role、署名、replay防止を実行時に検証する仕組みとreadbackが整うまで、非特権bootstrapは
-許可しても復旧権限発行以降をactivation blockedとする。
+Owner authorizationは`can_admins_bypass=false`の保護Environment、GitHub署名付きOIDC、専用App Checkを
+Issue / PR / main / head / 最大roundへ一致させる。`prevent_self_review=false`はsolo modeではOwner本人が
+Environment承認するための設定であり、独立性の証明には使わない。3役agent評価は同一headをroleごとのfresh
+contextで1回ずつ評価し、同じactor principal、run、nonceの再利用を拒否する。いずれかのreceiptまたはOwner
+authorizationを実行時に検証・readbackできなければ、非特権bootstrapは許可しても復旧権限発行以降を
+activation blockedとする。
 
 ISSUE-178の信頼境界はapproval receipt検証、復旧権限の発行と1回限りの消費、ISSUE-179の信頼境界は
 lineage / progression / attempt、fencing、atomic freshness、固定projectionの実行時評価である。
 どちらもGitHub App、Environment、secret、Ruleset、
-branch protection、repository settingsを変更しない。Security、Operations、Repository Ownerの
-独立確認が揃わない場合、復旧権限の自己利用、2回目のsuccession、別targetへの転用、対象不一致、
+branch protection、repository settingsを変更しない。Owner authorizationまたは3役agent評価が揃わない場合、
+復旧権限の自己利用、2回目のsuccession、別targetへの転用、対象不一致、
 期限切れ、別App、未知field、不完全inventoryのいずれかがある場合は`runtime_activation_gate`を
 `HOLD`として特権操作だけを停止する。
 
-現行`hana-merge-human-approval`の`prevent_self_review=false`は既知のactivation blockerである。
-Security、Operations、Repository Ownerの明示的な人間承認のもとで自己reviewを防ぐ設定へ是正し、
-readbackで有効値を確認するまでは、3者approval receipt検証、復旧権限発行・消費、Check更新、merge適格化という
-特権操作を開始しない。このblockerはGitHub Issue #363の同期やISSUE-178 / ISSUE-179の非特権作業を
-禁止しない。本IssueではEnvironment設定を変更しない。
+`hana-merge-human-approval`は`prevent_self_review=false`、`can_admins_bypass=false`をsolo modeの固定値とする。
+Owner自身のEnvironment承認は独立reviewではなく、exact-boundな例外を意図して発行したことの確認だけを示す。
+悪意あるOwnerまたは侵害されたOwner identityへの耐性は本modeの非目標であり、その安全性を主張しない。
 
 HOLDはstage scopeを持つ。ISSUE-177文書・schema・契約testの具体的findingは`issue_177_policy`を止める。
-#363の未同期またはreadback不足は`issue_178_entry_gate`を止める。self-review防止、runtimeの3者receipt、
+#363の未同期またはreadback不足は`issue_178_entry_gate`を止める。solo Owner authorization、runtimeの3役agent receipt、
 完全inventory、writer barrier、atomic freshnessの不足は`runtime_activation_gate`以降だけを止める。
 後続stageの未達をISSUE-177の再review理由にせず、前stageのHOLDを後stageで迂回しない。
 
-ISSUE-177のSecurity、Operations、Repository Ownerによる独立確認は、この方針文書を受け入れるreview gate
-であり、ISSUE-179 target headへのruntime approval receiptではない。文書テストが成功し、この3者が方針を
-確認すれば、GitHub Issue #363の同期やEnvironment是正が未完でもISSUE-177は完了できる。後続blockerの
+ISSUE-177のreview gateは、Repository Ownerの明示GOと、Security、Operations、Repository Owner観点を
+fresh contextで実施する3つの独立agent評価である。これはISSUE-179 target headへのruntime receiptではない。
+文書テストが成功し、Owner GOと3評価が揃えば、GitHub Issue #363の同期が未完でもISSUE-177は完了できる。後続blockerの
 未解消だけを理由に本方針の修正・再reviewへ戻らず、具体的な方針上のfindingがある場合だけ修正する。
+
+ISSUE-177のRound 4はexact-boundな例外Checkが同じheadで成功した後の1巡だけとする。P0 / P1が0件なら
+Ownerの完了判断へ進み、1件でも残れば`HOLD`として停止する。Round 5、reviewer追加、別headへの自動継続は
+行わない。
 
 ISSUE-179までの文書・unit test・in-memory fault-injection testは設計と決定的挙動の証拠にはなるが、
 GitHub上の保護設定、署名付きOIDC、専用App、完全inventory、Ruleset投影が実環境で正しく機能した証明

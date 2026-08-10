@@ -118,6 +118,7 @@ function makeApprovalReceipt(
     succession_id: successionId,
     finding_digest: lineageAnchor.finding_digest,
     role,
+    actor_principal_kind: 'agent',
     actor_principal_id: principal(actorCharacter),
     requester_principal_id: principal('b'),
     issuer_principal_id: principal('c'),
@@ -703,6 +704,13 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
         ...approvalReceipt,
         approval_payload: {
           ...approvalReceipt.approval_payload,
+          actor_principal_kind: 'human',
+        },
+      },
+      {
+        ...approvalReceipt,
+        approval_payload: {
+          ...approvalReceipt.approval_payload,
           actor_principal_id: 'person@example.com',
         },
       },
@@ -975,11 +983,29 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     )
     expect(invariants.hold_scopes.runtime_activation_gate).toEqual(
       expect.arrayContaining([
-        'self_review_prevention_missing',
-        'approval_receipt_invalid',
+        'solo_owner_authorization_missing',
+        'specialist_evaluation_receipt_invalid',
         'writer_barrier_missing',
       ]),
     )
+    expect(invariants.governance).toMatchObject({
+      mode: 'solo_maintainer',
+      human_owner_count: 1,
+      human_owner_authorization: {
+        prevent_self_review: false,
+        can_admins_bypass: false,
+      },
+      specialist_evaluations: {
+        required_roles: ['security', 'operations', 'repository_owner'],
+        actor_principal_kind: 'agent',
+        fresh_context_per_role: true,
+        same_head_required: true,
+      },
+      round_4_terminal_policy: {
+        max_reviews: 1,
+        p0_or_p1_result: 'hold_no_automatic_round_5',
+      },
+    })
     for (const [label, source] of [
       ['ADR', adrSource],
       ['Runbook', runbookSource],
@@ -1041,16 +1067,21 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     }
   })
 
-  it('keeps policy review separate from runtime proof and human approval incomplete', () => {
+  it('separates solo owner authorization from agent evaluation and runtime proof', () => {
     expect(issueSource).toContain('github_issue: 362')
     expect(issueSource).toContain(
-      '- [ ] Security、Operations、Repository Ownerによる方針文書の独立確認を得る',
+      '- [ ] Repository Ownerの明示GOと、Security、Operations、Repository Owner観点のfreshな独立agent評価を同じheadで得る',
     )
     expect(adrSource).toContain('ISSUE-177 policy acceptance pending')
     expect(adrSource).not.toContain('ISSUE-177 accepted policy')
+    expect(adrSource).toContain('solo_maintainer')
+    expect(adrSource).toContain('悪意あるOwner')
+    expect(runbookSource).toContain('人間のseparation of duties')
+    expect(issueSource).toContain('Round 5へ自動進行しない')
     expect(adrSource).toContain('ISSUE-177は完了できる')
     expect(runbookSource).toContain('ISSUE-177を再び修正loopへ戻さない')
     expect(issueSource).toContain('ISSUE-177は完了できる')
     expect(agentsSource).toContain('回復は文書だけで証明しない')
+    expect(agentsSource).toContain('solo-maintainer境界を偽装しない')
   })
 })

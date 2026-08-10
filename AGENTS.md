@@ -43,7 +43,8 @@
 8. **1 Issue 1 PR**。混入禁止。
 9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
 10. **Terminal HOLDを迂回しない**。PR #355とPR #361は凍結し、push、review、Check作成・更新、例外workflow dispatch、mergeを行わず、コード、commit、review、Check、attestation、例外証跡を後継へ再利用しない。第6巡、Terminal HOLD後のreviewer追加・交代、同一diffのcopy / cherry-pick、Issue / PRの作り直しによる回避を禁止する。
-11. **回復は文書だけで証明しない**。ISSUE-177は方針だけを定める。ISSUE-177のmain反映後にGitHub Issue #363を同期して人間がreadbackし、その後だけISSUE-178を実装する。ISSUE-178をmainへ入れた後、ISSUE-179の文書・コード・Draft PR / head確定まではCheck更新、権限発行、merge適格化を伴わない非特権bootstrapだけを許可する。target head確定後の3者approval receipt、復旧権限発行、1回限りの消費からを特権操作とし、runtimeの完全inventory、writer fencingとdrain / quiescence、atomicなmain freshness、固定`merge-eligibility`投影が揃うまでactivation blockedとする。
+11. **回復は文書だけで証明しない**。ISSUE-177は方針だけを定める。ISSUE-177のmain反映後にGitHub Issue #363を同期して人間がreadbackし、その後だけISSUE-178を実装する。ISSUE-178をmainへ入れた後、ISSUE-179の文書・コード・Draft PR / head確定まではCheck更新、権限発行、merge適格化を伴わない非特権bootstrapだけを許可する。target head確定後のsolo owner authorizationと3役のagent evaluation receipt、復旧権限発行、1回限りの消費からを特権操作とし、runtimeの完全inventory、writer fencingとdrain / quiescence、atomicなmain freshness、固定`merge-eligibility`投影が揃うまでactivation blockedとする。
+12. **solo-maintainer境界を偽装しない**。Hanaは人間のRepository Owner 1名による`solo_maintainer` modeを採用する。保護Environmentの同一Owner承認は意図確認であり、独立した人間reviewとは呼ばない。Security、Operations、Repository Owner観点は同じheadをfresh contextで評価する3つのagent principalへ分離し、Ownerの最終GOと区別する。`can_admins_bypass=false`、署名付きOIDC、専用App Check、SHA / round束縛を維持するが、悪意または侵害されたOwner自身への耐性は主張しない。ISSUE-177のRound 4は1回だけとし、P0 / P1が残ればHOLDしてRound 5へ自動進行しない。
 
 ---
 

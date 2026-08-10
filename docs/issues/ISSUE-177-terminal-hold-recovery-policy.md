@@ -24,7 +24,7 @@ Loop Engineer v2へ一度だけ移行する回復方針を確定する。
 
 - PR #355 / #361とsource Issue、観測base SHA、source head SHA、停止理由の凍結
 - immutable lineage anchor、bounded append-only attempt history、固定`merge-eligibility`投影の定義
-- canonical finding集合、3者approval receipt、機械可読な統一証跡schemaの定義
+- canonical finding集合、solo Owner authorization、3役agent evaluation receipt、機械可読な統一証跡schemaの定義
 - 非特権bootstrap、Check Runのhead束縛、writer fencing、main freshness、rollbackの定義
 - GitHub App権限契約と特権操作のactivation blockerの定義
 - ISSUE-178の復旧権限とISSUE-179のv2制御基盤の責務、依存順、信頼境界、停止条件、rollback
@@ -61,7 +61,7 @@ OpenAPI、生成型、アプリruntime、DB、Storage、GitHub設定、実環境
 - [x] 最終success PATCHが不明な場合は正確なCheck Run IDを再取得・readbackし、failureを確認できなければHOLDかつactivation blockedとする
 - [x] Hana専用GitHub Appの必要権限契約に`Metadata: read`を明記し、実際のApp設定を変更しない
 - [x] ISSUE-178の着手条件としてGitHub Issue #363の本文、受け入れ条件、依存関係、ADR-0017参照の同期と人間readbackを要求し、本Issueでは実施しない
-- [x] `hana-merge-human-approval`の`prevent_self_review=false`を既知のactivation blockerとし、人間による是正・確認まで特権activationを開始せず、本Issueでは設定変更しない
+- [x] `solo_maintainer` modeでは`prevent_self_review=false`、`can_admins_bypass=false`を固定し、Owner承認を独立reviewではなく意図確認として扱う
 - [x] 回復を1回限りとし、通常3巡、ISSUE-173例外最大5巡、第6巡禁止を維持する
 - [x] ISSUE-179の文書・コード・Draft PR / head確定までを非特権bootstrapとして許可し、特権操作と分ける
 - [x] canonical finding 9件のstable ID、順序、件数、digestを固定し、不一致をHOLDにする
@@ -76,7 +76,7 @@ OpenAPI、生成型、アプリruntime、DB、Storage、GitHub設定、実環境
 - [x] projectionのsuccess / failureと固定reasonの組合せをschemaで制約する
 - [x] round stateとFinding修正後の`round + 1` head progressionを固定する
 - [x] PR #361のcloseは本方針のmain反映後に別途Repository Ownerが判断すると定める
-- [ ] Security、Operations、Repository Ownerによる方針文書の独立確認を得る
+- [ ] Repository Ownerの明示GOと、Security、Operations、Repository Owner観点のfreshな独立agent評価を同じheadで得る
 - [x] 文書と文書テストだけで実行時の安全性を証明済みと扱わない
 - [x] 対象文書テスト、`pnpm issues:check`、`pnpm format:check`が成功する
 - [x] ISSUE-177統合修正では`pnpm pr:gate`とbuildを実行しない
@@ -148,6 +148,21 @@ succession、直接`finding_free`、旧progression失効前の新progression、a
 維持する。別のGitHub Userをdispatcherまたはrequired reviewerとして明示的に用意し、最終PR headへ束縛した
 1回限りの例外を発行できるまで進めない。
 
+## Solo-maintainer governance decision (2026-08-11)
+
+Repository Ownerは個人開発で追加の人間GitHub Userを用意できないことを明示し、`solo_maintainer` modeの採用を
+指示した。人間の意思決定者はRepository Owner 1名とし、保護Environmentの同一Owner承認は独立した人間review
+ではなくexact-boundな操作意図と最終責任の記録として扱う。Security、Operations、Repository Owner観点は、
+同じheadをroleごとのfresh contextで評価する3つのagent principalへ分離する。
+
+この決定はRound 2 / 3時点の「subagent reviewは人間3者ACを満たさない」という旧受け入れモデルだけを
+置換する。過去Finding、通常3巡の消費、Round 4例外要件、凍結sourceのHOLDはresetしない。
+
+`prevent_self_review=false`、`can_admins_bypass=false`、GitHub署名付きOIDC、専用App Check、Issue / PR /
+main / head / 最大round束縛を維持する。ただし、人間のseparation of duties、悪意あるOwner、侵害されたOwner
+identityへの耐性は提供せず、その安全性を主張しない。ISSUE-177のRound 4は1回だけとし、P0 / P1が0件なら
+Ownerの完了判断へ進み、1件でも残れば`HOLD`として停止する。Round 5へ自動進行しない。
+
 ## セキュリティ・プライバシー考慮
 
 唯一のallowlistは`docs/api-driven-development/recovery-evidence-v1.schema.json`とする。record typeは
@@ -172,21 +187,22 @@ ID一覧を複製しない。固定digestは`52450c49b3852ceedd838c975f6854ec430
 空集合、欠落、重複、余分なID、順序、件数、digestの不一致は`HOLD`にする。旧reviewは合格証跡として
 再利用せず、未解決FindingをISSUE-179の安全要件として継承し、target headのfresh reviewで評価する。
 
-## 非特権bootstrapと3者approval receipt
+## 非特権bootstrapとsolo Owner authorization / 3役agent evaluation receipt
 
 #363同期と人間readbackのentry gate後にISSUE-178を実装し、mainへ入れる。その後、ISSUE-179の文書・コードを作成し、Draft PRを開いてtarget PR / headを
 確定する。ここまではCheck更新、復旧権限発行・消費、`merge-eligibility`のsuccess、merge予約を行わない
 非特権bootstrapである。
 
 target PR / head確定後にSecurity、Operations、Repository Ownerを別roleとして要求し、同じidentity providerと
-repository scopeでdistinctなstable非PII principalを検証する。3件でrecord reference、target、main / head、
+repository scopeでdistinctなstable非PII agent principalを検証する。3件でrecord reference、target、main / head、
 succession、finding digest、approval run、requester / issuerを同一にし、actor集合とrequester / issuer集合を
 非交差にする。role、actor、approval ID、nonceの重複、cross-record自己承認、replay、期限切れ、署名またはreceipt
 不正、未知field、不一致を拒否する。
 検証後に復旧権限を発行して1回限りのsuccessionを消費し、その後だけ特権操作を開始する。
 
-現行Environmentだけでは3者独立承認を証明できない。実行可能なdistinct actor、role、署名、replay防止の
-検証とreadbackが整うまで、非特権bootstrap後のactivationをblockedにする。
+Owner authorizationは保護Environment、GitHub署名付きOIDC、専用App CheckをIssue / PR / main / head /
+最大roundへ束縛する。Owner authorizationまたは3役agent評価のdistinct actor、role、署名、replay防止を
+検証・readbackできるまで、非特権bootstrap後のactivationをblockedにする。
 
 ## head progressionとmerge適格性
 
@@ -195,8 +211,9 @@ successionはlineageについて1回だけ消費する。round stateは`evaluati
 `completed_with_findings`から`round + 1`へ進め、旧round successを要求しない。ただし
 `completed_with_findings`をmerge適格性に使用しない。
 
-head変更時は旧headのprogression authorityとfencing generationを失効させ、freshな3者承認と新head専用の
-progression authorityを要求する。successionは再消費しない。mainだけの変更はfreshな3者承認と新attemptで
+head変更時は旧headのprogression authorityとfencing generationを失効させ、freshなOwner authorization、
+3役agent評価と新head専用のprogression authorityを要求する。successionは再消費しない。mainだけの変更は
+freshなOwner authorization、3役agent評価と新attemptで
 同じprogressionを再試行する。
 
 復旧権限発行 → succession発行 → atomic compare-and-setによる未消費から消費済みへの遷移を要求する。
@@ -238,21 +255,19 @@ stage順は`issue_177_policy` → `issue_178_entry_gate` → `issue_178_non_priv
 `issue_178_entry_gate`ではGitHub Issue #363の本文、受け入れ条件、依存関係、ADR-0017参照を本方針へ同期し、
 人間がreadbackする。このgate前にISSUE-178を実装しない。本IssueではGitHub Issueを変更しない。
 
-現行`hana-merge-human-approval`の`prevent_self_review=false`は既知のactivation blockerである。
-Security、Operations、Repository Ownerの明示的な人間承認のもとで自己reviewを防ぐ設定へ是正し、
-readbackで有効値を確認するまではISSUE-178 / ISSUE-179の非特権作業を禁止するのではなく、3者approval receipt
-検証、復旧権限発行、Check更新、merge適格化という特権操作を開始しない。本IssueではEnvironment設定を
-変更しない。
+`hana-merge-human-approval`は`prevent_self_review=false`、`can_admins_bypass=false`をsolo modeの固定値とする。
+Owner本人の承認は独立reviewではなくexact-boundな意図確認である。Owner authorizationと3役agent evaluation
+receiptの検証、復旧権限発行、Check更新、merge適格化を分離し、どれか1件でも欠ければ特権操作を開始しない。
 
-ISSUE-177の3者独立確認はこの方針文書のreviewであり、ISSUE-179 target headへのruntime approval receiptではない。
-対象文書テストが成功し、3者が方針を確認すれば、GitHub Issue #363の同期やEnvironment是正が未完でも
+ISSUE-177のreview gateはOwnerの明示GOと3役agent評価であり、ISSUE-179 target headへのruntime receiptではない。
+対象文書テストが成功し、Owner GOと3評価が揃えば、GitHub Issue #363の同期が未完でも
 ISSUE-177は完了できる。後続blockerの未解消だけを理由に修正・再reviewを繰り返さず、具体的な方針上の
 findingがある場合だけ本Issueを修正する。
 
 ## 停止条件
 
 HOLDはstage scopeを持つ。方針文書、schema、契約testの具体的findingは`issue_177_policy`を止める。
-#363の未同期/readback不足は`issue_178_entry_gate`を止める。self-review防止、3者runtime receipt、復旧権限、
+#363の未同期/readback不足は`issue_178_entry_gate`を止める。solo Owner authorization、3役agent runtime receipt、復旧権限、
 完全inventory、writer barrier、atomic freshnessの不備は`runtime_activation_gate`以降だけを止める。
 後続stageの未達でISSUE-177を修正loopへ戻さず、前stageのHOLDを後stageで迂回しない。第6巡、追加reviewer、
 旧証跡再利用は常に禁止し、source headへ新しいCheckが投影されても凍結anchorを更新しない。

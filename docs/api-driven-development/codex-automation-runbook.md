@@ -296,19 +296,21 @@ HOLD回避を目的とする変更は常に`HOLD`とする。source headへ新�
    新しい権限で自己承認または自己mergeせず、権限を発行・消費しない。
 4. `issue_179_non_privileged_bootstrap`: ISSUE-179 / `#364`を最新`origin/main`から開始し、文書・コードを
    作成してDraft PRを開き、target PR / headを確定する。Check更新、権限発行・消費、success、merge予約は禁止する。
-5. `runtime_activation_gate`: self-review防止の是正/readback、freshな3者approval receipt、完全inventory、
+5. `runtime_activation_gate`: freshなsolo Owner authorization、3役agent evaluation receipt、完全inventory、
    writer barrier、GitHub側atomic main freshnessを検証する。未達なら後続だけを`HOLD`にする。
 6. `privileged_recovery`: gate通過後だけ1回限りのsuccession、head専用progression / attempt、Check更新を許可する。
 
-`hana-merge-human-approval`の`prevent_self_review=false`は既知のactivation blockerである。明示的な
-人間承認のもとで自己reviewを防ぐ設定へ是正してreadbackするまで、ISSUE-178 / ISSUE-179の非特権作業ではなく、
-3者approval receipt検証、権限発行、Check更新、merge適格化という特権操作を開始しない。本Issueでは
-Environment設定もApp設定も変更しない。Hana専用Appの必要権限契約は`Checks: write`と
-`Metadata: read`を含む。
+Hanaは人間のRepository Owner 1名による`solo_maintainer` modeで運用する。
+`hana-merge-human-approval`は`prevent_self_review=false`、`can_admins_bypass=false`を固定し、同一Ownerの承認を
+独立reviewではなくexact-boundな操作意図の確認として扱う。Security、Operations、Repository Owner観点は
+同一headをfresh contextで評価する3つのagent principalへ分離する。Hana専用Appの必要権限契約は
+`Checks: write`と`Metadata: read`を含む。
 
-ISSUE-177の3者独立確認は方針文書のreview gateであり、target headへのruntime approval receiptではない。
-文書テストと方針reviewが完了すれば、GitHub Issue #363の同期やEnvironment是正は後続stageのblockerとして
+ISSUE-177のreview gateはOwnerの明示GOと3役agent評価であり、target headへのruntime receiptではない。
+文書テストと方針reviewが完了すれば、GitHub Issue #363の同期は後続stageのblockerとして
 引き継ぎ、ISSUE-177を再び修正loopへ戻さない。具体的な方針上のfindingがある場合だけ文書を修正する。
+ISSUE-177のRound 4はexact-boundな例外Check後の1巡だけとし、P0 / P1が残れば`HOLD`してRound 5へ
+自動進行しない。
 
 ### 10.1 immutable lineage anchor
 
@@ -335,18 +337,21 @@ ID一覧を複製しない。固定digestは`52450c49b3852ceedd838c975f6854ec430
 SHAはanchorの可変実行fieldには入れず、復旧権限が凍結sourceを完全一致で確認する入力にする。target PR /
 headが未確定、fieldの欠落・重複・未知、anchorの不一致があれば`HOLD`にする。
 
-### 10.2 3者approval receiptと証跡schema
+### 10.2 solo Owner authorization、3役agent evaluation receiptと証跡schema
 
 Security、Operations、Repository Ownerを別roleとして必須にし、同じidentity providerとrepository scopeで
-検証したstableな非PII principalもdistinctにする。各`approval_receipt`は署名前の`approval_payload`と
+検証したstableな非PII agent principalもdistinctにする。各`approval_receipt`は署名前の`approval_payload`と
 検証後の`verification_receipt`へ分離する。canonical署名対象は`record_reference`の4 fieldと
 `approval_payload`だけであり、verification metadataを含めない。3件でrecord reference、target、main / head、
 succession、finding digest、approval run、requester / issuerを同一にし、actor集合との交差を拒否する。
 role、actor、approval ID、nonceの重複、cross-record自己承認、replay、期限切れ、署名またはreceipt不正、
 未知field、不一致を拒否する。
 
-現行Environmentだけでは3者独立承認を証明できない。distinct actor、role、署名、replay防止を実行時に
-検証してreadbackできる仕組みが整うまで、非特権bootstrap後のactivationをblockedにする。
+Owner authorizationは保護Environment、GitHub署名付きOIDC、専用App CheckをIssue / PR / main / head /
+最大roundへ束縛する。3役agent評価はroleごとのfresh context、distinct actor、署名、replay防止を実行時に
+検証する。Owner authorizationまたは評価receiptをreadbackできるまでactivationをblockedにする。
+`solo_maintainer` modeは人間のseparation of duties、悪意あるOwner、侵害されたOwner identityへの耐性を
+提供せず、その安全性を主張しない。
 
 機械可読allowlistの唯一の正本は
 `docs/api-driven-development/recovery-evidence-v1.schema.json`である。record typeは`lineage_anchor`、
@@ -391,8 +396,8 @@ event、event ID / sequence重複は`HOLD`にする。上限は1 roundあたり3
 1件だけ記録する。直接終端、二重終端、終端後の再評価を拒否する。次progression発行前に旧progression
 authorityを失効させ、同一lineageで複数のactive progressionを許可しない。
 
-mainだけが動いた場合はfreshな3者承認と新attemptで同じprogressionを再試行できる。headが動いた場合は
-旧headのprogression authorityとfencing generationを失効させ、freshな3者承認、新head専用authority、
+mainだけが動いた場合はfreshなOwner authorization、3役agent評価と新attemptで同じprogressionを再試行できる。headが動いた場合は
+旧headのprogression authorityとfencing generationを失効させ、freshなOwner authorization、3役agent評価、新head専用authority、
 `round + 1`を要求する。successionは1回だけ消費済みのまま再消費しない。通常3巡、例外最大5巡、
 第6巡禁止を維持する。
 
@@ -434,7 +439,7 @@ barrierまたはfailure readbackを完了できなければ`runtime_activation_g
 ### 10.5 停止、rollback、証明限界
 
 HOLDはstage scopeを持つ。方針・schema・契約testのfindingは`issue_177_policy`、#363の未同期/readback不足は
-`issue_178_entry_gate`、復旧権限、self-review防止、runtime receipt、inventory、writer barrier、atomic freshnessの
+`issue_178_entry_gate`、復旧権限、solo Owner authorization、agent evaluation receipt、inventory、writer barrier、atomic freshnessの
 不備は`runtime_activation_gate`以降だけを止める。rollbackはtarget PR / headのexclusive writer generationを
 上位のtrusted invalidatorへ移してから、次の順で行う。
 
