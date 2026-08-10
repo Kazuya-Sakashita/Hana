@@ -270,9 +270,194 @@ Verification after rollback:
 修正commit後はfresh contextで全必要reviewをやり直す。3巡目終了時にactionable finding、
 判断不一致、情報不足、検証不能、reviewer不足が残れば`HOLD`にする。
 
+### Terminal HOLD後の禁止事項
+
+PR #355とPR #361はTerminal HOLDの監査記録として凍結する。Issue Captain、reviewer、automationは
+次を行わない。
+
+- source PRへのpush、追加修正、第6巡review、reviewerの追加・交代、Check作成・更新、例外workflow
+  dispatch、merge、HOLDの解除
+- sourceのコード、commit、diff、review、Check、attestation、例外証跡のcopy、cherry-pick、再利用
+- Issue番号またはPR番号の変更、同一diffの載せ替え、新しいreviewerによるレビュー上限のreset
+- PR #361の自動close。closeが必要な場合はISSUE-177がmainへ入った後にRepository Ownerへ確認する
+
+Terminal HOLD後は修正または証跡追加で同じPRを再判定する通常loopへ戻らない。第6巡、reviewer増員、
+HOLD回避を目的とする変更は常に`HOLD`とする。source headへ新しいCheckが投影されても凍結anchorを
+更新せず、回復証跡として再利用しない。
+
+## 10. Terminal HOLD recovery
+
+正本はADR-0017のISSUE-177追補とする。回復はschemaに定義した次のstage順へ限定する。
+
+1. `issue_177_policy`: ISSUE-177 / `#362`の文書方針をmainへ入れる。
+2. `issue_178_entry_gate`: GitHub Issue #363の本文、受け入れ条件、依存関係、ADR-0017参照を本方針へ
+   同期し、人間がreadbackする。本IssueではGitHub Issueを変更しない。このgate前にISSUE-178を実装しない。
+3. `issue_178_non_privileged_implementation`: ISSUE-178 / `#363`を実装してmainへ入れる。ISSUE-178のPRは
+   新しい権限で自己承認または自己mergeせず、権限を発行・消費しない。
+4. `issue_179_non_privileged_bootstrap`: ISSUE-179 / `#364`を最新`origin/main`から開始し、文書・コードを
+   作成してDraft PRを開き、target PR / headを確定する。Check更新、権限発行・消費、success、merge予約は禁止する。
+5. `runtime_activation_gate`: self-review防止の是正/readback、freshな3者approval receipt、完全inventory、
+   writer barrier、GitHub側atomic main freshnessを検証する。未達なら後続だけを`HOLD`にする。
+6. `privileged_recovery`: gate通過後だけ1回限りのsuccession、head専用progression / attempt、Check更新を許可する。
+
+`hana-merge-human-approval`の`prevent_self_review=false`は既知のactivation blockerである。明示的な
+人間承認のもとで自己reviewを防ぐ設定へ是正してreadbackするまで、ISSUE-178 / ISSUE-179の非特権作業ではなく、
+3者approval receipt検証、権限発行、Check更新、merge適格化という特権操作を開始しない。本Issueでは
+Environment設定もApp設定も変更しない。Hana専用Appの必要権限契約は`Checks: write`と
+`Metadata: read`を含む。
+
+ISSUE-177の3者独立確認は方針文書のreview gateであり、target headへのruntime approval receiptではない。
+文書テストと方針reviewが完了すれば、GitHub Issue #363の同期やEnvironment是正は後続stageのblockerとして
+引き継ぎ、ISSUE-177を再び修正loopへ戻さない。具体的な方針上のfindingがある場合だけ文書を修正する。
+
+### 10.1 immutable lineage anchor
+
+anchorはrepository、`lineage_id`、root source Issue / PR、terminal source Issue / PR、target Issue / PR、
+canonical finding ID集合、1回限りの`succession_id`だけを含む。main SHA、head SHA、round、workflow run、
+attemptは含めず、作成後に更新・削除・転用しない。lineage anchorにはmain SHA、head SHA、roundを
+含めない。
+
+凍結した移行元は次のとおり。observed base SHAは監査値であり、main移動後も変更しない。
+
+| source             | observed base SHA                          | source head SHA                            | terminal reason                              |
+| ------------------ | ------------------------------------------ | ------------------------------------------ | -------------------------------------------- |
+| `#354` / PR `#355` | `e6c891ecde1ba3f51b739361d3cd3de4433835a3` | `1239936947aed0f198216a2c8bf4be3177eb2223` | 第6巡が必要となり、最大5巡を超えた           |
+| `#358` / PR `#361` | `fbd5250251ce42d2d1505c685e3f01459d979c0e` | `514d8c64d252b22fb84f7b7834ae690025896882` | 第5巡の未解決P1が残り、第6巡は禁止されている |
+
+canonical集合はISSUE-174 / `#358`、PR `#361`、source head
+`514d8c64d252b22fb84f7b7834ae690025896882`へ束縛する。UTF-8の記載順でLF結合し、末尾LFなしで
+SHA-256を計算する。ID、順序、9件という件数、digestの正本は
+`docs/api-driven-development/recovery-evidence-v1.schema.json`の`lineageAnchor` constであり、Markdownへ
+ID一覧を複製しない。固定digestは`52450c49b3852ceedd838c975f6854ec43009ba70f645630ecd00f826da787a1`である。
+
+空集合、欠落、重複、余分なID、順序、件数、digestの不一致は`HOLD`にする。旧reviewは合格証跡として
+再利用せず、未解決FindingだけをISSUE-179の安全要件として継承してfresh reviewで評価する。source head
+SHAはanchorの可変実行fieldには入れず、復旧権限が凍結sourceを完全一致で確認する入力にする。target PR /
+headが未確定、fieldの欠落・重複・未知、anchorの不一致があれば`HOLD`にする。
+
+### 10.2 3者approval receiptと証跡schema
+
+Security、Operations、Repository Ownerを別roleとして必須にし、同じidentity providerとrepository scopeで
+検証したstableな非PII principalもdistinctにする。各`approval_receipt`は署名前の`approval_payload`と
+検証後の`verification_receipt`へ分離する。canonical署名対象は`record_reference`の4 fieldと
+`approval_payload`だけであり、verification metadataを含めない。3件でrecord reference、target、main / head、
+succession、finding digest、approval run、requester / issuerを同一にし、actor集合との交差を拒否する。
+role、actor、approval ID、nonceの重複、cross-record自己承認、replay、期限切れ、署名またはreceipt不正、
+未知field、不一致を拒否する。
+
+現行Environmentだけでは3者独立承認を証明できない。distinct actor、role、署名、replay防止を実行時に
+検証してreadbackできる仕組みが整うまで、非特権bootstrap後のactivationをblockedにする。
+
+機械可読allowlistの唯一の正本は
+`docs/api-driven-development/recovery-evidence-v1.schema.json`である。record typeは`lineage_anchor`、
+`approval_receipt`、`lineage_event`、`progression_event`、`attempt_event`、`writer_fence_event`、
+`projection_event`だけとし、Markdownへfield一覧を複製しない。schemaのpattern、長さ、enum、
+`unevaluatedProperties: false`で型違反、未知field、自由文、PIIを拒否する。raw token / claim / signature /
+loginは保存せず、OIDC `jti`とfencing tokenはSHA-256値だけを保存する。
+
+### 10.3 bounded append-only attempt history
+
+v2は1回限りのsuccessionとheadごとのbounded progressionを分ける。
+
+- progression: `lineage_id`、target Issue / PR、head SHA、round、round state。main SHAは含めない。
+- attempt: progression、現在のmain SHA、workflow run / run attempt、hash化したOIDC `jti`。
+- history: start / success / failure / cancel / timeoutをappend-only eventとして追記し、上書き・削除しない。
+
+復旧権限とsuccessionのissue / consume / revokeは`lineage_event`、headごとのprogression authority、round
+state、fencing generationのissue / revokeは`progression_event`へappend-onlyで記録する。activeな復旧権限の
+発行 → succession発行 → atomic compare-and-setによる1回限りの消費を要求する。progression authority発行前の
+round state / fencing event、失効後利用、orphan、順序逆転、二重発行・消費を拒否する。`round_state`は
+round state eventだけ、`writer_generation`はfencing generation eventだけに持たせる。
+
+承認集合digestは、検証済みかつ有効期限内の3 roleを各1件だけ選び、`operations`、`repository_owner`、
+`security`の順で各`approval_receipt` record全体を並べ、配列をRFC 8785でcanonicalizeしてSHA-256を取る。
+lineageは`lineage_id + succession_id`、progressionは`lineage_id + progression_id`、attemptは
+`lineage_id + attempt_id`でpartitionし、authority、succession、target Issue / PR / head、round、
+`approval_set_digest_sha256`をpartition内で不変にする。progression発行は同じ束縛の`succession_consumed`、
+attempt開始は同じauthority、succession、target、head、roundのactiveかつ`finding_free`なprogressionを必須とする。
+attemptのapproval集合はreceipt内のlineage、succession、target、main / headへ照合し、main移動時のfreshな集合を
+許可しつつ、別partitionまたは別targetのevent接合を拒否する。
+
+同じattempt lifecycle内では`attempt_id`、run、run attempt、`jti` hashを全eventで不変にし、startから
+1つのterminal eventまで再掲してよい。`event_id`と`event_sequence`だけをevent単位で一意にする。
+別attemptでのattempt tuple再利用は異なる`attempt_id`で同じrun / run attempt / OIDC `jti` hashを使う場合も含む。
+別progressionへの付け替え、start重複、複数または矛盾するterminal
+event、event ID / sequence重複は`HOLD`にする。上限は1 roundあたり3 attempt、1 lineageあたり15 attempt
+とし、超過時は再試行しない。round stateは
+`evaluation_completed`、`completed_with_findings`、`finding_free`とする。Finding修正後の新headは
+旧headの`completed_with_findings`から`round + 1`へ進め、旧roundのsuccessを要求しない。ただし
+`completed_with_findings`はmerge適格性に使わない。
+終端の`completed_with_findings`または`finding_free`は同じprogressionの`evaluation_completed`直後に
+1件だけ記録する。直接終端、二重終端、終端後の再評価を拒否する。次progression発行前に旧progression
+authorityを失効させ、同一lineageで複数のactive progressionを許可しない。
+
+mainだけが動いた場合はfreshな3者承認と新attemptで同じprogressionを再試行できる。headが動いた場合は
+旧headのprogression authorityとfencing generationを失効させ、freshな3者承認、新head専用authority、
+`round + 1`を要求する。successionは1回だけ消費済みのまま再消費しない。通常3巡、例外最大5巡、
+第6巡禁止を維持する。
+
+### 10.4 fixed merge-eligibility projection
+
+Ruleset向けrequired checkは固定名`merge-eligibility`だけとし、動的attempt Checkは監査履歴として
+扱う。projectionは最新の完全inventoryから導く現在値であり、attempt historyの代替にしない。
+
+success遷移前にtarget PR / head単位のexclusive `writer_generation`またはfencing tokenを取得して
+readbackし、下位generationの新規outbound writeを遮断する。in-flight writerをdrainし、遅延PATCHが
+残らないquiescenceを確認した後だけ、現在generationがsuccessを書ける。
+Check PATCH credentialは単一のtrusted holderだけが保持し、workerへ渡さない。すべてのPATCHをholderへ集約し、
+holderが下位generationのrequestを拒否する。
+全barrier eventは同じ`barrier_id`、target、main / head、progression、attempt、generation、fencing token、
+credential owner、App / Check / Check Run IDを再掲する。generation取得からquiescence確認までをRFC 8785で
+canonicalizeしたSHA-256を`completed_barrier_digest_sha256`として後続eventとprojectionへ束縛する。
+main freshnessはGitHub merge queue SHA、strict up-to-date、または同等のGitHub側原子的条件へ束縛し、
+main変更eventと直前readbackだけでは原子性を主張しない。原子的条件がなければsuccessを許可しない。
+
+各`projection_event`はtarget PR / head、`main_sha`、`progression_id`、`attempt_id`、App / Check / Check Run ID、
+writer generation、barrier ID / digestへ直接束縛する。`success`は`finding_free` reasonだけに限定し、
+stale inventory、rollback、unknown-success recovery、activation blockedは必ず`failure`にする。
+新attempt開始時は旧successを先に無効化し、success確定直前に現在のmain / head、anchor、復旧権限、
+progression、attempt、review、必須Checkをfresh readbackする。main移動、head移動、再実行、重複、
+pagination欠落、別App、未知field、不完全inventory、staleまたは複数のprojectionはfail-closedで
+`HOLD`にする。旧PRのreview、Check、attestationはprojection入力にしない。
+
+Check Runはrepository、target PR、target head SHA、GitHub App ID、check nameへ束縛する。PATCH前に
+完全inventoryから5要素が一意に一致する正確なCheck Run IDを再取得し、別headで作成されたCheck Run
+IDを更新しない。Hana専用GitHub Appの必要権限契約は`Checks: write`と`Metadata: read`を含む。
+
+最終`success` PATCHの応答がtimeout、切断、または成否不明なら、fail-closedを証明済みと主張しない。
+現在writerより上位generationのtrusted invalidatorだけが、generation取得、下位generationの新規write遮断、
+drain開始、quiescence確認の順にbarrierを完了してから5要素で正確なCheck Run IDを再取得する。
+同一Check Run IDのsuccessをreadbackした場合だけ同じIDを`failure`へ更新し、同一IDのfailureをreadbackする。
+controller停止後も同じIDの最終failureを確認する。
+barrierまたはfailure readbackを完了できなければ`runtime_activation_gate`を`HOLD`にする。
+
+### 10.5 停止、rollback、証明限界
+
+HOLDはstage scopeを持つ。方針・schema・契約testのfindingは`issue_177_policy`、#363の未同期/readback不足は
+`issue_178_entry_gate`、復旧権限、self-review防止、runtime receipt、inventory、writer barrier、atomic freshnessの
+不備は`runtime_activation_gate`以降だけを止める。rollbackはtarget PR / headのexclusive writer generationを
+上位のtrusted invalidatorへ移してから、次の順で行う。
+
+1. 上位writer generationを取得してreadbackする。
+2. 下位generationの新規outbound success書込みを遮断する。
+3. 下位generationのin-flight writerのdrainを開始する。
+4. 遅延PATCHが残らないquiescenceを確認する。
+5. 同一Check Run IDのsuccessをreadbackする。
+6. required Checkを`failure`へ投影し、同一Check Run IDのfailureをreadbackする。
+7. controllerを停止またはrevertする。
+8. 同一Check Run IDの最終failureをreadbackする。
+
+fencingを取得できない、drain / quiescenceを証明できない、success応答不明を上位generationでfailure化できない、
+failure readbackを確認できない場合は`runtime_activation_gate`を`HOLD`にする。rollback後もPR #355とPR #361はTerminal HOLDのままとし、
+新たな後継を作らない。
+
+文書、unit test、in-memory testだけでは実行時の安全性を証明できない。GitHub上の保護Environment、
+署名付きOIDC、専用App、完全inventory、Ruleset投影のfreshなstatus-only証跡と独立reviewが揃うまで、
+回復済みまたは`AUTO_MERGE_ELIGIBLE`と扱わない。
+
 ---
 
-## 10. Stop / Block Rules
+## 11. Stop / Block Rules
 
 Codex は以下で止まる。
 
@@ -287,7 +472,7 @@ Codex は以下で止まる。
 
 止まったら Issue を `blocked` にするか、PR に missing decision を明記する。
 
-## 11. Safety baselineと段階有効化
+## 12. Safety baselineと段階有効化
 
 - `approval_policy="never"`、Full Access、CI bypassを採用しない。
 - 推奨baselineは`approval_policy="on-request"`、`approvals_reviewer="auto_review"`、

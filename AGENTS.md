@@ -16,6 +16,7 @@
 - **Codex Skill**: `$hana-development`（Hana の Issue 着手・レビュー・PR 準備で使う）
 - **Codex 自動開発 Runbook**: `docs/api-driven-development/codex-automation-runbook.md`
 - **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない）
+- **Terminal HOLD 回復境界**: ADR-0017のISSUE-177追補（PR #355 / #361を凍結し、ISSUE-178 → ISSUE-179の順以外では回復しない）
 
 ### Claude Code から Codex への読み替え
 
@@ -41,6 +42,8 @@
 7. **不確実なら止まる**。3回失敗したら一度報告。同じコマンドをループしない。
 8. **1 Issue 1 PR**。混入禁止。
 9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
+10. **Terminal HOLDを迂回しない**。PR #355とPR #361は凍結し、push、review、Check作成・更新、例外workflow dispatch、mergeを行わず、コード、commit、review、Check、attestation、例外証跡を後継へ再利用しない。第6巡、Terminal HOLD後のreviewer追加・交代、同一diffのcopy / cherry-pick、Issue / PRの作り直しによる回避を禁止する。
+11. **回復は文書だけで証明しない**。ISSUE-177は方針だけを定める。ISSUE-177のmain反映後にGitHub Issue #363を同期して人間がreadbackし、その後だけISSUE-178を実装する。ISSUE-178をmainへ入れた後、ISSUE-179の文書・コード・Draft PR / head確定まではCheck更新、権限発行、merge適格化を伴わない非特権bootstrapだけを許可する。target head確定後の3者approval receipt、復旧権限発行、1回限りの消費からを特権操作とし、runtimeの完全inventory、writer fencingとdrain / quiescence、atomicなmain freshness、固定`merge-eligibility`投影が揃うまでactivation blockedとする。
 
 ---
 
@@ -259,6 +262,7 @@ tests/
 - `docs/api-driven-development/openapi-style-guide.md` — OpenAPI 命名規約
 - `docs/api-driven-development/security-and-privacy.md` — セキュリティ詳細
 - `docs/adr/` — アーキテクチャ判断記録
+- `docs/adr/0017-loop-engineer-approval-boundary.md` — Terminal HOLD凍結、回復lineage、ISSUE-178 → ISSUE-179の順序
 - `docs/issues/` — Issue の永続コピー
 - `docs/perf/` — パフォーマンスベースラインと計測手引き
 
