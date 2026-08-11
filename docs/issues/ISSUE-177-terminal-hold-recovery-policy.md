@@ -76,6 +76,7 @@ OpenAPI、生成型、アプリruntime、DB、Storage、GitHub設定、実環境
 - [x] projectionのsuccess / failureと固定reasonの組合せをschemaで制約する
 - [x] round stateとFinding修正後の`round + 1` head progressionを固定する
 - [x] PR #361のcloseは本方針のmain反映後に別途Repository Ownerが判断すると定める
+- [x] Round 4のHOLD結果を保持し、1つのbounded remediation batchとexact-boundなRound 5を1回だけ許可する
 - [ ] Repository Ownerの明示GOと、Security、Operations、Repository Owner観点のfreshな独立agent評価を同じheadで得る
 - [x] 文書と文書テストだけで実行時の安全性を証明済みと扱わない
 - [x] 対象文書テスト、`pnpm issues:check`、`pnpm format:check`が成功する
@@ -160,8 +161,32 @@ Repository Ownerは個人開発で追加の人間GitHub Userを用意できな�
 
 `prevent_self_review=false`、`can_admins_bypass=false`、GitHub署名付きOIDC、専用App Check、Issue / PR /
 main / head / 最大round束縛を維持する。ただし、人間のseparation of duties、悪意あるOwner、侵害されたOwner
-identityへの耐性は提供せず、その安全性を主張しない。ISSUE-177のRound 4は1回だけとし、P0 / P1が0件なら
-Ownerの完了判断へ進み、1件でも残れば`HOLD`として停止する。Round 5へ自動進行しない。
+identityへの耐性は提供せず、その安全性を主張しない。ISSUE-177のRound 4は1回だけとし、その結果を
+上書きまたはresetしない。P0 / P1が0件ならOwnerの完了判断へ進む。P0 / P1が残った場合は、Ownerの明示指示に
+よる1つのbounded remediation batchと、修正済みの1つの最終headに対するRound 5を1回だけ許可する。
+
+## Round 4 HOLD preservation and bounded Round 5 authorization (2026-08-11)
+
+Round 4はmain `e6c891ecde1ba3f51b739361d3cd3de4433835a3`、PR #389 head
+`85b12486c5f98af52f9d2567ef7c637e0fe70c0f`、workflow run `31449803907`、専用App Check Run
+`93651892231`へ束縛して1回だけ実施した。Security、Operations、Repository Owner観点はいずれも
+P0 0件、P1 3件で`HOLD`と判定し、重複を統合したP1は次の5分類である。
+
+- freshな新head progressionと消費済みsuccessionの旧head / approval digest束縛が両立しない
+- immutable lineage anchorとlineageあたり1つのsuccessionがaggregate validatorで強制されない
+- 3役のdecision、P0 / P1件数、Owner authorizationから`finding_free` / successを導出できない
+- progression失効後の`round + 1`連続性とround reset拒否が強制されない
+- activation gateが、gate通過後にだけ作成可能なprogression / attempt / writer barrierを先に要求する
+
+このRound 4結果、reviewed head、Finding、role別件数、workflow / Check Runを削除、成功扱い、上書き、reset
+してはならない。Repository Ownerは2026-08-11に、この5分類だけを扱う1つのbounded remediation batchと、
+修正済みの1つの最終headに対するexact-boundなRound 5を1回だけ明示的に許可した。ガバナンス改定から
+技術是正完了までを同じbatchとして扱い、中間headへ例外Checkまたは専門reviewを発行しない。
+
+Round 5はIssue / PR / current main / final head / `max_round=5`へ束縛した専用App Checkの成功後、Security、
+Operations、Repository Owner観点を同じ最終headのfresh contextで1回ずつ評価する。P0 / P1が0件ならOwnerの
+完了判断へ進む。1件でも残ればTerminal HOLDとし、Round 6、追加batch、reviewer追加・交代、別Issue / PR、
+別headへの自動継続を禁止する。PR #355 / #361の凍結と旧証跡再利用禁止は変更しない。
 
 ## セキュリティ・プライバシー考慮
 
@@ -262,7 +287,8 @@ receiptの検証、復旧権限発行、Check更新、merge適格化を分離し
 ISSUE-177のreview gateはOwnerの明示GOと3役agent評価であり、ISSUE-179 target headへのruntime receiptではない。
 対象文書テストが成功し、Owner GOと3評価が揃えば、GitHub Issue #363の同期が未完でも
 ISSUE-177は完了できる。後続blockerの未解消だけを理由に修正・再reviewを繰り返さず、具体的な方針上の
-findingがある場合だけ本Issueを修正する。
+findingがある場合だけ本Issueを修正する。Round 4の具体的findingは、上記の1つのbounded remediation batchと
+exact-boundなRound 5でだけ再判定し、追加batchまたはRound 6へ進めない。
 
 ## 停止条件
 

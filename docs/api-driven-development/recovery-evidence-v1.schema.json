@@ -50,10 +50,19 @@
         "fresh_context_per_role": true,
         "same_head_required": true
       },
-      "round_4_terminal_policy": {
-        "max_reviews": 1,
-        "finding_free_result": "eligible_for_owner_completion_decision",
-        "p0_or_p1_result": "hold_no_automatic_round_5"
+      "round_4_remediation_policy": {
+        "round_4_result": "hold",
+        "round_4_result_preserved": true,
+        "max_remediation_batches": 1,
+        "intermediate_heads_are_review_candidates": false,
+        "round_5": {
+          "requires_exact_bound_exception": true,
+          "max_reviews": 1,
+          "fresh_context_per_role": true,
+          "same_head_required": true,
+          "finding_free_result": "eligible_for_owner_completion_decision",
+          "p0_or_p1_result": "terminal_hold_no_round_6"
+        }
       },
       "unsupported_security_claims": [
         "human_separation_of_duties",

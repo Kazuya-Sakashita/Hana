@@ -395,9 +395,14 @@ fresh contextで実施する3つの独立agent評価である。これはISSUE-1
 文書テストが成功し、Owner GOと3評価が揃えば、GitHub Issue #363の同期が未完でもISSUE-177は完了できる。後続blockerの
 未解消だけを理由に本方針の修正・再reviewへ戻らず、具体的な方針上のfindingがある場合だけ修正する。
 
-ISSUE-177のRound 4はexact-boundな例外Checkが同じheadで成功した後の1巡だけとする。P0 / P1が0件なら
-Ownerの完了判断へ進み、1件でも残れば`HOLD`として停止する。Round 5、reviewer追加、別headへの自動継続は
-行わない。
+ISSUE-177のRound 4はexact-boundな例外Checkが同じheadで成功した後の1巡だけとし、その結果、reviewed head、
+Finding、role別件数、Check Runを上書きまたはresetしない。P0 / P1が0件ならOwnerの完了判断へ進む。
+P0 / P1が残った場合は、Repository Ownerの明示指示があるときだけ、Round 4結果を保持した1つのbounded
+remediation batchと、修正済みの1つの最終headに対するexact-boundなRound 5を1回だけ許可する。
+ガバナンス改定から技術是正完了までを同じremediation batchとして扱い、中間headへ例外Checkまたは
+専門reviewを発行しない。Round 5は同じ最終headをSecurity、Operations、Repository Owner観点のfresh contextで
+評価し、P0 / P1が0件ならOwnerの完了判断へ進む。1件でも残ればTerminal HOLDとし、Round 6、追加batch、
+reviewer追加・交代、別Issue / PR、別headへの自動継続を行わない。
 
 ISSUE-179までの文書・unit test・in-memory fault-injection testは設計と決定的挙動の証拠にはなるが、
 GitHub上の保護設定、署名付きOIDC、専用App、完全inventory、Ruleset投影が実環境で正しく機能した証明

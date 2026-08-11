@@ -309,8 +309,12 @@ Hanaは人間のRepository Owner 1名による`solo_maintainer` modeで運用す
 ISSUE-177のreview gateはOwnerの明示GOと3役agent評価であり、target headへのruntime receiptではない。
 文書テストと方針reviewが完了すれば、GitHub Issue #363の同期は後続stageのblockerとして
 引き継ぎ、ISSUE-177を再び修正loopへ戻さない。具体的な方針上のfindingがある場合だけ文書を修正する。
-ISSUE-177のRound 4はexact-boundな例外Check後の1巡だけとし、P0 / P1が残れば`HOLD`してRound 5へ
-自動進行しない。
+ISSUE-177のRound 4結果、reviewed head、Finding、role別件数、Check Runは上書きまたはresetしない。
+P0 / P1が残った場合は、Repository Ownerの明示指示があるときだけ、ガバナンス改定と技術是正を含む1つの
+bounded remediation batchを開始できる。中間headへ例外Checkまたは専門reviewを発行せず、修正済みの1つの
+最終headを確定してから、Issue / PR / current main / final head / `max_round=5`へexact-boundな例外を1回だけ
+発行する。Round 5は3役agentが同じ最終headをfresh contextで評価し、P0 / P1が0件ならOwnerの完了判断へ
+進む。1件でも残ればTerminal HOLDとし、Round 6、追加batch、reviewer追加・交代、自動継続を行わない。
 
 ### 10.1 immutable lineage anchor
 

@@ -1001,9 +1001,18 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
         fresh_context_per_role: true,
         same_head_required: true,
       },
-      round_4_terminal_policy: {
-        max_reviews: 1,
-        p0_or_p1_result: 'hold_no_automatic_round_5',
+      round_4_remediation_policy: {
+        round_4_result: 'hold',
+        round_4_result_preserved: true,
+        max_remediation_batches: 1,
+        intermediate_heads_are_review_candidates: false,
+        round_5: {
+          requires_exact_bound_exception: true,
+          max_reviews: 1,
+          fresh_context_per_role: true,
+          same_head_required: true,
+          p0_or_p1_result: 'terminal_hold_no_round_6',
+        },
       },
     })
     for (const [label, source] of [
@@ -1077,7 +1086,12 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     expect(adrSource).toContain('solo_maintainer')
     expect(adrSource).toContain('悪意あるOwner')
     expect(runbookSource).toContain('人間のseparation of duties')
-    expect(issueSource).toContain('Round 5へ自動進行しない')
+    for (const source of [agentsSource, adrSource, runbookSource, issueSource]) {
+      expect(source).toContain('Round 4結果')
+      expect(source).toMatch(/bounded\s+remediation batch/)
+      expect(source).toContain('Round 5')
+      expect(source).toContain('Round 6')
+    }
     expect(adrSource).toContain('ISSUE-177は完了できる')
     expect(runbookSource).toContain('ISSUE-177を再び修正loopへ戻さない')
     expect(issueSource).toContain('ISSUE-177は完了できる')
