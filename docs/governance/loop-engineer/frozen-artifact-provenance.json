@@ -1,0 +1,222 @@
+{
+  "schema_version": "frozen_artifact_provenance_v1",
+  "canonicalization": {
+    "set_order": "ascending UTF-8 byte order",
+    "set_serialization": "one entry per line with a final LF",
+    "digest": "SHA-256 lowercase hexadecimal"
+  },
+  "origin_main_allowlist": {
+    "commit_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+    "tree_sha": "d5ad1d1671beed07daba99800ac3ea2ab0f56148",
+    "tree_inventory_derivation": "git ls-tree -r -t --full-tree <commit_sha> | LC_ALL=C sort",
+    "tree_inventory_count": 950,
+    "tree_inventory_sha256": "e3a2e27c4bd3d3c0024f96b9fdf26c3ec579269b7015f3f9ac4f3b07a0f58fff"
+  },
+  "forbidden_source_derivation": {
+    "commits": "git rev-list <base_sha>..<head_sha> | LC_ALL=C sort",
+    "objects": "git rev-list --objects <head_sha> --not <base_sha> | LC_ALL=C sort",
+    "blobs": "filter the objects projection to objecttype=blob, retain oid and path, then sort",
+    "patch_ids": "git patch-id --stable for each non-merge commit in base..head",
+    "paths": "git diff --name-only <base_sha>...<head_sha> | LC_ALL=C sort"
+  },
+  "frozen_sources": [
+    {
+      "pull_request": 355,
+      "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "head_sha": "1239936947aed0f198216a2c8bf4be3177eb2223",
+      "commit_inventory_count": 9,
+      "commit_inventory_sha256": "b5164d1fc7abbe00e322ba8691409633155f67b6f6a1dcd1bb477477246986b2",
+      "commit_oids": [
+        "1239936947aed0f198216a2c8bf4be3177eb2223",
+        "12b0b7019325e89180425d59e8048daffaf4cb32",
+        "2c7b0770f5dd272343d7a47c7e0bea4412bce6e3",
+        "2f0eaf7ee713bfd140269720a7d593e8f007c5a7",
+        "3541a7ab13460461088fb816e90b13d5ba18e0d2",
+        "655147adfe050c29497973c9e8b4e4568c975ac0",
+        "86f094d7f151c22fd9a694d7e49b124fab364812",
+        "ab92e618f29bd803380fd0676fe4abe8cbbf7ff3",
+        "bec19ade54ec32c5708a7073955bf18ce894a56d"
+      ],
+      "object_inventory_count": 95,
+      "object_inventory_sha256": "fd27367426540ccca43e4f088951def8f0831fc9c5f680eefaafe183c20a1169",
+      "branch_only_blobs": [
+        "0146efeaa34d02d178e91ec5c8b2226a712523c2 .github/workflows/loop-engineer-merge-gates.yml",
+        "051e89315bf85dcc19b00d14f1ec888740075943 docs/issues/ISSUE-172-current-main-sha.md",
+        "08c3c0ee7bc9a2f23daa2f66abe9b5e75ffabc61 scripts/loop-engineer/github-check-generation.ts",
+        "0b3ef4a6f092ed3b24d7320df5f2b3ee350a368b tests/unit/scripts/loop-engineer-github-check-generation.test.ts",
+        "181ae178d27d3911a30382f1df1c15807c3d464b docs/issues/README.md",
+        "22b96a08d9abec2cc3e0d4c4cfbba327e03ad016 scripts/loop-engineer/github-check-generation.ts",
+        "2c2a6aeaeabc892a5586f80d97482491b3742922 tests/unit/scripts/loop-engineer-github-check-generation.test.ts",
+        "2c3e1ff558a00664a46dfa2549f4d6c2525af27b tests/unit/scripts/loop-engineer-github-check-generation.test.ts",
+        "310d44195655877045055138871ddbe0500cb005 scripts/loop-engineer/github-check-generation.ts",
+        "5815e7f9ec77ea719ebfedd6da26107ed5f4813a .github/workflows/loop-engineer-merge-gates.yml",
+        "5da62ba928fb50cf6609f3a4a02ae388a02a5553 scripts/loop-engineer/github-check-generation.ts",
+        "622e0a172cdc19da61e74f2dbb9df4b4a0728328 tests/unit/app/loop-engineer-github-merge-controls-contract.test.ts",
+        "628bfdad31ca4db7cf473f894186020b854713c4 tests/unit/scripts/loop-engineer-github-check-generation.test.ts",
+        "6f7fa451b6d27c9b5ac66c6adb8a6e8aeac30486 .github/workflows/loop-engineer-main-advanced.yml",
+        "87efc18fd2723db83f4f80e65c4374ea7862cb00 tests/unit/scripts/loop-engineer-github-check-generation.test.ts",
+        "ae804744dd59f76f83d48905e48a3cbc629022cd tests/unit/scripts/loop-engineer-github-check-generation.test.ts",
+        "ba5f8420c21e86e1e04ce6f1ab27b168c984b1d6 tests/unit/app/loop-engineer-github-merge-controls-contract.test.ts",
+        "baf3284449a222b380183539ca2a469b5c759441 scripts/loop-engineer/github-check-generation.ts",
+        "ccb018fa55ce01ce06173cd742a551a4b67ed22c docs/issues/README.md",
+        "dc6e01e588467c35ead1007618487f02c7554d63 scripts/loop-engineer/github-check-generation.ts",
+        "e031252fbe68a2dfc778819275b44dafa5d6698c tests/unit/scripts/loop-engineer-github-check-generation.test.ts",
+        "e12dc16f84e40a865a02cb978617e2876949c597 .github/workflows/loop-engineer-merge-gates.yml",
+        "fa40f508a11cd34504c63b5f30a0c7b1b3447f27 tests/unit/app/loop-engineer-github-merge-controls-contract.test.ts"
+      ],
+      "stable_patch_ids": [
+        "054c9e95a03a15dd063d4c88e667d89fd23f6cd8",
+        "0798c6400242d355b737d58cfd5996a062954af6",
+        "11416bced26217638c06aac4c82121bb7e28a904",
+        "5337a103a871b055e3dba768e4874ccc1625e732",
+        "6d6774a0e32493c6eff3169ad18ced095cdcc97f",
+        "95c564a7c9c6ad38d753ba2fcb5ca31ca6b40ed7",
+        "99edef7d90dbf822c522a12ba823aec02c3b9361",
+        "a9e4899358197652edc9c3f3919b37252faeca26",
+        "f7a02387dede67e05aeb0f5bc9fb7e465eed06dd"
+      ],
+      "changed_paths": [
+        ".github/workflows/loop-engineer-main-advanced.yml",
+        ".github/workflows/loop-engineer-merge-gates.yml",
+        "docs/issues/ISSUE-172-current-main-sha.md",
+        "docs/issues/README.md",
+        "scripts/loop-engineer/github-check-generation.ts",
+        "tests/unit/app/loop-engineer-github-merge-controls-contract.test.ts",
+        "tests/unit/scripts/loop-engineer-github-check-generation.test.ts"
+      ],
+      "path_inventory_sha256": "3783b54c880d640eee05fff5bb1d8fdfefee0127391678b556eb3e3c49e676b8"
+    },
+    {
+      "pull_request": 361,
+      "base_sha": "fbd5250251ce42d2d1505c685e3f01459d979c0e",
+      "head_sha": "514d8c64d252b22fb84f7b7834ae690025896882",
+      "commit_inventory_count": 2,
+      "commit_inventory_sha256": "de39d5287d7554e691cb665066207f100a1fbd6ef28fe759320cb8bd13373af3",
+      "commit_oids": [
+        "514d8c64d252b22fb84f7b7834ae690025896882",
+        "740f59d423f36aae05d0540729217ef71fdcb902"
+      ],
+      "object_inventory_count": 40,
+      "object_inventory_sha256": "f314e784c68f99ed9dc8fdb46c4b216fd9f3b275e38321b921873f0fa6f4c1a4",
+      "branch_only_blobs": [
+        "2ab387976080ce96d2f6ff74319737b5f0790527 docs/api-driven-development/loop-engineer-review-lineage-supersession.md",
+        "3168f8a662879c3773daf0160cc9b7a6849a8c56 scripts/loop-engineer/github-merge-gates.ts",
+        "326e11e318be87a064cd7236b6b8c0ca6b0f4b3c scripts/loop-engineer/github-review-lineage-supersession.ts",
+        "3355c05aee5ef997a84fe9f80dd6264357668c08 tests/unit/scripts/loop-engineer-github-review-lineage-supersession.test.ts",
+        "40e424a7f506c937ac50a621f8a3e3b06504b833 scripts/loop-engineer/evaluate-github-merge-gates.ts",
+        "52a3fd21a9257696d222b2060aadb40676cc271f docs/issues/ISSUE-174-terminal-hold-supersession.md",
+        "57b84425fbb5ccfb7b512852d86dd6002e3390ff .github/workflows/loop-engineer-merge-gates.yml",
+        "587c5ec4e8486dec1c1d0e8728f2669da7bdeefd docs/adr/0017-loop-engineer-approval-boundary.md",
+        "7a5af68688216619a3e5e075d0f69db6134e2003 tests/unit/scripts/loop-engineer-github-merge-gates.test.ts",
+        "812a00f8c19aa563da2adfd910a5bd70ce176b9f .github/workflows/loop-engineer-review-lineage-supersession.yml",
+        "9cb0b07be4c0b6100ec62be6d84e2f03cc56b151 scripts/loop-engineer/github-review-lineage-supersession.ts",
+        "a7bc0899f762d1f3d933716c95c294c8d67b3129 tests/unit/scripts/loop-engineer-github-merge-gates-cli.test.ts",
+        "c1d121e129b2c8526a598f8396ed14782083ad0f tests/unit/app/loop-engineer-review-lineage-supersession-contract.test.ts",
+        "c58acb91d46c9afd75b4c701c6b01447174590d2 AGENTS.md",
+        "d8a23292cbea1a9fceb6eb56b947715e4546351e tests/unit/scripts/loop-engineer-github-merge-gates-lineage.test.ts",
+        "d8c966c05d4f98051404a9a6a8427339accd666a docs/issues/README.md",
+        "e1e308440713cbe892a9ea815e936030bc2eb1da docs/api-driven-development/codex-automation-runbook.md",
+        "e996c977e0cb37626f0f17a47c8ad7fa5dba3364 tests/unit/app/loop-engineer-review-round-exception-contract.test.ts",
+        "f6039f5c599f484bf6007e163a5bd498e0823950 tests/unit/scripts/loop-engineer-github-review-lineage-supersession.test.ts"
+      ],
+      "stable_patch_ids": [
+        "00bcb5e2f342c86a2c7b0c2352cae4094150cb66",
+        "92f4444377305f5a4777be9720fbe94dd04438dd"
+      ],
+      "changed_paths": [
+        ".github/workflows/loop-engineer-merge-gates.yml",
+        ".github/workflows/loop-engineer-review-lineage-supersession.yml",
+        "AGENTS.md",
+        "docs/adr/0017-loop-engineer-approval-boundary.md",
+        "docs/api-driven-development/codex-automation-runbook.md",
+        "docs/api-driven-development/loop-engineer-review-lineage-supersession.md",
+        "docs/issues/ISSUE-174-terminal-hold-supersession.md",
+        "docs/issues/README.md",
+        "scripts/loop-engineer/evaluate-github-merge-gates.ts",
+        "scripts/loop-engineer/github-merge-gates.ts",
+        "scripts/loop-engineer/github-review-lineage-supersession.ts",
+        "tests/unit/app/loop-engineer-review-lineage-supersession-contract.test.ts",
+        "tests/unit/app/loop-engineer-review-round-exception-contract.test.ts",
+        "tests/unit/scripts/loop-engineer-github-merge-gates-cli.test.ts",
+        "tests/unit/scripts/loop-engineer-github-merge-gates-lineage.test.ts",
+        "tests/unit/scripts/loop-engineer-github-merge-gates.test.ts",
+        "tests/unit/scripts/loop-engineer-github-review-lineage-supersession.test.ts"
+      ],
+      "path_inventory_sha256": "12f62f65544161469ca533bb0617e0f216587d3e1e73826729f4a8483b596d1c"
+    },
+    {
+      "pull_request": 389,
+      "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e",
+      "commit_inventory_count": 6,
+      "commit_inventory_sha256": "0bf90a0ea5d630b485b351e181d9d7fa1b54215bf86947ec3add06e1c52b41fe",
+      "commit_oids": [
+        "087000310ec95450ce3fffd8241e42b5f83cf8c2",
+        "0c647677bd51bc09dfce42756efab9c2ee565a4c",
+        "24a85f9ed31c28d3a14ede45f891a1386699be9e",
+        "621f97e7b6d86eb2c13aa691d7e6eb1d1860e113",
+        "85b12486c5f98af52f9d2567ef7c637e0fe70c0f",
+        "dd239a76c454ded9c9526bf360c9970878bd3c68"
+      ],
+      "object_inventory_count": 73,
+      "object_inventory_sha256": "bc10ff89c3810ae94143a9fd27a1b440db8ebf11b57af6afb1d5375e9bb7ddb8",
+      "branch_only_blobs": [
+        "2352f32684af76d71ddb1c3cb6cc0f50d49466f9 tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts",
+        "23cf08e74726978640dc1e245d79afa14f3320f0 docs/api-driven-development/codex-automation-runbook.md",
+        "28bbb1e06bb8106a2f27102b832c7b59b814a351 AGENTS.md",
+        "30b8574596aa73f9cf775b1f51a83cefdc2c4a87 tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts",
+        "48177b02ea692c57f1f0bae1a23817eb219301cb AGENTS.md",
+        "4c2a7ed82d2339dfa9e6b9b9461d66dadc9aa75e AGENTS.md",
+        "4cd36ae3f38ed9a607128e761800c7780036490e docs/api-driven-development/recovery-evidence-v1.schema.json",
+        "4d12d016d1d2c35e18908c1b0f5e40b278e5c37d docs/issues/ISSUE-177-terminal-hold-recovery-policy.md",
+        "5600ce27a921d4396bfc16a8407ed3123b6470f9 docs/api-driven-development/codex-automation-runbook.md",
+        "56b20582d293515da3d8110dff00f05c0bc8ecb2 docs/api-driven-development/codex-automation-runbook.md",
+        "60883a6a2d42cc818185500bd0222b7cc7980fe6 tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts",
+        "64c2a691f6c73549c20a0c812618330bd5daf5d2 docs/adr/0017-loop-engineer-approval-boundary.md",
+        "6f6af814c6589d654b4d9ec4231507b3900788b6 docs/issues/ISSUE-177-terminal-hold-recovery-policy.md",
+        "8236ffc8b1b5b6f737e96e0e1c8ff49780a4a1b9 tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts",
+        "8bce79955bf3ccc5546094d78e6501286c1f8fc0 docs/api-driven-development/recovery-evidence-v1.schema.json",
+        "8ec8db97fc4610883a65d8321e966525052b6f7e docs/adr/0017-loop-engineer-approval-boundary.md",
+        "994df7c7ae8754f3570b3a9148a3062b8257685e docs/issues/ISSUE-177-terminal-hold-recovery-policy.md",
+        "a0d8386b2332800c05b7e229b9d11b1a8df78b80 docs/issues/ISSUE-177-terminal-hold-recovery-policy.md",
+        "a7c8ded2a02ce98a18f3bb29704edec0ee499c74 tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts",
+        "adf245837c1d06f16f5f8d53fc9abdae83c80095 docs/api-driven-development/recovery-evidence-v1.schema.json",
+        "b6cabc74a39f5d32310841a060b5e1ad534cf976 docs/api-driven-development/recovery-evidence-v1.schema.json",
+        "bd34fb649bf84c098a21b01004f79d021967aedb docs/adr/0017-loop-engineer-approval-boundary.md",
+        "c2025f0a7c4ecb853ffb1c70c4225aeefbe3227b docs/api-driven-development/codex-automation-runbook.md",
+        "c9c516a0af803436e1fcf5fa225947afdcabad79 tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts",
+        "ce686acdd08d6d726d6f4ff5775b79f007877972 docs/adr/0017-loop-engineer-approval-boundary.md",
+        "d45e7d0f64e8bdd265493a5c731a6c2387da3f48 docs/issues/README.md",
+        "d9a6993b31b6e5927e9876893439107a815aecec AGENTS.md"
+      ],
+      "stable_patch_ids": [
+        "0cd4ca3517ec4ee30a77e0bdc95fafbc41b1cc5f",
+        "570217e23fee55436369a4286a8c9042727e00ab",
+        "6531127d5d3b55106c9971c1aa48e77b60daeae5",
+        "7e2066360f49cf8d5e43808959e5325390e84f25",
+        "88a06ab842a401097c91d5d4c08f7b153791a06c",
+        "8e5a7ac14041a12b6a8d5ee0cdeb9442e778b932"
+      ],
+      "changed_paths": [
+        "AGENTS.md",
+        "docs/adr/0017-loop-engineer-approval-boundary.md",
+        "docs/api-driven-development/codex-automation-runbook.md",
+        "docs/api-driven-development/recovery-evidence-v1.schema.json",
+        "docs/issues/ISSUE-177-terminal-hold-recovery-policy.md",
+        "docs/issues/README.md",
+        "tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts"
+      ],
+      "path_inventory_sha256": "5e5e5f210f82d4f645555a17662616f549b699ab90243338f3f02f71aab97dfb"
+    }
+  ],
+  "candidate_rules": {
+    "fail_closed_matches": [
+      "candidate commit equals a forbidden commit oid",
+      "candidate added or modified blob equals a listed branch-only blob oid",
+      "candidate stable patch id equals a forbidden stable patch id",
+      "candidate branch contains a frozen head as an ancestor"
+    ],
+    "warning_only": ["semantic or textual similarity without an object or stable patch match"],
+    "required_readback": "Recompute every inventory from the exact base/head when the objects remain available and require the recorded count and digest to match."
+  }
+}

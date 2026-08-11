@@ -3,7 +3,7 @@ id: ISSUE-193
 title: recovery-protocol-v2への一度限りの移行ガバナンスを定義する
 priority: P0
 status: review
-size: S
+size: M
 created_at: 2026-08-11
 github_issue: 390
 requires_human_review:
@@ -43,16 +43,17 @@ ISSUE-177 / PR #389のRound 5 Terminal HOLDを失敗終了として保持した�
 - ADR-0018の一度限りの独立後継設計
 - Codex自動開発RunbookのG0〜G3実行順と停止条件
 - Round 5 terminal manifestとv2 charterの機械可読な整合性
+- grant binding inputs、frozen artifact provenance、fixed principal review historyの再計算可能性
 
 OpenAPI、生成型、runtime、database、workflowおよびGitHub設定には影響しない。
 
 ## 受け入れ条件 (Acceptance Criteria)
 
-- [x] Round 5 terminal manifestのsource SHA、run、Check、3役結果、6件のfinding IDを固定する
+- [x] Round 5 terminal manifestのsource SHA、run、Check、3役結果、6件の無損失finding recordを固定する
 - [x] Terminal HOLDの適用単位と、Issue / PR / branch / head変更でreview budgetがresetされないことを定義する
-- [x] transition grantをprogram、protocol major、main、manifest、requirements、threat model、scope、review budget、期限、nonceへ束縛する
-- [x] 許可入力と禁止artifactをprovenance規則として定義する
-- [x] G0〜G3を固定し、各deliverableをD1、V1、最大1 remediation、V2へ制限する
+- [x] transition grantをstable repository / Owner、audience、program、main / final tree、全digest、期限、nonceへ束縛する
+- [x] 許可treeと禁止commit / object / blob / patch / pathを再計算可能なprovenance規則として定義する
+- [x] G0〜G3を固定し、各deliverableをD1、V1、最大1 remediation、必須V2へ制限する
 - [x] V2でP0/P1が残る場合はprogram全体をTerminal HOLDとし、自動後継を禁止する
 - [x] transition時のagent評価を独立した人間reviewまたはtrusted receiptと表現しない
 - [x] v2の特権activation前にtrusted verifier真正性とreplay防止を必須化する
@@ -73,22 +74,34 @@ OpenAPI、生成型、runtime、database、workflowおよびGitHub設定には�
 - Security: GitHub / OIDC / supply-chain観点から、Round 6ではなく一度限りの別protocol majorとすることを提案
 - Operations: safetyとlivenessを分離し、Terminal HOLDの適用単位と有限停止を確認
 - Repository Owner perspective: G0〜G3のIssue分割、1 Issue / 1 PR、D1 / V1 / V2予算を確認
+- Principal set: `/root/gov_security_counsel`、`/root/gov_liveness_architect`、`/root/gov_delivery_designer`
+- Record: charterのD1 objectへ2026-08-11T05:40:17Zにretrospective Owner aggregationとして固定
 - Authority: 3 roleともread-only advisoryであり、独立した人間reviewまたはtrusted receiptではない
+
+## V1 finding record
+
+- Reviewed base: `e6c891ecde1ba3f51b739361d3cd3de4433835a3`
+- Reviewed head: `90d42a9b7ee131191995412191d1a962c4ad07fb`
+- Results: Security P1=4、Operations P1=5、Repository Owner perspective P1=4、全role HOLD
+- Consolidated backlog: 5 P1 + 2 P2
+- Finding-set digest: `3b1ca32844c28b2a05ae01ff833188df0352204a69b6c241c61855b911e7069a`
+- GitHub record: PR #391 comment `5249358797`
+- Remediation: batch 1 / 1を消費し、次は追加V1ではなくV2だけを許可
 
 ## Post-head transition gates
 
 次はlocal文書のcheckboxを更新して証明しない。final headを変更しない外部のstatus-only記録として残す。
 
-1. V1で3 roleが同じexact headをfresh contextで評価する
-2. P1がある場合だけfinding backlogを固定し、1 bounded remediation後にV2を行う
+1. V1で3 roleが同じexact headをfresh contextで評価する（完了、上記status-only record）
+2. finding backlogを固定し、1 bounded remediationを行う（実行中、追加batch禁止）
 3. V2のP0 / P1が0件であることを確認する
-4. Repository Ownerがcurrent main、final head、各digestへexact-boundしたtransition判断を行う
-5. G0のmerge後にgrantを`accepted`として一度だけ消費する
+4. Repository Ownerがcurrent main / tree、final head / tree、各digestへexact-boundしたJSON-only grantを発行する
+5. G0 merge後のparent / tree readbackから`ACCEPTED_CONSUMED`を導出する
 
 ## 動作確認
 
-1. terminal manifestのSHA-256とcharter内の参照digestが一致することを確認する
-2. 文書整合testで固定SHA、6 finding、review budget、grant未発行、activation blockedを確認する
+1. terminal manifest、binding inputs、provenance、各canonical projectionのSHA-256を再計算する
+2. 文書整合testで6 finding全文、grant lifecycle、fixed principal、必須V2、finite budget、main freshnessを確認する
 3. Issue registryとPrettierでfrontmatterおよび文書形式を確認する
 4. diffがG0の文書、manifest、文書整合testだけであることを確認する
 
@@ -99,5 +112,7 @@ OpenAPI、生成型、runtime、database、workflowおよびGitHub設定には�
 - Draft PR #389
 - ADR-0017
 - ADR-0018
+- `docs/governance/loop-engineer/frozen-artifact-provenance.json`
 - `docs/governance/loop-engineer/issue-177-round5-terminal-manifest.json`
+- `docs/governance/loop-engineer/recovery-protocol-v2-binding-inputs.json`
 - `docs/governance/loop-engineer/recovery-protocol-v2-charter.json`

@@ -1,12 +1,152 @@
 {
-  "schema_version": "recovery_protocol_v2_charter_v1",
+  "schema_version": "recovery_protocol_v2_charter_v2",
+  "policy_state": "governance_candidate",
+  "grant_state_source": "external GitHub state reduced under the binding input contract",
+  "runtime_activation_state": "blocked",
   "program_id": "hana-loop-engineer-recovery-v2",
   "protocol_major": 2,
-  "state": "governance_charter",
+  "repository_id": 1238189306,
+  "repository_node_id": "R_kgDOSc1E-g",
   "origin_main_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
-  "terminal_manifest": {
-    "path": "docs/governance/loop-engineer/issue-177-round5-terminal-manifest.json",
-    "sha256": "bab81ce1f8e57320fda288e30ff170b54ab77be7a0b322b42bbd6fa8e6db91f3"
+  "origin_main_tree_sha": "d5ad1d1671beed07daba99800ac3ea2ab0f56148",
+  "canonicalization": {
+    "structured_values": "RFC8785-JCS UTF-8",
+    "files": "exact UTF-8 file bytes after Prettier formatting",
+    "digest": "SHA-256 lowercase hexadecimal"
+  },
+  "source_documents": {
+    "terminal_manifest": "docs/governance/loop-engineer/issue-177-round5-terminal-manifest.json",
+    "binding_inputs": "docs/governance/loop-engineer/recovery-protocol-v2-binding-inputs.json",
+    "frozen_artifact_provenance": "docs/governance/loop-engineer/frozen-artifact-provenance.json"
+  },
+  "binding_digests": {
+    "terminal_manifest_sha256": "5bf9a1d78af8a2c7ae2280196f891b45ee219092730be62a826bb822bb860b42",
+    "requirements_sha256": "e5eaf5053b2beed8acabd593326a3af3d71477b48f1410086997481f93f967eb",
+    "binding_inputs_file_sha256": "62f808b652a2866b409f4bb03e3260e56feb2b5252a0f8e1accf362f42135453",
+    "threat_model_sha256": "c52aac51b40517ab758cf6170e6300b097a6338f6276b01e17bc30a65295e4ff",
+    "artifact_scope_sha256": "d0b9afc8594088ca565a443157edbe40e58b739943adc80e6367e1358a3c1354",
+    "input_allowlist_sha256": "bfd37e8afee851ddaf9c0c24bf0afa4b5db9ab5ec264924874f605a7418adf65",
+    "provenance_file_sha256": "e9fc6d91f7cff050aef98bb05a596194d8852e9b4e1300cdca17fe81ee6a23b0",
+    "forbidden_artifacts_sha256": "4f49059da3677e65e34c58cf10ffc5634651da1380c3cfd7c6d54ce489989c70",
+    "review_policy_sha256": "5e0ce04d25435639b09491f1b014877e9e7ecd0200805bfcbb0737b1b37d1d2f",
+    "principal_set_sha256": "3003fc6e456d6f5438c6f19ce05adcc64a7136a54a97f64474935cd00e6127ff",
+    "grant_contract_sha256": "24a00942ef7853495377a813c0261025027a92642aa43f96ec1f495344c83795",
+    "main_freshness_sha256": "c6b30f0348dfb87c3e56bf11ee21521867edbf42e6d880ac5df3383547c98870",
+    "d1_evaluation_set_sha256": "7334a15ee71d3f82b65a99fd18edd65923a40b5c0aab05e33f373ac1d8d69b88",
+    "v1_evaluation_set_sha256": "de3933d19070c4a69badfa888927243ffabd8e1aa70225986d0a1d317db871a3",
+    "binding_payload_sha256": "f9fb84a7b11587be2e098cca8b8071db3c3aad8910aa44811ff5d0c420e74c52"
+  },
+  "review_history": {
+    "D1": {
+      "stage": "D1",
+      "deliverable": "G0",
+      "recorded_at": "2026-08-11T05:40:17Z",
+      "record_kind": "retrospective_owner_aggregation_of_prior_read_only_advisory",
+      "completed_before_initial_candidate": true,
+      "is_human_review": false,
+      "is_trusted_receipt": false,
+      "reviewed_requirements_sha256": "e5eaf5053b2beed8acabd593326a3af3d71477b48f1410086997481f93f967eb",
+      "reviewed_threat_model_sha256": "c52aac51b40517ab758cf6170e6300b097a6338f6276b01e17bc30a65295e4ff",
+      "reviewed_artifact_scope_sha256": "d0b9afc8594088ca565a443157edbe40e58b739943adc80e6367e1358a3c1354",
+      "records": [
+        {
+          "role": "security",
+          "principal_id": "/root/gov_security_counsel",
+          "p0": 0,
+          "p1": 0,
+          "p2": 0,
+          "verdict": "advisory_complete"
+        },
+        {
+          "role": "operations",
+          "principal_id": "/root/gov_liveness_architect",
+          "p0": 0,
+          "p1": 0,
+          "p2": 0,
+          "verdict": "advisory_complete"
+        },
+        {
+          "role": "repository_owner_perspective",
+          "principal_id": "/root/gov_delivery_designer",
+          "p0": 0,
+          "p1": 0,
+          "p2": 0,
+          "verdict": "advisory_complete"
+        }
+      ]
+    },
+    "V1": {
+      "stage": "V1",
+      "deliverable": "G0",
+      "reviewed_base_main_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "reviewed_head_sha": "90d42a9b7ee131191995412191d1a962c4ad07fb",
+      "issued_at": "2026-08-11T05:32:25Z",
+      "comment_id": 5249358797,
+      "comment_node_id": "IC_kwDOSc1E-s8AAAABOOLbzQ",
+      "comment_edited": false,
+      "finding_set_sha256": "3b1ca32844c28b2a05ae01ff833188df0352204a69b6c241c61855b911e7069a",
+      "records": [
+        {
+          "role": "security",
+          "principal_id": "/root/gov_security_counsel",
+          "p0": 0,
+          "p1": 4,
+          "p2": 1,
+          "verdict": "hold"
+        },
+        {
+          "role": "operations",
+          "principal_id": "/root/gov_liveness_architect",
+          "p0": 0,
+          "p1": 5,
+          "p2": 1,
+          "verdict": "hold"
+        },
+        {
+          "role": "repository_owner_perspective",
+          "principal_id": "/root/gov_delivery_designer",
+          "p0": 0,
+          "p1": 4,
+          "p2": 1,
+          "verdict": "hold"
+        }
+      ],
+      "remediation": {
+        "finding_backlog_sha256": "3b1ca32844c28b2a05ae01ff833188df0352204a69b6c241c61855b911e7069a",
+        "batch": 1,
+        "maximum_batches": 1,
+        "consumed": true,
+        "next_stage": "V2",
+        "another_v1_allowed": false
+      }
+    },
+    "V2": {
+      "stage": "V2",
+      "deliverable": "G0",
+      "state": "pending_external_exact_final_head_bundle",
+      "required_even_when_v1_is_go": true
+    }
+  },
+  "grant_binding_payload": {
+    "program_id": "hana-loop-engineer-recovery-v2",
+    "protocol_major": 2,
+    "repository_id": 1238189306,
+    "repository_node_id": "R_kgDOSc1E-g",
+    "origin_main_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+    "origin_main_tree_sha": "d5ad1d1671beed07daba99800ac3ea2ab0f56148",
+    "terminal_manifest_sha256": "5bf9a1d78af8a2c7ae2280196f891b45ee219092730be62a826bb822bb860b42",
+    "requirements_sha256": "e5eaf5053b2beed8acabd593326a3af3d71477b48f1410086997481f93f967eb",
+    "binding_inputs_file_sha256": "62f808b652a2866b409f4bb03e3260e56feb2b5252a0f8e1accf362f42135453",
+    "threat_model_sha256": "c52aac51b40517ab758cf6170e6300b097a6338f6276b01e17bc30a65295e4ff",
+    "artifact_scope_sha256": "d0b9afc8594088ca565a443157edbe40e58b739943adc80e6367e1358a3c1354",
+    "input_allowlist_sha256": "bfd37e8afee851ddaf9c0c24bf0afa4b5db9ab5ec264924874f605a7418adf65",
+    "forbidden_artifacts_sha256": "4f49059da3677e65e34c58cf10ffc5634651da1380c3cfd7c6d54ce489989c70",
+    "review_policy_sha256": "5e0ce04d25435639b09491f1b014877e9e7ecd0200805bfcbb0737b1b37d1d2f",
+    "principal_set_sha256": "3003fc6e456d6f5438c6f19ce05adcc64a7136a54a97f64474935cd00e6127ff",
+    "grant_contract_sha256": "24a00942ef7853495377a813c0261025027a92642aa43f96ec1f495344c83795",
+    "main_freshness_sha256": "c6b30f0348dfb87c3e56bf11ee21521867edbf42e6d880ac5df3383547c98870",
+    "d1_evaluation_set_sha256": "7334a15ee71d3f82b65a99fd18edd65923a40b5c0aab05e33f373ac1d8d69b88",
+    "v1_evaluation_set_sha256": "de3933d19070c4a69badfa888927243ffabd8e1aa70225986d0a1d317db871a3"
   },
   "fixed_deliverables": [
     {
@@ -34,82 +174,25 @@
       "privileged": false
     }
   ],
-  "input_policy": {
-    "allowed": [
-      "origin_main_tree",
-      "terminal_manifest_metadata",
-      "six_stable_finding_requirements",
-      "public_standards",
-      "new_v2_requirements_and_threat_model"
-    ],
-    "forbidden": [
-      "frozen_branch_only_code",
-      "frozen_commit_or_diff",
-      "frozen_schema",
-      "frozen_test_or_fixture",
-      "frozen_review_or_check",
-      "frozen_attestation",
-      "frozen_artifact_as_oracle_or_success_evidence"
-    ],
-    "forbidden_sources": [
-      {
-        "pull_request": 355,
-        "head_sha": "1239936947aed0f198216a2c8bf4be3177eb2223"
-      },
-      {
-        "pull_request": 361,
-        "head_sha": "514d8c64d252b22fb84f7b7834ae690025896882"
-      },
-      {
-        "pull_request": 389,
-        "head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e"
-      }
-    ]
-  },
   "transition_grant": {
-    "storage": "external_status_only_exact_head_record",
     "initial_state": "not_issued",
-    "allowed_states": ["not_issued", "issued", "accepted", "rejected", "expired"],
-    "issuer": "repository_owner",
+    "issued_record_storage": "GitHub Issue #390 JSON-only Owner comment",
+    "accepted_state": "derived from the unique issued record and exact GitHub merge readback",
     "single_use": true,
     "non_delegable": true,
-    "terminal_states": ["accepted", "rejected", "expired"],
-    "required_bindings": [
-      "transition_id",
-      "program_id",
-      "protocol_major",
-      "origin_main_sha",
-      "decision_main_sha",
-      "final_governance_head_sha",
-      "terminal_manifest_sha256",
-      "requirements_sha256",
-      "threat_model_sha256",
-      "artifact_scope_sha256",
-      "input_allowlist_sha256",
-      "forbidden_artifacts_sha256",
-      "review_budget_sha256",
-      "expires_at",
-      "nonce"
-    ]
-  },
-  "review_budget": {
-    "stages_per_deliverable": ["D1", "V1", "V2"],
-    "max_specialist_snapshots_per_deliverable": 3,
-    "max_remediation_batches_per_deliverable": 1,
-    "max_specialist_snapshots_total": 12,
-    "max_remediation_batches_total": 4,
-    "principal_roles": ["security", "operations", "repository_owner_perspective"],
-    "principal_replacement_allowed": false,
-    "budget_reset_by_issue_pr_branch_head_or_scope": false
+    "terminal_states": ["accepted_consumed", "rejected_consumed", "program_terminal_hold"],
+    "accepted_grant_is_never_rewritten": true,
+    "post_acceptance_stop_record": "program_halted"
   },
   "terminal_conditions": [
     "p0_at_any_stage",
     "p0_or_p1_at_v2",
     "new_p0_or_p1_outside_fixed_scope",
-    "incomplete_inventory",
-    "principal_missing_or_replaced",
-    "digest_mismatch",
-    "review_budget_exhausted"
+    "incomplete_or_ambiguous_inventory",
+    "principal_missing_reused_or_replaced",
+    "digest_mismatch_or_unknown_field",
+    "main_moved_after_v2",
+    "attempt_to_exceed_review_budget"
   ],
   "activation": {
     "state": "blocked",

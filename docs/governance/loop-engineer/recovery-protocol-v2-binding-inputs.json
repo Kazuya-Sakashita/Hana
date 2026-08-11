@@ -1,0 +1,262 @@
+{
+  "schema_version": "recovery_protocol_v2_binding_inputs_v1",
+  "canonicalization": {
+    "standard": "RFC8785-JCS",
+    "encoding": "UTF-8",
+    "digest": "SHA-256 lowercase hexadecimal",
+    "unknown_fields": "reject"
+  },
+  "repository": {
+    "full_name": "Kazuya-Sakashita/Hana",
+    "repository_id": 1238189306,
+    "repository_node_id": "R_kgDOSc1E-g",
+    "owner_principal_id": 64903209,
+    "governance_issue": 390,
+    "governance_issue_node_id": "I_kwDOSc1E-s8AAAABMP1qZA",
+    "governance_pull_request": 391,
+    "governance_pull_request_node_id": "PR_kwDOSc1E-s79WEKX"
+  },
+  "program_identity": {
+    "program_id": "hana-loop-engineer-recovery-v2",
+    "protocol_major": 2,
+    "origin_main_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+    "origin_main_tree_sha": "d5ad1d1671beed07daba99800ac3ea2ab0f56148",
+    "terminal_manifest_path": "docs/governance/loop-engineer/issue-177-round5-terminal-manifest.json",
+    "terminal_manifest_projection": "entire UTF-8 file bytes",
+    "requirements_projection": "/findings"
+  },
+  "threat_model": {
+    "protected_properties": [
+      "Round 5 terminal result cannot be reset or relabeled",
+      "only one v2 transition exists for the frozen source and target",
+      "old branch-only artifacts cannot become successor implementation or success evidence",
+      "review principals, stages, heads, findings, and budget cannot be substituted",
+      "a stale main or incomplete GitHub inventory cannot become accepted",
+      "policy merge cannot activate runtime privilege"
+    ],
+    "adversaries_and_failures": [
+      "caller-controlled identifiers and arbitrary digest values",
+      "duplicate, edited, deleted, replayed, or cross-repository Owner comments",
+      "concurrent grant records or ambiguous write responses",
+      "Issue, PR, branch, head, scope, or reviewer replacement used as a budget reset",
+      "frozen commit, blob, patch, test, schema, review, Check, or attestation reuse",
+      "main movement between V2, Owner decision, merge, and accepted readback",
+      "partial pagination, duplicate matching records, unknown fields, or missing readback",
+      "solo Owner compromise, which remains an explicitly unsupported threat"
+    ],
+    "fail_closed_rule": "Unknown, incomplete, duplicated, edited, stale, mismatched, over-budget, or unsupported input halts the program without a successor grant."
+  },
+  "artifact_scope": {
+    "g0_exact_paths": [
+      "AGENTS.md",
+      "docs/adr/0017-loop-engineer-approval-boundary.md",
+      "docs/adr/0018-terminal-hold-independent-successor.md",
+      "docs/api-driven-development/codex-automation-runbook.md",
+      "docs/governance/loop-engineer/frozen-artifact-provenance.json",
+      "docs/governance/loop-engineer/issue-177-round5-terminal-manifest.json",
+      "docs/governance/loop-engineer/recovery-protocol-v2-binding-inputs.json",
+      "docs/governance/loop-engineer/recovery-protocol-v2-charter.json",
+      "docs/issues/ISSUE-193-recovery-protocol-v2-governance.md",
+      "docs/issues/README.md",
+      "tests/unit/scripts/issue-193-recovery-protocol-v2-governance.test.ts"
+    ],
+    "successor_allowed_prefixes": [
+      ".github/actions/loop-engineer-v2/",
+      ".github/workflows/loop-engineer-v2-",
+      "docs/governance/loop-engineer/v2/",
+      "scripts/loop-engineer-v2/",
+      "tests/unit/scripts/loop-engineer-v2/"
+    ],
+    "successor_allowed_exact_paths": [
+      "AGENTS.md",
+      "docs/adr/0018-terminal-hold-independent-successor.md",
+      "docs/api-driven-development/codex-automation-runbook.md",
+      "docs/issues/README.md",
+      "package.json"
+    ],
+    "forbidden_changes": [
+      "OpenAPI or generated API types in G0",
+      "runtime, workflow, GitHub App, Environment, Ruleset, credential, Check, merge, or activation changes in G0",
+      "paths outside the exact G0 set or successor allowlist without terminal rejection of this program"
+    ],
+    "path_matching": "Exact paths match byte-for-byte; a prefix ending in slash permits descendants; the workflow prefix permits only basenames beginning loop-engineer-v2-."
+  },
+  "input_allowlist": {
+    "origin_main": {
+      "commit_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "tree_sha": "d5ad1d1671beed07daba99800ac3ea2ab0f56148",
+      "tree_inventory_sha256": "e3a2e27c4bd3d3c0024f96b9fdf26c3ec579269b7015f3f9ac4f3b07a0f58fff"
+    },
+    "other_allowed_inputs": [
+      "the exact terminal manifest and its canonical findings projection",
+      "public standards and public GitHub documentation",
+      "new v2 requirements, threat model, oracle, and implementation created in G0-G3"
+    ]
+  },
+  "forbidden_artifacts": {
+    "source_path": "docs/governance/loop-engineer/frozen-artifact-provenance.json",
+    "projection": "/frozen_sources",
+    "candidate_checks": [
+      "frozen head ancestry",
+      "forbidden commit OID equality",
+      "branch-only blob OID equality for added or modified blobs",
+      "stable patch ID equality"
+    ],
+    "semantic_similarity": "warning_only"
+  },
+  "review_policy": {
+    "principal_set": [
+      {
+        "role": "security",
+        "principal_id": "/root/gov_security_counsel"
+      },
+      {
+        "role": "operations",
+        "principal_id": "/root/gov_liveness_architect"
+      },
+      {
+        "role": "repository_owner_perspective",
+        "principal_id": "/root/gov_delivery_designer"
+      }
+    ],
+    "principal_rules": {
+      "same_principal_across_d1_v1_v2": true,
+      "one_role_per_principal": true,
+      "replacement_allowed": false,
+      "evaluation_is_human_review": false,
+      "evaluation_is_trusted_receipt": false
+    },
+    "evaluation_record_required_fields": [
+      "schema_version",
+      "program_id",
+      "deliverable",
+      "stage",
+      "role",
+      "principal_id",
+      "reviewed_base_main_sha",
+      "reviewed_head_sha_or_scope_sha256",
+      "requirements_sha256",
+      "threat_model_sha256",
+      "artifact_scope_sha256",
+      "finding_set_sha256",
+      "p0",
+      "p1",
+      "p2",
+      "verdict",
+      "issued_at"
+    ],
+    "snapshot_definition": "One stage bundle containing exactly one record from each of the three fixed roles over identical bound inputs; role records are not three snapshots.",
+    "stage_machine": [
+      "D1_PENDING -> D1_COMPLETED when one complete D1 bundle has P0=0",
+      "D1_COMPLETED -> IMPLEMENTATION_COMPLETED after the initial candidate is committed",
+      "IMPLEMENTATION_COMPLETED -> V1_COMPLETED after one complete exact-head V1 bundle",
+      "V1_COMPLETED -> REMEDIATION_CONSUMED only when V1 P1>0 and the finding backlog digest is fixed",
+      "V1_COMPLETED -> V2_PENDING when V1 P1=0; V2 remains mandatory on the same head",
+      "REMEDIATION_CONSUMED -> V2_PENDING after exactly one remediation commit batch",
+      "V2_PENDING -> V2_COMPLETED after one complete exact-final-head V2 bundle",
+      "V2_COMPLETED -> OWNER_DECISION_PENDING only when P0=0 and P1=0",
+      "P0 at any stage, P0 or P1 at V2, duplicate stage, principal replacement, scope change, or an attempt beyond budget -> PROGRAM_TERMINAL_HOLD"
+    ],
+    "review_budget": {
+      "required_stage_bundles_per_deliverable": ["D1", "V1", "V2"],
+      "max_stage_bundles_per_deliverable": 3,
+      "max_remediation_batches_per_deliverable": 1,
+      "max_stage_bundles_total": 12,
+      "max_remediation_batches_total": 4,
+      "attempt_to_exceed_budget_is_terminal": true,
+      "normal_v2_completion_exhausts_but_does_not_violate_budget": true,
+      "budget_reset_by_issue_pr_branch_head_scope_or_principal": false
+    }
+  },
+  "main_freshness": {
+    "v2_binding": "Every V2 role record binds the same reviewed_base_main_sha and reviewed_head_sha.",
+    "grant_binding": "decision_main_sha and final_governance_head_sha exactly equal the V2 bundle values.",
+    "merge_precondition": "Immediately before merge, current main equals decision_main_sha and the PR is strictly up to date under the active GitHub Ruleset.",
+    "accepted_readback": "The merged PR head equals final_governance_head_sha, the merge commit first parent equals decision_main_sha, and the accepted main tree equals the final head tree.",
+    "main_movement": "Any main movement after V2 terminally rejects and consumes this transition; no refresh, rebase, update-branch, new head, or extra review is allowed.",
+    "refresh_budget": 0
+  },
+  "grant_record_contract": {
+    "storage": {
+      "medium": "GitHub Issue comment",
+      "repository_id": 1238189306,
+      "issue_number": 390,
+      "issue_node_id": "I_kwDOSc1E-s8AAAABMP1qZA",
+      "body_format": "one JSON object and one trailing LF; no Markdown fence or prose",
+      "author_id": 64903209,
+      "author_association": "OWNER",
+      "immutable_envelope": "updated_at must equal created_at",
+      "inventory": "paginate all Issue comments through hasNextPage=false; reject missing pages, duplicate cursors, duplicate records, edited records, and unknown matching records"
+    },
+    "unique_key_fields": [
+      "repository_id",
+      "terminal_manifest_sha256",
+      "program_id",
+      "protocol_major"
+    ],
+    "issued_record_required_fields": [
+      "schema_version",
+      "record_type",
+      "event_id",
+      "transition_id",
+      "repository_id",
+      "repository_node_id",
+      "issue_number",
+      "issue_node_id",
+      "pull_request_number",
+      "pull_request_node_id",
+      "owner_principal_id",
+      "audience",
+      "decision",
+      "program_id",
+      "protocol_major",
+      "origin_main_sha",
+      "decision_main_sha",
+      "final_governance_head_sha",
+      "final_governance_tree_sha",
+      "terminal_manifest_sha256",
+      "requirements_sha256",
+      "threat_model_sha256",
+      "artifact_scope_sha256",
+      "input_allowlist_sha256",
+      "forbidden_artifacts_sha256",
+      "review_policy_sha256",
+      "principal_set_sha256",
+      "d1_evaluation_set_sha256",
+      "v1_evaluation_set_sha256",
+      "v2_evaluation_set_sha256",
+      "grant_contract_sha256",
+      "binding_payload_sha256",
+      "nonce_sha256",
+      "issued_at",
+      "expires_at"
+    ],
+    "issued_record_constants": {
+      "schema_version": "protocol_v2_transition_grant_v1",
+      "record_type": "protocol_v2_transition_grant",
+      "repository_id": 1238189306,
+      "repository_node_id": "R_kgDOSc1E-g",
+      "issue_number": 390,
+      "issue_node_id": "I_kwDOSc1E-s8AAAABMP1qZA",
+      "pull_request_number": 391,
+      "pull_request_node_id": "PR_kwDOSc1E-s79WEKX",
+      "owner_principal_id": 64903209,
+      "audience": "hana-recovery-protocol-v2-transition",
+      "decision": "issue",
+      "program_id": "hana-loop-engineer-recovery-v2",
+      "protocol_major": 2,
+      "origin_main_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3"
+    },
+    "state_reducer": [
+      "No valid issued record -> NOT_ISSUED",
+      "Exactly one valid unexpired issued record and an open unmerged PR -> ISSUED",
+      "Two or more matching issued records, any unknown field, edit, mismatch, replay, or ambiguous inventory -> PROGRAM_TERMINAL_HOLD",
+      "ISSUED plus PR closed unmerged, explicit unique Owner reject event, or expiry -> REJECTED_CONSUMED",
+      "ISSUED plus exact GitHub merge and accepted-readback invariants -> ACCEPTED_CONSUMED",
+      "ACCEPTED_CONSUMED, REJECTED_CONSUMED, and PROGRAM_TERMINAL_HOLD are immutable terminal states",
+      "After ACCEPTED_CONSUMED, cancellation appends a distinct program_halted record and never rewrites the grant"
+    ],
+    "idempotency": "Repeated readback of the same comment ID, event ID, merge commit, and accepted tree returns the same state without adding a record.",
+    "unknown_fields": "reject"
+  }
+}
