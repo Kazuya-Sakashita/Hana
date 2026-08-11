@@ -2,7 +2,7 @@
 id: ISSUE-194
 title: Loop Engineer回復をmanual-onlyで終端する人間ルート方針を定義する
 priority: P0
-status: in_progress
+status: review
 size: S
 created_at: 2026-08-11
 github_issue: 392
@@ -67,7 +67,7 @@ OpenAPI、生成型、DB、Storage、アプリruntimeには影響しない。
 - [x] Round 1または2の完全bundleにあるcontent findingは巡ごとに正確に1つのbounded修正batchへ統合する
 - [x] operational failureはどのRoundでも即時、Round 3のcontent findingは最終的に`blocked`とする
 - [x] 第4巡、reviewer交代によるbudget reset、例外workflow、Terminal HOLD後継の自動作成を禁止する
-- [ ] `pnpm format:check`、`pnpm issues:check`、`pnpm pr:gate`、`git diff --check`が成功する
+- [x] `pnpm format:check`、`pnpm issues:check`、`pnpm pr:gate`、`git diff --check`が成功する
 - [x] 問題がない場合も自動mergeせず、Repository Ownerが手動squash mergeを判断する
 
 ## Review計画
@@ -96,8 +96,7 @@ merge-base、head SHA、review role、round、finding件数、固定statusだけ
 - `git diff --check`: pass
 - 全unit / contract test: pass（1544 tests、23 skipped）
 - `pnpm build:ci`: pass（sandbox外でport bindを許可して確認）
-- GitHub `pr-gate`: Round 1 head `64a4926cd9adcc32c5bac954e5344300097b558c`でpass。
-  remediation後のheadでは未確認
+- GitHub `pr-gate`: remediation content head `faaca01de58302ea686eca201e1f381f87050e4d`でpass
 - local `pnpm pr:gate`: sandboxのport bind制限により最終buildだけを同一processで完走できなかったため、
   successとは記録しない
 
@@ -117,7 +116,7 @@ merge-base、head SHA、review role、round、finding件数、固定statusだけ
   - `rollback_removes_safety`
   - `frozen_adr_identifier_reference`
   - `github_local_ac_drift`
-- Remediation: exactly one bounded batch applied; Round 2 pending
+- Remediation: exactly one bounded batch closed; Round 2 pending
 
 ## Rollback
 
