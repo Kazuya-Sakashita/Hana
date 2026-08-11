@@ -16,6 +16,7 @@
 - **Codex Skill**: `$hana-development`（Hana の Issue 着手・レビュー・PR 準備で使う）
 - **Codex 自動開発 Runbook**: `docs/api-driven-development/codex-automation-runbook.md`
 - **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない）
+- **Terminal HOLD 回復境界**: ADR-0017のISSUE-177追補（PR #355 / #361を凍結し、ISSUE-178 → ISSUE-179の順以外では回復しない）
 
 ### Claude Code から Codex への読み替え
 
@@ -41,6 +42,9 @@
 7. **不確実なら止まる**。3回失敗したら一度報告。同じコマンドをループしない。
 8. **1 Issue 1 PR**。混入禁止。
 9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
+10. **Terminal HOLDを迂回しない**。PR #355とPR #361は凍結し、push、review、Check作成・更新、例外workflow dispatch、mergeを行わず、コード、commit、review、Check、attestation、例外証跡を後継へ再利用しない。第6巡、Terminal HOLD後のreviewer追加・交代、同一diffのcopy / cherry-pick、Issue / PRの作り直しによる回避を禁止する。
+11. **回復は文書だけで証明しない**。ISSUE-177は方針だけを定める。ISSUE-177のmain反映後にGitHub Issue #363を同期して人間がreadbackし、その後だけISSUE-178を実装する。ISSUE-178をmainへ入れた後、ISSUE-179の文書・コード・Draft PR / head確定まではCheck更新、権限発行、merge適格化を伴わない非特権bootstrapだけを許可する。target head確定後は、まずsolo Owner authorization、3役のagent evaluation receipt、完全inventory、atomic main freshness能力を検証専用のpre-activation gateで確認し、progression / attempt / writer barrierをまだ要求しない。通過後だけ復旧権限発行、1回限りのsuccession消費、head専用progression / attempt作成を許可する。次にpre-success gateでwriter fencing、drain / quiescence、完全inventory、atomicなmain freshnessを確認し、同じbarrier、decision集合、Owner authorization、成功attemptをreadbackした後だけ固定`merge-eligibility`のsuccessを投影する。
+12. **solo-maintainer境界を偽装しない**。Hanaは人間のRepository Owner 1名による`solo_maintainer` modeを採用する。保護Environmentの同一Owner承認は意図確認であり、独立した人間reviewとは呼ばない。Security、Operations、Repository Owner観点は同じheadをfresh contextで評価する3つのagent principalへ分離し、Ownerの最終GOと区別する。`can_admins_bypass=false`、署名付きOIDC、専用App Check、SHA / round束縛を維持するが、悪意または侵害されたOwner自身への耐性は主張しない。ISSUE-177のRound 4結果はresetせず、P0 / P1が残った場合はRepository Ownerが明示的に許可した1つのbounded remediation batchと、修正済みの1つの最終headに対するexact-boundなRound 5を1回だけ許可する。中間headへ例外Checkまたは専門reviewを発行せず、Round 5でP0 / P1が残ればTerminal HOLDとし、Round 6、自動継続、reviewer交代を禁止する。
 
 ---
 
@@ -259,6 +263,7 @@ tests/
 - `docs/api-driven-development/openapi-style-guide.md` — OpenAPI 命名規約
 - `docs/api-driven-development/security-and-privacy.md` — セキュリティ詳細
 - `docs/adr/` — アーキテクチャ判断記録
+- `docs/adr/0017-loop-engineer-approval-boundary.md` — Terminal HOLD凍結、回復lineage、ISSUE-178 → ISSUE-179の順序
 - `docs/issues/` — Issue の永続コピー
 - `docs/perf/` — パフォーマンスベースラインと計測手引き
 
