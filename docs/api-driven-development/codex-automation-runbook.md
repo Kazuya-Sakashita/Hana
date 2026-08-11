@@ -312,11 +312,17 @@ settingsは人間承認後だけ変更し、ISSUE-167の人間GOまではnative 
 
 通常PRのHana App required Checksと、回復権限を分離する。
 
-- normal merge-control: 通常Issue / PR、既存Ruleset、required Checks、最大3巡review、人間の手動merge判断
-- recovery authority: review例外、回復credential、succession、recovery Check、権限消費、activation
+- normal merge-control: 通常Issue / PR、active Rulesetのfresh readback、required Checks、最大3巡review、人間の手動merge判断
+- recovery authority: 凍結・回復目的のreview例外、credential、succession、Check、権限消費、activation
 
-normal merge-controlのsuccessをrecovery authorityの許可へ読み替えない。通常PRのCheck発行や手動mergeは
-継続できるが、それだけで回復workflow、credential、Check更新またはactivationを開始しない。
+normal merge-controlのsuccessをrecovery authorityの許可へ読み替えない。各PRでactive Rulesetをfreshに
+readbackし、非凍結の通常PR、現在head、required App identity、normal merge-control purposeへ一致する
+Checkだけを通常planeとして扱う。それだけで回復workflow、credential、Check更新またはactivationを
+開始しない。
+
+通常`merge-eligibility`を発行できない場合は対象PRを`HOLD`とし、Ruleset bypassやrecovery publisherで
+代用しない。ADR-0017のISSUE-173例外は非凍結の通常PRだけに適用でき、Terminal HOLD lineage、
+ISSUE-194、回復停止方針または回復権限を扱うPRには使用しない。
 
 ### 12.2 凍結対象
 
@@ -329,7 +335,7 @@ base / head SHA、Check IDのread-only参照だけを許可する。
 
 ### 12.3 manual-only停止
 
-hardware security keyがなく、別IssueによるRepository Ownerの判断もない間は次を`BLOCKED`とする。
+hardware security keyがない間は、別IssueやRepository Owner判断の有無にかかわらず次を`BLOCKED`とする。
 
 - 回復用credential、token、secret、署名鍵、authority receiptの作成、発行、更新、消費
 - `review-round-exception`その他の回復Checkの作成、更新、再利用
@@ -338,17 +344,27 @@ hardware security keyがなく、別IssueによるRepository Ownerの判断も�
 - 回復目的のRuleset、Environment、repository settings、GitHub App権限変更
 
 software-only key、caller boolean、自由文comment、agent自己申告をhardware境界の代用にしない。
+keyが利用可能になった後も、別IssueによるRepository Ownerの明示判断を追加の必要条件とし、一方だけで
+blockを解除しない。
 
 ### 12.4 ISSUE-194の有限reviewと終了
 
-ISSUE-194は同一head SHAをSpec / Acceptance、Security / Authority Boundary、
-Operations / Liveness / Rollbackの3観点で独立確認して1巡とし、最大3巡にする。
+Roundは最初のrole開始時に消費する。開始前にround ID、merge-base、head SHA、Spec / Acceptance、
+Security / Authority Boundary、Operations / Liveness / Rollbackの3 role、fixed principal、期限を固定する。
 
-Round 1または2のfindingは巡ごとに1つのbounded修正batchへ統合する。修正後は新head SHAで次巡を行い、
-旧reviewを無効にする。Round 3でfinding、scope変更、reviewer不足、timeout、SHA不一致または検証失敗が
-残ればIssueを`blocked`として終了する。第4巡、reviewer交代によるbudget reset、ISSUE-173例外、
-自動後継Issueを使用しない。
+Round 1または2の完全bundleにcontent findingがある場合だけ、全findingをstable IDと固定reasonへ
+正規化し、巡ごとに正確に1つのbounded修正batchへ統合できる。修正後は新head SHAで次巡を行い、
+旧reviewを無効にする。
+
+どのRoundでもreviewer不足・交代、timeout、schema違反、SHA不一致、scope変更、Round開始後の
+main / head変更、batch外変更があれば、そのRoundを消費して即時`blocked`とする。Round 3のfindingまたは検証失敗も`blocked`とし、
+第4巡、budget reset、ISSUE-173例外、自動後継Issueを使用しない。
 
 全reviewとrequired Checksが成功してもauto-mergeを予約しない。Repository Ownerが手動squash mergeを
-判断する。H1のmergeはH2 / H3、credential、Check更新、activationを開始しない。H2 / H3はH1 merge後に
-別Issueを作成するかを人間が改めて判断し、hardware security keyがない間のH3は`BLOCKED`とする。
+判断する。H1のmergeは後続Issue、credential、Check更新、activationを開始しない。
+
+H2は非特権design-only / read-only verifier検討であり、credential、Check、workflow dispatch、settings、
+authority消費、activationを持たない。H3はhardware-bound recovery authorityの発行・消費・activation
+検討である。名称を変えてもこの意味的境界を適用する。どちらもH1 merge後のOwner明示判断がある場合だけ
+最大1 Issue、最大3巡、例外なしで検討でき、失敗時に自動後継を作らない。hardware security keyがない間は
+H2の有無にかかわらずH3と全recovery authorityを`BLOCKED`とする。

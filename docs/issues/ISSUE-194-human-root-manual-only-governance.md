@@ -36,7 +36,8 @@ manual-onlyで終端する。通常開発の保護されたmerge経路と回復�
 - Ruleset、Environment、repository settingsの変更
 - GitHub App、token、credential、secret、署名鍵の作成・変更
 - workflow、runtime、schema、OpenAPI、アプリコード、testの変更
-- recovery Check、`review-round-exception`、`merge-eligibility`の作成・更新
+- Terminal HOLD lineage、ISSUE-194または回復目的のrecovery Check、`review-round-exception`、
+  `merge-eligibility`投影の作成・更新
 - 凍結PRへのpush、review、Check、merge
 - 凍結branchのcode、commit、diff、schema、test、fixture、review、Check、attestationの再利用
 - H2 / H3 Issueの作成、実装、activation
@@ -62,23 +63,26 @@ OpenAPI、生成型、DB、Storage、アプリruntimeには影響しない。
 - [x] H1のmergeだけではH2 / H3、credential発行、Check更新、activationを開始しない
 - [x] hardware security keyがない間の実権限経路を`BLOCKED`にする
 - [x] Ruleset、Environment、workflow、App、token、runtimeを変更しない
-- [x] reviewは同一head SHAに対する独立した3観点を1巡とし、最大3巡に制限する
-- [x] Round 1または2のfindingは巡ごとに1つのbounded修正batchへ統合する
-- [x] Round 3でfinding、scope変更、reviewer不足、SHA不一致が残ればIssueを`blocked`として終了する
+- [x] reviewは最初のrole開始時にbase、head、3 role、principal、期限へ固定してRoundを消費する
+- [x] Round 1または2の完全bundleにあるcontent findingは巡ごとに正確に1つのbounded修正batchへ統合する
+- [x] operational failureはどのRoundでも即時、Round 3のcontent findingは最終的に`blocked`とする
 - [x] 第4巡、reviewer交代によるbudget reset、例外workflow、Terminal HOLD後継の自動作成を禁止する
 - [ ] `pnpm format:check`、`pnpm issues:check`、`pnpm pr:gate`、`git diff --check`が成功する
 - [x] 問題がない場合も自動mergeせず、Repository Ownerが手動squash mergeを判断する
 
 ## Review計画
 
-各巡で同一merge-base、Issue、head SHA、diffを使い、他reviewerの結果を事前共有しない。
+Roundは最初のrole開始時に消費する。開始前に同一merge-base、Issue、head SHA、diff、3 role、
+fixed principal、期限を固定し、他reviewerの結果を事前共有しない。
 
 1. Spec / Acceptance
 2. Security / Authority Boundary
 3. Operations / Liveness / Rollback
 
-Round 1と2でfindingがあれば、全findingを固定して1回の修正batchにまとめる。修正後は新head SHAで
-次巡を行う。Round 3で解消しなければ追加修正・第4巡へ進まず、原因と未解決事項を報告する。
+Round 1と2の完全bundleにcontent findingがあれば、全findingをstable IDと固定reasonへ正規化し、
+正確に1回の修正batchへまとめる。修正後は新head SHAで次巡を行う。reviewer不足・交代、timeout、
+schema違反、SHA不一致、scope変更、Round開始後のmain / head変更、batch外変更はどのRoundでも即時
+`blocked`とする。Round 3のcontent findingも追加修正・第4巡へ進まず、原因と未解決事項を報告する。
 
 ## セキュリティ・プライバシー考慮
 
@@ -92,13 +96,35 @@ merge-base、head SHA、review role、round、finding件数、固定statusだけ
 - `git diff --check`: pass
 - 全unit / contract test: pass（1544 tests、23 skipped）
 - `pnpm build:ci`: pass（sandbox外でport bindを許可して確認）
-- `pnpm pr:gate`: GitHubの正規Check待ち。ローカルではsandboxのport bind制限により最終buildだけを
-  同一processで完走できなかったため、成功とは記録しない
+- GitHub `pr-gate`: Round 1 head `64a4926cd9adcc32c5bac954e5344300097b558c`でpass。
+  remediation後のheadでは未確認
+- local `pnpm pr:gate`: sandboxのport bind制限により最終buildだけを同一processで完走できなかったため、
+  successとは記録しない
+
+## Review Ledger
+
+- Round: 1
+- Reviewed head: `64a4926cd9adcc32c5bac954e5344300097b558c`
+- Roles completed: 3 / 3
+- Raw findings: 12
+- Normalized backlog: `issue194-r1-backlog-v1`（P1: 6、P2: 2）
+- Fixed reasons:
+  - `hardware_key_conjunction`
+  - `round_consumption_missing`
+  - `issue173_scope_ambiguous`
+  - `h2_h3_undefined`
+  - `normal_check_projection_ambiguous`
+  - `rollback_removes_safety`
+  - `frozen_adr_identifier_reference`
+  - `github_local_ac_drift`
+- Remediation: exactly one bounded batch applied; Round 2 pending
 
 ## Rollback
 
-文書PRをrevertし、通常開発を既存のmain規約へ戻す。Terminal HOLD対象、Ruleset、Environment、App、
-credential、runtimeには変更を加えないため、回復権限や実環境のrollback操作は発生しない。
+Terminal HOLD凍結とrecovery authorityの`BLOCKED`はrollbackでも削除しない。誤りはmanual-only停止を
+維持したforward-fixで修正する。通常planeの記述だけをrevertする場合も、凍結対象、credential / Check /
+workflow禁止、H2 / H3非自動開始、activation禁止を残す。Ruleset、Environment、App、credential、
+runtimeには変更を加えないため、外部状態のrollback操作は発生しない。
 
 ## 参考
 

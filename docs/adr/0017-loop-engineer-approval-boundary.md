@@ -166,18 +166,27 @@ AI生成本文、secret、接続文字列は取得・artifact保存・ログ出�
 ### 11. Terminal HOLD後のmanual-only境界
 
 Terminal HOLD後の回復権限はADR-0019を正とする。ADR-0017の通常merge-controlは維持するが、
-通常PRのHana App required Checksを、回復exception、credential、successionまたはactivationの証跡へ
-読み替えない。
+通常PRのactive Rulesetをfreshにreadbackして得たrequired Checksを、回復exception、credential、
+successionまたはactivationの証跡へ読み替えない。通常の`merge-eligibility`は非凍結の通常PR、
+現在head、required App identity、normal merge-control purposeへ一致する場合だけ通常planeとして扱う。
+凍結対象または回復権限をsubject / purposeとする投影はrecovery Checkとして禁止する。
 
 PR #355、#361、#389、#391とIssue #362、#390は凍結する。対象へのpush、review、Check作成・更新、
 例外workflow、merge、および凍結成果物の後続実装・合格証跡への再利用を禁止する。
 
-hardware security keyがなく、別Issueによる人間の再設計判断もない間は、回復用credentialの発行・消費、
-recovery Check更新、workflow dispatch、runtime activationを`BLOCKED`とする。通常開発のPR、既存Rulesetの
-required Checks、人間が最終判断する手動squash mergeは回復権限ではないため継続できる。
+hardware security keyがない間は、別Issueまたは人間判断の有無にかかわらず、回復用credentialの
+発行・消費、recovery Check更新、workflow dispatch、runtime activationを`BLOCKED`とする。keyが
+利用可能になった後も、別IssueによるRepository Ownerの明示判断を追加の必要条件とする。
+
+通常開発のPR、fresh readbackしたRulesetのrequired Checks、人間が最終判断する手動squash mergeは
+回復権限ではないため継続できる。通常Checkを発行できない場合はそのPRを`HOLD`とし、bypassや
+recovery publisherで代用しない。
 
 ISSUE-194のmergeはこのmanual-only停止を記録するだけで、H2 / H3の開始、権限付与、Check更新、
 activationまたはauto-merge予約を許可しない。
+
+ADR-0017のISSUE-173例外は非凍結の通常PRにだけ適用可能であり、Terminal HOLD lineage、ISSUE-194、
+回復停止方針または回復権限を扱うPRには適用しない。
 
 ## Consequences
 
