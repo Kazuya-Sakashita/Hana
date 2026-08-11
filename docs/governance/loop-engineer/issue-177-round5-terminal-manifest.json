@@ -1,0 +1,179 @@
+{
+  "schema_version": "issue_177_round5_terminal_manifest_v2",
+  "recorded_at": "2026-08-11T04:50:42Z",
+  "repository": "Kazuya-Sakashita/Hana",
+  "campaign": {
+    "issue_id": "ISSUE-177",
+    "github_issue": 362,
+    "pull_request": 389,
+    "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+    "head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e",
+    "round": 5,
+    "result": "terminal_hold"
+  },
+  "exception_evidence": {
+    "workflow_run_id": 31459233974,
+    "workflow_head_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+    "check_run_id": 93679465377,
+    "check_name": "review-round-exception",
+    "check_app_id": 4483496,
+    "check_head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e",
+    "check_external_id": "loop-engineer-review-round-exception/v1|ISSUE-177|389|e6c891ecde1ba3f51b739361d3cd3de4433835a3|24a85f9ed31c28d3a14ede45f891a1386699be9e|5"
+  },
+  "source_records": [
+    {
+      "kind": "pull_request_comment",
+      "issue_or_pull_request": 389,
+      "comment_id": 5249114601,
+      "created_at": "2026-08-11T04:50:42Z"
+    },
+    {
+      "kind": "issue_comment",
+      "issue_or_pull_request": 362,
+      "comment_id": 5249114608,
+      "created_at": "2026-08-11T04:50:42Z"
+    }
+  ],
+  "role_results": [
+    {
+      "role": "security",
+      "p0": 0,
+      "p1": 4,
+      "verdict": "hold"
+    },
+    {
+      "role": "operations",
+      "p0": 0,
+      "p1": 4,
+      "verdict": "hold"
+    },
+    {
+      "role": "repository_owner_perspective",
+      "p0": 0,
+      "p1": 3,
+      "verdict": "hold"
+    }
+  ],
+  "findings": [
+    {
+      "id": "R5-GLOBAL-LINEAGE-UNIQUENESS",
+      "severity": "P1",
+      "source_finding": "anchor / succession一意性がcaller-controlledなlineage_id内に限定され、同じ凍結source / targetを別lineageとして再登録できる。凍結source値も機械定数ではない。",
+      "threat": "A caller changes lineage_id or mutable frozen-source input and registers the same source or target as a new recovery.",
+      "invariants": [
+        "The verifier derives the recovery key from repository ID, terminal manifest digest, canonical source and target, and protocol major.",
+        "The frozen source coordinates are machine constants from the terminal manifest, not caller inputs.",
+        "The complete repository program inventory contains at most one recovery for the canonical source and target."
+      ],
+      "negative_examples": [
+        "Reject the same source and target under a different lineage_id.",
+        "Reject a caller-supplied source SHA that differs from the terminal manifest."
+      ],
+      "required_runtime_proof": "A complete-inventory uniqueness trace keyed outside caller control.",
+      "assigned_deliverables": ["G1", "G2"]
+    },
+    {
+      "id": "R5-VERIFIER-AUTHENTICITY-REPLAY",
+      "severity": "P1",
+      "source_finding": "trusted verifier receiptの真正性、receipt digest導出、repository / audience、lineage全inventoryでのapproval / authorization ID・nonce・run replayがaggregate検証されない。",
+      "threat": "A caller forges a verified flag, replays a valid receipt in another repository or audience, or reuses an approval, authorization, nonce, run, or jti.",
+      "invariants": [
+        "Verify the OIDC signature, issuer, audience, subject, repository ID, workflow and ref, environment, run tuple, jti, and expiry.",
+        "Derive and verify the receipt digest from the authenticated claims and bound program inputs.",
+        "Reject approval ID, authorization ID, nonce, run tuple, and jti reuse across the complete lineage inventory."
+      ],
+      "negative_examples": [
+        "Reject caller-supplied verified=true without authenticated claims.",
+        "Reject a valid receipt replayed under another repository, audience, or lineage."
+      ],
+      "required_runtime_proof": "A trusted receipt verification trace plus complete lineage-global replay inventory.",
+      "assigned_deliverables": ["G1", "G2"]
+    },
+    {
+      "id": "R5-SUCCESS-CROSS-RECORD-BINDING",
+      "severity": "P1",
+      "source_finding": "approval、Owner authorization、progression、attempt、fencing generation / token、barrier、projectionの完全joinとlatest / active状態が不足し、別head・失効済み状態のspliceを閉じていない。",
+      "threat": "An attacker splices approval or authority from another head or uses a stale fence, barrier, attempt, or projection to publish success.",
+      "invariants": [
+        "Join anchor, approval, Owner authorization, progression, attempt, fencing generation and token, exact barrier inventory, and projection on the same program and target.",
+        "Every joined record is the latest active non-revoked record at the success decision.",
+        "The read-only verifier cannot create or update the success projection."
+      ],
+      "negative_examples": [
+        "Reject an approval from another head with an otherwise valid attempt.",
+        "Reject an expired fence generation or barrier inventory missing one writer."
+      ],
+      "required_runtime_proof": "A full latest-active cross-record join and independent publisher trace.",
+      "assigned_deliverables": ["G1", "G2", "G3"]
+    },
+    {
+      "id": "R5-ATTEMPT-BOUNDS",
+      "severity": "P1",
+      "source_finding": "1 round最大3 attempt、1 lineage最大15 attemptは定数確認だけで、aggregate validatorが4件目 / 16件目を拒否しない。",
+      "threat": "Concurrent or replayed reservations exceed the per-round or per-lineage attempt ceiling, or restart a terminal lineage.",
+      "invariants": [
+        "Atomically reserve and reject the fourth attempt in one round.",
+        "Atomically reserve and reject the sixteenth attempt in one lineage.",
+        "Reject concurrent over-reservation and every attempt after a terminal lineage state."
+      ],
+      "negative_examples": [
+        "Reject two concurrent reservations that would create attempts three and four from the same prior count.",
+        "Reject attempt sixteen even when it starts a new round in the same lineage."
+      ],
+      "required_runtime_proof": "An aggregate reservation trace proving the 3-per-round and 15-per-lineage limits.",
+      "assigned_deliverables": ["G1", "G3"]
+    },
+    {
+      "id": "R5-MAIN-REFRESH-REACHABILITY",
+      "severity": "P1",
+      "source_finding": "mainだけが移動した場合に同じprogressionをfresh receiptで再試行する文書経路と、progression / attemptのapproval・Owner digest不変条件が両立しない。",
+      "threat": "A main-only change either makes the valid state machine unreachable or permits stale approval and Owner authorization to survive into a new attempt.",
+      "invariants": [
+        "A main-only movement keeps the same head-bound progression but requires a new attempt authorization bound to fresh main, approval, and Owner authorization.",
+        "A head movement invalidates the current progression and requires the next permitted round rather than a main-refresh attempt.",
+        "The progression and attempt digests distinguish immutable head state from refreshable main-bound authority."
+      ],
+      "negative_examples": [
+        "Reject reuse of the prior main approval after main moves.",
+        "Reject treating a head change as a main-only refresh."
+      ],
+      "required_runtime_proof": "Reachable main-only and head-change transition traces with fresh authority binding.",
+      "assigned_deliverables": ["G1", "G2", "G3"]
+    },
+    {
+      "id": "R5-INVENTORY-FRESHNESS-PROOF",
+      "severity": "P1",
+      "source_finding": "successに必要なpagination完全性、Check identity一意性、GitHub側atomic main freshness、rollback invalidator generationの証跡が完全traceのtrusted inputとして検証されない。",
+      "threat": "A partial inventory, duplicate Check, stale main comparison, active writer, or failed rollback is omitted from a success decision.",
+      "invariants": [
+        "Prove every pagination cursor, hasNextPage=false, no duplicate or missing record, and one expected Check identity.",
+        "Use GitHub-enforced merge queue or strict up-to-date protection for atomic main freshness instead of a custom last-second comparison.",
+        "After writer fencing, prove drain and quiescence with double readback and a generation increase.",
+        "Project rollback failure and verify the final invalidator generation by readback."
+      ],
+      "negative_examples": [
+        "Reject an inventory that omits a final page or contains two matching Checks.",
+        "Reject success when a writer remains active or rollback readback is missing."
+      ],
+      "required_runtime_proof": "A complete pagination, atomic freshness, fencing, quiescence, projection, and rollback trace.",
+      "assigned_deliverables": ["G1", "G3"]
+    }
+  ],
+  "frozen_pull_requests": [
+    {
+      "number": 355,
+      "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "head_sha": "1239936947aed0f198216a2c8bf4be3177eb2223"
+    },
+    {
+      "number": 361,
+      "base_sha": "fbd5250251ce42d2d1505c685e3f01459d979c0e",
+      "head_sha": "514d8c64d252b22fb84f7b7834ae690025896882"
+    },
+    {
+      "number": 389,
+      "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e"
+    }
+  ]
+}

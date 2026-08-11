@@ -16,6 +16,7 @@
 - **Codex Skill**: `$hana-development`（Hana の Issue 着手・レビュー・PR 準備で使う）
 - **Codex 自動開発 Runbook**: `docs/api-driven-development/codex-automation-runbook.md`
 - **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない）
+- **Terminal HOLD後継境界**: `docs/adr/0018-terminal-hold-independent-successor.md`（凍結campaignを再開せず、一度限りの独立後継だけを許可する）
 
 ### Claude Code から Codex への読み替え
 
@@ -41,6 +42,9 @@
 7. **不確実なら止まる**。3回失敗したら一度報告。同じコマンドをループしない。
 8. **1 Issue 1 PR**。混入禁止。
 9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
+10. **Terminal HOLDを迂回しない**。Terminal HOLDはcandidate revisionとreview campaignの不可逆な終端である。対象Issue、PR、headにはpush、修正、追加review、reviewer追加・交代、Check作成・更新、例外workflow、mergeを行わない。Issue、PR、branch、head、reviewerまたはcaller申告のlineage IDを変えてもreview budgetをresetしない。PR #355、#361、#389とIssue #362は凍結し、Round 5結果をreset、成功扱い、未完review扱い、Round 6へ変更しない。
+11. **後継は一度限りの独立programにする**。ISSUE-193 / ADR-0018のG0だけが、mainから`recovery-protocol-v2`を設計する入口である。旧campaignから継承できるのはterminal manifestと6件のfinding requirementだけとし、旧branch-only code、commit、diff、schema、test、fixture、review、Check、attestationを実装素材、oracleまたは合格証跡へ再利用しない。G0のmain反映と、repository / Owner stable ID / audience / program / protocol major / main commit・tree / final commit・tree / manifest / requirements / threat model / scope / 禁止artifact / fixed principal / D1・V1・V2評価集合 / 期限 / nonceへexact-boundした一度限りのOwner grantが揃うまでG1を開始しない。grantはGitHub Issue #390のJSON-only Owner commentと完全inventoryから判定し、acceptedはexact merge readbackから導出する。
+12. **有限reviewとactivation分離を守る**。G0〜G3は直列で、各deliverableを`D1 → 実装 → V1 → 最大1 remediation → V2`へ限定し、remediationがなくてもV2を必須とする。1 snapshotはfixed 3 roleの完全bundleである。V2でP0 / P1が残る、新しいP0 / P1が見つかる、inventory不完全、principal欠落・交代・role重複、digest不一致、scope変更、4件目のsnapshotまたはV2後の修正を試みた場合はprogram全体をTerminal HOLDにし、自動後継、追加round、Issue分割、grant連鎖を禁止する。V2後にmainが動いた場合もrefreshせず一度限りのtransitionを終了する。solo Ownerの判断と3 role agentのread-only advisoryを独立した人間reviewまたはtrusted receiptと呼ばない。G1〜G3をmergeしても、別のpre-activation human GOまではcredential発行、succession消費、Check更新、merge適格性投影、runtime activationを行わない。
 
 ---
 
@@ -259,6 +263,8 @@ tests/
 - `docs/api-driven-development/openapi-style-guide.md` — OpenAPI 命名規約
 - `docs/api-driven-development/security-and-privacy.md` — セキュリティ詳細
 - `docs/adr/` — アーキテクチャ判断記録
+- `docs/adr/0017-loop-engineer-approval-boundary.md` — Loop EngineerのHOLDと人間承認境界
+- `docs/adr/0018-terminal-hold-independent-successor.md` — Round 5凍結を維持した一度限りの独立後継program
 - `docs/issues/` — Issue の永続コピー
 - `docs/perf/` — パフォーマンスベースラインと計測手引き
 

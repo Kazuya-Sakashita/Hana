@@ -13,7 +13,7 @@
 | --- | ---: |
 | `todo` | 5 |
 | `in_progress` | 1 |
-| `review` | 9 |
+| `review` | 10 |
 | `done` | 150 |
 | `blocked` | 7 |
 
@@ -48,6 +48,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-169` | `#348` | `review` | P0 | S | App preflightのpnpm参照先をtrusted checkoutへ固定する | - |
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
+| `ISSUE-193` | `#390` | `review` | P0 | M | recovery-protocol-v2への一度限りの移行ガバナンスを定義する | - |
 
 ## Blocked Or Needs Human Decision
 
@@ -237,6 +238,7 @@ ready条件: `status: todo`、sizeがS/M、`blocked_by` が空またはすべて
 | `ISSUE-171` | `#352` | `review` | P0 | S | Gate evaluationをJSON-onlyで後段へ渡す | - |
 | `ISSUE-173` | `#356` | `review` | P0 | M | レビュー上限の人間承認例外をSHAへ束縛する | - |
 | `ISSUE-185` | `#375` | `blocked` | P0 | M | ProductEventの退会purgeとHMAC key lifecycleを実装する | ISSUE-152 |
+| `ISSUE-193` | `#390` | `review` | P0 | M | recovery-protocol-v2への一度限りの移行ガバナンスを定義する | - |
 
 ## Status Rules
 
