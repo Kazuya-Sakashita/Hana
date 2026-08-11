@@ -4,6 +4,7 @@
   "title": "Hana Terminal HOLD recovery evidence v1",
   "oneOf": [
     { "$ref": "#/$defs/lineageAnchor" },
+    { "$ref": "#/$defs/ownerAuthorizationReceipt" },
     { "$ref": "#/$defs/approvalReceipt" },
     { "$ref": "#/$defs/lineageEvent" },
     { "$ref": "#/$defs/progressionEvent" },
@@ -17,8 +18,10 @@
       "issue_178_entry_gate",
       "issue_178_non_privileged_implementation",
       "issue_179_non_privileged_bootstrap",
-      "runtime_activation_gate",
-      "privileged_recovery"
+      "runtime_pre_activation_gate",
+      "privileged_authority_activation",
+      "pre_success_gate",
+      "success_projection"
     ],
     "hold_scopes": {
       "issue_177_policy": [
@@ -27,13 +30,60 @@
         "independent_policy_review_missing"
       ],
       "issue_178_entry_gate": ["issue_363_not_synchronized", "issue_363_human_readback_missing"],
-      "runtime_activation_gate": [
+      "runtime_pre_activation_gate": [
         "solo_owner_authorization_missing",
         "specialist_evaluation_receipt_invalid",
+        "inventory_incomplete",
+        "atomic_main_freshness_missing"
+      ],
+      "pre_success_gate": [
         "writer_barrier_missing",
         "inventory_incomplete",
         "atomic_main_freshness_missing"
       ]
+    },
+    "stage_capabilities": {
+      "runtime_pre_activation_gate": {
+        "mode": "verify_only",
+        "requires_preexisting_progression_or_attempt": false,
+        "forbids": [
+          "succession_consumption",
+          "progression_creation",
+          "attempt_creation",
+          "check_patch"
+        ]
+      },
+      "privileged_authority_activation": {
+        "mode": "single_compare_and_set",
+        "allows": ["succession_consumption", "progression_creation", "attempt_creation"],
+        "forbids": ["success_check_patch"]
+      },
+      "pre_success_gate": {
+        "mode": "verify_and_fence",
+        "requires": ["active_progression", "started_attempt"],
+        "allows": ["failure_check_patch"],
+        "forbids": ["success_check_patch"]
+      },
+      "success_projection": {
+        "mode": "exact_bound_success",
+        "requires": [
+          "finding_free_progression",
+          "succeeded_attempt",
+          "completed_writer_barrier",
+          "fresh_inventory",
+          "atomic_main_freshness"
+        ]
+      }
+    },
+    "enforcement_ownership": {
+      "record_shape": "json_schema_2020_12",
+      "cross_record_contract": "normative_x_hana_invariants",
+      "reference_validator_test": "tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts",
+      "runtime_implementation": {
+        "issue_178": ["anchor_and_lineage_inventory", "authorization_and_succession"],
+        "issue_179": ["progression_and_attempt", "writer_barrier_and_projection"]
+      },
+      "json_schema_record_validation_alone_is_sufficient": false
     },
     "governance": {
       "mode": "solo_maintainer",
@@ -113,7 +163,36 @@
         "approval_payload.requester_principal_id",
         "approval_payload.issuer_principal_id"
       ],
-      "reject_expired_at_evaluation": true
+      "reject_expired_at_evaluation": true,
+      "require_issued_at_or_before_evaluation": true,
+      "finding_free_requires": {
+        "decision": "go",
+        "p0_count": 0,
+        "p1_count": 0
+      }
+    },
+    "lineage_anchor_binding": {
+      "canonicalization": "RFC8785",
+      "digest": "sha256",
+      "exactly_one_anchor_per_lineage": true,
+      "all_record_references_resolve": true,
+      "event_fields_equal_anchor": ["target_issue", "target_pr", "succession_id"],
+      "max_successions_per_lineage": 1
+    },
+    "owner_authorization": {
+      "canonicalization": "RFC8785",
+      "digest": "sha256",
+      "record_selection": "one_valid_unexpired_owner_authorization_receipt",
+      "required_bindings": [
+        "lineage_id",
+        "lineage_anchor_digest_sha256",
+        "authorization_payload.target_issue",
+        "authorization_payload.target_pr",
+        "authorization_payload.main_sha",
+        "authorization_payload.target_head_sha",
+        "authorization_payload.max_round"
+      ],
+      "output_field": "owner_authorization_digest_sha256"
     },
     "approval_set_digest": {
       "canonicalization": "RFC8785",
@@ -150,18 +229,34 @@
           "main_sha": "approval_payload.main_sha",
           "target_head_sha": "approval_payload.target_head_sha",
           "succession_id": "approval_payload.succession_id"
+        },
+        "writer_fence_event": {
+          "lineage_id": "lineage_id",
+          "target_pr": "approval_payload.target_pr",
+          "main_sha": "approval_payload.main_sha",
+          "target_head_sha": "approval_payload.target_head_sha",
+          "succession_id": "approval_payload.succession_id"
+        },
+        "projection_event": {
+          "lineage_id": "lineage_id",
+          "target_pr": "approval_payload.target_pr",
+          "main_sha": "approval_payload.main_sha",
+          "target_head_sha": "approval_payload.target_head_sha",
+          "succession_id": "approval_payload.succession_id"
         }
       }
     },
     "lineage_lifecycle": {
-      "partition_by": ["lineage_id", "succession_id"],
+      "partition_by": ["lineage_id"],
       "binding_fields": [
         "authority_id",
+        "succession_id",
         "target_issue",
         "target_pr",
         "main_sha",
         "target_head_sha",
-        "approval_set_digest_sha256"
+        "approval_set_digest_sha256",
+        "owner_authorization_digest_sha256"
       ],
       "authority_transitions": {
         "absent": ["recovery_authority_issued"],
@@ -176,7 +271,7 @@
       },
       "consume_requires": ["active_recovery_authority", "prior_succession_issued"],
       "consumption_atomicity": "compare_and_set_unconsumed_to_consumed",
-      "max_consumptions_per_lineage_succession": 1
+      "max_consumptions_per_lineage": 1
     },
     "progression_lifecycle": {
       "partition_by": ["lineage_id", "progression_id"],
@@ -187,17 +282,21 @@
         "target_pr",
         "target_head_sha",
         "round",
-        "approval_set_digest_sha256"
+        "predecessor_progression_id",
+        "approval_set_digest_sha256",
+        "owner_authorization_digest_sha256"
       ],
       "issuance_requires_consumed_succession": {
         "partition_by": ["lineage_id", "succession_id"],
-        "same_fields": [
-          "authority_id",
-          "target_issue",
-          "target_pr",
-          "target_head_sha",
-          "approval_set_digest_sha256"
-        ]
+        "same_fields": ["authority_id", "succession_id", "target_issue", "target_pr"]
+      },
+      "successor_requires": {
+        "predecessor_progression_id": true,
+        "predecessor_round_state": "completed_with_findings",
+        "predecessor_authority": "revoked",
+        "predecessor_fencing": "not_active",
+        "target_head_sha": "different_from_predecessor",
+        "round": "predecessor_round_plus_one"
       },
       "authority_transitions": {
         "absent": ["progression_authority_issued"],
@@ -228,7 +327,8 @@
         "target_pr",
         "target_head_sha",
         "round",
-        "approval_set_digest_sha256"
+        "approval_set_digest_sha256",
+        "owner_authorization_digest_sha256"
       ],
       "start_requires_active_progression": {
         "partition_by": ["lineage_id", "progression_id"],
@@ -238,7 +338,9 @@
           "target_issue",
           "target_pr",
           "target_head_sha",
-          "round"
+          "round",
+          "approval_set_digest_sha256",
+          "owner_authorization_digest_sha256"
         ],
         "round_state": "finding_free"
       }
@@ -270,11 +372,16 @@
       "lineage_id",
       "lineage_anchor_digest_sha256",
       "barrier_id",
+      "authority_id",
+      "succession_id",
       "target_pr",
       "target_head_sha",
       "main_sha",
       "progression_id",
       "attempt_id",
+      "round",
+      "approval_set_digest_sha256",
+      "owner_authorization_digest_sha256",
       "writer_generation",
       "fencing_token_sha256",
       "credential_owner_id",
@@ -297,11 +404,16 @@
         "lineage_id",
         "lineage_anchor_digest_sha256",
         "barrier_id",
+        "authority_id",
+        "succession_id",
         "target_pr",
         "target_head_sha",
         "main_sha",
         "progression_id",
         "attempt_id",
+        "round",
+        "approval_set_digest_sha256",
+        "owner_authorization_digest_sha256",
         "writer_generation",
         "fencing_token_sha256",
         "credential_owner_id",
@@ -317,11 +429,16 @@
     "unknown_success_without_valid_barrier": "hold_activation_blocked",
     "projection_required_bindings": [
       "barrier_id",
+      "authority_id",
+      "succession_id",
       "target_pr",
       "target_head_sha",
       "main_sha",
       "progression_id",
       "attempt_id",
+      "round",
+      "approval_set_digest_sha256",
+      "owner_authorization_digest_sha256",
       "github_app_id",
       "check_name",
       "check_run_id",
@@ -339,6 +456,7 @@
     "attemptId": { "type": "string", "pattern": "^attempt_[a-f0-9]{32}$" },
     "approvalId": { "type": "string", "pattern": "^approval_[a-f0-9]{32}$" },
     "approvalRunId": { "type": "string", "pattern": "^approvalrun_[a-f0-9]{32}$" },
+    "authorizationId": { "type": "string", "pattern": "^authorization_[a-f0-9]{32}$" },
     "verifierId": { "type": "string", "pattern": "^verifier_[a-f0-9]{32}$" },
     "credentialOwnerId": { "type": "string", "pattern": "^credential_[a-f0-9]{32}$" },
     "barrierId": { "type": "string", "pattern": "^barrier_[a-f0-9]{32}$" },
@@ -426,6 +544,46 @@
         "finding_digest"
       ]
     },
+    "ownerAuthorizationPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target_issue": { "$ref": "#/$defs/issueNumber" },
+        "target_pr": { "$ref": "#/$defs/prNumber" },
+        "main_sha": { "$ref": "#/$defs/gitSha" },
+        "target_head_sha": { "$ref": "#/$defs/gitSha" },
+        "max_round": { "const": 5 },
+        "decision": { "const": "authorize" },
+        "owner_principal_kind": { "const": "human" },
+        "owner_principal_id": { "$ref": "#/$defs/principalId" },
+        "environment": { "const": "hana-merge-human-approval" },
+        "authorization_id": { "$ref": "#/$defs/authorizationId" },
+        "workflow_run_id": { "type": "integer", "minimum": 1 },
+        "check_run_id": { "type": "integer", "minimum": 1 },
+        "check_name": { "const": "review-round-exception" },
+        "issued_at": { "$ref": "#/$defs/timestamp" },
+        "expires_at": { "$ref": "#/$defs/timestamp" },
+        "nonce_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "required": [
+        "target_issue",
+        "target_pr",
+        "main_sha",
+        "target_head_sha",
+        "max_round",
+        "decision",
+        "owner_principal_kind",
+        "owner_principal_id",
+        "environment",
+        "authorization_id",
+        "workflow_run_id",
+        "check_run_id",
+        "check_name",
+        "issued_at",
+        "expires_at",
+        "nonce_sha256"
+      ]
+    },
     "approvalPayload": {
       "type": "object",
       "additionalProperties": false,
@@ -436,6 +594,10 @@
         "target_head_sha": { "$ref": "#/$defs/gitSha" },
         "succession_id": { "$ref": "#/$defs/successionId" },
         "finding_digest": { "$ref": "#/$defs/sha256" },
+        "decision": { "enum": ["go", "hold"] },
+        "p0_count": { "type": "integer", "minimum": 0 },
+        "p1_count": { "type": "integer", "minimum": 0 },
+        "evaluation_digest_sha256": { "$ref": "#/$defs/sha256" },
         "role": { "enum": ["security", "operations", "repository_owner"] },
         "actor_principal_kind": { "const": "agent" },
         "actor_principal_id": { "$ref": "#/$defs/principalId" },
@@ -454,6 +616,10 @@
         "target_head_sha",
         "succession_id",
         "finding_digest",
+        "decision",
+        "p0_count",
+        "p1_count",
+        "evaluation_digest_sha256",
         "role",
         "actor_principal_kind",
         "actor_principal_id",
@@ -464,6 +630,22 @@
         "issued_at",
         "expires_at",
         "nonce_sha256"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "decision": { "const": "go" },
+            "p0_count": { "const": 0 },
+            "p1_count": { "const": 0 }
+          }
+        },
+        {
+          "properties": { "decision": { "const": "hold" } },
+          "anyOf": [
+            { "properties": { "p0_count": { "minimum": 1 } } },
+            { "properties": { "p1_count": { "minimum": 1 } } }
+          ]
+        }
       ]
     },
     "verificationReceipt": {
@@ -481,6 +663,21 @@
         "verification_receipt_digest_sha256",
         "verification_status"
       ]
+    },
+    "ownerAuthorizationReceipt": {
+      "allOf": [
+        { "$ref": "#/$defs/recordReference" },
+        {
+          "type": "object",
+          "properties": {
+            "record_type": { "const": "owner_authorization_receipt" },
+            "authorization_payload": { "$ref": "#/$defs/ownerAuthorizationPayload" },
+            "verification_receipt": { "$ref": "#/$defs/verificationReceipt" }
+          },
+          "required": ["record_type", "authorization_payload", "verification_receipt"]
+        }
+      ],
+      "unevaluatedProperties": false
     },
     "approvalReceipt": {
       "allOf": [
@@ -520,7 +717,8 @@
             "target_pr": { "$ref": "#/$defs/prNumber" },
             "main_sha": { "$ref": "#/$defs/gitSha" },
             "target_head_sha": { "$ref": "#/$defs/gitSha" },
-            "approval_set_digest_sha256": { "$ref": "#/$defs/sha256" }
+            "approval_set_digest_sha256": { "$ref": "#/$defs/sha256" },
+            "owner_authorization_digest_sha256": { "$ref": "#/$defs/sha256" }
           },
           "required": [
             "record_type",
@@ -531,7 +729,8 @@
             "target_pr",
             "main_sha",
             "target_head_sha",
-            "approval_set_digest_sha256"
+            "approval_set_digest_sha256",
+            "owner_authorization_digest_sha256"
           ]
         }
       ],
@@ -555,6 +754,7 @@
               ]
             },
             "progression_id": { "$ref": "#/$defs/progressionId" },
+            "predecessor_progression_id": { "$ref": "#/$defs/progressionId" },
             "authority_id": { "$ref": "#/$defs/authorityId" },
             "succession_id": { "$ref": "#/$defs/successionId" },
             "target_issue": { "$ref": "#/$defs/issueNumber" },
@@ -565,7 +765,8 @@
               "enum": ["evaluation_completed", "completed_with_findings", "finding_free"]
             },
             "writer_generation": { "$ref": "#/$defs/writerGeneration" },
-            "approval_set_digest_sha256": { "$ref": "#/$defs/sha256" }
+            "approval_set_digest_sha256": { "$ref": "#/$defs/sha256" },
+            "owner_authorization_digest_sha256": { "$ref": "#/$defs/sha256" }
           },
           "required": [
             "record_type",
@@ -577,7 +778,8 @@
             "target_pr",
             "target_head_sha",
             "round",
-            "approval_set_digest_sha256"
+            "approval_set_digest_sha256",
+            "owner_authorization_digest_sha256"
           ],
           "allOf": [
             {
@@ -595,6 +797,11 @@
               },
               "then": { "required": ["writer_generation"] },
               "else": { "not": { "required": ["writer_generation"] } }
+            },
+            {
+              "if": { "properties": { "round": { "const": 1 } } },
+              "then": { "not": { "required": ["predecessor_progression_id"] } },
+              "else": { "required": ["predecessor_progression_id"] }
             }
           ]
         }
@@ -627,6 +834,7 @@
             "main_sha": { "$ref": "#/$defs/gitSha" },
             "round": { "type": "integer", "minimum": 1, "maximum": 5 },
             "approval_set_digest_sha256": { "$ref": "#/$defs/sha256" },
+            "owner_authorization_digest_sha256": { "$ref": "#/$defs/sha256" },
             "attempt_id": { "$ref": "#/$defs/attemptId" },
             "run_id": { "type": "integer", "minimum": 1 },
             "run_attempt": { "type": "integer", "minimum": 1 },
@@ -644,6 +852,7 @@
             "main_sha",
             "round",
             "approval_set_digest_sha256",
+            "owner_authorization_digest_sha256",
             "attempt_id",
             "run_id",
             "run_attempt",
@@ -676,11 +885,16 @@
               ]
             },
             "barrier_id": { "$ref": "#/$defs/barrierId" },
+            "authority_id": { "$ref": "#/$defs/authorityId" },
+            "succession_id": { "$ref": "#/$defs/successionId" },
             "target_pr": { "$ref": "#/$defs/prNumber" },
             "target_head_sha": { "$ref": "#/$defs/gitSha" },
             "main_sha": { "$ref": "#/$defs/gitSha" },
             "progression_id": { "$ref": "#/$defs/progressionId" },
             "attempt_id": { "$ref": "#/$defs/attemptId" },
+            "round": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "approval_set_digest_sha256": { "$ref": "#/$defs/sha256" },
+            "owner_authorization_digest_sha256": { "$ref": "#/$defs/sha256" },
             "writer_generation": { "$ref": "#/$defs/writerGeneration" },
             "fencing_token_sha256": { "$ref": "#/$defs/sha256" },
             "credential_owner_id": { "$ref": "#/$defs/credentialOwnerId" },
@@ -695,11 +909,16 @@
             "record_type",
             "event_type",
             "barrier_id",
+            "authority_id",
+            "succession_id",
             "target_pr",
             "target_head_sha",
             "main_sha",
             "progression_id",
             "attempt_id",
+            "round",
+            "approval_set_digest_sha256",
+            "owner_authorization_digest_sha256",
             "writer_generation",
             "fencing_token_sha256",
             "credential_owner_id",
@@ -776,11 +995,16 @@
             "record_type": { "const": "projection_event" },
             "event_type": { "const": "check_projection_recorded" },
             "barrier_id": { "$ref": "#/$defs/barrierId" },
+            "authority_id": { "$ref": "#/$defs/authorityId" },
+            "succession_id": { "$ref": "#/$defs/successionId" },
             "target_pr": { "$ref": "#/$defs/prNumber" },
             "target_head_sha": { "$ref": "#/$defs/gitSha" },
             "main_sha": { "$ref": "#/$defs/gitSha" },
             "progression_id": { "$ref": "#/$defs/progressionId" },
             "attempt_id": { "$ref": "#/$defs/attemptId" },
+            "round": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "approval_set_digest_sha256": { "$ref": "#/$defs/sha256" },
+            "owner_authorization_digest_sha256": { "$ref": "#/$defs/sha256" },
             "github_app_id": { "type": "integer", "minimum": 1 },
             "check_name": { "const": "merge-eligibility" },
             "check_run_id": { "type": "integer", "minimum": 1 },
@@ -802,11 +1026,16 @@
             "record_type",
             "event_type",
             "barrier_id",
+            "authority_id",
+            "succession_id",
             "target_pr",
             "target_head_sha",
             "main_sha",
             "progression_id",
             "attempt_id",
+            "round",
+            "approval_set_digest_sha256",
+            "owner_authorization_digest_sha256",
             "github_app_id",
             "check_name",
             "check_run_id",

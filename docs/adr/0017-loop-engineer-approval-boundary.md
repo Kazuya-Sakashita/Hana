@@ -155,12 +155,18 @@ round、actionable finding件数、必須check名とstatus、固定された最�
 `unevaluatedProperties`を禁止し、次のrecordだけを許可する。
 
 - `lineage_anchor`: root / terminalのIssue、PR、base / head SHA、target、1回限りのsuccession、finding集合
+- `owner_authorization_receipt`: solo Ownerのexact-boundな意図と保護Environment / Check証跡
 - `approval_receipt`: 署名対象digest、trusted verifier receipt、検証済みactor / requester / issuer principal
 - `lineage_event`: 復旧権限とsuccessionの発行、消費、失効
 - `progression_event`: progression authority、round state、fencing generationの発行、失効
 - `attempt_event`: start、success、failure、cancel、timeout
 - `writer_fence_event`: generation取得、下位writer遮断、drain、quiescence、failure投影とreadback
 - `projection_event`: current main / head / progression / attemptから固定`merge-eligibility`への投影
+
+JSON Schemaは各recordのshapeを検証し、`x-hana-invariants`をcross-record集約契約の規範とする。
+JSON Schemaを1 recordずつ通すだけでは十分と扱わない。本Issueのcontract testは参照aggregate validatorとして
+正負例を固定し、ISSUE-178がanchor / lineage / authorization / succession、ISSUE-179がprogression / attempt /
+writer barrier / projectionのruntime enforcementを実装する。
 
 lineage anchorは可変なmain SHA / target head SHAを含めない。その他のrecordは`record_reference`で
 `lineage_id`と`lineage_anchor_digest_sha256`へ束縛する。projectionは`progression_id`、`attempt_id`、
@@ -261,30 +267,42 @@ progression authority発行前にround stateやfencing generationを記録せず
 `round_state_recorded` eventだけ、`writer_generation`はfencing generationの発行・失効eventだけに持たせる。
 失効後の利用、先行eventのない後継、重複発行・消費、event ID / sequence重複は`HOLD`とする。
 
+各agent receiptは`decision=go | hold`、`p0_count`、`p1_count`、status-onlyな評価digestを署名対象に含める。
+`go`はP0 / P1がともに0の場合だけ、`hold`は少なくとも一方が1以上の場合だけ許可する。
 承認集合digestは、有効期限内かつ検証済みの`security`、`operations`、`repository_owner`を各1件だけ選び、
 roleを`operations`、`repository_owner`、`security`の順に並べ、各`approval_receipt` record全体をRFC 8785で
 canonicalizeした配列のSHA-256とする。この値だけを`approval_set_digest_sha256`として後続eventへ渡し、
 部分field、入力順、未検証receipt、重複roleから別digestを作ることを禁止する。
 
-lineage lifecycleは`lineage_id + succession_id`、progression lifecycleは`lineage_id + progression_id`、
+solo Owner authorizationはagent評価と別の`owner_authorization_receipt`にし、Issue / PR / current main /
+target head / `max_round`、Environment、workflow run、専用App Check Runへ束縛する。receipt全体をRFC 8785で
+canonicalizeしたSHA-256を`owner_authorization_digest_sha256`とし、progression、attempt、writer barrier、
+projectionまで同じ値を再掲する。Owner authorizationをagent評価または`finding_free`の代替にしない。
+
+lineage lifecycleは`lineage_id`、progression lifecycleは`lineage_id + progression_id`、
 attempt lifecycleは`lineage_id + attempt_id`でそれぞれpartitionする。同一partition内ではauthority、succession、
-target Issue / PR / head、round、approval集合の束縛を不変にする。progression authorityの発行は、同じlineage、
-succession、authority、target、approval集合で先に`succession_consumed`が記録されている場合だけ許可する。
+target Issue / PRの束縛を不変にする。lineageごとにRFC 8785でcanonicalizeしたanchorを正確に1件だけ許可し、
+すべてのrecord referenceのanchor digest、target Issue / PR、successionをanchorへ完全一致させる。successionは
+caller指定IDごとではなくlineage全体で1件、消費も1回だけとする。progression authorityの発行は、同じlineage、
+succession、authority、targetで先に`succession_consumed`が記録されている場合だけ許可するが、消費時のmain、
+head、approval集合を新progressionへ継承しない。
 attempt開始は同じauthority、succession、target、head、roundを持つactiveなprogressionが`finding_free`に
-到達した後だけ許可する。attemptのapproval集合はreceipt内のlineage、succession、target、main / headと一致させ、
+到達した後だけ許可する。attemptのapproval集合とOwner authorizationはreceipt内のlineage、succession、target、main / headと一致させ、
 main移動時のfreshな集合を許可しつつ、別partitionのeventや別targetの集合を接合して成立させない。
 
 attempt tuple（run ID、run attempt、OIDC `jti` hash）はlineage内で正確に1つの`attempt_id`へ対応させる。
 異なるattempt IDによる同じtupleの再利用も、同じattempt ID内のtuple変更と同様に`HOLD`とする。
 
 round stateは`evaluation_completed`、`completed_with_findings`、`finding_free`の3状態とする。必要roleの
-評価が完了した時点で`evaluation_completed`、actionable findingが1件以上なら
+有効なreceiptが完了した時点で`evaluation_completed`、いずれかが`hold`またはP0 / P1が1件以上なら
 `completed_with_findings`、0件なら`finding_free`へ進む。Finding修正後の新headは、旧headの
 `completed_with_findings`から`round + 1`の新progressionへ進める。この遷移に旧roundのsuccessや
 `finding_free`を要求しないが、`completed_with_findings`自体はmerge適格性に使用しない。
 `completed_with_findings`と`finding_free`は必ず同一progressionの`evaluation_completed`直後の二択とし、
 直接記録、両方の記録、同じ終端状態の再記録を拒否する。同一lineageで次progressionを発行する前に旧progression
-authorityを失効させ、activeなprogressionを同時に複数持たない。
+authorityとfencingを失効させ、activeなprogressionを同時に複数持たない。2巡目以降は
+`predecessor_progression_id`を必須にし、predecessorが`completed_with_findings`、失効済み、別headであり、
+roundが正確に`predecessor round + 1`の場合だけ発行する。
 
 mainだけが移動した場合はfreshなOwner authorization、3役agent評価と新attemptにより同じprogressionを再試行できる。headが
 移動した場合は旧headのprogression authorityとfencing generationを先に失効させ、freshなOwner authorization、3役agent評価と
@@ -301,8 +319,10 @@ Rulesetへ提示する最終状態は、Hana専用GitHub Appが発行する固�
 最新の完全inventoryから導出した現在値である。
 
 `success`へ投影できるのは、immutable lineage anchor、消費済みの1回限りのsuccession、現在head専用の
-progression authorityとattempt、solo Owner authorization、3役agent evaluation receipt、`finding_free`、必須Checkが完全一致する場合だけとする。
+progression authorityと成功attempt、solo Owner authorization、3役すべてが`go`かつP0 / P1が0のagent
+evaluation receipt、`finding_free`、quiescence済みwriter barrier、必須Checkが完全一致する場合だけとする。
 各`projection_event`はtarget PR / headに加えて`main_sha`、`progression_id`、`attempt_id`を直接持ち、
+authority、succession、round、agent approval集合digest、Owner authorization digest、barrier digestを
 projection生成時の完全inventoryと同じrecordへ束縛する。`check_status=success`は
 `check_reason=finding_free`とだけ組み合わせ、stale inventory、rollback、unknown-success recovery、
 activation blockedは必ず`check_status=failure`にする。
@@ -316,7 +336,7 @@ credential owner、App ID、check name、Check Run IDを再掲する。generatio
 RFC 8785でcanonicalizeしてSHA-256を計算し、`completed_barrier_digest_sha256`としてquiescence以降のeventと
 projectionへ束縛する。
 generationが一意でない、競合writerを遮断できない、drainまたはquiescenceを証明できない場合は
-`runtime_activation_gate`を`HOLD`とする。
+`pre_success_gate`を`HOLD`とする。
 
 main freshnessは、success遷移とmergeの間をGitHub merge queue SHA、strict up-to-date条件、または
 同等のGitHub側原子的条件で束縛する。main変更eventの購読と直前readbackだけでは完全な原子性を
@@ -336,20 +356,22 @@ Check Runは少なくともrepository、target PR、target head SHA、GitHub App
 同一Check Run IDのsuccessをreadbackした場合だけ、同じIDを`failure`へ更新して同一IDのfailureをreadbackし、
 controller停止後に同じIDの最終failureを再確認する。
 このbarrierを完了できない、または上位generationでfailure化して確認できない場合は
-`runtime_activation_gate`を`HOLD`とする。
+`pre_success_gate`を`HOLD`とする。
 
 #### 11.5 順序、信頼境界、停止条件
 
 回復順は次のstageで固定する。前stageを満たすまで後stageへ進まず、実装着手と特権activationを混同しない。
 
-| stage                                     | entry / exit gate                                                                                                            | 許可する操作                                                                              |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `issue_177_policy`                        | ISSUE-177をmainへ入れる                                                                                                      | 文書と契約testだけ。権限発行、Check更新、runtime安全性の主張は禁止                        |
-| `issue_178_entry_gate`                    | GitHub Issue #363の本文、AC、依存、ADR参照を本方針へ同期し、人間がreadbackする                                               | Issue同期だけ。本Issueでは実施しない                                                      |
-| `issue_178_non_privileged_implementation` | entry gate後、ISSUE-178をmainへ入れる                                                                                        | trusted-mainの検証器、authority、fencing、invalidatorを実装するが、権限は発行・消費しない |
-| `issue_179_non_privileged_bootstrap`      | ISSUE-178 main後、最新mainからISSUE-179の文書・コード・Draft PR / headを確定する                                             | Check更新、権限発行・消費、success、merge予約を行わない                                   |
-| `runtime_activation_gate`                 | freshなsolo Owner authorization、3役agent evaluation receipt、完全inventory、writer barrier、atomic main freshnessを確認する | 検証のみ。1件でも未達なら特権操作は禁止                                                   |
-| `privileged_recovery`                     | activation gate通過後                                                                                                        | 1回限りのsuccession消費、head専用progression / attempt、固定Check更新を許可               |
+| stage                                     | entry / exit gate                                                                                                                 | 許可する操作                                                                              |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `issue_177_policy`                        | ISSUE-177をmainへ入れる                                                                                                           | 文書と契約testだけ。権限発行、Check更新、runtime安全性の主張は禁止                        |
+| `issue_178_entry_gate`                    | GitHub Issue #363の本文、AC、依存、ADR参照を本方針へ同期し、人間がreadbackする                                                    | Issue同期だけ。本Issueでは実施しない                                                      |
+| `issue_178_non_privileged_implementation` | entry gate後、ISSUE-178をmainへ入れる                                                                                             | trusted-mainの検証器、authority、fencing、invalidatorを実装するが、権限は発行・消費しない |
+| `issue_179_non_privileged_bootstrap`      | ISSUE-178 main後、最新mainからISSUE-179の文書・コード・Draft PR / headを確定する                                                  | Check更新、権限発行・消費、success、merge予約を行わない                                   |
+| `runtime_pre_activation_gate`             | freshなsolo Owner authorization、3役agent evaluation receipt、完全inventory、exclusive writer能力、atomic freshness能力を確認する | 検証のみ。1件でも未達なら権限発行は禁止                                                   |
+| `privileged_authority_activation`         | pre-activation gate通過後                                                                                                         | 1回限りのsuccession消費とhead専用progression / attempt作成だけを許可。successは禁止       |
+| `pre_success_gate`                        | active progression / attemptへfencingを取得し、drain / quiescence、完全inventory、current main / headを再確認する                 | failure投影と検証だけを許可。successは禁止                                                |
+| `success_projection`                      | pre-success gateの同じbarrier、decision集合、Owner authorization、attempt成功を完全一致でreadbackする                             | 固定`merge-eligibility`のsuccess投影だけを許可                                            |
 
 #363の同期と人間readbackが完了する前にISSUE-178を実装しない。
 ISSUE-178自身のPRは新しい権限で自己承認または自己mergeしない。ISSUE-179はPR #361のコード、commit、review、
@@ -364,7 +386,7 @@ main / head、succession、finding digest、署名対象payload digest、trusted
 3件でrecord reference、target、main / head、succession、finding digest、approval run、requester / issuerを
 同一にし、actor集合とrequester / issuer集合を非交差にする。role、actor、approval ID、nonceの重複、
 requester / issuerとのcross-record自己承認、replay、期限切れ、
-署名またはreceipt不正、未知field、値の不一致を拒否して`runtime_activation_gate`を`HOLD`にする。
+署名またはreceipt不正、未知field、値の不一致を拒否して`runtime_pre_activation_gate`を`HOLD`にする。
 
 Owner authorizationは`can_admins_bypass=false`の保護Environment、GitHub署名付きOIDC、専用App Checkを
 Issue / PR / main / head / 最大roundへ一致させる。`prevent_self_review=false`はsolo modeではOwner本人が
@@ -378,7 +400,7 @@ lineage / progression / attempt、fencing、atomic freshness、固定projection�
 どちらもGitHub App、Environment、secret、Ruleset、
 branch protection、repository settingsを変更しない。Owner authorizationまたは3役agent評価が揃わない場合、
 復旧権限の自己利用、2回目のsuccession、別targetへの転用、対象不一致、
-期限切れ、別App、未知field、不完全inventoryのいずれかがある場合は`runtime_activation_gate`を
+期限切れ、別App、未知field、不完全inventoryのいずれかがある場合は`runtime_pre_activation_gate`以降を
 `HOLD`として特権操作だけを停止する。
 
 `hana-merge-human-approval`は`prevent_self_review=false`、`can_admins_bypass=false`をsolo modeの固定値とする。
@@ -387,7 +409,8 @@ Owner自身のEnvironment承認は独立reviewではなく、exact-boundな例�
 
 HOLDはstage scopeを持つ。ISSUE-177文書・schema・契約testの具体的findingは`issue_177_policy`を止める。
 #363の未同期またはreadback不足は`issue_178_entry_gate`を止める。solo Owner authorization、runtimeの3役agent receipt、
-完全inventory、writer barrier、atomic freshnessの不足は`runtime_activation_gate`以降だけを止める。
+完全inventoryまたはauthorization不足は`runtime_pre_activation_gate`以降、writer barrierまたは直前freshnessの
+不足は`pre_success_gate`以降だけを止める。
 後続stageの未達をISSUE-177の再review理由にせず、前stageのHOLDを後stageで迂回しない。
 
 ISSUE-177のreview gateは、Repository Ownerの明示GOと、Security、Operations、Repository Owner観点を
@@ -427,7 +450,7 @@ GitHub上の保護設定、署名付きOIDC、専用App、完全inventory、Rule
 
 rollback開始時にexclusive writer generationまたはfencing tokenを取得できない場合、success PATCH応答不明を
 上位generationでfailure化できない場合、drain / quiescenceを証明できない場合、途中または最終readbackで
-failureを確認できない場合は`runtime_activation_gate`を`HOLD`のまま人間判断を要求する。いずれの場合も新たな後継Issue、第6巡、追加reviewer、
+failureを確認できない場合は`pre_success_gate`を`HOLD`のまま人間判断を要求する。いずれの場合も新たな後継Issue、第6巡、追加reviewer、
 旧証跡再利用で回復を続けない。
 
 ## Consequences

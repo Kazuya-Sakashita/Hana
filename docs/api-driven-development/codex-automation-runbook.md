@@ -296,9 +296,14 @@ HOLD回避を目的とする変更は常に`HOLD`とする。source headへ新�
    新しい権限で自己承認または自己mergeせず、権限を発行・消費しない。
 4. `issue_179_non_privileged_bootstrap`: ISSUE-179 / `#364`を最新`origin/main`から開始し、文書・コードを
    作成してDraft PRを開き、target PR / headを確定する。Check更新、権限発行・消費、success、merge予約は禁止する。
-5. `runtime_activation_gate`: freshなsolo Owner authorization、3役agent evaluation receipt、完全inventory、
-   writer barrier、GitHub側atomic main freshnessを検証する。未達なら後続だけを`HOLD`にする。
-6. `privileged_recovery`: gate通過後だけ1回限りのsuccession、head専用progression / attempt、Check更新を許可する。
+5. `runtime_pre_activation_gate`: freshなsolo Owner authorization、3役agent evaluation receipt、完全inventory、
+   exclusive writer能力、GitHub側atomic freshness能力を検証する。未達なら後続だけを`HOLD`にする。
+6. `privileged_authority_activation`: pre-activation通過後だけ1回限りのsuccessionを消費し、head専用progression /
+   attemptを作成する。success投影は禁止する。
+7. `pre_success_gate`: active progression / attemptへfencingを取得し、drain / quiescence、完全inventory、current
+   main / headを再確認する。failure投影以外のCheck更新は禁止する。
+8. `success_projection`: 同じbarrier、decision集合、Owner authorization、成功attemptをreadbackした後だけ固定
+   `merge-eligibility`へsuccessを投影する。
 
 Hanaは人間のRepository Owner 1名による`solo_maintainer` modeで運用する。
 `hana-merge-human-approval`は`prevent_self_review=false`、`can_admins_bypass=false`を固定し、同一Ownerの承認を
@@ -349,20 +354,27 @@ Security、Operations、Repository Ownerを別roleとして必須にし、同じ
 `approval_payload`だけであり、verification metadataを含めない。3件でrecord reference、target、main / head、
 succession、finding digest、approval run、requester / issuerを同一にし、actor集合との交差を拒否する。
 role、actor、approval ID、nonceの重複、cross-record自己承認、replay、期限切れ、署名またはreceipt不正、
-未知field、不一致を拒否する。
+未知field、不一致を拒否する。各receiptは`decision=go | hold`、P0 / P1件数、status-onlyな評価digestを持ち、
+`go`はP0 / P1がともに0、`hold`は少なくとも一方が1以上の場合だけ許可する。
 
 Owner authorizationは保護Environment、GitHub署名付きOIDC、専用App CheckをIssue / PR / main / head /
-最大roundへ束縛する。3役agent評価はroleごとのfresh context、distinct actor、署名、replay防止を実行時に
+最大roundへ束縛した独立`owner_authorization_receipt`として保存し、receipt全体のcanonical digestを
+progression、attempt、writer barrier、projectionへ再掲する。3役agent評価はroleごとのfresh context、distinct actor、署名、replay防止を実行時に
 検証する。Owner authorizationまたは評価receiptをreadbackできるまでactivationをblockedにする。
 `solo_maintainer` modeは人間のseparation of duties、悪意あるOwner、侵害されたOwner identityへの耐性を
 提供せず、その安全性を主張しない。
 
 機械可読allowlistの唯一の正本は
 `docs/api-driven-development/recovery-evidence-v1.schema.json`である。record typeは`lineage_anchor`、
-`approval_receipt`、`lineage_event`、`progression_event`、`attempt_event`、`writer_fence_event`、
+`owner_authorization_receipt`、`approval_receipt`、`lineage_event`、`progression_event`、`attempt_event`、`writer_fence_event`、
 `projection_event`だけとし、Markdownへfield一覧を複製しない。schemaのpattern、長さ、enum、
 `unevaluatedProperties: false`で型違反、未知field、自由文、PIIを拒否する。raw token / claim / signature /
 loginは保存せず、OIDC `jti`とfencing tokenはSHA-256値だけを保存する。
+
+JSON Schemaはrecord shape、`x-hana-invariants`は規範的なcross-record契約である。record単体のschema検証だけを
+runtime安全性の証明にしない。参照aggregate validatorと正負例は
+`tests/unit/app/loop-engineer-terminal-hold-recovery-contract.test.ts`へ固定し、ISSUE-178がanchor / lineage /
+authorization / succession、ISSUE-179がprogression / attempt / writer barrier / projectionをruntimeで強制する。
 
 ### 10.3 bounded append-only attempt history
 
@@ -380,11 +392,13 @@ round state eventだけ、`writer_generation`はfencing generation eventだけ�
 
 承認集合digestは、検証済みかつ有効期限内の3 roleを各1件だけ選び、`operations`、`repository_owner`、
 `security`の順で各`approval_receipt` record全体を並べ、配列をRFC 8785でcanonicalizeしてSHA-256を取る。
-lineageは`lineage_id + succession_id`、progressionは`lineage_id + progression_id`、attemptは
-`lineage_id + attempt_id`でpartitionし、authority、succession、target Issue / PR / head、round、
-`approval_set_digest_sha256`をpartition内で不変にする。progression発行は同じ束縛の`succession_consumed`、
+lineageごとにcanonical anchorを正確に1件だけ許可し、すべてのrecord reference、target Issue / PR、successionを
+anchorへ照合する。lineageは`lineage_id`、progressionは`lineage_id + progression_id`、attemptは
+`lineage_id + attempt_id`でpartitionし、successionはlineage全体で1件、消費も1回だけにする。progression発行は
+同じlineage、authority、succession、targetの`succession_consumed`を要求するが、消費時のmain / head /
+approval集合を新progressionへ継承しない。
 attempt開始は同じauthority、succession、target、head、roundのactiveかつ`finding_free`なprogressionを必須とする。
-attemptのapproval集合はreceipt内のlineage、succession、target、main / headへ照合し、main移動時のfreshな集合を
+attemptのapproval集合とOwner authorizationはreceipt内のlineage、succession、target、main / headへ照合し、main移動時のfreshな集合を
 許可しつつ、別partitionまたは別targetのevent接合を拒否する。
 
 同じattempt lifecycle内では`attempt_id`、run、run attempt、`jti` hashを全eventで不変にし、startから
@@ -397,8 +411,10 @@ event、event ID / sequence重複は`HOLD`にする。上限は1 roundあたり3
 旧headの`completed_with_findings`から`round + 1`へ進め、旧roundのsuccessを要求しない。ただし
 `completed_with_findings`はmerge適格性に使わない。
 終端の`completed_with_findings`または`finding_free`は同じprogressionの`evaluation_completed`直後に
-1件だけ記録する。直接終端、二重終端、終端後の再評価を拒否する。次progression発行前に旧progression
-authorityを失効させ、同一lineageで複数のactive progressionを許可しない。
+1件だけ記録する。3役すべてが`go`かつP0 / P1が0の場合だけ`finding_free`、それ以外は
+`completed_with_findings`にする。直接終端、二重終端、終端後の再評価を拒否する。次progression発行前に
+旧progression authorityとfencingを失効させる。2巡目以降はpredecessor ID、別head、
+`completed_with_findings`、正確な`round + 1`を要求し、round resetまたは飛越しを拒否する。
 
 mainだけが動いた場合はfreshなOwner authorization、3役agent評価と新attemptで同じprogressionを再試行できる。headが動いた場合は
 旧headのprogression authorityとfencing generationを失効させ、freshなOwner authorization、3役agent評価、新head専用authority、
@@ -421,8 +437,10 @@ canonicalizeしたSHA-256を`completed_barrier_digest_sha256`として後続even
 main freshnessはGitHub merge queue SHA、strict up-to-date、または同等のGitHub側原子的条件へ束縛し、
 main変更eventと直前readbackだけでは原子性を主張しない。原子的条件がなければsuccessを許可しない。
 
-各`projection_event`はtarget PR / head、`main_sha`、`progression_id`、`attempt_id`、App / Check / Check Run ID、
-writer generation、barrier ID / digestへ直接束縛する。`success`は`finding_free` reasonだけに限定し、
+各`projection_event`はtarget PR / head、`main_sha`、authority、succession、round、`progression_id`、`attempt_id`、
+agent approval集合digest、Owner authorization digest、App / Check / Check Run ID、writer generation、barrier ID /
+digestへ直接束縛する。`success`は3役GO、P0 / P1が0、成功attempt、quiescence済みbarrier、`finding_free`
+reasonが完全一致する場合だけに限定し、
 stale inventory、rollback、unknown-success recovery、activation blockedは必ず`failure`にする。
 新attempt開始時は旧successを先に無効化し、success確定直前に現在のmain / head、anchor、復旧権限、
 progression、attempt、review、必須Checkをfresh readbackする。main移動、head移動、再実行、重複、
@@ -438,13 +456,14 @@ IDを更新しない。Hana専用GitHub Appの必要権限契約は`Checks: writ
 drain開始、quiescence確認の順にbarrierを完了してから5要素で正確なCheck Run IDを再取得する。
 同一Check Run IDのsuccessをreadbackした場合だけ同じIDを`failure`へ更新し、同一IDのfailureをreadbackする。
 controller停止後も同じIDの最終failureを確認する。
-barrierまたはfailure readbackを完了できなければ`runtime_activation_gate`を`HOLD`にする。
+barrierまたはfailure readbackを完了できなければ`pre_success_gate`を`HOLD`にする。
 
 ### 10.5 停止、rollback、証明限界
 
 HOLDはstage scopeを持つ。方針・schema・契約testのfindingは`issue_177_policy`、#363の未同期/readback不足は
-`issue_178_entry_gate`、復旧権限、solo Owner authorization、agent evaluation receipt、inventory、writer barrier、atomic freshnessの
-不備は`runtime_activation_gate`以降だけを止める。rollbackはtarget PR / headのexclusive writer generationを
+`issue_178_entry_gate`、復旧権限、solo Owner authorization、agent evaluation receipt、inventoryの不備は
+`runtime_pre_activation_gate`以降、writer barrierまたは直前freshnessの不備は`pre_success_gate`以降だけを止める。
+rollbackはtarget PR / headのexclusive writer generationを
 上位のtrusted invalidatorへ移してから、次の順で行う。
 
 1. 上位writer generationを取得してreadbackする。
@@ -457,7 +476,7 @@ HOLDはstage scopeを持つ。方針・schema・契約testのfindingは`issue_17
 8. 同一Check Run IDの最終failureをreadbackする。
 
 fencingを取得できない、drain / quiescenceを証明できない、success応答不明を上位generationでfailure化できない、
-failure readbackを確認できない場合は`runtime_activation_gate`を`HOLD`にする。rollback後もPR #355とPR #361はTerminal HOLDのままとし、
+failure readbackを確認できない場合は`pre_success_gate`を`HOLD`にする。rollback後もPR #355とPR #361はTerminal HOLDのままとし、
 新たな後継を作らない。
 
 文書、unit test、in-memory testだけでは実行時の安全性を証明できない。GitHub上の保護Environment、

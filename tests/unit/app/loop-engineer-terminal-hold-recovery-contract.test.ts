@@ -33,7 +33,9 @@ const principal = (character: string) => `principal_${sha(character)}`
 function canonicalize(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`
   if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
+    const entries = Object.entries(value).sort(([left], [right]) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    )
     return `{${entries
       .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalize(entry)}`)
       .join(',')}}`
@@ -66,13 +68,6 @@ function eventEnvelope(sequence: number) {
   }
 }
 
-const recordReference = {
-  schema_version: 'recovery_evidence_v1',
-  repository: 'Kazuya-Sakashita/Hana',
-  lineage_id: typedId('lineage', 'a'),
-  lineage_anchor_digest_sha256: sha('a'),
-}
-
 const target = {
   target_issue: 364,
   target_pr: 400,
@@ -80,6 +75,7 @@ const target = {
   target_head_sha: gitSha('b'),
 }
 
+const lineageId = typedId('lineage', 'a')
 const successionId = typedId('succession', 'b')
 const authorityId = typedId('authority', 'c')
 const progressionId = typedId('progression', 'd')
@@ -90,7 +86,7 @@ const lineageAnchor = {
   schema_version: 'recovery_evidence_v1',
   record_type: 'lineage_anchor',
   repository: 'Kazuya-Sakashita/Hana',
-  lineage_id: recordReference.lineage_id,
+  lineage_id: lineageId,
   root_source_issue: 354,
   root_source_pr: 355,
   root_source_base_sha: 'e6c891ecde1ba3f51b739361d3cd3de4433835a3',
@@ -107,23 +103,48 @@ const lineageAnchor = {
   finding_digest: '52450c49b3852ceedd838c975f6854ec43009ba70f645630ecd00f826da787a1',
 }
 
+const recordReference = {
+  schema_version: 'recovery_evidence_v1',
+  repository: 'Kazuya-Sakashita/Hana',
+  lineage_id: lineageId,
+  lineage_anchor_digest_sha256: digest(lineageAnchor),
+}
+
+type EvaluationDecision = 'go' | 'hold'
+
+interface ApprovalOptions {
+  binding?: typeof target
+  decision?: EvaluationDecision
+  p0Count?: number
+  p1Count?: number
+  approvalRunCharacter?: string
+  evaluationCharacter?: string
+}
+
 function makeApprovalReceipt(
   role: string,
   actorCharacter: string,
   approvalCharacter: string,
   nonceCharacter: string,
+  options: ApprovalOptions = {},
 ) {
+  const binding = options.binding ?? target
+  const decision = options.decision ?? 'go'
   const approvalPayload = {
-    ...target,
+    ...binding,
     succession_id: successionId,
     finding_digest: lineageAnchor.finding_digest,
+    decision,
+    p0_count: options.p0Count ?? 0,
+    p1_count: options.p1Count ?? (decision === 'hold' ? 1 : 0),
+    evaluation_digest_sha256: sha(options.evaluationCharacter ?? approvalCharacter),
     role,
     actor_principal_kind: 'agent',
     actor_principal_id: principal(actorCharacter),
     requester_principal_id: principal('b'),
     issuer_principal_id: principal('c'),
     approval_id: typedId('approval', approvalCharacter),
-    approval_run_id: typedId('approvalrun', 'a'),
+    approval_run_id: typedId('approvalrun', options.approvalRunCharacter ?? 'a'),
     issued_at: '2026-08-09T00:00:00Z',
     expires_at: '2026-08-09T01:00:00Z',
     nonce_sha256: sha(nonceCharacter),
@@ -143,12 +164,50 @@ function makeApprovalReceipt(
   }
 }
 
+function makeOwnerAuthorizationReceipt(binding = target, authorizationCharacter = 'a') {
+  const authorizationPayload = {
+    ...binding,
+    max_round: 5,
+    decision: 'authorize',
+    owner_principal_kind: 'human',
+    owner_principal_id: principal('a'),
+    environment: 'hana-merge-human-approval',
+    authorization_id: typedId('authorization', authorizationCharacter),
+    workflow_run_id: 200,
+    check_run_id: 300,
+    check_name: 'review-round-exception',
+    issued_at: '2026-08-09T00:00:00Z',
+    expires_at: '2026-08-09T01:00:00Z',
+    nonce_sha256: sha(authorizationCharacter),
+  }
+  const signatureInput = { ...recordReference, authorization_payload: authorizationPayload }
+
+  return {
+    ...recordReference,
+    record_type: 'owner_authorization_receipt',
+    authorization_payload: authorizationPayload,
+    verification_receipt: {
+      signature_payload_digest_sha256: digest(signatureInput),
+      verifier_id: typedId('verifier', 'b'),
+      verification_receipt_digest_sha256: sha('e'),
+      verification_status: 'verified',
+    },
+  }
+}
+
 const approvalSet = [
   makeApprovalReceipt('security', 'd', 'd', 'd'),
   makeApprovalReceipt('operations', 'e', 'e', 'e'),
   makeApprovalReceipt('repository_owner', 'f', 'f', 'f'),
 ]
 const approvalReceipt = fixtureAt(approvalSet, 0)
+const ownerAuthorizationReceipt = makeOwnerAuthorizationReceipt()
+const ownerAuthorizationDigest = digest(ownerAuthorizationReceipt)
+const baseEvidenceContext: Array<Record<string, unknown>> = [
+  lineageAnchor,
+  ownerAuthorizationReceipt,
+  ...approvalSet,
+]
 
 function approvalSetDigest(records: Array<Record<string, unknown>>): string {
   const roleOrder = invariants.approval_set_digest.role_order as string[]
@@ -162,7 +221,11 @@ function approvalSetDigest(records: Array<Record<string, unknown>>): string {
 
 const validApprovalSetDigest = approvalSetDigest(approvalSet)
 
-function makeLineageEvent(eventType: string, sequence: number) {
+function makeLineageEvent(
+  eventType: string,
+  sequence: number,
+  extension: Record<string, unknown> = {},
+) {
   return {
     ...recordReference,
     ...eventEnvelope(sequence),
@@ -172,6 +235,8 @@ function makeLineageEvent(eventType: string, sequence: number) {
     succession_id: successionId,
     ...target,
     approval_set_digest_sha256: validApprovalSetDigest,
+    owner_authorization_digest_sha256: ownerAuthorizationDigest,
+    ...extension,
   }
 }
 
@@ -200,6 +265,7 @@ function makeProgressionEvent(
     target_head_sha: target.target_head_sha,
     round: 1,
     approval_set_digest_sha256: validApprovalSetDigest,
+    owner_authorization_digest_sha256: ownerAuthorizationDigest,
     ...extension,
   }
 }
@@ -229,6 +295,7 @@ const attemptEvent = {
   main_sha: target.main_sha,
   round: 1,
   approval_set_digest_sha256: validApprovalSetDigest,
+  owner_authorization_digest_sha256: ownerAuthorizationDigest,
   attempt_id: attemptId,
   run_id: 100,
   run_attempt: 1,
@@ -239,11 +306,16 @@ const writerIdentity = {
   ...recordReference,
   record_type: 'writer_fence_event',
   barrier_id: barrierId,
+  authority_id: authorityId,
+  succession_id: successionId,
   target_pr: target.target_pr,
   target_head_sha: target.target_head_sha,
   main_sha: target.main_sha,
   progression_id: progressionId,
   attempt_id: attemptId,
+  round: 1,
+  approval_set_digest_sha256: validApprovalSetDigest,
+  owner_authorization_digest_sha256: ownerAuthorizationDigest,
   writer_generation: 2,
   fencing_token_sha256: sha('c'),
   credential_owner_id: typedId('credential', 'd'),
@@ -290,11 +362,16 @@ const projectionEvent = {
   record_type: 'projection_event',
   event_type: 'check_projection_recorded',
   barrier_id: barrierId,
+  authority_id: authorityId,
+  succession_id: successionId,
   target_pr: target.target_pr,
   target_head_sha: target.target_head_sha,
   main_sha: target.main_sha,
   progression_id: progressionId,
   attempt_id: attemptId,
+  round: 1,
+  approval_set_digest_sha256: validApprovalSetDigest,
+  owner_authorization_digest_sha256: ownerAuthorizationDigest,
   github_app_id: writerIdentity.github_app_id,
   check_name: 'merge-eligibility',
   check_run_id: writerIdentity.check_run_id,
@@ -303,6 +380,179 @@ const projectionEvent = {
   writer_generation: writerIdentity.writer_generation,
   fencing_token_sha256: writerIdentity.fencing_token_sha256,
   completed_barrier_digest_sha256: completedBarrierDigest,
+}
+
+function buildSuccessfulTwoRoundTrace() {
+  const roundOneApprovalSet = [
+    makeApprovalReceipt('security', 'd', '1', '1', {
+      decision: 'hold',
+      p1Count: 1,
+      approvalRunCharacter: '1',
+    }),
+    makeApprovalReceipt('operations', 'e', '2', '2', {
+      decision: 'hold',
+      p1Count: 1,
+      approvalRunCharacter: '1',
+    }),
+    makeApprovalReceipt('repository_owner', 'f', '3', '3', {
+      decision: 'hold',
+      p1Count: 1,
+      approvalRunCharacter: '1',
+    }),
+  ]
+  const roundOneApprovalDigest = approvalSetDigest(roundOneApprovalSet)
+  const roundTwoTarget = { ...target, target_head_sha: gitSha('c') }
+  const roundTwoApprovalSet = [
+    makeApprovalReceipt('security', '1', '4', '4', {
+      binding: roundTwoTarget,
+      approvalRunCharacter: '2',
+    }),
+    makeApprovalReceipt('operations', '2', '5', '5', {
+      binding: roundTwoTarget,
+      approvalRunCharacter: '2',
+    }),
+    makeApprovalReceipt('repository_owner', '3', '6', '6', {
+      binding: roundTwoTarget,
+      approvalRunCharacter: '2',
+    }),
+  ]
+  const roundTwoApprovalDigest = approvalSetDigest(roundTwoApprovalSet)
+  const roundTwoAuthorization = makeOwnerAuthorizationReceipt(roundTwoTarget, 'b')
+  const roundTwoAuthorizationDigest = digest(roundTwoAuthorization)
+  const roundTwoProgressionId = typedId('progression', '1')
+  const roundTwoAttemptId = typedId('attempt', '2')
+  const roundTwoBarrierId = typedId('barrier', '3')
+
+  const lineageEvents = [
+    makeLineageEvent('recovery_authority_issued', 1, {
+      approval_set_digest_sha256: roundOneApprovalDigest,
+    }),
+    makeLineageEvent('succession_issued', 2, {
+      approval_set_digest_sha256: roundOneApprovalDigest,
+    }),
+    makeLineageEvent('succession_consumed', 3, {
+      approval_set_digest_sha256: roundOneApprovalDigest,
+    }),
+  ]
+  const roundOneProgression = [
+    makeProgressionEvent('progression_authority_issued', 10, {
+      approval_set_digest_sha256: roundOneApprovalDigest,
+    }),
+    makeProgressionEvent('round_state_recorded', 11, {
+      approval_set_digest_sha256: roundOneApprovalDigest,
+      round_state: 'evaluation_completed',
+    }),
+    makeProgressionEvent('round_state_recorded', 12, {
+      approval_set_digest_sha256: roundOneApprovalDigest,
+      round_state: 'completed_with_findings',
+    }),
+    makeProgressionEvent('progression_authority_revoked', 13, {
+      approval_set_digest_sha256: roundOneApprovalDigest,
+    }),
+  ]
+  const roundTwoBinding = {
+    progression_id: roundTwoProgressionId,
+    predecessor_progression_id: progressionId,
+    target_head_sha: roundTwoTarget.target_head_sha,
+    round: 2,
+    approval_set_digest_sha256: roundTwoApprovalDigest,
+    owner_authorization_digest_sha256: roundTwoAuthorizationDigest,
+  }
+  const roundTwoProgression = [
+    makeProgressionEvent('progression_authority_issued', 20, roundTwoBinding),
+    makeProgressionEvent('round_state_recorded', 21, {
+      ...roundTwoBinding,
+      round_state: 'evaluation_completed',
+    }),
+    makeProgressionEvent('round_state_recorded', 22, {
+      ...roundTwoBinding,
+      round_state: 'finding_free',
+    }),
+    makeProgressionEvent('fencing_generation_issued', 23, {
+      ...roundTwoBinding,
+      writer_generation: 2,
+    }),
+  ]
+  const roundTwoAttemptBase = {
+    ...attemptEvent,
+    progression_id: roundTwoProgressionId,
+    target_head_sha: roundTwoTarget.target_head_sha,
+    main_sha: roundTwoTarget.main_sha,
+    round: 2,
+    approval_set_digest_sha256: roundTwoApprovalDigest,
+    owner_authorization_digest_sha256: roundTwoAuthorizationDigest,
+    attempt_id: roundTwoAttemptId,
+    run_id: 200,
+    oidc_jti_sha256: sha('4'),
+  }
+  const roundTwoAttempts = [
+    { ...roundTwoAttemptBase, ...eventEnvelope(24), event_type: 'attempt_started' },
+    { ...roundTwoAttemptBase, ...eventEnvelope(25), event_type: 'attempt_succeeded' },
+  ]
+  const successWriterIdentity = {
+    ...writerIdentity,
+    barrier_id: roundTwoBarrierId,
+    target_head_sha: roundTwoTarget.target_head_sha,
+    main_sha: roundTwoTarget.main_sha,
+    progression_id: roundTwoProgressionId,
+    attempt_id: roundTwoAttemptId,
+    round: 2,
+    approval_set_digest_sha256: roundTwoApprovalDigest,
+    owner_authorization_digest_sha256: roundTwoAuthorizationDigest,
+    fencing_token_sha256: sha('5'),
+    credential_owner_id: typedId('credential', '6'),
+    check_run_id: 2000,
+  }
+  const barrierEvents = [
+    'generation_acquired',
+    'lower_generation_blocked',
+    'drain_started',
+    'quiescence_confirmed',
+  ].map((eventType, index) => ({
+    ...successWriterIdentity,
+    ...eventEnvelope(30 + index),
+    event_type: eventType,
+  }))
+  const successBarrierDigest = barrierDigest(barrierEvents)
+  barrierEvents[3] = {
+    ...fixtureAt(barrierEvents, 3),
+    completed_barrier_digest_sha256: successBarrierDigest,
+  }
+  const successProjection = {
+    ...projectionEvent,
+    ...eventEnvelope(40),
+    barrier_id: roundTwoBarrierId,
+    target_head_sha: roundTwoTarget.target_head_sha,
+    main_sha: roundTwoTarget.main_sha,
+    progression_id: roundTwoProgressionId,
+    attempt_id: roundTwoAttemptId,
+    round: 2,
+    approval_set_digest_sha256: roundTwoApprovalDigest,
+    owner_authorization_digest_sha256: roundTwoAuthorizationDigest,
+    check_run_id: 2000,
+    check_status: 'success',
+    check_reason: 'finding_free',
+    fencing_token_sha256: sha('5'),
+    completed_barrier_digest_sha256: successBarrierDigest,
+  }
+
+  return {
+    records: [
+      lineageAnchor,
+      ownerAuthorizationReceipt,
+      roundTwoAuthorization,
+      ...roundOneApprovalSet,
+      ...roundTwoApprovalSet,
+      ...lineageEvents,
+      ...roundOneProgression,
+      ...roundTwoProgression,
+      ...roundTwoAttempts,
+      ...barrierEvents,
+      successProjection,
+    ] as Array<Record<string, unknown>>,
+    roundTwoProgressionId,
+    successProjection,
+  }
 }
 
 function validateApprovalSet(
@@ -342,6 +592,11 @@ function validateApprovalSet(
   for (const record of records) {
     if (!validateEvidence(record)) errors.push('invalid receipt schema')
     if (
+      Date.parse(String(getPath(record, 'approval_payload.issued_at'))) > Date.parse(evaluationAt)
+    ) {
+      errors.push('approval issued after evaluation')
+    }
+    if (
       Date.parse(String(getPath(record, 'approval_payload.expires_at'))) <= Date.parse(evaluationAt)
     ) {
       errors.push('expired approval')
@@ -364,12 +619,99 @@ function validateApprovalSet(
   return errors
 }
 
+function validateOwnerAuthorization(
+  record: Record<string, unknown>,
+  evaluationAt: string,
+): string[] {
+  const errors: string[] = []
+  if (!validateEvidence(record)) errors.push('invalid owner authorization schema')
+  const issuedAt = Date.parse(String(getPath(record, 'authorization_payload.issued_at')))
+  const expiresAt = Date.parse(String(getPath(record, 'authorization_payload.expires_at')))
+  const evaluatedAt = Date.parse(evaluationAt)
+  if (issuedAt > evaluatedAt) errors.push('owner authorization issued after evaluation')
+  if (expiresAt <= evaluatedAt) errors.push('expired owner authorization')
+  const signatureInput = {
+    schema_version: record.schema_version,
+    repository: record.repository,
+    lineage_id: record.lineage_id,
+    lineage_anchor_digest_sha256: record.lineage_anchor_digest_sha256,
+    authorization_payload: record.authorization_payload,
+  }
+  if (
+    digest(signatureInput) !==
+    getPath(record, 'verification_receipt.signature_payload_digest_sha256')
+  ) {
+    errors.push('owner authorization signature mismatch')
+  }
+  return errors
+}
+
 function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
   const errors: string[] = []
   const eventRecords = records.filter((record) => record.event_id !== undefined)
   const ordered = [...eventRecords].sort(
     (left, right) => Number(left.event_sequence) - Number(right.event_sequence),
   )
+  const evaluationAt = String(ordered.at(-1)?.event_at ?? '2026-08-09T00:30:00Z')
+  const anchorsByLineage = new Map<string, Array<Record<string, unknown>>>()
+  for (const record of records.filter((candidate) => candidate.record_type === 'lineage_anchor')) {
+    const key = String(record.lineage_id)
+    anchorsByLineage.set(key, [...(anchorsByLineage.get(key) ?? []), record])
+  }
+  const anchors = new Map<string, Record<string, unknown>>()
+  for (const [lineage, candidates] of anchorsByLineage) {
+    if (candidates.length !== 1) errors.push('lineage must have exactly one anchor')
+    const anchor = candidates[0]
+    if (anchor) anchors.set(lineage, anchor)
+  }
+  for (const record of records.filter((candidate) => candidate.record_type !== 'lineage_anchor')) {
+    const anchor = anchors.get(String(record.lineage_id))
+    if (!anchor) {
+      errors.push('missing lineage anchor')
+      continue
+    }
+    if (record.lineage_anchor_digest_sha256 !== digest(anchor)) {
+      errors.push('lineage anchor digest mismatch')
+    }
+    for (const field of invariants.lineage_anchor_binding.event_fields_equal_anchor as string[]) {
+      if (record[field] !== undefined && record[field] !== anchor[field]) {
+        errors.push(`lineage anchor field mismatch: ${field}`)
+      }
+    }
+    const payloadPrefix =
+      record.record_type === 'approval_receipt'
+        ? 'approval_payload'
+        : record.record_type === 'owner_authorization_receipt'
+          ? 'authorization_payload'
+          : undefined
+    if (payloadPrefix) {
+      for (const field of ['target_issue', 'target_pr']) {
+        if (getPath(record, `${payloadPrefix}.${field}`) !== anchor[field]) {
+          errors.push(`lineage anchor payload mismatch: ${field}`)
+        }
+      }
+      if (
+        payloadPrefix === 'approval_payload' &&
+        getPath(record, 'approval_payload.succession_id') !== anchor.succession_id
+      ) {
+        errors.push('lineage anchor payload mismatch: succession_id')
+      }
+    }
+  }
+
+  const ownerAuthorizations = new Map<string, Record<string, unknown>>()
+  for (const record of records.filter(
+    (candidate) => candidate.record_type === 'owner_authorization_receipt',
+  )) {
+    if (validateOwnerAuthorization(record, evaluationAt).length === 0) {
+      const authorizationDigest = digest(record)
+      if (ownerAuthorizations.has(authorizationDigest)) {
+        errors.push('duplicate owner authorization receipt')
+      }
+      ownerAuthorizations.set(authorizationDigest, record)
+    }
+  }
+
   const approvalGroups = new Map<string, Array<Record<string, unknown>>>()
   for (const record of records.filter(
     (candidate) => candidate.record_type === 'approval_receipt',
@@ -378,7 +720,6 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
     approvalGroups.set(key, [...(approvalGroups.get(key) ?? []), record])
   }
   const approvalSets = new Map<string, Array<Record<string, unknown>>>()
-  const evaluationAt = String(ordered.at(-1)?.event_at ?? '2026-08-09T00:30:00Z')
   for (const group of approvalGroups.values()) {
     if (validateApprovalSet(group, evaluationAt).length === 0) {
       approvalSets.set(approvalSetDigest(group), group)
@@ -403,6 +744,8 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
       bindings?: Record<string, unknown>
       recoveryAuthority: 'absent' | 'active' | 'revoked'
       succession: 'absent' | 'issued' | 'consumed' | 'revoked'
+      successionIds: Set<unknown>
+      consumptions: number
     }
   >()
   const progressionStates = new Map<
@@ -413,9 +756,14 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
       fencing: 'absent' | 'active' | 'revoked'
       fencingGeneration?: unknown
       roundState: 'absent' | 'evaluation_completed' | 'completed_with_findings' | 'finding_free'
+      progressionId: unknown
+      predecessorProgressionId?: unknown
+      round: number
+      targetHeadSha: unknown
     }
   >()
   const activeProgressions = new Map<string, string>()
+  const latestProgressions = new Map<string, string>()
 
   function compareBindings(
     record: Record<string, unknown>,
@@ -451,6 +799,40 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
     }
   }
 
+  function validateOwnerBinding(record: Record<string, unknown>) {
+    const authorization = ownerAuthorizations.get(String(record.owner_authorization_digest_sha256))
+    if (!authorization) {
+      errors.push('unknown owner authorization digest')
+      return
+    }
+    for (const field of ['target_issue', 'target_pr', 'main_sha', 'target_head_sha']) {
+      if (
+        record[field] !== undefined &&
+        record[field] !== getPath(authorization, `authorization_payload.${field}`)
+      ) {
+        errors.push(`owner authorization binding mismatch: ${field}`)
+      }
+    }
+    if (
+      record.round !== undefined &&
+      Number(record.round) > Number(getPath(authorization, 'authorization_payload.max_round'))
+    ) {
+      errors.push('owner authorization round exceeded')
+    }
+  }
+
+  function approvalSetIsFindingFree(record: Record<string, unknown>): boolean {
+    const set = approvalSets.get(String(record.approval_set_digest_sha256))
+    return Boolean(
+      set?.every(
+        (receipt) =>
+          getPath(receipt, 'approval_payload.decision') === 'go' &&
+          getPath(receipt, 'approval_payload.p0_count') === 0 &&
+          getPath(receipt, 'approval_payload.p1_count') === 0,
+      ),
+    )
+  }
+
   for (const record of ordered) {
     if (eventIds.has(record.event_id)) errors.push('duplicate event_id')
     if (eventSequences.has(record.event_sequence)) errors.push('duplicate event_sequence')
@@ -459,10 +841,19 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
 
     if (record.record_type === 'lineage_event') {
       validateApprovalBinding(record)
-      const key = `${record.lineage_id}:${record.succession_id}`
+      validateOwnerBinding(record)
+      const key = String(record.lineage_id)
       const state = lineageStates.get(key) ?? {
         recoveryAuthority: 'absent' as const,
         succession: 'absent' as const,
+        successionIds: new Set<unknown>(),
+        consumptions: 0,
+      }
+      state.successionIds.add(record.succession_id)
+      if (
+        state.successionIds.size > invariants.lineage_anchor_binding.max_successions_per_lineage
+      ) {
+        errors.push('multiple successions for lineage')
       }
       state.bindings = compareBindings(
         record,
@@ -492,6 +883,10 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
             errors.push('invalid succession consumption')
           }
           state.succession = 'consumed'
+          state.consumptions += 1
+          if (state.consumptions > invariants.lineage_lifecycle.max_consumptions_per_lineage) {
+            errors.push('multiple succession consumptions for lineage')
+          }
           break
         case 'succession_revoked':
           if (!['issued', 'consumed'].includes(state.succession)) {
@@ -505,12 +900,17 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
 
     if (record.record_type === 'progression_event') {
       validateApprovalBinding(record)
+      validateOwnerBinding(record)
       const lineageKey = String(record.lineage_id)
       const key = `${lineageKey}:${record.progression_id}`
       const state = progressionStates.get(key) ?? {
         authority: 'absent' as const,
         fencing: 'absent' as const,
         roundState: 'absent' as const,
+        progressionId: record.progression_id,
+        predecessorProgressionId: record.predecessor_progression_id,
+        round: Number(record.round),
+        targetHeadSha: record.target_head_sha,
       }
       state.bindings = compareBindings(
         record,
@@ -521,8 +921,7 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
 
       switch (record.event_type) {
         case 'progression_authority_issued': {
-          const successionKey = `${lineageKey}:${record.succession_id}`
-          const lineageState = lineageStates.get(successionKey)
+          const lineageState = lineageStates.get(lineageKey)
           if (!lineageState || lineageState.succession !== 'consumed') {
             errors.push('progression without consumed succession')
           } else {
@@ -533,10 +932,37 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
               }
             }
           }
+          const predecessorKey = latestProgressions.get(lineageKey)
+          if (!predecessorKey) {
+            if (record.round !== 1 || record.predecessor_progression_id !== undefined) {
+              errors.push('first progression must start at round 1 without predecessor')
+            }
+          } else {
+            const predecessor = progressionStates.get(predecessorKey)
+            if (record.predecessor_progression_id !== predecessor?.progressionId) {
+              errors.push('successor predecessor mismatch')
+            }
+            if (predecessor?.roundState !== 'completed_with_findings') {
+              errors.push('successor requires completed-with-findings predecessor')
+            }
+            if (predecessor?.authority !== 'revoked') {
+              errors.push('successor requires revoked predecessor authority')
+            }
+            if (predecessor?.fencing === 'active') {
+              errors.push('successor requires inactive predecessor fencing')
+            }
+            if (record.target_head_sha === predecessor?.targetHeadSha) {
+              errors.push('successor must use a different head')
+            }
+            if (Number(record.round) !== Number(predecessor?.round) + 1) {
+              errors.push('successor round must increment by one')
+            }
+          }
           if (activeProgressions.has(lineageKey)) errors.push('active progression exists')
           if (state.authority !== 'absent') errors.push('duplicate progression authority issue')
           state.authority = 'active'
           activeProgressions.set(lineageKey, key)
+          latestProgressions.set(lineageKey, key)
           break
         }
         case 'round_state_recorded': {
@@ -545,6 +971,15 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
             state.roundState
           ] as string[]
           if (!allowed.includes(String(record.round_state))) errors.push('invalid round transition')
+          if (record.round_state === 'finding_free' && !approvalSetIsFindingFree(record)) {
+            errors.push('finding-free state requires three GO receipts with no P0/P1')
+          }
+          if (
+            record.round_state === 'completed_with_findings' &&
+            approvalSetIsFindingFree(record)
+          ) {
+            errors.push('completed-with-findings state requires a HOLD or P0/P1 finding')
+          }
           state.roundState = record.round_state as typeof state.roundState
           break
         }
@@ -583,6 +1018,7 @@ function validateLifecycle(records: Array<Record<string, unknown>>): string[] {
 
     if (record.record_type === 'attempt_event') {
       validateApprovalBinding(record)
+      validateOwnerBinding(record)
       const attemptKey = `${record.lineage_id}:${record.attempt_id}`
       const state = attemptStates.get(attemptKey) ?? { starts: 0, terminals: 0 }
       state.bindings = compareBindings(
@@ -668,6 +1104,160 @@ function validateUnknownSuccessSequence(records: Array<Record<string, unknown>>)
   return errors
 }
 
+function validateSuccessfulTrace(records: Array<Record<string, unknown>>): string[] {
+  const errors = validateLifecycle(records)
+  for (const record of records) {
+    if (!validateEvidence(record)) {
+      errors.push(`invalid schema in complete trace: ${String(record.record_type)}`)
+    }
+  }
+  const successProjections = records.filter(
+    (record) => record.record_type === 'projection_event' && record.check_status === 'success',
+  )
+  if (successProjections.length !== 1) errors.push('trace requires exactly one success projection')
+
+  for (const projection of successProjections) {
+    const projectionSequence = Number(projection.event_sequence)
+    const approvals = records.filter(
+      (record) =>
+        record.record_type === 'approval_receipt' &&
+        approvalSetDigest(
+          records.filter(
+            (candidate) =>
+              candidate.record_type === 'approval_receipt' &&
+              getPath(candidate, 'approval_payload.approval_run_id') ===
+                getPath(record, 'approval_payload.approval_run_id'),
+          ),
+        ) === projection.approval_set_digest_sha256,
+    )
+    const approvalRunIds = new Set(
+      approvals.map((record) => getPath(record, 'approval_payload.approval_run_id')),
+    )
+    const selectedApprovals =
+      approvalRunIds.size === 1
+        ? records.filter(
+            (record) =>
+              record.record_type === 'approval_receipt' &&
+              getPath(record, 'approval_payload.approval_run_id') === [...approvalRunIds][0],
+          )
+        : []
+    if (
+      validateApprovalSet(selectedApprovals, String(projection.event_at)).length > 0 ||
+      !selectedApprovals.every(
+        (record) =>
+          getPath(record, 'approval_payload.decision') === 'go' &&
+          getPath(record, 'approval_payload.p0_count') === 0 &&
+          getPath(record, 'approval_payload.p1_count') === 0,
+      )
+    ) {
+      errors.push('success projection requires three exact-bound GO receipts with no P0/P1')
+    }
+
+    const ownerAuthorization = records.find(
+      (record) =>
+        record.record_type === 'owner_authorization_receipt' &&
+        digest(record) === projection.owner_authorization_digest_sha256,
+    )
+    if (
+      !ownerAuthorization ||
+      validateOwnerAuthorization(ownerAuthorization, String(projection.event_at)).length > 0
+    ) {
+      errors.push('success projection requires a valid owner authorization')
+    } else {
+      for (const field of ['target_pr', 'main_sha', 'target_head_sha']) {
+        if (projection[field] !== getPath(ownerAuthorization, `authorization_payload.${field}`)) {
+          errors.push(`success owner authorization mismatch: ${field}`)
+        }
+      }
+      if (Number(projection.round) > 5) errors.push('success exceeds owner maximum round')
+    }
+
+    const progressionEvents = records.filter(
+      (record) =>
+        record.record_type === 'progression_event' &&
+        record.progression_id === projection.progression_id,
+    )
+    const findingFree = progressionEvents.find(
+      (record) =>
+        record.event_type === 'round_state_recorded' && record.round_state === 'finding_free',
+    )
+    const fencingIssued = progressionEvents.find(
+      (record) => record.event_type === 'fencing_generation_issued',
+    )
+    if (!findingFree || !fencingIssued) {
+      errors.push('success requires active finding-free progression with fencing')
+    }
+
+    const attemptEvents = records
+      .filter(
+        (record) =>
+          record.record_type === 'attempt_event' && record.attempt_id === projection.attempt_id,
+      )
+      .sort((left, right) => Number(left.event_sequence) - Number(right.event_sequence))
+    const attemptStarted = attemptEvents.find((record) => record.event_type === 'attempt_started')
+    const attemptSucceeded = attemptEvents.find(
+      (record) => record.event_type === 'attempt_succeeded',
+    )
+    if (!attemptStarted || !attemptSucceeded) {
+      errors.push('success projection requires one succeeded attempt')
+    }
+
+    const barrierEvents = records
+      .filter(
+        (record) =>
+          record.record_type === 'writer_fence_event' &&
+          record.barrier_id === projection.barrier_id,
+      )
+      .sort((left, right) => Number(left.event_sequence) - Number(right.event_sequence))
+    const expectedBarrierTypes = [
+      'generation_acquired',
+      'lower_generation_blocked',
+      'drain_started',
+      'quiescence_confirmed',
+    ]
+    if (
+      JSON.stringify(barrierEvents.map((record) => record.event_type)) !==
+      JSON.stringify(expectedBarrierTypes)
+    ) {
+      errors.push('success barrier sequence mismatch')
+      continue
+    }
+    for (const field of invariants.writer_barrier_identity_fields as string[]) {
+      if (new Set(barrierEvents.map((record) => record[field])).size !== 1) {
+        errors.push(`success writer identity mismatch: ${field}`)
+      }
+    }
+    const expectedBarrierDigest = barrierDigest(barrierEvents)
+    const quiescence = fixtureAt(barrierEvents, 3)
+    if (
+      quiescence.completed_barrier_digest_sha256 !== expectedBarrierDigest ||
+      projection.completed_barrier_digest_sha256 !== expectedBarrierDigest
+    ) {
+      errors.push('success barrier digest mismatch')
+    }
+    for (const field of invariants.projection_required_bindings as string[]) {
+      if (field !== 'completed_barrier_digest_sha256' && projection[field] !== quiescence[field]) {
+        errors.push(`success projection binding mismatch: ${field}`)
+      }
+    }
+    if (
+      !attemptStarted ||
+      Number(attemptStarted.event_sequence) >= Number(fixtureAt(barrierEvents, 0).event_sequence)
+    ) {
+      errors.push('pre-success barrier is not reachable after attempt creation')
+    }
+    if (
+      !attemptSucceeded ||
+      Number(attemptSucceeded.event_sequence) >= projectionSequence ||
+      Number(quiescence.event_sequence) >= projectionSequence
+    ) {
+      errors.push('success projected before attempt and quiescence completed')
+    }
+  }
+
+  return errors
+}
+
 function expectConceptsInOrder(source: string, concepts: string[], label: string): void {
   let cursor = 0
   for (const concept of concepts) {
@@ -678,9 +1268,10 @@ function expectConceptsInOrder(source: string, concepts: string[], label: string
 }
 
 describe('ISSUE-177 Terminal HOLD recovery contract', () => {
-  it('validates all seven evidence record types against the machine-readable SSOT', () => {
+  it('validates all eight evidence record types against the machine-readable SSOT', () => {
     for (const fixture of [
       lineageAnchor,
+      ownerAuthorizationReceipt,
       approvalReceipt,
       lineageEvent,
       progressionEvent,
@@ -690,13 +1281,16 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     ]) {
       expect(validateEvidence(fixture), JSON.stringify(validateEvidence.errors)).toBe(true)
     }
-    expect(schema.oneOf).toHaveLength(7)
+    expect(schema.oneOf).toHaveLength(8)
   })
 
   it('separates signed approval payload from derived verification receipt', () => {
     expect(invariants.approval_signature.included).toContain('approval_payload')
     expect(invariants.approval_signature.excluded).toEqual(['verification_receipt'])
     expect(validateApprovalSet(approvalSet, '2026-08-09T00:30:00Z')).toEqual([])
+    expect(validateOwnerAuthorization(ownerAuthorizationReceipt, '2026-08-09T00:30:00Z')).toEqual(
+      [],
+    )
 
     const invalidSchemaFixtures = [
       { ...approvalReceipt, unexpected: true },
@@ -757,6 +1351,15 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     )
     expect(validateApprovalSet(approvalSet, '2026-08-09T02:00:00Z')).toContain('expired approval')
 
+    const badOwnerSignature = structuredClone(ownerAuthorizationReceipt)
+    badOwnerSignature.verification_receipt.signature_payload_digest_sha256 = sha('f')
+    expect(validateOwnerAuthorization(badOwnerSignature, '2026-08-09T00:30:00Z')).toContain(
+      'owner authorization signature mismatch',
+    )
+    expect(validateOwnerAuthorization(ownerAuthorizationReceipt, '2026-08-09T02:00:00Z')).toContain(
+      'expired owner authorization',
+    )
+
     expect(approvalSetDigest([...approvalSet].reverse())).toBe(validApprovalSetDigest)
     const tamperedSet = structuredClone(approvalSet)
     fixtureAt(tamperedSet, 0).verification_receipt.verification_receipt_digest_sha256 = sha('f')
@@ -766,28 +1369,29 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
       digest: 'sha256',
       included: 'entire_approval_receipt_record',
     })
+    expect(canonicalize({ '\ue000': 1, '😀': 2 })).toBe('{"😀":2,"":1}')
   })
 
   it('enforces authority, succession, and progression lifecycle order', () => {
     expect(lineageSequence.every((record) => validateEvidence(record))).toBe(true)
     expect(progressionSequence.every((record) => validateEvidence(record))).toBe(true)
-    expect(validateLifecycle([...approvalSet, ...lineageSequence, ...progressionSequence])).toEqual(
-      [],
-    )
+    expect(
+      validateLifecycle([...baseEvidenceContext, ...lineageSequence, ...progressionSequence]),
+    ).toEqual([])
 
     expect(
-      validateLifecycle([...approvalSet, makeLineageEvent('succession_consumed', 1)]),
+      validateLifecycle([...baseEvidenceContext, makeLineageEvent('succession_consumed', 1)]),
     ).toContain('invalid succession consumption')
     expect(
       validateLifecycle([
-        ...approvalSet,
+        ...baseEvidenceContext,
         ...lineageSequence,
         makeLineageEvent('succession_consumed', 4),
       ]),
     ).toContain('invalid succession consumption')
     expect(
       validateLifecycle([
-        ...approvalSet,
+        ...baseEvidenceContext,
         ...lineageSequence,
         makeProgressionEvent('round_state_recorded', 1, { round_state: 'finding_free' }),
       ]),
@@ -795,7 +1399,7 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
 
     expect(
       validateLifecycle([
-        ...approvalSet,
+        ...baseEvidenceContext,
         ...lineageSequence,
         makeProgressionEvent('progression_authority_issued', 10),
         makeProgressionEvent('round_state_recorded', 11, { round_state: 'finding_free' }),
@@ -809,7 +1413,7 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     })
     expect(
       validateLifecycle([
-        ...approvalSet,
+        ...baseEvidenceContext,
         ...lineageSequence,
         makeProgressionEvent('progression_authority_issued', 10),
         makeProgressionEvent('round_state_recorded', 11, {
@@ -824,17 +1428,17 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
 
     expect(
       validateLifecycle([
-        ...approvalSet,
+        ...baseEvidenceContext,
         ...lineageSequence,
         makeProgressionEvent('progression_authority_issued', 10, {
           succession_id: typedId('succession', 'f'),
         }),
       ]),
-    ).toContain('progression without consumed succession')
+    ).toContain('consumed succession binding mismatch: succession_id')
 
     expect(
       validateLifecycle([
-        ...approvalSet,
+        ...baseEvidenceContext,
         { ...makeLineageEvent('succession_issued', 2), target_pr: 401 },
       ]),
     ).toContain('approval set binding mismatch: target_pr')
@@ -854,8 +1458,117 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
     )
   })
 
+  it('accepts one consumed succession followed by a fresh-head successor and rejects all five P1 regressions', () => {
+    const trace = buildSuccessfulTwoRoundTrace()
+    expect(validateSuccessfulTrace(trace.records)).toEqual([])
+
+    const progressionAuthorities = trace.records.filter(
+      (record) =>
+        record.record_type === 'progression_event' &&
+        record.event_type === 'progression_authority_issued',
+    )
+    expect(progressionAuthorities.map((record) => record.round)).toEqual([1, 2])
+    expect(new Set(progressionAuthorities.map((record) => record.target_head_sha)).size).toBe(2)
+    expect(
+      trace.records.filter(
+        (record) =>
+          record.record_type === 'lineage_event' && record.event_type === 'succession_consumed',
+      ),
+    ).toHaveLength(1)
+
+    const duplicateSuccession = structuredClone(trace.records)
+    duplicateSuccession.push(
+      makeLineageEvent('succession_issued', 4, {
+        succession_id: typedId('succession', 'f'),
+      }),
+    )
+    expect(validateLifecycle(duplicateSuccession)).toContain('multiple successions for lineage')
+
+    const tamperedAnchor = structuredClone(trace.records)
+    const anchor = tamperedAnchor.find((record) => record.record_type === 'lineage_anchor')
+    if (!anchor) throw new Error('missing tamper fixture anchor')
+    anchor.finding_count = 8
+    expect(validateLifecycle(tamperedAnchor)).toContain('lineage anchor digest mismatch')
+
+    const holdApprovalSet = [
+      makeApprovalReceipt('security', 'd', '7', '7', {
+        decision: 'hold',
+        p1Count: 1,
+        approvalRunCharacter: '3',
+      }),
+      makeApprovalReceipt('operations', 'e', '8', '8', {
+        decision: 'hold',
+        p1Count: 1,
+        approvalRunCharacter: '3',
+      }),
+      makeApprovalReceipt('repository_owner', 'f', '9', '9', {
+        decision: 'hold',
+        p1Count: 1,
+        approvalRunCharacter: '3',
+      }),
+    ]
+    const holdDigest = approvalSetDigest(holdApprovalSet)
+    expect(
+      validateLifecycle([
+        lineageAnchor,
+        ownerAuthorizationReceipt,
+        ...approvalSet,
+        ...holdApprovalSet,
+        ...lineageSequence,
+        makeProgressionEvent('progression_authority_issued', 10, {
+          approval_set_digest_sha256: holdDigest,
+        }),
+        makeProgressionEvent('round_state_recorded', 11, {
+          approval_set_digest_sha256: holdDigest,
+          round_state: 'evaluation_completed',
+        }),
+        makeProgressionEvent('round_state_recorded', 12, {
+          approval_set_digest_sha256: holdDigest,
+          round_state: 'finding_free',
+        }),
+      ]),
+    ).toContain('finding-free state requires three GO receipts with no P0/P1')
+
+    const wrongOwner = structuredClone(trace.records)
+    const successProjection = wrongOwner.find(
+      (record) => record.record_type === 'projection_event' && record.check_status === 'success',
+    )
+    if (!successProjection) throw new Error('missing success projection fixture')
+    successProjection.owner_authorization_digest_sha256 = ownerAuthorizationDigest
+    expect(validateSuccessfulTrace(wrongOwner)).toContain(
+      'success owner authorization mismatch: target_head_sha',
+    )
+
+    const resetRound = structuredClone(trace.records)
+    for (const record of resetRound.filter(
+      (candidate) =>
+        candidate.record_type === 'progression_event' &&
+        candidate.progression_id === trace.roundTwoProgressionId,
+    )) {
+      record.round = 1
+      delete record.predecessor_progression_id
+    }
+    expect(validateLifecycle(resetRound)).toContain('successor round must increment by one')
+
+    const circularActivation = structuredClone(trace.records)
+    const roundTwoAttempts = circularActivation.filter(
+      (record) =>
+        record.record_type === 'attempt_event' &&
+        record.progression_id === trace.roundTwoProgressionId,
+    )
+    Object.assign(fixtureAt(roundTwoAttempts, 0), eventEnvelope(35))
+    Object.assign(fixtureAt(roundTwoAttempts, 1), eventEnvelope(36))
+    expect(validateSuccessfulTrace(circularActivation)).toContain(
+      'pre-success barrier is not reachable after attempt creation',
+    )
+  })
+
   it('keeps an attempt tuple stable and unique across attempt IDs', () => {
-    const lifecycleContext = [...approvalSet, ...lineageSequence, ...activeProgressionSequence]
+    const lifecycleContext = [
+      ...baseEvidenceContext,
+      ...lineageSequence,
+      ...activeProgressionSequence,
+    ]
     const terminalAttempt = {
       ...attemptEvent,
       ...eventEnvelope(21),
@@ -879,7 +1592,7 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
 
     expect(
       validateLifecycle([
-        ...approvalSet,
+        ...baseEvidenceContext,
         ...lineageSequence,
         makeProgressionEvent('progression_authority_issued', 10),
         attemptEvent,
@@ -975,19 +1688,36 @@ describe('ISSUE-177 Terminal HOLD recovery contract', () => {
       'issue_178_entry_gate',
       'issue_178_non_privileged_implementation',
       'issue_179_non_privileged_bootstrap',
-      'runtime_activation_gate',
-      'privileged_recovery',
+      'runtime_pre_activation_gate',
+      'privileged_authority_activation',
+      'pre_success_gate',
+      'success_projection',
     ])
     expect(invariants.hold_scopes.issue_178_entry_gate).toContain(
       'issue_363_human_readback_missing',
     )
-    expect(invariants.hold_scopes.runtime_activation_gate).toEqual(
+    expect(invariants.hold_scopes.runtime_pre_activation_gate).toEqual(
       expect.arrayContaining([
         'solo_owner_authorization_missing',
         'specialist_evaluation_receipt_invalid',
-        'writer_barrier_missing',
       ]),
     )
+    expect(invariants.hold_scopes.pre_success_gate).toContain('writer_barrier_missing')
+    expect(invariants.stage_capabilities).toMatchObject({
+      runtime_pre_activation_gate: {
+        mode: 'verify_only',
+        requires_preexisting_progression_or_attempt: false,
+      },
+      privileged_authority_activation: {
+        allows: ['succession_consumption', 'progression_creation', 'attempt_creation'],
+      },
+      pre_success_gate: {
+        requires: ['active_progression', 'started_attempt'],
+      },
+      success_projection: {
+        requires: expect.arrayContaining(['succeeded_attempt', 'completed_writer_barrier']),
+      },
+    })
     expect(invariants.governance).toMatchObject({
       mode: 'solo_maintainer',
       human_owner_count: 1,
