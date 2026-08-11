@@ -1,0 +1,92 @@
+{
+  "schema_version": "issue_177_round5_terminal_manifest_v1",
+  "recorded_at": "2026-08-11T04:50:42Z",
+  "repository": "Kazuya-Sakashita/Hana",
+  "campaign": {
+    "issue_id": "ISSUE-177",
+    "github_issue": 362,
+    "pull_request": 389,
+    "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+    "head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e",
+    "round": 5,
+    "result": "terminal_hold"
+  },
+  "exception_evidence": {
+    "workflow_run_id": 31459233974,
+    "workflow_head_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+    "check_run_id": 93679465377,
+    "check_name": "review-round-exception",
+    "check_app_id": 4483496,
+    "check_head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e",
+    "check_external_id": "loop-engineer-review-round-exception/v1|ISSUE-177|389|e6c891ecde1ba3f51b739361d3cd3de4433835a3|24a85f9ed31c28d3a14ede45f891a1386699be9e|5"
+  },
+  "role_results": [
+    {
+      "role": "security",
+      "p0": 0,
+      "p1": 4,
+      "verdict": "hold"
+    },
+    {
+      "role": "operations",
+      "p0": 0,
+      "p1": 4,
+      "verdict": "hold"
+    },
+    {
+      "role": "repository_owner_perspective",
+      "p0": 0,
+      "p1": 3,
+      "verdict": "hold"
+    }
+  ],
+  "findings": [
+    {
+      "id": "R5-GLOBAL-LINEAGE-UNIQUENESS",
+      "severity": "P1",
+      "requirement": "Derive a repository-global recovery identity outside caller control and reject duplicate source or target registration across the complete inventory."
+    },
+    {
+      "id": "R5-VERIFIER-AUTHENTICITY-REPLAY",
+      "severity": "P1",
+      "requirement": "Verify trusted receipt authenticity and reject approval, authorization, nonce, run, and jti replay across the program inventory."
+    },
+    {
+      "id": "R5-SUCCESS-CROSS-RECORD-BINDING",
+      "severity": "P1",
+      "requirement": "Join the active anchor, approval, owner authorization, progression, attempt, fence, barrier, and projection before success."
+    },
+    {
+      "id": "R5-ATTEMPT-BOUNDS",
+      "severity": "P1",
+      "requirement": "Atomically reject the fourth attempt in a round, the sixteenth attempt in a program, concurrent over-reservation, and restart after terminal state."
+    },
+    {
+      "id": "R5-MAIN-REFRESH-REACHABILITY",
+      "severity": "P1",
+      "requirement": "Keep a reachable transition for main-only movement while rebinding fresh approval and owner authorization to the next attempt."
+    },
+    {
+      "id": "R5-INVENTORY-FRESHNESS-PROOF",
+      "severity": "P1",
+      "requirement": "Prove complete pagination, unique Check identity, GitHub-enforced atomic freshness, writer quiescence, and rollback invalidation readback."
+    }
+  ],
+  "frozen_pull_requests": [
+    {
+      "number": 355,
+      "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "head_sha": "1239936947aed0f198216a2c8bf4be3177eb2223"
+    },
+    {
+      "number": 361,
+      "base_sha": "fbd5250251ce42d2d1505c685e3f01459d979c0e",
+      "head_sha": "514d8c64d252b22fb84f7b7834ae690025896882"
+    },
+    {
+      "number": 389,
+      "base_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+      "head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e"
+    }
+  ]
+}

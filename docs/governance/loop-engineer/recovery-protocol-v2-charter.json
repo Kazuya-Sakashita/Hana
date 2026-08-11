@@ -1,0 +1,134 @@
+{
+  "schema_version": "recovery_protocol_v2_charter_v1",
+  "program_id": "hana-loop-engineer-recovery-v2",
+  "protocol_major": 2,
+  "state": "governance_charter",
+  "origin_main_sha": "e6c891ecde1ba3f51b739361d3cd3de4433835a3",
+  "terminal_manifest": {
+    "path": "docs/governance/loop-engineer/issue-177-round5-terminal-manifest.json",
+    "sha256": "bab81ce1f8e57320fda288e30ff170b54ab77be7a0b322b42bbd6fa8e6db91f3"
+  },
+  "fixed_deliverables": [
+    {
+      "id": "G0",
+      "purpose": "governance_transition",
+      "github_issue": 390,
+      "privileged": false
+    },
+    {
+      "id": "G1",
+      "purpose": "formal_contract_and_independent_oracle",
+      "github_issue": null,
+      "privileged": false
+    },
+    {
+      "id": "G2",
+      "purpose": "trusted_verifier_and_authority",
+      "github_issue": null,
+      "privileged": false
+    },
+    {
+      "id": "G3",
+      "purpose": "runtime_controller_and_projection",
+      "github_issue": null,
+      "privileged": false
+    }
+  ],
+  "input_policy": {
+    "allowed": [
+      "origin_main_tree",
+      "terminal_manifest_metadata",
+      "six_stable_finding_requirements",
+      "public_standards",
+      "new_v2_requirements_and_threat_model"
+    ],
+    "forbidden": [
+      "frozen_branch_only_code",
+      "frozen_commit_or_diff",
+      "frozen_schema",
+      "frozen_test_or_fixture",
+      "frozen_review_or_check",
+      "frozen_attestation",
+      "frozen_artifact_as_oracle_or_success_evidence"
+    ],
+    "forbidden_sources": [
+      {
+        "pull_request": 355,
+        "head_sha": "1239936947aed0f198216a2c8bf4be3177eb2223"
+      },
+      {
+        "pull_request": 361,
+        "head_sha": "514d8c64d252b22fb84f7b7834ae690025896882"
+      },
+      {
+        "pull_request": 389,
+        "head_sha": "24a85f9ed31c28d3a14ede45f891a1386699be9e"
+      }
+    ]
+  },
+  "transition_grant": {
+    "storage": "external_status_only_exact_head_record",
+    "initial_state": "not_issued",
+    "allowed_states": ["not_issued", "issued", "accepted", "rejected", "expired"],
+    "issuer": "repository_owner",
+    "single_use": true,
+    "non_delegable": true,
+    "terminal_states": ["accepted", "rejected", "expired"],
+    "required_bindings": [
+      "transition_id",
+      "program_id",
+      "protocol_major",
+      "origin_main_sha",
+      "decision_main_sha",
+      "final_governance_head_sha",
+      "terminal_manifest_sha256",
+      "requirements_sha256",
+      "threat_model_sha256",
+      "artifact_scope_sha256",
+      "input_allowlist_sha256",
+      "forbidden_artifacts_sha256",
+      "review_budget_sha256",
+      "expires_at",
+      "nonce"
+    ]
+  },
+  "review_budget": {
+    "stages_per_deliverable": ["D1", "V1", "V2"],
+    "max_specialist_snapshots_per_deliverable": 3,
+    "max_remediation_batches_per_deliverable": 1,
+    "max_specialist_snapshots_total": 12,
+    "max_remediation_batches_total": 4,
+    "principal_roles": ["security", "operations", "repository_owner_perspective"],
+    "principal_replacement_allowed": false,
+    "budget_reset_by_issue_pr_branch_head_or_scope": false
+  },
+  "terminal_conditions": [
+    "p0_at_any_stage",
+    "p0_or_p1_at_v2",
+    "new_p0_or_p1_outside_fixed_scope",
+    "incomplete_inventory",
+    "principal_missing_or_replaced",
+    "digest_mismatch",
+    "review_budget_exhausted"
+  ],
+  "activation": {
+    "state": "blocked",
+    "blocked_operations": [
+      "recovery_credential_issuance",
+      "succession_consumption",
+      "check_creation_or_update",
+      "merge_eligibility_projection",
+      "runtime_activation"
+    ],
+    "requires": [
+      "g1_g2_g3_accepted",
+      "trusted_verifier_authenticity",
+      "program_global_replay_rejection",
+      "complete_runtime_inventory",
+      "writer_fencing_and_quiescence",
+      "github_enforced_atomic_main_freshness",
+      "rollback_invalidation_readback",
+      "separate_pre_activation_human_go"
+    ]
+  }
+}

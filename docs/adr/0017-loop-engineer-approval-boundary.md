@@ -28,7 +28,7 @@ Loop EngineerはPRを次の3状態のどれかに分類する。優先順位は
 | --------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `AUTO_MERGE_ELIGIBLE` | 低リスクのコード変更で、最新SHAのreviewとCIがすべて合格              | ISSUE-167のdry-runと人間GO後だけnative auto-mergeを予約できる |
 | `HUMAN_REQUIRED`      | 証跡は揃っているが、実環境・不可逆性・管理権限に関する人間判断が必要 | 人間が限定scopeを承認するまでmergeまたは操作しない            |
-| `HOLD`                | 指摘、矛盾、不明、stale証跡、検証不能のいずれかがある                | 人間承認でも上書きせず、修正または証跡追加後に再判定する      |
+| `HOLD`                | 指摘、矛盾、不明、stale証跡、検証不能のいずれかがある                | 通常HOLDは修正後に再判定し、Terminal HOLDはADR-0018に従う     |
 
 `HUMAN_REQUIRED`は判断待ちであり、`HOLD`は合格条件未達である。管理者がCIやreviewを無視して
 `HOLD`をmerge可能へ変える運用は採用しない。
@@ -95,6 +95,10 @@ repository、workflow、Environment、actor、run、main SHAを検証した後�
 caller入力のboolean、自由文、ローカルファイル、通常のGitHub Actions Appのjob、OIDC未検証の証明は
 承認にならない。mainまたはheadが動いた場合、Checkが複数・未完了・失敗・別Appの場合、許可上限を
 超えた場合は`HOLD`とする。第6巡以降の例外、Ruleset bypass、未解決findingの上書きは認めない。
+
+第5巡の最終評価でactionable findingが残った場合はTerminal HOLDとする。対象candidateとreview campaignを
+凍結し、修正または証跡追加後の再判定へ戻さない。問題領域全体を永久停止せずに別protocol majorを
+設計する場合も、IssueやPRの作り直しではなくADR-0018の一度限りのtransitionを必要とする。
 
 ### 5. HUMAN_REQUIRED
 
@@ -163,6 +167,15 @@ AI生成本文、secret、接続文字列は取得・artifact保存・ログ出�
 
 それまでも`HOLD`条件は最優先で維持し、HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う。
 
+### 11. Terminal HOLDと独立後継
+
+ISSUE-177 / PR #389のRound 5 Terminal HOLD、凍結対象、禁止artifact、一度限りの
+`recovery-protocol-v2`移行、有限review budgetおよびactivation分離はADR-0018を正とする。
+
+ADR-0018は第6巡の例外を作らない。旧campaignの結果を保持したまま、別program identity、別protocol
+major、別artifact集合をOwnerのexact-bound grantで開始する状態遷移だけを定義する。transition grantが
+未発行、期限切れ、消費済み、不一致の場合はG1以降を開始しない。
+
 ## Consequences
 
 ### Positive
@@ -192,5 +205,7 @@ ISSUE-167で具体化する。
 - ISSUE-166 / GitHub Issue #338
 - ISSUE-167 / GitHub Issue #339
 - ISSUE-173 / GitHub Issue #356
+- ISSUE-193 / GitHub Issue #390
+- `docs/adr/0018-terminal-hold-independent-successor.md`
 - `docs/api-driven-development/codex-automation-runbook.md`
 - `AGENTS.md`

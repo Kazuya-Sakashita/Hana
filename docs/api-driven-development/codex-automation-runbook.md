@@ -28,7 +28,10 @@
 | --------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
 | `AUTO_MERGE_ELIGIBLE` | 最新SHAの全reviewとCIが合格し、actionable finding 0件で、外部影響がない | 有効化後にnative auto-merge予約だけを許可 |
 | `HUMAN_REQUIRED`      | 証跡は揃っているが、実環境、不可逆性、管理権限、外部契約の判断が必要    | 限定scopeの人間承認まで停止               |
-| `HOLD`                | 指摘、矛盾、stale SHA、情報不足、検証不能、未知riskがある               | 人間承認で上書きせず、修正または証跡追加  |
+| `HOLD`                | 指摘、矛盾、stale SHA、情報不足、検証不能、未知riskがある               | 通常HOLDは再判定し、Terminal HOLDは凍結   |
+
+`HOLD`は人間承認で上書きせず、通常HOLDだけを残存review budget内の修正後に再判定する。
+Terminal HOLDはADR-0018に従って対象campaignを終了する。
 
 code-onlyで候補になり得る範囲:
 
@@ -270,9 +273,53 @@ Verification after rollback:
 修正commit後はfresh contextで全必要reviewをやり直す。3巡目終了時にactionable finding、
 判断不一致、情報不足、検証不能、reviewer不足が残れば`HOLD`にする。
 
+## 10. Terminal HOLDとindependent successor
+
+通常HOLDとTerminal HOLDを区別する。通常HOLDはreview budget内で修正と再判定ができる。Terminal HOLDは
+最大巡の最終評価でP0 / P1が残ったcandidate revisionとreview campaignの不可逆な終端である。
+
+Terminal HOLD後は次を禁止する。
+
+- 対象Issue、PR、headへのpush、追加修正、追加review、reviewer追加・交代
+- Check作成・更新、例外workflow、merge、結果のresetまたは成功扱い
+- Issue、PR、branch、head、reviewer、caller申告lineageの変更によるreview budget reset
+- 凍結code、commit、diff、schema、test、fixture、review、Check、attestationの後継利用
+
+ISSUE-177 / PR #389の後はADR-0018と
+`docs/governance/loop-engineer/recovery-protocol-v2-charter.json`を正とし、次の順序だけを許可する。
+
+1. `G0`: mainからgovernance、terminal manifest、provenance、有限review budgetを定義する
+2. G0の最終headに対して3 roleがfresh read-only評価を行う
+3. Repository Ownerがexact-boundな`protocol_v2_transition_grant`を1回だけ発行する
+4. G0をmainへ反映し、grantを`accepted`として消費する
+5. `G1`: formal contractとproductionから独立したread-only oracleを作る
+6. `G2`: trusted verifier真正性、program-global replay拒否、authorityのatomic consumeを作る
+7. `G3`: runtime inventory、attempt上限、writer fencing、atomic freshness、rollback、projectionを作る
+8. G1〜G3完了後も、別のpre-activation human GOまで特権操作を行わない
+
+G0〜G3は直列で、各deliverableのreviewを次へ限定する。
+
+```text
+D1 scope / threat / failure review
+  -> initial implementation
+  -> V1 exact-head verification
+  -> at most one bounded remediation when P1 exists
+  -> V2 exact-final-head verification
+```
+
+D1またはV1でP0があれば即時停止する。V2でP0 / P1が残る、新しいP0 / P1が見つかる、inventoryが
+不完全、principalが欠けるか交代する、digestが一致しない、scope変更が必要、または予算を使い切った
+場合はprogram全体をTerminal HOLDにする。4 deliverable合計で最大12 specialist snapshot、4 remediation
+batchとし、追加Issue、scope分割、自動後継、grant連鎖を行わない。
+
+transition時に利用できる別trust-domain verifierがなければ、GitHub write tokenと復旧credentialを持たない
+3 role agentのfresh advisoryを使える。ただし、これを独立した人間review、trusted receipt、人間SoD、
+悪意あるOwnerへの耐性と記録しない。G2でtrusted verifier真正性とreplay防止を実装するまで、credential
+発行、succession消費、Check更新、success投影を行わない。
+
 ---
 
-## 10. Stop / Block Rules
+## 11. Stop / Block Rules
 
 Codex は以下で止まる。
 
@@ -287,7 +334,7 @@ Codex は以下で止まる。
 
 止まったら Issue を `blocked` にするか、PR に missing decision を明記する。
 
-## 11. Safety baselineと段階有効化
+## 12. Safety baselineと段階有効化
 
 - `approval_policy="never"`、Full Access、CI bypassを採用しない。
 - 推奨baselineは`approval_policy="on-request"`、`approvals_reviewer="auto_review"`、
