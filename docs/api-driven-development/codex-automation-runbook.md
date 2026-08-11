@@ -5,7 +5,8 @@
 目的は無条件の自動mergeではない。PRの最新commit SHAに対する複数の独立reviewとCIを使い、
 `AUTO_MERGE_ELIGIBLE`、`HUMAN_REQUIRED`、`HOLD`を安全側に判定することである。
 
-本契約はADR-0017を正とする。ISSUE-164〜ISSUE-166の実装とISSUE-167のdry-run後に人間が
+通常merge-controlはADR-0017、Terminal HOLD後のmanual-only回復境界はADR-0019を正とする。
+ISSUE-164〜ISSUE-166の実装とISSUE-167のdry-run後に人間が
 有効化を承認するまでも`HOLD`条件を最優先し、HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う。
 
 ---
@@ -304,3 +305,50 @@ ISSUE-167で誤許可0件を確認し、人間がGOを出すまでも`HOLD`条�
 ISSUE-166のGitHub設定契約、status-only workflow、設定前snapshot、postflight、rollbackは
 `docs/api-driven-development/loop-engineer-github-merge-controls/README.md`を正とする。Rulesetとrepository
 settingsは人間承認後だけ変更し、ISSUE-167の人間GOまではnative auto-mergeをどのPRにも予約しない。
+
+## 12. Terminal HOLD後のmanual-only運用
+
+### 12.1 plane分離
+
+通常PRのHana App required Checksと、回復権限を分離する。
+
+- normal merge-control: 通常Issue / PR、既存Ruleset、required Checks、最大3巡review、人間の手動merge判断
+- recovery authority: review例外、回復credential、succession、recovery Check、権限消費、activation
+
+normal merge-controlのsuccessをrecovery authorityの許可へ読み替えない。通常PRのCheck発行や手動mergeは
+継続できるが、それだけで回復workflow、credential、Check更新またはactivationを開始しない。
+
+### 12.2 凍結対象
+
+PR #355、#361、#389、#391とIssue #362、#390を凍結する。対象へのpush、修正、review、reviewer交代、
+Check作成・更新、workflow dispatch、mergeを行わない。
+
+凍結branchのcode、commit、diff、schema、test、fixture、review、Check、attestationは、別Issueの
+実装素材、oracle、合格証跡、activation入力へ再利用しない。凍結執行に必要なobject ID、terminal state、
+base / head SHA、Check IDのread-only参照だけを許可する。
+
+### 12.3 manual-only停止
+
+hardware security keyがなく、別IssueによるRepository Ownerの判断もない間は次を`BLOCKED`とする。
+
+- 回復用credential、token、secret、署名鍵、authority receiptの作成、発行、更新、消費
+- `review-round-exception`その他の回復Checkの作成、更新、再利用
+- 回復workflow、例外workflow、activation workflowのdispatch
+- succession、回復用merge適格性投影、runtime activation
+- 回復目的のRuleset、Environment、repository settings、GitHub App権限変更
+
+software-only key、caller boolean、自由文comment、agent自己申告をhardware境界の代用にしない。
+
+### 12.4 ISSUE-194の有限reviewと終了
+
+ISSUE-194は同一head SHAをSpec / Acceptance、Security / Authority Boundary、
+Operations / Liveness / Rollbackの3観点で独立確認して1巡とし、最大3巡にする。
+
+Round 1または2のfindingは巡ごとに1つのbounded修正batchへ統合する。修正後は新head SHAで次巡を行い、
+旧reviewを無効にする。Round 3でfinding、scope変更、reviewer不足、timeout、SHA不一致または検証失敗が
+残ればIssueを`blocked`として終了する。第4巡、reviewer交代によるbudget reset、ISSUE-173例外、
+自動後継Issueを使用しない。
+
+全reviewとrequired Checksが成功してもauto-mergeを予約しない。Repository Ownerが手動squash mergeを
+判断する。H1のmergeはH2 / H3、credential、Check更新、activationを開始しない。H2 / H3はH1 merge後に
+別Issueを作成するかを人間が改めて判断し、hardware security keyがない間のH3は`BLOCKED`とする。

@@ -163,6 +163,22 @@ AI生成本文、secret、接続文字列は取得・artifact保存・ログ出�
 
 それまでも`HOLD`条件は最優先で維持し、HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う。
 
+### 11. Terminal HOLD後のmanual-only境界
+
+Terminal HOLD後の回復権限はADR-0019を正とする。ADR-0017の通常merge-controlは維持するが、
+通常PRのHana App required Checksを、回復exception、credential、successionまたはactivationの証跡へ
+読み替えない。
+
+PR #355、#361、#389、#391とIssue #362、#390は凍結する。対象へのpush、review、Check作成・更新、
+例外workflow、merge、および凍結成果物の後続実装・合格証跡への再利用を禁止する。
+
+hardware security keyがなく、別Issueによる人間の再設計判断もない間は、回復用credentialの発行・消費、
+recovery Check更新、workflow dispatch、runtime activationを`BLOCKED`とする。通常開発のPR、既存Rulesetの
+required Checks、人間が最終判断する手動squash mergeは回復権限ではないため継続できる。
+
+ISSUE-194のmergeはこのmanual-only停止を記録するだけで、H2 / H3の開始、権限付与、Check更新、
+activationまたはauto-merge予約を許可しない。
+
 ## Consequences
 
 ### Positive
@@ -192,5 +208,7 @@ ISSUE-167で具体化する。
 - ISSUE-166 / GitHub Issue #338
 - ISSUE-167 / GitHub Issue #339
 - ISSUE-173 / GitHub Issue #356
+- ISSUE-194 / GitHub Issue #392
+- `docs/adr/0019-human-root-manual-only-governance.md`
 - `docs/api-driven-development/codex-automation-runbook.md`
 - `AGENTS.md`
