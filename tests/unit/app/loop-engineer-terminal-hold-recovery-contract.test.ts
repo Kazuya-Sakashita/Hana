@@ -503,7 +503,7 @@ function buildSuccessfulTwoRoundTrace() {
     credential_owner_id: typedId('credential', '6'),
     check_run_id: 2000,
   }
-  const barrierEvents = [
+  const barrierEvents: Array<Record<string, unknown>> = [
     'generation_acquired',
     'lower_generation_blocked',
     'drain_started',
@@ -1107,8 +1107,9 @@ function validateUnknownSuccessSequence(records: Array<Record<string, unknown>>)
 function validateSuccessfulTrace(records: Array<Record<string, unknown>>): string[] {
   const errors = validateLifecycle(records)
   for (const record of records) {
+    const recordType = String(record.record_type)
     if (!validateEvidence(record)) {
-      errors.push(`invalid schema in complete trace: ${String(record.record_type)}`)
+      errors.push(`invalid schema in complete trace: ${recordType}`)
     }
   }
   const successProjections = records.filter(
