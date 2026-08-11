@@ -148,6 +148,12 @@ rollback、最新SHA条件を満たすコード変更は`AUTO_MERGE_ELIGIBLE`候
 自動判定と監査へ保存してよいのは、Issue ID、PR番号、head SHA、変更領域ID、reviewer role、round、
 actionable finding件数、必須check名とstatus、固定された最終判定reasonである。
 
+ISSUE-194だけはADR-0019の有限reviewを監査可能にするため、GitHub Issue #392のstatus-only commentへ
+round ID、merge-base / head SHA、Issue / scope digest、roleとprincipal IDのSHA-256対応、時刻、期限、
+normalized finding ID / reason / severity、finding set digest、remediation batch ID、input / output head、
+許可path / scope digest、固定statusを追加できる。opening、result、batchは別recordとしてcomment IDで
+結び付け、既存recordを編集・削除・再発行しない。
+
 PR本文、コメント本文、review prompt全文、実ユーザー情報、画像、画像URL、storage key、AI prompt、
 AI生成本文、secret、接続文字列は取得・artifact保存・ログ出力しない。
 
@@ -162,6 +168,35 @@ AI生成本文、secret、接続文字列は取得・artifact保存・ログ出�
 5. ISSUE-167の人間GO後に、限定した低リスクPRだけを有効化する
 
 それまでも`HOLD`条件は最優先で維持し、HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う。
+
+### 11. Terminal HOLD後のmanual-only境界
+
+Terminal HOLD後の回復権限はADR-0019を正とする。ADR-0017の通常merge-controlは維持するが、
+通常PRのactive Rulesetをfreshにreadbackして得たrequired Checksを、回復exception、credential、
+successionまたはactivationの証跡へ読み替えない。通常の`merge-eligibility`は非凍結の通常PR、
+現在head、required App identity、normal merge-control purposeへ一致する場合だけ通常planeとして扱う。
+凍結対象または回復権限をsubject / purposeとする投影はrecovery Checkとして禁止する。
+
+PR #355、#361、#389、#391とIssue #362、#390は凍結する。対象へのpush、review、Check作成・更新、
+例外workflow、merge、および凍結成果物の後続実装・合格証跡への再利用を禁止する。
+
+hardware security keyがない間は、別Issueまたは人間判断の有無にかかわらず、回復用credentialの
+発行・消費、recovery Check更新、workflow dispatch、runtime activationを`BLOCKED`とする。keyが
+利用可能になった後も、別IssueによるRepository Ownerの明示判断を追加の必要条件とする。
+
+通常開発のPR、fresh readbackしたRulesetのrequired Checks、人間が最終判断する手動squash mergeは
+回復権限ではないため継続できる。通常Checkを発行できない場合はそのPRを`HOLD`とし、bypassや
+recovery publisherで代用しない。
+
+ISSUE-194のmergeはこのmanual-only停止を記録するだけで、H2 / H3の開始、権限付与、Check更新、
+activationまたはauto-merge予約を許可しない。
+
+ADR-0017のISSUE-173例外は非凍結の通常PRにだけ適用可能であり、Terminal HOLD lineage、ISSUE-194、
+回復停止方針または回復権限を扱うPRには適用しない。
+
+ただしPR #393はmanual-only停止をmainへ記録するため、ADR-0019のexact-bound bootstrapに一致する
+専用Appの`normal-policy-merge-control` Checkだけを現在headへ発行できる。このCheckは回復権限、例外、
+credential、succession、activationまたは自動mergeを付与せず、Ruleset変更やbypassも許可しない。
 
 ## Consequences
 
@@ -192,5 +227,7 @@ ISSUE-167で具体化する。
 - ISSUE-166 / GitHub Issue #338
 - ISSUE-167 / GitHub Issue #339
 - ISSUE-173 / GitHub Issue #356
+- ISSUE-194 / GitHub Issue #392
+- `docs/adr/0019-human-root-manual-only-governance.md`
 - `docs/api-driven-development/codex-automation-runbook.md`
 - `AGENTS.md`

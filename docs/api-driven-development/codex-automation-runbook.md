@@ -5,7 +5,8 @@
 目的は無条件の自動mergeではない。PRの最新commit SHAに対する複数の独立reviewとCIを使い、
 `AUTO_MERGE_ELIGIBLE`、`HUMAN_REQUIRED`、`HOLD`を安全側に判定することである。
 
-本契約はADR-0017を正とする。ISSUE-164〜ISSUE-166の実装とISSUE-167のdry-run後に人間が
+通常merge-controlはADR-0017、Terminal HOLD後のmanual-only回復境界はADR-0019を正とする。
+ISSUE-164〜ISSUE-166の実装とISSUE-167のdry-run後に人間が
 有効化を承認するまでも`HOLD`条件を最優先し、HOLDでないPRのmergeを`HUMAN_REQUIRED`として扱う。
 
 ---
@@ -297,6 +298,9 @@ Codex は以下で止まる。
   必須check名とstatus、固定された最終判定reasonだけにする。
 - PR本文、コメント本文、prompt全文、実ユーザー情報、画像、生成本文、secretをartifactへ保存しない。
 
+ISSUE-194ではADR-0019に定義したstatus-only Round台帳のfieldだけを追加で許可する。raw principal identity、
+review prompt、raw finding本文、自由文の承認は保存しない。
+
 有効化順はISSUE-164の判定、ISSUE-165のreview gate、ISSUE-166のRuleset、ISSUE-167のdry-runである。
 ISSUE-167で誤許可0件を確認し、人間がGOを出すまでも`HOLD`条件を最優先する。HOLDでないPRも、
 人間GOまではmergeを`HUMAN_REQUIRED`にする。
@@ -304,3 +308,84 @@ ISSUE-167で誤許可0件を確認し、人間がGOを出すまでも`HOLD`条�
 ISSUE-166のGitHub設定契約、status-only workflow、設定前snapshot、postflight、rollbackは
 `docs/api-driven-development/loop-engineer-github-merge-controls/README.md`を正とする。Rulesetとrepository
 settingsは人間承認後だけ変更し、ISSUE-167の人間GOまではnative auto-mergeをどのPRにも予約しない。
+
+## 12. Terminal HOLD後のmanual-only運用
+
+### 12.1 plane分離
+
+通常PRのHana App required Checksと、回復権限を分離する。
+
+- normal merge-control: 通常Issue / PR、active Rulesetのfresh readback、required Checks、最大3巡review、人間の手動merge判断
+- recovery authority: 凍結・回復目的のreview例外、credential、succession、Check、権限消費、activation
+
+normal merge-controlのsuccessをrecovery authorityの許可へ読み替えない。各PRでactive Rulesetをfreshに
+readbackし、非凍結の通常PR、現在head、required App identity、normal merge-control purposeへ一致する
+Checkだけを通常planeとして扱う。それだけで回復workflow、credential、Check更新またはactivationを
+開始しない。
+
+通常`merge-eligibility`を発行できない場合は対象PRを`HOLD`とし、Ruleset bypassやrecovery publisherで
+代用しない。ADR-0017のISSUE-173例外は非凍結の通常PRだけに適用でき、Terminal HOLD lineage、
+ISSUE-194、回復停止方針または回復権限を扱うPRには使用しない。
+
+PR #393だけはmanual-only停止方針をmainへ記録するbootstrapとして、repository ID `1238189306`、
+node ID `R_kgDOSc1E-g`、Issue #392、PR #393、現在head、active Ruleset ID `20413337`、Hana App ID
+`4483496`をfreshに照合する。完全一致する場合だけ、専用Appの5 required Checksを
+`normal-policy-merge-control` purposeで発行できる。通常CIに対応する3 CheckはそのCIのsuccess後、
+`specialist-review-gate`と`merge-eligibility`はRound 3の3 role GO後だけ発行する。recovery projection、
+review例外、credential、succession、activation、自動merge、Ruleset変更・bypassには使用しない。
+
+### 12.2 凍結対象
+
+PR #355、#361、#389、#391とIssue #362、#390を凍結する。対象へのpush、修正、review、reviewer交代、
+Check作成・更新、workflow dispatch、mergeを行わない。
+
+凍結branchのcode、commit、diff、schema、test、fixture、review、Check、attestationは、別Issueの
+実装素材、oracle、合格証跡、activation入力へ再利用しない。凍結執行に必要なobject ID、terminal state、
+base / head SHA、Check IDのread-only参照だけを許可する。
+
+### 12.3 manual-only停止
+
+hardware security keyがない間は、別IssueやRepository Owner判断の有無にかかわらず次を`BLOCKED`とする。
+
+- 回復用credential、token、secret、署名鍵、authority receiptの作成、発行、更新、消費
+- `review-round-exception`その他の回復Checkの作成、更新、再利用
+- 回復workflow、例外workflow、activation workflowのdispatch
+- succession、回復用merge適格性投影、runtime activation
+- 回復目的のRuleset、Environment、repository settings、GitHub App権限変更
+
+software-only key、caller boolean、自由文comment、agent自己申告をhardware境界の代用にしない。
+keyが利用可能になった後も、別IssueによるRepository Ownerの明示判断を追加の必要条件とし、一方だけで
+blockを解除しない。
+
+### 12.4 ISSUE-194の有限reviewと終了
+
+GitHub Issue #392のcommentをoperational SSOTとする。各Roundは最初のrole開始前に、新規
+`issue194-round-open/v1` commentを1件だけ作る。`round_id`、merge-base / head SHA、Issue / scope digest、
+3 roleと各fixed principal IDのSHA-256対応、開始時刻、期限、`consumed=true`を固定する。作成済みcommentを
+編集・削除・再発行せず、そのcomment IDを同一入力として全roleへ渡す。
+
+全role完了後はopening comment IDを参照する別の`issue194-round-result/v1` commentへ、role別resultと
+finding件数、normalized finding ID / reason / severity、finding set digest、固定status、
+`advisory_only=true`、`human_approval=false`を追記する。raw identity、prompt、raw finding本文、自由文の
+承認を保存しない。
+
+Round 1または2の完全bundleにcontent findingがある場合だけ、全findingをstable IDと固定reasonへ
+正規化し、巡ごとに正確に1つのbounded修正batchへ統合できる。修正前にopening / result comment ID、
+`batch_id`、input head、許可path / scope digestを別の`issue194-remediation-batch/v1` commentへ固定する。
+完了は別commentへoutput headとresultを追記し、既存recordを編集しない。修正後は新head SHAで次巡を
+行い、旧reviewを無効にする。
+
+どのRoundでもreviewer不足・交代、timeout、schema違反、SHA不一致、scope変更、Round開始後の
+main / head変更、batch外変更、台帳recordの欠落・編集・削除・重複・再発行があれば、そのRoundを消費して
+即時`blocked`とする。Round 3のfindingまたは検証失敗も`blocked`とし、第4巡、budget reset、
+ISSUE-173例外、自動後継Issueを使用しない。Round 2以前の事後recordは消費・findingのstatusに限り、
+開始証跡やGOへ読み替えない。Round 3は完全なopening recordなしに開始しない。
+
+全reviewとrequired Checksが成功してもauto-mergeを予約しない。Repository Ownerが手動squash mergeを
+判断する。H1のmergeは後続Issue、credential、Check更新、activationを開始しない。
+
+H2は非特権design-only / read-only verifier検討であり、credential、Check、workflow dispatch、settings、
+authority消費、activationを持たない。H3はhardware-bound recovery authorityの発行・消費・activation
+検討である。名称を変えてもこの意味的境界を適用する。どちらもH1 merge後のOwner明示判断がある場合だけ
+最大1 Issue、最大3巡、例外なしで検討でき、失敗時に自動後継を作らない。hardware security keyがない間は
+H2の有無にかかわらずH3と全recovery authorityを`BLOCKED`とする。

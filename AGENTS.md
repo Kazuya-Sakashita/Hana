@@ -16,6 +16,7 @@
 - **Codex Skill**: `$hana-development`（Hana の Issue 着手・レビュー・PR 準備で使う）
 - **Codex 自動開発 Runbook**: `docs/api-driven-development/codex-automation-runbook.md`
 - **Loop Engineer 承認境界**: `docs/adr/0017-loop-engineer-approval-boundary.md`（HOLDを最優先し、ISSUE-167の人間GOまでは自動mergeを予約しない）
+- **Loop Engineer manual-only境界**: `docs/adr/0019-human-root-manual-only-governance.md`（Terminal HOLD後の回復権限を停止し、通常merge-controlと分離する）
 
 ### Claude Code から Codex への読み替え
 
@@ -41,6 +42,9 @@
 7. **不確実なら止まる**。3回失敗したら一度報告。同じコマンドをループしない。
 8. **1 Issue 1 PR**。混入禁止。
 9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
+10. **Terminal HOLDを迂回しない**。PR #355、#361、#389、#391とIssue #362、#390は凍結し、push、review、Check作成・更新、例外workflow、mergeを行わない。Issue、PR、branch、head、reviewerを変えても、凍結成果物のcode、commit、diff、schema、test、fixture、review、Check、attestationを後続の実装素材や合格証跡へ再利用しない。
+11. **回復権限はmanual-onlyで停止する**。通常PRのHana App required Checksはmerge-control証跡であり、回復exception、credential、succession、activationを付与しない。hardware security keyがない間は、別IssueやOwner判断の有無にかかわらず回復権限を`BLOCKED`とする。keyが利用可能になった後も、別IssueによるRepository Ownerの明示判断を追加の必要条件とし、どちらか一方だけでblockを解除しない。通常開発のPRと人間による手動squash mergeはこの停止に含めない。
+12. **ISSUE-194は3巡で終端する**。各RoundはGitHub Issue #392へ一意なopening recordを追記してから最初のroleを開始し、base、head、3 roleと固定principalのhash、期限へ固定して消費する。結果と修正batchは別のstatus-only commentでopening recordへ結び付け、既存recordを編集・削除・再発行しない。Round 1または2の完全bundleにcontent findingがある場合だけ、全findingを固定し、巡ごとに正確に1つのbounded修正batchへ統合できる。reviewer不足・交代、timeout、schema違反、SHA不一致、scope変更、batch外変更、record欠落・重複・改変は即時`blocked`とする。Round 3のfindingも`blocked`で終了し、第4巡、budget reset、ISSUE-173例外を使用しない。PR #393に限り、最終Roundが全role GOの場合、active Rulesetへ一致する専用Appの通常merge-control Checkを現在headへstatus-onlyで発行できるが、回復権限、例外、credential、activation、自動mergeを一切付与しない。
 
 ---
 
@@ -259,6 +263,7 @@ tests/
 - `docs/api-driven-development/openapi-style-guide.md` — OpenAPI 命名規約
 - `docs/api-driven-development/security-and-privacy.md` — セキュリティ詳細
 - `docs/adr/` — アーキテクチャ判断記録
+- `docs/adr/0019-human-root-manual-only-governance.md` — Terminal HOLD後のmanual-only回復停止境界
 - `docs/issues/` — Issue の永続コピー
 - `docs/perf/` — パフォーマンスベースラインと計測手引き
 
