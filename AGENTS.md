@@ -44,7 +44,7 @@
 9. **専門reviewは通常3巡まで**。4〜5巡目は、ISSUE-173の保護Environment、GitHub署名付きOIDC、専用App CheckがIssue / PR / main SHA / head SHA / 最大巡へ一致する場合だけ許可する。6巡目とcaller自己申告は常にHOLD。
 10. **Terminal HOLDを迂回しない**。PR #355、#361、#389、#391とIssue #362、#390は凍結し、push、review、Check作成・更新、例外workflow、mergeを行わない。Issue、PR、branch、head、reviewerを変えても、凍結成果物のcode、commit、diff、schema、test、fixture、review、Check、attestationを後続の実装素材や合格証跡へ再利用しない。
 11. **回復権限はmanual-onlyで停止する**。通常PRのHana App required Checksはmerge-control証跡であり、回復exception、credential、succession、activationを付与しない。hardware security keyがない間は、別IssueやOwner判断の有無にかかわらず回復権限を`BLOCKED`とする。keyが利用可能になった後も、別IssueによるRepository Ownerの明示判断を追加の必要条件とし、どちらか一方だけでblockを解除しない。通常開発のPRと人間による手動squash mergeはこの停止に含めない。
-12. **ISSUE-194は3巡で終端する**。Roundは最初のroleを開始した時点でbase、head、3 role、principal、期限へ固定して消費する。Round 1または2の完全bundleにcontent findingがある場合だけ、全findingを固定し、巡ごとに正確に1つのbounded修正batchへ統合できる。reviewer不足・交代、timeout、schema違反、SHA不一致、scope変更、batch外変更は即時`blocked`とする。Round 3のfindingも`blocked`で終了し、第4巡、budget reset、ISSUE-173例外を使用しない。
+12. **ISSUE-194は3巡で終端する**。各RoundはGitHub Issue #392へ一意なopening recordを追記してから最初のroleを開始し、base、head、3 roleと固定principalのhash、期限へ固定して消費する。結果と修正batchは別のstatus-only commentでopening recordへ結び付け、既存recordを編集・削除・再発行しない。Round 1または2の完全bundleにcontent findingがある場合だけ、全findingを固定し、巡ごとに正確に1つのbounded修正batchへ統合できる。reviewer不足・交代、timeout、schema違反、SHA不一致、scope変更、batch外変更、record欠落・重複・改変は即時`blocked`とする。Round 3のfindingも`blocked`で終了し、第4巡、budget reset、ISSUE-173例外を使用しない。PR #393に限り、最終Roundが全role GOの場合、active Rulesetへ一致する専用Appの通常merge-control Checkを現在headへstatus-onlyで発行できるが、回復権限、例外、credential、activation、自動mergeを一切付与しない。
 
 ---
 

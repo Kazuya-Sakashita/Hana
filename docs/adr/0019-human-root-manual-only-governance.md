@@ -34,6 +34,18 @@ purposeへ一致する場合だけnormal planeとして扱う。通常の`merge-
 subject / purposeとするrecovery projectionを区別する。通常Checkを発行できない場合は対象PRを`HOLD`とし、
 Ruleset bypassやrecovery publisherで代用しない。
 
+ISSUE-194を閉じるPR #393は回復権限を実装せず、manual-only停止をmainへ記録するpolicy-only PRである。
+このPRだけは、repository ID `1238189306`、node ID `R_kgDOSc1E-g`、Issue #392、PR #393、現在head、
+active Ruleset ID `20413337`のfresh readbackへ一致する場合に限り、Hana App ID `4483496`の
+`pr-gate`、`validate`、`local-registry`、`specialist-review-gate`、`merge-eligibility`を
+`normal-policy-merge-control` purposeのstatus-only Checkとして発行できる。最初の3件は対応する通常CIの
+success後、後ろの2件は本節の最終Roundで3 roleすべてがGOとなった後だけ発行する。RulesetまたはApp
+identityが変わった場合は発行せず`HOLD`とする。
+
+この限定bootstrapはrecovery Check、review例外、credential、succession、authority receipt、activation、
+production操作、自動merge予約またはRuleset bypassを許可しない。Checkのsubject / purposeへ凍結対象、
+回復権限、H2またはH3を含めず、PR #393以外へ転用しない。
+
 ### 2. Terminal HOLDを凍結する
 
 次を凍結対象とする。
@@ -75,6 +87,9 @@ agent reviewはadvisoryであり、別人の人間承認、separation of duties�
 ADR-0017のISSUE-173例外は、非凍結の通常PRに限って従来どおり評価できる。Terminal HOLD lineage、
 ISSUE-194、回復停止方針または回復権限を扱うPRには適用しない。
 
+前節のPR #393限定`normal-policy-merge-control` Checkはrecovery Checkではなく、この禁止の唯一の
+bootstrap例外である。対象、App identity、Check名、review条件のいずれかが一致しなければ適用しない。
+
 ### 6. H1、H2、H3を自動連鎖させない
 
 ISSUE-194はH1としてmanual-only停止を文書化する。H1のmergeは次のIssue作成、実装、credential、
@@ -91,21 +106,41 @@ hardware security keyがない間は、H2や別Issueの有無にかかわらずH
 
 ### 7. ISSUE-194の有限review
 
-Roundは最初のroleを開始した時点で消費する。開始前にround ID、merge-base、head SHA、次の3 role、
-固定principal、期限を確定し、同一値を全reviewerへ渡す。
+GitHub Issue #392のcommentをRound台帳のoperational SSOTとする。各Roundは最初のroleを開始する前に、
+次の`issue194-round-open/v1`を新しいcommentとして1件だけ追記する。commentの作成によりRoundを消費し、
+同一値を全reviewerへ渡す。
+
+- `round_id`、`merge_base_sha`、`head_sha`
+- `issue_snapshot_digest`、`scope_diff_digest`
+- roleごとの`principal_id_sha256`
+- `opened_at`、`deadline`、`consumed=true`
+
+principalのraw identityは保存せず、次の3 roleとhashの対応だけを固定する。
 
 1. Spec / Acceptance
 2. Security / Authority Boundary
 3. Operations / Liveness / Rollback
 
+全role完了後はopening comment IDを参照する別の`issue194-round-result/v1` commentを追記する。
+結果recordはrole別resultとfinding件数、各normalized findingのstable ID、固定reason、severity、
+`finding_set_digest`、最終status、`advisory_only=true`、`human_approval=false`だけを持つ。raw prompt、
+raw finding本文、principal identityまたは自由文の承認を保存しない。
+
 Round 1または2の完全bundleにcontent findingがある場合、remediationを行うなら全findingをstable IDと
-固定reasonへ正規化し、巡ごとに正確に1つのbounded修正batchへ統合する。remediationしない場合は
-`blocked`で終了する。修正後は新head SHAで次巡を行い、旧reviewを合格証跡へ使わない。
+固定reasonへ正規化し、巡ごとに正確に1つのbounded修正batchへ統合する。開始時にopening / result comment
+IDを参照する別の`issue194-remediation-batch/v1` commentを追記し、`batch_id`、`input_head_sha`、
+許可path、scope digestを固定する。完了時は別のstatus-only commentへ`output_head_sha`とresultを追記し、
+開始recordを編集しない。修正後は新head SHAで次巡を行い、旧reviewを合格証跡へ使わない。
 
 どのRoundでもreviewer不足・交代、timeout、schema違反、SHA不一致、scope変更、Round開始後の
-main / head変更、finding batch外の変更があれば、そのRoundを消費してISSUE-194を即時`blocked`とする。role再実行や
-同一Roundの再作成はしない。Round 3のcontent finding、判断不一致または検証失敗も`blocked`とする。
-第4巡、budget reset、ISSUE-173例外、自動後継Issueを使用しない。
+main / head変更、finding batch外の変更、台帳recordの欠落・編集・削除・重複・再発行があれば、
+そのRoundを消費してISSUE-194を即時`blocked`とする。role再実行や同一Roundの再作成はしない。
+Round 3のcontent finding、判断不一致または検証失敗も`blocked`とする。第4巡、budget reset、
+ISSUE-173例外、自動後継Issueを使用しない。
+
+Round 2以前に開始前recordが存在しなかった場合は、事後recordを開始証跡やGOへ読み替えない。
+事後recordは消費済みRoundとfindingを透明化するstatusに限る。完全なopening / result分離はRound 3から
+必須とし、Round 3開始前に満たせなければ`blocked`とする。
 
 全reviewとrequired Checksが成功してもauto-mergeは予約せず、Repository Ownerが手動squash mergeを
 判断する。

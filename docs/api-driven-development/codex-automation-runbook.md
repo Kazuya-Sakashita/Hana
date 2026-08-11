@@ -298,6 +298,9 @@ Codex は以下で止まる。
   必須check名とstatus、固定された最終判定reasonだけにする。
 - PR本文、コメント本文、prompt全文、実ユーザー情報、画像、生成本文、secretをartifactへ保存しない。
 
+ISSUE-194ではADR-0019に定義したstatus-only Round台帳のfieldだけを追加で許可する。raw principal identity、
+review prompt、raw finding本文、自由文の承認は保存しない。
+
 有効化順はISSUE-164の判定、ISSUE-165のreview gate、ISSUE-166のRuleset、ISSUE-167のdry-runである。
 ISSUE-167で誤許可0件を確認し、人間がGOを出すまでも`HOLD`条件を最優先する。HOLDでないPRも、
 人間GOまではmergeを`HUMAN_REQUIRED`にする。
@@ -324,6 +327,13 @@ Checkだけを通常planeとして扱う。それだけで回復workflow、crede
 代用しない。ADR-0017のISSUE-173例外は非凍結の通常PRだけに適用でき、Terminal HOLD lineage、
 ISSUE-194、回復停止方針または回復権限を扱うPRには使用しない。
 
+PR #393だけはmanual-only停止方針をmainへ記録するbootstrapとして、repository ID `1238189306`、
+node ID `R_kgDOSc1E-g`、Issue #392、PR #393、現在head、active Ruleset ID `20413337`、Hana App ID
+`4483496`をfreshに照合する。完全一致する場合だけ、専用Appの5 required Checksを
+`normal-policy-merge-control` purposeで発行できる。通常CIに対応する3 CheckはそのCIのsuccess後、
+`specialist-review-gate`と`merge-eligibility`はRound 3の3 role GO後だけ発行する。recovery projection、
+review例外、credential、succession、activation、自動merge、Ruleset変更・bypassには使用しない。
+
 ### 12.2 凍結対象
 
 PR #355、#361、#389、#391とIssue #362、#390を凍結する。対象へのpush、修正、review、reviewer交代、
@@ -349,16 +359,27 @@ blockを解除しない。
 
 ### 12.4 ISSUE-194の有限reviewと終了
 
-Roundは最初のrole開始時に消費する。開始前にround ID、merge-base、head SHA、Spec / Acceptance、
-Security / Authority Boundary、Operations / Liveness / Rollbackの3 role、fixed principal、期限を固定する。
+GitHub Issue #392のcommentをoperational SSOTとする。各Roundは最初のrole開始前に、新規
+`issue194-round-open/v1` commentを1件だけ作る。`round_id`、merge-base / head SHA、Issue / scope digest、
+3 roleと各fixed principal IDのSHA-256対応、開始時刻、期限、`consumed=true`を固定する。作成済みcommentを
+編集・削除・再発行せず、そのcomment IDを同一入力として全roleへ渡す。
+
+全role完了後はopening comment IDを参照する別の`issue194-round-result/v1` commentへ、role別resultと
+finding件数、normalized finding ID / reason / severity、finding set digest、固定status、
+`advisory_only=true`、`human_approval=false`を追記する。raw identity、prompt、raw finding本文、自由文の
+承認を保存しない。
 
 Round 1または2の完全bundleにcontent findingがある場合だけ、全findingをstable IDと固定reasonへ
-正規化し、巡ごとに正確に1つのbounded修正batchへ統合できる。修正後は新head SHAで次巡を行い、
-旧reviewを無効にする。
+正規化し、巡ごとに正確に1つのbounded修正batchへ統合できる。修正前にopening / result comment ID、
+`batch_id`、input head、許可path / scope digestを別の`issue194-remediation-batch/v1` commentへ固定する。
+完了は別commentへoutput headとresultを追記し、既存recordを編集しない。修正後は新head SHAで次巡を
+行い、旧reviewを無効にする。
 
 どのRoundでもreviewer不足・交代、timeout、schema違反、SHA不一致、scope変更、Round開始後の
-main / head変更、batch外変更があれば、そのRoundを消費して即時`blocked`とする。Round 3のfindingまたは検証失敗も`blocked`とし、
-第4巡、budget reset、ISSUE-173例外、自動後継Issueを使用しない。
+main / head変更、batch外変更、台帳recordの欠落・編集・削除・重複・再発行があれば、そのRoundを消費して
+即時`blocked`とする。Round 3のfindingまたは検証失敗も`blocked`とし、第4巡、budget reset、
+ISSUE-173例外、自動後継Issueを使用しない。Round 2以前の事後recordは消費・findingのstatusに限り、
+開始証跡やGOへ読み替えない。Round 3は完全なopening recordなしに開始しない。
 
 全reviewとrequired Checksが成功してもauto-mergeを予約しない。Repository Ownerが手動squash mergeを
 判断する。H1のmergeは後続Issue、credential、Check更新、activationを開始しない。

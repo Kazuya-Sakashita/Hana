@@ -148,6 +148,12 @@ rollback、最新SHA条件を満たすコード変更は`AUTO_MERGE_ELIGIBLE`候
 自動判定と監査へ保存してよいのは、Issue ID、PR番号、head SHA、変更領域ID、reviewer role、round、
 actionable finding件数、必須check名とstatus、固定された最終判定reasonである。
 
+ISSUE-194だけはADR-0019の有限reviewを監査可能にするため、GitHub Issue #392のstatus-only commentへ
+round ID、merge-base / head SHA、Issue / scope digest、roleとprincipal IDのSHA-256対応、時刻、期限、
+normalized finding ID / reason / severity、finding set digest、remediation batch ID、input / output head、
+許可path / scope digest、固定statusを追加できる。opening、result、batchは別recordとしてcomment IDで
+結び付け、既存recordを編集・削除・再発行しない。
+
 PR本文、コメント本文、review prompt全文、実ユーザー情報、画像、画像URL、storage key、AI prompt、
 AI生成本文、secret、接続文字列は取得・artifact保存・ログ出力しない。
 
@@ -187,6 +193,10 @@ activationまたはauto-merge予約を許可しない。
 
 ADR-0017のISSUE-173例外は非凍結の通常PRにだけ適用可能であり、Terminal HOLD lineage、ISSUE-194、
 回復停止方針または回復権限を扱うPRには適用しない。
+
+ただしPR #393はmanual-only停止をmainへ記録するため、ADR-0019のexact-bound bootstrapに一致する
+専用Appの`normal-policy-merge-control` Checkだけを現在headへ発行できる。このCheckは回復権限、例外、
+credential、succession、activationまたは自動mergeを付与せず、Ruleset変更やbypassも許可しない。
 
 ## Consequences
 

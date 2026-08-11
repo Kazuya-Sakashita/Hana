@@ -37,7 +37,8 @@ manual-onlyで終端する。通常開発の保護されたmerge経路と回復�
 - GitHub App、token、credential、secret、署名鍵の作成・変更
 - workflow、runtime、schema、OpenAPI、アプリコード、testの変更
 - Terminal HOLD lineage、ISSUE-194または回復目的のrecovery Check、`review-round-exception`、
-  `merge-eligibility`投影の作成・更新
+  recovery `merge-eligibility`投影の作成・更新。PR #393のexact-boundな
+  `normal-policy-merge-control` Checkだけは受け入れ条件のbootstrapとして許可する
 - 凍結PRへのpush、review、Check、merge
 - 凍結branchのcode、commit、diff、schema、test、fixture、review、Check、attestationの再利用
 - H2 / H3 Issueの作成、実装、activation
@@ -67,6 +68,9 @@ OpenAPI、生成型、DB、Storage、アプリruntimeには影響しない。
 - [x] Round 1または2の完全bundleにあるcontent findingは巡ごとに正確に1つのbounded修正batchへ統合する
 - [x] operational failureはどのRoundでも即時、Round 3のcontent findingは最終的に`blocked`とする
 - [x] 第4巡、reviewer交代によるbudget reset、例外workflow、Terminal HOLD後継の自動作成を禁止する
+- [x] GitHub Issue #392にroleとstable principal hashを対応付ける編集不可のRound台帳を定義する
+- [x] normalized finding、finding set digest、bounded修正batchをcomment IDとhead SHAで結び付ける
+- [x] PR #393だけのnormal-policy merge-control Check bootstrapを回復権限から分離する
 - [x] `pnpm format:check`、`pnpm issues:check`、`pnpm pr:gate`、`git diff --check`が成功する
 - [x] 問題がない場合も自動mergeせず、Repository Ownerが手動squash mergeを判断する
 
@@ -84,10 +88,19 @@ Round 1と2の完全bundleにcontent findingがあれば、全findingをstable I
 schema違反、SHA不一致、scope変更、Round開始後のmain / head変更、batch外変更はどのRoundでも即時
 `blocked`とする。Round 3のcontent findingも追加修正・第4巡へ進まず、原因と未解決事項を報告する。
 
+Round 3からGitHub Issue #392のcommentをoperational SSOTとする。開始前に一意な
+`issue194-round-open/v1`を追記し、round、base / head、Issue / scope digest、3 roleとprincipal ID hash、
+開始時刻、期限を固定する。結果と修正batchはopening comment IDを参照する別commentへ追記し、既存recordを
+編集・削除・再発行しない。欠落、重複または改変は`blocked`とする。Round 2の事後recordは消費済みと
+findingの透明化だけに使い、開始証跡またはGOへ読み替えない。
+
 ## セキュリティ・プライバシー考慮
 
 H1はcredential、secret、OIDC claim、実ユーザーデータを取得・保存しない。証跡はIssue、PR、
-merge-base、head SHA、review role、round、finding件数、固定statusだけに限定する。
+merge-base / head SHA、Issue / scope digest、review role、principal IDのSHA-256、round、時刻、期限、
+finding件数、normalized finding ID / reason / severity、finding set digest、batch ID、input / output head、
+許可path / scope digest、固定statusだけに限定する。raw identity、prompt、raw finding本文、自由文の承認を
+保存しない。
 
 ## Validation Ledger
 
@@ -116,7 +129,23 @@ merge-base、head SHA、review role、round、finding件数、固定statusだけ
   - `rollback_removes_safety`
   - `frozen_adr_identifier_reference`
   - `github_local_ac_drift`
-- Remediation: exactly one bounded batch closed; Round 2 pending
+- Remediation: exactly one bounded batch closed
+
+### Round 2
+
+- Reviewed head: `9f11096fae528c4591acde7d38eca23f9f248c1b`
+- Roles completed: 3 / 3
+- Security / Authority Boundary: GO
+- Spec / Acceptance: P1 x 2
+- Operations / Liveness / Rollback: P1 x 2
+- Raw findings: 4
+- Normalized backlog: `issue194-r2-backlog-v1`（P1: 3）
+- Fixed reasons:
+  - `principal_round_manifest_not_durable`
+  - `finding_batch_binding_not_auditable`
+  - `issue194_normal_check_bootstrap_missing`
+- Evidence: GitHub Issue #392 status-only result comment; opening recordは事後作成せず、Round 2のGO証跡にはしない
+- Remediation: exactly one bounded batch in progress; Round 3 pending
 
 ## Rollback
 
