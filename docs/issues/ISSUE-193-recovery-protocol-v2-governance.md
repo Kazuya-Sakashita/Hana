@@ -93,7 +93,7 @@ OpenAPI、生成型、runtime、database、workflowおよびGitHub設定には�
 次はlocal文書のcheckboxを更新して証明しない。final headを変更しない外部のstatus-only記録として残す。
 
 1. V1で3 roleが同じexact headをfresh contextで評価する（完了、上記status-only record）
-2. finding backlogを固定し、1 bounded remediationを行う（実行中、追加batch禁止）
+2. finding backlogを固定し、1 bounded remediationを行う（完了、追加batch禁止）
 3. V2のP0 / P1が0件であることを確認する
 4. Repository Ownerがcurrent main / tree、final head / tree、各digestへexact-boundしたJSON-only grantを発行する
 5. G0 merge後のparent / tree readbackから`ACCEPTED_CONSUMED`を導出する
